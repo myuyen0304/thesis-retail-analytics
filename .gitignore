@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ============================================================
+# Riêng của project này
+# ============================================================
+
+# Data nguồn — KHÔNG commit (126MB). Tải từ Google Drive, xem README.md
+data/
+
+# File output/tạm sinh ra khi chạy notebook
+.baseline_dump.txt

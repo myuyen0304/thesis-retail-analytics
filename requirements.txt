@@ -1,0 +1,8 @@
+# Môi trường đang chạy trên máy chính — pin version để hai máy giống nhau.
+# LƯU Ý: pandas 3.x, KHÔNG phải 2.x. Hành vi dtype chuỗi khác nhau đáng kể giữa hai bản.
+
+pandas==3.0.5
+numpy==2.5.1
+matplotlib==3.11.1
+pyarrow==25.0.0      # pandas 3.0 dùng cho string dtype
+ipykernel==7.3.0     # để chạy notebook trong VS Code / Jupyter
