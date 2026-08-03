@@ -44,6 +44,122 @@ Hai điều định hình toàn bộ thiết kế:
 2. **Mọi bảng giao dịch dừng ở 2022-12-31**; chỉ `sample_submission` sống ở 2023–2024.
    Vùng dự báo tách biệt hoàn toàn khỏi vùng dữ liệu thật.
 
+### 1.1 Mô hình khái niệm (conceptual model)
+
+Trước khi chuẩn hóa, cần một bức tranh **nghiệp vụ** — thế giới thật có những thực thể nào và
+liên hệ ra sao — độc lập với việc sau này sẽ có bao nhiêu bảng.
+
+> **Ba mức mô hình:** *conceptual* (mục này) → *logical* (§6, §8) → *physical* (DDL cụ thể của một DBMS).
+> Sơ đồ ở §6 **không phải** mô hình khái niệm: nó có bảng junction, có kiểu dữ liệu, có PK/FK —
+> đều là mối quan tâm mức logical. Toàn bộ §2–§5 chính là phần **dẫn** từ mức này xuống mức đó.
+
+```mermaid
+erDiagram
+    GEOGRAPHY  ||--o{ CUSTOMER   : "cư trú"
+    CUSTOMER   ||--o{ ORDER      : "đặt"
+    ORDER      ||--|{ ORDER_ITEM : "gồm"
+    PRODUCT    ||--o{ ORDER_ITEM : "được bán"
+
+    ORDER_ITEM }o--o{ PROMOTION  : "áp dụng"
+
+    ORDER      ||--|| PAYMENT           : "thanh toán"
+    ORDER      ||--o| SHIPMENT          : "giao"
+    ORDER_ITEM ||--o| PRODUCT_RETURN    : "bị trả"
+    ORDER_ITEM ||--o| REVIEW            : "được đánh giá"
+    PRODUCT    ||--o{ INVENTORY_SNAPSHOT : "tồn kho"
+```
+
+**Quy ước để hai sơ đồ đọc chồng lên nhau được:**
+
+| | §1.1 — conceptual | §6 — logical |
+|---|---|---|
+| Tên thực thể / bảng | `CHỮ HOA` | `chữ thường` |
+| Nhãn quan hệ | tiếng Việt | tiếng Việt, **dùng đúng từ như nhau** |
+| Kiểu dữ liệu, PK/FK | không có | có đủ |
+
+Tên chỉ khác nhau ở **kiểu chữ**, nên `ORDER_ITEM` ở đây và `order_item` ở §6 nhìn là biết ngay
+cùng một thứ; nhãn quan hệ (`đặt`, `gồm`, `được bán`, `bị trả`…) dùng nguyên văn ở cả hai mức.
+Chỗ nào một thực thể nở ra thành nhiều bảng thì tra bảng ánh xạ ngay dưới.
+
+**Ba điều sơ đồ này cố ý làm khác §6:**
+
+1. **Quan hệ M:N để nguyên** — `ORDER_ITEM }o--o{ PROMOTION` là **một đường**, không có bảng
+   trung gian. `order_item_promotion` ở §6 không phải thực thể nghiệp vụ; nó sinh ra vì
+   *mô hình quan hệ không biểu diễn được M:N trực tiếp* (§2.2). Nó thuộc mức logical.
+2. **Không có kiểu dữ liệu, không PK/FK.** Ở mức khái niệm chưa quyết định gì về lưu trữ.
+   (Cú pháp mermaid bắt mọi thuộc tính phải kèm kiểu — mà kiểu là mối quan tâm mức logical —
+   nên ở đây bỏ hẳn khối thuộc tính.)
+3. **Không có bảng nào do chuẩn hóa sinh ra** — `product_model`, `review_title_label`,
+   `region`/`city`/`district` đều vắng mặt. Chúng là *kết quả* của §4, không phải *đầu vào*.
+
+**Hai hạn chế của ký hiệu:** mermaid vẽ theo crow's foot, không vẽ được hình thoi kiểu Chen,
+nên quan hệ ở đây hiện ra như đường nối chứ không như đối tượng hạng nhất. Và `ORDER_ITEM` là
+**thực thể yếu** — nó không tồn tại độc lập với `ORDER` và phải mượn định danh của đơn
+(chính là lý do §2.1 phải thêm `line_number`) — mermaid không có ký hiệu cho điều đó.
+
+#### Từ khái niệm xuống logical: 11 thực thể → 17 bảng
+
+| Thực thể (§1.1) | Bảng (§6, §8) | Chuyện gì xảy ra khi xuống logical |
+|---|---|---|
+| `CUSTOMER` | `customer` | bỏ `city` (§4.2) |
+| `GEOGRAPHY` | `zip_area` + `city` + `district` + `region` | **1 → 4 bảng** (§4.5) |
+| `PRODUCT` | `product` + `product_model` | **1 → 2 bảng** (§4.1) |
+| `PROMOTION` | `promotion` | giữ nguyên |
+| `ORDER` | `"order"` | bỏ `zip` (§4.2); đặt trong nháy vì là từ khóa SQL |
+| `ORDER_ITEM` | `order_item` | **thêm `line_number`** (§2.1) |
+| *(quan hệ M:N)* | `order_item_promotion` | **quan hệ hóa thành bảng** (§2.2) |
+| `PAYMENT` | `payment` | teo còn đúng 1 cột `installments` (§4.4, §5) |
+| `SHIPMENT` | `shipment` | giữ nguyên |
+| `PRODUCT_RETURN` | `product_return` | FK trỏ **dòng hàng**, không phải đơn |
+| `REVIEW` | `review` + `review_title_label` | **1 → 2 bảng** (§4.3) |
+| `INVENTORY_SNAPSHOT` | `inventory_snapshot` | 17 → 9 cột (§3.1, §5) |
+
+**11 thực thể → 17 bảng.** Cộng `web_traffic` và `daily_sales_forecast` (xem dưới) là **19 bảng**
+ở §7. Bốn dòng in đậm là toàn bộ chỗ số lượng bảng thay đổi — mỗi chỗ đều dẫn về mục chứng minh
+tương ứng, nên không có bảng nào ở §6 xuất hiện mà không truy được nguồn gốc.
+
+`PAYMENT` là ví dụ gọn nhất cho việc *conceptual ≠ logical*: thanh toán rõ ràng là một khái
+niệm nghiệp vụ có thật, nhưng xuống tới logical thì `payment_method` trùng `orders` (§4.4) và
+`payment_value` suy ra được 100% (§5), nên bảng chỉ còn `installments`. Thực thể **không biến
+mất**, nó **teo lại** — và điều đó chỉ nhìn thấy được khi có mức khái niệm để đối chiếu.
+
+#### Vì sao `web_traffic` và `daily_sales_forecast` không có ở đây
+
+Đây cũng là lời giải thích cho hai bảng "đứng tự do" trong sơ đồ §6:
+
+- **`web_traffic`** là **chuỗi quan sát tổng hợp theo ngày**, không phải thực thể của miền bán
+  hàng. Nó đã bị gộp mất định danh trước khi tới tay — không có `session_id` nào để nối một
+  phiên truy cập với một đơn hàng, nên quan hệ với cây giao dịch **không tồn tại trong dữ liệu**.
+- **`daily_sales_forecast`** là **đầu ra của bài toán**, không phải dữ liệu quan sát. Nó phủ
+  2023-01-01 → 2024-07-01 và giao với `order`/`sales`/`web_traffic` đúng **0 ngày**, nên không
+  có dòng nào bên kia để trỏ tới.
+
+Cả hai chỉ xuất hiện từ mức logical trở đi. Chúng nổi ở §6 không phải vì thiết kế thiếu sót,
+mà vì **mô hình quan hệ không có thực thể "ngày"** để làm trung gian — ngày là *giá trị*, không
+phải *thực thể*. (`star_schema.md` có `dim_date` nên ở đó chúng hết nổi; xem §9.5.)
+
+#### Bằng chứng cho cardinality
+
+Mọi ký hiệu cardinality trên đều đọc ra từ dữ liệu, đã kiểm trong notebook:
+
+Cardinality ở §1.1 và §6 là **cùng một bộ số** — không có quan hệ nào hai sơ đồ nói khác nhau:
+
+| Quan hệ | Cardinality | Số liệu | Nguồn |
+|---|---|---|---|
+| `ORDER` → `ORDER_ITEM` | 1 : 1..N | 0 đơn không có dòng hàng; tối đa 5 dòng/đơn | `normalization.ipynb` §2.1, §6 |
+| `ORDER` → `PAYMENT` | 1 : 1 | 0 đơn không có payment; 1:1 đầy đủ | `normalization.ipynb` §6 |
+| `ORDER` → `SHIPMENT` | 1 : 0..1 | **80.878** đơn không có shipment | `normalization.ipynb` §6 |
+| `ORDER_ITEM` → `REVIEW` | 1 : 0..1 | `UNIQUE(order_id, product_id)` 0 vi phạm | `normalization.ipynb` §6 |
+| `ORDER_ITEM` → `PRODUCT_RETURN` | 1 : 0..1 | xem ghi chú bên dưới | `normalization.ipynb` §6 |
+| `CUSTOMER` → `ORDER` | 1 : 0..N | **31.684** khách chưa mua lần nào | `data_model.ipynb` §3 |
+| `PRODUCT` → `ORDER_ITEM` | 1 : 0..N | **814** sản phẩm chưa bán lần nào | `data_model.ipynb` §3 |
+| `PRODUCT` → `INVENTORY_SNAPSHOT` | 1 : 0..N | chỉ 1.624/2.412 SP có snapshot | `data_model.ipynb` §6 |
+
+> **Ghi chú về `PRODUCT_RETURN`:** `returns` có **2 cặp** `(order_id, product_id)` trùng, thoạt nhìn
+> giống một dòng hàng bị trả hai lần. Nhưng cả hai cặp đều nằm trong **16 khóa nhập nhằng** ở §2.1,
+> và mỗi đơn đó có đúng **2 dòng hàng** cho cùng sản phẩm — nên hai lần trả ứng với hai dòng hàng
+> khác nhau, không phải một dòng bị trả hai lần. Cardinality 1:0..1 là đúng.
+
 ---
 
 ## 2. 1NF — nguyên tử, không nhóm lặp, định danh được từng dòng
