@@ -65,7 +65,7 @@ Kiểm tra đủ **14 file nguồn**:
 
 | File | Nội dung |
 |---|---|
-| `eda.ipynb` | Tìm cấu trúc sinh dữ liệu — 8 phát hiện chính, không xây model |
+| `eda.ipynb` | Tìm cấu trúc sinh dữ liệu — 5 phát hiện chính, không xây model |
 | `data_model.ipynb` | Kiểm chứng các quyết định trong `star_schema.md` |
 | `normalization.ipynb` | Kiểm chứng các phụ thuộc hàm trong `normalized_schema.md` |
 | `baseline.ipynb` | Baseline seasonal average + trend — **có lỗi đã biết**, chỉ dùng làm mốc so sánh |

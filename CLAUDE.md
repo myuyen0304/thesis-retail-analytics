@@ -80,7 +80,9 @@ R = lambda f, **k: pd.read_csv(f'{DATA}/{f}', low_memory=False, **k)
 
 ## 5. Những gì ĐÃ kết luận — đừng dò lại từ đầu
 
-Tám điểm dưới đây đã được chứng minh trong `eda.ipynb` / `data_model.ipynb` / `normalization.ipynb`.
+Tám điểm dưới đây đã được chứng minh: **điểm 1–6 từ `eda.ipynb`** (đúng 5 phát hiện chính nêu ở cell đầu,
+tách điểm 3 thành hai vì mùa vụ-theo-tháng và ngày-trong-tháng là hai tín hiệu riêng),
+**điểm 7 từ `eda.ipynb` §6**, **điểm 8 từ `data_model.ipynb` §3**.
 Phép reconcile ở điểm 1 rất tốn thời gian chạy; **không cần làm lại**. Nếu định nói ngược lại
 bất kỳ điểm nào, phải chỉ ra cell nào sai trước.
 
