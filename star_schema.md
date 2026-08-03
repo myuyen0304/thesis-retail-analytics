@@ -510,7 +510,10 @@ CREATE TABLE fact_review (
     order_item_sk BIGINT      NOT NULL REFERENCES fact_order_item,
     date_sk       INTEGER     NOT NULL REFERENCES dim_date,
     rating        SMALLINT    NOT NULL CHECK (rating BETWEEN 1 AND 5)
-);   -- 113.551 dòng; bỏ customer_id (dư thừa) và review_title (phụ thuộc hàm vào rating)
+);   -- 113.551 dòng; bỏ customer_id (dư thừa) và review_title (FD review_title → rating, §5.6)
+--   ⚠ PHI CHUẨN HÓA CÓ CHỦ ĐÍCH: mô hình 3NF làm ngược lại — `review` giữ review_title và
+--   suy ra rating qua review_title_label (normalized_schema.md §4.3). Ở đây giữ `rating` vì nó
+--   là measure gộp được (AVG/COUNT), còn title chỉ là nhãn.
 
 CREATE TABLE bridge_item_promo (
     order_item_sk BIGINT  NOT NULL REFERENCES fact_order_item,
@@ -543,7 +546,7 @@ CREATE TABLE fact_web_traffic (
 | `inventory.reorder_flag` | hằng số 1 giá trị |
 | `order_items.promo_id_2` | rỗng 99,97% — chuyển vào bridge |
 | `reviews.customer_id` | suy được từ `order_id`, lệch 0 |
-| `reviews.review_title` | phụ thuộc hàm hoàn toàn vào `rating` |
+| `reviews.review_title` | FD `review_title → rating` (§5.6) — mỗi title thuộc đúng 1 rating, nên `rating` giữ đủ thông tin |
 
 ---
 
