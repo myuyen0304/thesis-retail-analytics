@@ -138,6 +138,14 @@ Repo: `myuyen0304/thesis-retail-analytics` (**Private**). Team 2 người.
 - Merge vào `main` qua Pull Request, người kia review.
 - `git add` **từng file cụ thể**, không `git add -A` (dễ lỡ tay kéo file rác vào).
 
+### Quy ước commit message
+
+- **Không thêm dòng `Co-Authored-By: Claude ...`** vào cuối commit message. Mặc định của
+  Claude Code là có; ở repo này thì bỏ. Đây là khóa luận, log phải là tác giả người thật.
+- **Ngắn gọn** — một dòng tiêu đề mô tả việc đã làm, không cần body trừ khi thật sự cần giải thích.
+- Viết **tiếng Việt không dấu** cho commit message (khác với `.md` và notebook ở §0 — chỗ đó có dấu).
+  Cả log hiện tại đang theo lối này, thêm dấu vào sẽ lệch với phần còn lại. Ký hiệu `§` thì dùng được.
+
 ### Hai quy tắc bắt buộc với notebook
 
 1. **Một notebook một chủ.** Hai người sửa cùng một `.ipynb` sẽ tạo conflict trong JSON
