@@ -159,6 +159,9 @@ Cardinality ở §1.1 và §6 là **cùng một bộ số** — không có quan 
 > giống một dòng hàng bị trả hai lần. Nhưng cả hai cặp đều nằm trong **16 khóa nhập nhằng** ở §2.1,
 > và mỗi đơn đó có đúng **2 dòng hàng** cho cùng sản phẩm — nên hai lần trả ứng với hai dòng hàng
 > khác nhau, không phải một dòng bị trả hai lần. Cardinality 1:0..1 là đúng.
+>
+> Đúng 2 cặp này cũng là nguồn của cảnh báo giả `RET-043492` ở §8 — cùng một nguyên nhân:
+> `(order_id, product_id)` không phải khóa của `order_item`.
 
 ---
 
@@ -592,9 +595,24 @@ Chuẩn hóa ở đây **thêm 5 bảng nhỏ** (`product_model` 2.172 + `review
 ## 8. DDL
 
 **Mọi `CHECK` dưới đây đã được chạy thử trên dữ liệu nguồn** (`normalization.ipynb` §6):
-11/12 ràng buộc **đạt** trên toàn bộ dữ liệu; ràng buộc duy nhất **thất bại** là
-`return_quantity <= quantity` (1 dòng — `RET-043492`). Khai báo ràng buộc mà không kiểm
-trước là cách chắc chắn nhất để pipeline chết lúc load.
+**12/12 đạt** — nhưng chỉ khi join đúng khóa. Ràng buộc liên bảng `return_quantity <= quantity`
+cho kết quả trái ngược tùy cách nối `returns` với `order_item`:
+
+| Cách join | Số dòng sau join | Vi phạm |
+|---|---:|---:|
+| `(order_id, product_id)` — **không phải khóa** (§2.1) | 39.943 | **1** (`RET-043492`) |
+| `(order_id, line_number)` — sau khi gán theo thứ tự nguồn | 39.939 | **0** |
+
+Chênh lệch 39.943 − 39.939 = 4 chính là dấu vết fan-out: 2 cặp khóa nhập nhằng nở ra 2×2 dòng.
+`RET-043492` có `return_quantity=3` bị ghép nhầm vào dòng hàng `quantity=1`, trong khi đơn đó có
+**2** dòng cùng sản phẩm với `quantity` là 4 và 1 — ghép đúng thứ tự nguồn thì 3 ≤ 4 và 1 ≤ 1.
+
+⇒ **Đây là cảnh báo giả**, không phải lỗi dữ liệu. Và nó là bằng chứng thực nghiệm cho đúng rủi ro
+§2.1 đã cảnh báo: join bằng khóa không hợp lệ **sinh ra kết luận sai**, chứ không chỉ gây bất tiện.
+(Xem ghi chú `PRODUCT_RETURN` ở §1.1 — cùng 2 cặp khóa đó.)
+
+Khai báo ràng buộc mà không kiểm trước là cách chắc chắn nhất để pipeline chết lúc load.
+Kiểm bằng khóa sai còn tệ hơn: nó tạo ra lỗi không tồn tại.
 
 ```sql
 -- ========== ĐỊA LÝ (3NF chặt — xem §4.5 về đánh đổi) ==========
@@ -713,8 +731,10 @@ CREATE TABLE product_return (
     refund_amount   DECIMAL(16,2) NOT NULL,
     FOREIGN KEY (order_id, line_number) REFERENCES order_item
 );   -- 39.939 dòng
--- ⚠ 1 dòng (RET-043492) có return_quantity=3 > quantity=1 ⇒ CHECK liên bảng phải
---   là trigger/assertion, và dòng này sẽ bị chặn khi load
+-- ⚠ return_quantity <= quantity là ràng buộc LIÊN BẢNG ⇒ phải là trigger/assertion,
+--   DDL thuần không diễn đạt được. Dữ liệu nguồn ĐẠT 0 vi phạm khi join bằng
+--   (order_id, line_number). Cảnh báo "RET-043492" chỉ xuất hiện nếu join bằng
+--   (order_id, product_id) — khóa không hợp lệ; xem phần đầu §8 và §2.1.
 
 CREATE TABLE review_title_label (                          -- tách 3NF, §4.3
     review_title VARCHAR(64) PRIMARY KEY,
@@ -882,8 +902,11 @@ Nên phát biểu chính xác là:
 Thiết kế dừng ở mức mô hình + DDL. Chưa viết pipeline ETL, chưa load. Ba việc phải làm khi triển khai:
 
 1. **Gán `line_number`** theo thứ tự dòng ổn định trong file nguồn — làm **trước** mọi join
-   `returns`/`reviews` (§2.1).
+   `returns`/`reviews` (§2.1). Đây đồng thời là thứ khiến `return_quantity <= quantity`
+   đạt **0 vi phạm**; join sai khóa thì cùng dữ liệu đó báo lỗi giả (§8).
 2. **Ràng buộc liên bảng** (`return_quantity <= quantity`, tính nhất quán `region` hai đường ở §4.5)
    phải là trigger hoặc test khi load — DDL thuần không diễn đạt được.
+   Lưu ý: dữ liệu nguồn hiện **đạt cả hai**; trigger ở đây để bảo vệ nghiệp vụ ghi về sau,
+   **không** phải để sửa dòng nào đang sai.
 3. **Chọn định nghĩa doanh thu**: `sales.csv` dùng **gross**, `payments` dùng **net**.
    Hai định nghĩa cùng tồn tại trong nguồn (`star_schema.md` §5.2).

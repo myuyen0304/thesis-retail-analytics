@@ -1,6 +1,6 @@
 # Star Schema — Datathon 2026 Round 1
 
-Thiết kế mô hình dữ liệu chiều (dimensional model) cho 15 file CSV nguồn.
+Thiết kế mô hình dữ liệu chiều (dimensional model) cho 14 file CSV nguồn.
 Mọi quyết định dưới đây đều dựa trên kiểm chứng trong `data_model.ipynb`.
 
 > **Tài liệu song song:** `normalized_schema.md` — cùng dữ liệu, mô hình chuẩn hóa 3NF (19 bảng),
@@ -180,7 +180,7 @@ erDiagram
 
 ---
 
-## 3. Ánh xạ nguồn → đích (15 file CSV → 14 bảng)
+## 3. Ánh xạ nguồn → đích (14 file CSV → 14 bảng)
 
 | File nguồn | Bảng đích | Ghi chú |
 |---|---|---|
@@ -354,7 +354,7 @@ Nhưng nó là fact **duy nhất phải mở rộng quá 2022-12-31** để ch�
 | 6 | `shipping_fee` 0–32 trong khi giá trị đơn ~30.000 | 🟡 Thấp | Đơn vị không nhất quán — ghi chú, đừng cộng chung |
 | 7 | `inventory.reorder_flag` chỉ 1 giá trị; `order_items.promo_id_2` rỗng 99,97% | 🟡 Thấp | Cột chết — loại khỏi mô hình |
 | 8 | `bounce_rate` ≈ 0,005 (phi thực tế) | 🟡 Thấp | Không xây metric trên đó |
-| 9 | 1 dòng `return_quantity` > số lượng đã mua | 🟢 Nhỏ | Rule chặn khi load |
+| 9 | ~~1 dòng `return_quantity` > số lượng đã mua~~ → **cảnh báo giả**: chỉ xuất hiện khi join `returns` với `order_items` bằng `(order_id, product_id)`, vốn **không phải khóa** | 🟢 Nhỏ | **Không** chặn khi load. Gán `line_number` theo thứ tự nguồn rồi join — 0 vi phạm / 39.939 (`normalized_schema.md` §2.1, §8) |
 | 10 | `reviews.customer_id` dư thừa (suy được từ `order_id`, lệch 0) | 🟢 Nhỏ | Bỏ cột |
 
 > **Về `dim_product.price_anomaly`:** đây là cờ *chất lượng dữ liệu*, không phải thuộc tính phân tích.
