@@ -50,7 +50,7 @@ Trước khi chuẩn hóa, cần một bức tranh **nghiệp vụ** — thế g
 liên hệ ra sao — độc lập với việc sau này sẽ có bao nhiêu bảng.
 
 > **Ba mức mô hình:** *conceptual* (mục này) → *logical* (§6, §8) → *physical* (DDL cụ thể của một DBMS).
-> Sơ đồ ở §6 **không phải** mô hình khái niệm: nó có bảng junction, có kiểu dữ liệu, có PK/FK —
+> Sơ đồ ở §6.2 **không phải** mô hình khái niệm: nó có bảng junction, có kiểu dữ liệu, có PK/FK —
 > đều là mối quan tâm mức logical. Toàn bộ §2–§5 chính là phần **dẫn** từ mức này xuống mức đó.
 
 ```mermaid
@@ -152,7 +152,7 @@ mất**, nó **teo lại** — và điều đó chỉ nhìn thấy được khi 
 
 #### Vì sao `web_traffic` và `daily_sales_forecast` không có ở đây
 
-Đây cũng là lời giải thích cho hai bảng "đứng tự do" trong sơ đồ §6:
+Đây cũng là lời giải thích cho hai bảng "đứng tự do" trong sơ đồ §6.2:
 
 - **`web_traffic`** là **chuỗi quan sát tổng hợp theo ngày**, không phải thực thể của miền bán
   hàng. Nó đã bị gộp mất định danh trước khi tới tay — không có `session_id` nào để nối một
