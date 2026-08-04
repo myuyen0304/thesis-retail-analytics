@@ -69,6 +69,33 @@ erDiagram
     PRODUCT    ||--o{ INVENTORY_SNAPSHOT : "tồn kho"
 ```
 
+**Thuộc tính của 11 thực thể.** Cú pháp mermaid bắt mọi thuộc tính phải kèm kiểu dữ liệu — mà kiểu
+là mối quan tâm mức logical (xem điểm 2 của "Ba điều sơ đồ này cố ý làm khác §6" bên dưới) — nên
+thuộc tính không nằm được trong sơ đồ trên. Bảng dưới đây là cách vòng qua đúng giới hạn đó:
+liệt kê đủ thuộc tính ở **mức khái niệm**, **không ghi kiểu**.
+
+| Thực thể | Định danh | Thuộc tính |
+|---|---|---|
+| `GEOGRAPHY` | `zip` | city, district, region |
+| `CUSTOMER` | `customer_id` | zip, city, signup_date, gender, age_group, acquisition_channel |
+| `PRODUCT` | `product_id` | product_name, category, segment, size, color, price, cogs |
+| `PROMOTION` | `promo_id` | promo_name, promo_type, discount_value, start_date, end_date, applicable_category, promo_channel, stackable_flag, min_order_value |
+| `ORDER` | `order_id` | order_date, customer_id, zip, order_status, payment_method, device_type, order_source |
+| `ORDER_ITEM` | *(thực thể yếu — nguồn KHÔNG có định danh hợp lệ; §2.1 thêm `line_number`)* | product_id, quantity, unit_price, discount_amount, promo_id, promo_id_2 |
+| `PAYMENT` | `order_id` | payment_method, payment_value, installments |
+| `SHIPMENT` | `order_id` | ship_date, delivery_date, shipping_fee |
+| `PRODUCT_RETURN` | `return_id` | order_id, product_id, return_date, return_reason, return_quantity, refund_amount |
+| `REVIEW` | `review_id` | order_id, product_id, customer_id, review_date, rating, review_title |
+| `INVENTORY_SNAPSHOT` | *(`snapshot_date`, `product_id`)* | stock_on_hand, units_received, units_sold, stockout_days, days_of_supply, fill_rate, sell_through_rate, stockout_flag, overstock_flag, reorder_flag, product_name, category, segment, year, month |
+
+⚠️ Đây là thuộc tính **nguyên trạng như trong file nguồn — trước khi §2–§5 mổ xẻ**. Rất nhiều cột ở
+đây sẽ bị loại hoặc chuyển chỗ: `customers.city` và `orders.zip` (§4.2), `inventory.year`/`month`
+và ba cột thuộc tính sản phẩm (§3.1), `promo_id_2` (§2.2), `payment_value` và các cột dẫn xuất của
+`inventory` (§5), `reviews.customer_id` (§4.4).
+
+Nói cách khác, **bảng này là đầu vào của quá trình chuẩn hóa**, còn §7 là đầu ra. Độ chênh giữa hai
+bảng chính là lượng dư thừa đã bị loại bỏ — đối chiếu qua bảng ánh xạ ngay dưới đây.
+
 **Quy ước để hai sơ đồ đọc chồng lên nhau được:**
 
 | | §1.1 — conceptual | §6 — logical |
@@ -88,7 +115,7 @@ Chỗ nào một thực thể nở ra thành nhiều bảng thì tra bảng ánh
    *mô hình quan hệ không biểu diễn được M:N trực tiếp* (§2.2). Nó thuộc mức logical.
 2. **Không có kiểu dữ liệu, không PK/FK.** Ở mức khái niệm chưa quyết định gì về lưu trữ.
    (Cú pháp mermaid bắt mọi thuộc tính phải kèm kiểu — mà kiểu là mối quan tâm mức logical —
-   nên ở đây bỏ hẳn khối thuộc tính.)
+   nên trong *sơ đồ* bỏ hẳn khối thuộc tính. Thuộc tính vẫn được liệt kê đủ, ở **bảng riêng** phía trên.)
 3. **Không có bảng nào do chuẩn hóa sinh ra** — `product_model`, `review_title_label`,
    `region`/`city`/`district` đều vắng mặt. Chúng là *kết quả* của §4, không phải *đầu vào*.
 
@@ -149,8 +176,8 @@ Cardinality ở §1.1 và §6 là **cùng một bộ số** — không có quan 
 | `ORDER` → `ORDER_ITEM` | 1 : 1..N | 0 đơn không có dòng hàng; tối đa 5 dòng/đơn | `normalization.ipynb` §2.1, §6 |
 | `ORDER` → `PAYMENT` | 1 : 1 | 0 đơn không có payment; 1:1 đầy đủ | `normalization.ipynb` §6 |
 | `ORDER` → `SHIPMENT` | 1 : 0..1 | **80.878** đơn không có shipment | `normalization.ipynb` §6 |
-| `ORDER_ITEM` → `REVIEW` | 1 : 0..1 | `UNIQUE(order_id, product_id)` 0 vi phạm | `normalization.ipynb` §6 |
-| `ORDER_ITEM` → `PRODUCT_RETURN` | 1 : 0..1 | xem ghi chú bên dưới | `normalization.ipynb` §6 |
+| `ORDER_ITEM` → `REVIEW` | 1 : 0..1 | `UNIQUE(order_id, line_number)` 0 vi phạm / 113.551 | `normalization.ipynb` §6 |
+| `ORDER_ITEM` → `PRODUCT_RETURN` | 1 : 0..1 | `UNIQUE(order_id, line_number)` 0 vi phạm / 39.939 — xem ghi chú bên dưới | `normalization.ipynb` §6 |
 | `CUSTOMER` → `ORDER` | 1 : 0..N | **31.684** khách chưa mua lần nào | `data_model.ipynb` §3 |
 | `PRODUCT` → `ORDER_ITEM` | 1 : 0..N | **814** sản phẩm chưa bán lần nào | `data_model.ipynb` §3 |
 | `PRODUCT` → `INVENTORY_SNAPSHOT` | 1 : 0..N | chỉ 1.624/2.412 SP có snapshot | `data_model.ipynb` §6 |
@@ -401,7 +428,40 @@ Công thức hợp lý nhất chỉ khớp một phần ⇒ **giữ chúng làm 
 
 ---
 
-## 6. ERD — mô hình chuẩn hóa 3NF
+## 6. Relational diagram — mô hình quan hệ sau chuẩn hóa (3NF)
+
+> Đây **không phải** một ERD thứ hai. §1.1 là ERD ở mức khái niệm; mục này là **sơ đồ quan hệ**:
+> mọi thứ trong đó đã là *bảng*, quan hệ M:N đã bị quan hệ hóa, có kiểu dữ liệu và PK/FK, và khớp
+> 1:1 với DDL §8. §6.1 nói rõ đi từ cái trước sang cái sau bằng quy tắc nào.
+
+### 6.1 Năm quy tắc chuyển từ ERD sang quan hệ
+
+Mỗi quy tắc kèm chỗ đã áp dụng, để mọi bảng ở §6.2 đều truy được nguồn gốc về một thực thể
+hoặc một quan hệ trong ERD §1.1:
+
+| # | Quy tắc | Áp dụng ở đây |
+|---|---|---|
+| 1 | **Thực thể mạnh** → một quan hệ; định danh → PK | `CUSTOMER`→`customer`, `PRODUCT`→`product`, `PROMOTION`→`promotion`, `GEOGRAPHY`→`zip_area` |
+| 2 | **Thực thể yếu** → PK = PK của cha + cột phân biệt cục bộ | `ORDER_ITEM` → PK `(order_id, line_number)` — **§2.1** |
+| 3 | **Quan hệ 1:N** → đặt FK ở phía **N** | `CUSTOMER`→`ORDER`: `order.customer_id`; `PRODUCT`→`ORDER_ITEM`: `order_item.product_id` |
+| 4 | **Quan hệ 1:1 / 1:0..1** → FK ở phía phụ thuộc, kèm **UNIQUE** (hoặc để FK trùng luôn PK) | `PAYMENT`, `SHIPMENT`: `order_id` vừa là PK vừa là FK ⇒ tự khắc duy nhất. `REVIEW`, `PRODUCT_RETURN`: PK riêng nên **phải khai báo** `UNIQUE (order_id, line_number)` |
+| 5 | **Quan hệ M:N** → bảng junction, PK = hợp hai PK | `ORDER_ITEM`↔`PROMOTION` → `order_item_promotion` — **§2.2** |
+
+Quy tắc 4 là chỗ dễ hụt nhất, và tài liệu này từng hụt thật: `review` có `UNIQUE (order_id,
+line_number)` còn `product_return` thì không, dù §1.1 vẽ cả hai là 1:0..1. Đã bổ sung ở §8.
+Bài học chung: **cardinality vẽ trên sơ đồ chỉ có giá trị khi có ràng buộc đỡ nó** — nếu không,
+nó chỉ đang mô tả dữ liệu hiện có chứ không ràng buộc dữ liệu tương lai.
+
+**Hai giới hạn của ký hiệu, cần nói thẳng:**
+
+1. mermaid nối **thực thể với thực thể**, không nối **cột với cột** như sơ đồ quan hệ chuẩn.
+   Nhìn đường `order_item ||--o| product_return` không biết được cặp cột nào tạo ra liên kết —
+   phải tra DDL §8 (`FOREIGN KEY (order_id, line_number)`). Vì vậy §6.2 và §8 phải đọc cùng nhau.
+2. nhãn quan hệ tiếng Việt (`gồm`, `được bán`, `bị trả`…) được **giữ có chủ đích**, đúng quy ước ở
+   §1.1, để hai sơ đồ đọc chồng lên nhau. Sơ đồ quan hệ thuần túy thì quan hệ **không có tên** —
+   nó chính là ràng buộc FK, không phải một đối tượng riêng.
+
+### 6.2 Sơ đồ
 
 ```mermaid
 erDiagram
@@ -487,7 +547,7 @@ erDiagram
         string order_source
     }
     order_item {
-        int     order_id        PK
+        int     order_id        PK, FK
         int     line_number     PK
         int     product_id      FK
         int     quantity
@@ -495,16 +555,16 @@ erDiagram
         decimal discount_amount
     }
     order_item_promotion {
-        int    order_id    PK
-        int    line_number PK
-        string promo_id    PK
+        int    order_id    PK, FK
+        int    line_number PK, FK
+        string promo_id    PK, FK
     }
     payment {
-        int order_id     PK
+        int order_id     PK, FK
         int installments
     }
     shipment {
-        int     order_id      PK
+        int     order_id      PK, FK
         date    ship_date
         date    delivery_date
         decimal shipping_fee
@@ -531,7 +591,7 @@ erDiagram
     }
     inventory_snapshot {
         date    snapshot_date PK
-        int     product_id    PK
+        int     product_id    PK, FK
         int     stock_on_hand
         int     units_received
         int     units_sold
@@ -590,12 +650,57 @@ Chuẩn hóa ở đây **thêm 5 bảng nhỏ** (`product_model` 2.172 + `review
 `region`/`city`/`district` 84 dòng) và 1 bảng junction, để xóa dư thừa lặp trên hàng trăm nghìn dòng.
 Đổi lại: mỗi truy vấn phân tích tốn thêm 2–4 join.
 
+### 7.1 Tổng kết: 19 bảng đứng ở đâu so với từng chuẩn
+
+Bảng này **không thêm khẳng định mới** — nó gom lại các kết luận đã chứng minh ở §2–§5 và trỏ về
+mục tương ứng. Cột 2NF dùng lập luận cấu trúc ở §9.3: **PK một cột thì 2NF luôn thỏa, không cần kiểm**.
+
+| Bảng | PK | 1NF | 2NF | 3NF |
+|---|---|---|---|---|
+| `region` | `region` | ✅ | hiển nhiên (PK đơn cột) | ✅ tách ra ở §4.5 |
+| `city` | `city` | ✅ | hiển nhiên | ✅ tách ra ở §4.5 |
+| `district` | `district` | ✅ | hiển nhiên | ✅ tách ra ở §4.5 |
+| `zip_area` | `zip` | ✅ | hiển nhiên | ✅ `city`/`district`/`region` đã tách — §4.5 |
+| `customer` | `customer_id` | ✅ | hiển nhiên | ✅ đã bỏ `city` — §4.2 |
+| `product_model` | `product_name` | ✅ | hiển nhiên | ✅ chính là bảng sinh ra để sửa §4.1 |
+| `product` | `product_id` | ✅ | hiển nhiên | ✅ đã bỏ `category`/`segment` — §4.1 |
+| `promotion` | `promo_id` | ✅ | hiển nhiên | ✅ `promo_name` chỉ là candidate key — §4.4 |
+| `"order"` | `order_id` | ✅ | hiển nhiên | ✅ đã bỏ `zip` — §4.2 |
+| `order_item` | `(order_id, line_number)` | ✅ **sau khi thêm `line_number`** — §2.1 | ✅ **đã kiểm cả 3 cột không khóa** — §3.2 | ✅ không có FD bắc cầu — §3.2 |
+| `order_item_promotion` | `(order_id, line_number, promo_id)` | ✅ chính là bảng sinh ra để sửa §2.2 | toàn khóa (all-key) ⇒ hiển nhiên đạt tới BCNF — §3 | ✅ |
+| `payment` | `order_id` | ✅ | hiển nhiên | ✅ đã bỏ `payment_method` — §4.4 |
+| `shipment` | `order_id` | ✅ | hiển nhiên | không nằm trong 5 bảng vi phạm ở §4 |
+| `product_return` | `return_id` + `UNIQUE (order_id, line_number)` | ✅ | hiển nhiên | không nằm trong 5 bảng vi phạm ở §4 |
+| `review_title_label` | `review_title` | ✅ | hiển nhiên | ✅ chính là bảng sinh ra để sửa §4.3 |
+| `review` | `review_id` + `UNIQUE (order_id, line_number)` | ✅ | hiển nhiên | ✅ đã bỏ `rating` (§4.3) và `customer_id` (§4.4) |
+| `inventory_snapshot` | `(snapshot_date, product_id)` | ✅ đã bỏ `reorder_flag` — §2.3 | ✅ **vi phạm ở cả hai vế, đã sửa** — §3.1 | không nằm trong 5 bảng vi phạm ở §4 |
+| `web_traffic` | `traffic_date` | ✅ | hiển nhiên | không nằm trong 5 bảng vi phạm ở §4 |
+| `daily_sales_forecast` | `forecast_date` | ✅ | hiển nhiên | không nằm trong 5 bảng vi phạm ở §4 |
+
+⚠️ **Đọc đúng chữ "không nằm trong 5 bảng vi phạm ở §4".** §4 rà FD bắc cầu trên 5 bảng nguồn
+(`products`, `customers`, `orders`, `reviews`, `payments`) cộng `geography` như một judgment call.
+Năm bảng ghi dòng đó **chưa được kiểm khẳng định** là đạt 3NF — chúng chỉ *không bị đợt rà đó bắt*.
+Ghi "✅ 3NF" cho chúng sẽ là một khẳng định không có cell chứng minh, đúng thứ mà kỷ luật ở §5 cấm:
+*trông giống thì chưa đủ*.
+
+**Dư thừa đã loại được, đếm cụ thể:**
+
+| Nguồn dư thừa | Trước | Sau |
+|---|---|---|
+| `(category, segment)` lặp theo SKU | lặp thừa 240 lần trong `products` | 1 dòng / model trong `product_model` (§4.1) |
+| Thuộc tính sản phẩm lặp theo mốc snapshot | 3 cột × tới 126 mốc / SP | FK `product_id` (§3.1) |
+| `city` lưu hai nơi | `customers` **và** `geography` | chỉ `zip_area` (§4.2) |
+| `zip` lưu hai nơi | `orders` **và** `customers` | chỉ `customer` (§4.2) |
+| `payment_method` lưu hai nơi | `orders` **và** `payments` | chỉ `"order"` (§4.4) |
+| `rating` lặp theo từng đánh giá | 113.551 dòng | 18 dòng `review_title_label` (§4.3) |
+| Cột tính được | `payment_value`, `stockout_flag`, `days_of_supply`, cả `sales.csv` | bỏ / chuyển thành view (§5) |
+
 ---
 
 ## 8. DDL
 
 **Mọi `CHECK` dưới đây đã được chạy thử trên dữ liệu nguồn** (`normalization.ipynb` §6):
-**12/12 đạt** — nhưng chỉ khi join đúng khóa. Ràng buộc liên bảng `return_quantity <= quantity`
+**13/13 đạt** — nhưng chỉ khi join đúng khóa. Ràng buộc liên bảng `return_quantity <= quantity`
 cho kết quả trái ngược tùy cách nối `returns` với `order_item`:
 
 | Cách join | Số dòng sau join | Vi phạm |
@@ -729,7 +834,8 @@ CREATE TABLE product_return (
     return_reason   VARCHAR(32)   NOT NULL,
     return_quantity SMALLINT      NOT NULL CHECK (return_quantity > 0),
     refund_amount   DECIMAL(16,2) NOT NULL,
-    FOREIGN KEY (order_id, line_number) REFERENCES order_item
+    FOREIGN KEY (order_id, line_number) REFERENCES order_item,
+    UNIQUE (order_id, line_number)                         -- 1 lần trả / dòng hàng, §6.1 quy tắc 4
 );   -- 39.939 dòng
 -- ⚠ return_quantity <= quantity là ràng buộc LIÊN BẢNG ⇒ phải là trigger/assertion,
 --   DDL thuần không diễn đạt được. Dữ liệu nguồn ĐẠT 0 vi phạm khi join bằng
