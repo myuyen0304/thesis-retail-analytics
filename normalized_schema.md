@@ -139,7 +139,7 @@ nên quan hệ ở đây hiện ra như đường nối chứ không như đối
 | `SHIPMENT` | `shipment` | giữ nguyên |
 | `PRODUCT_RETURN` | `product_return` | FK trỏ **dòng hàng**, không phải đơn |
 | `REVIEW` | `review` + `review_title_label` | **1 → 2 bảng** (§4.3) |
-| `INVENTORY_SNAPSHOT` | `inventory_snapshot` | 17 → 9 cột (§3.1, §5) |
+| `INVENTORY_SNAPSHOT` | `inventory_snapshot` | 17 → 6 cột (§3.1, §5) |
 
 **11 thực thể → 17 bảng.** Cộng `web_traffic` và `daily_sales_forecast` (xem dưới) là **19 bảng**
 ở §7. Bốn dòng in đậm là toàn bộ chỗ số lượng bảng thay đổi — mỗi chỗ đều dẫn về mục chứng minh
@@ -413,18 +413,47 @@ DDL §8 dùng phương án A (vì tài liệu này là bài toán chuẩn hóa);
 > Cột *tính được* từ cột khác là một dạng dư thừa **khác**. Bỏ chúng vì nguyên tắc
 > "không lưu cái tính được", **không phải** vì chuẩn hóa.
 
+Năm dòng `inventory` dưới đây đọc ở `np.isclose(atol=1e-9)` — dung sai chặt. Lý do **bắt buộc**
+phải ghi dung sai kèm mọi con số "khớp 100%" nằm ở §5.1.
+
 | Đối tượng | Kiểm chứng | Xử lý |
 |---|---|---|
 | `payments.payment_value` | == Σ(qty×price − discount) của đơn, khớp **100%** | bỏ |
 | **toàn bộ `sales.csv`** | tái tạo từ `order_items`, sai số **2,2e-16** (Revenue) / **1,0e-08** (COGS) | **view**, không phải bảng cơ sở |
 | `inventory.stockout_flag` | == `(stockout_days > 0)`, khớp **100%** | bỏ |
-| `inventory.days_of_supply` | == `stock_on_hand/(units_sold/30)`, khớp **100%** | bỏ |
+| `inventory.days_of_supply` | == `ROUND(stock_on_hand/(units_sold/30), 1)`, khớp **100%** | bỏ |
+| `inventory.fill_rate` | == `ROUND(1 − stockout_days/30, 4)`, khớp **100%** | bỏ |
+| `inventory.sell_through_rate` | == `ROUND(units_sold/(stock_on_hand + units_sold), 4)`, khớp **100%** | bỏ |
+| `inventory.overstock_flag` | == `(days_of_supply > 90)`, khớp **100%** | bỏ |
 
-**Và chỗ phải dừng lại:** ba cột còn lại **không** chứng minh được là dẫn xuất từ cột giữ lại —
-`fill_rate` (55,5%), `sell_through_rate` (65,9%), `overstock_flag` (93,6%).
-Công thức hợp lý nhất chỉ khớp một phần ⇒ **giữ chúng làm measure độc lập, đừng đoán công thức**.
+Cả 5 cột của `inventory` đều là dẫn xuất, không sót cột nào ⇒ `inventory_snapshot` chỉ còn
+**6 cột**: `snapshot_date`, `product_id`, `stock_on_hand`, `units_received`, `units_sold`,
+`stockout_days`. `overstock_flag` suy qua `days_of_supply` **tính lại**, nên vẫn nằm trong 6 cột đó.
 
-Đây là kỷ luật quan trọng: "trông giống dẫn xuất" không đủ để xóa cột. Chỉ xóa khi khớp 100%.
+### 5.1 Ba trong năm dòng `inventory` từng bị kết luận ngược — và vì sao
+
+Bản trước của mục này xếp `fill_rate`, `sell_through_rate`, `overstock_flag` vào nhóm
+"measure độc lập, đừng đoán công thức". **Sai cả ba.** Phát hiện khi đối chiếu chéo với
+`docs/data-dictionary.md` của thành viên còn lại — tài liệu đó ghi đúng công thức `fill_rate`.
+Mỗi cột chỉ lệch **một chi tiết** so với công thức thật:
+
+| Cột | Bản trước thử | Đọc ra | Lệch ở đâu |
+|---|---|---:|---|
+| `fill_rate` | mẫu số = số ngày **thật** của tháng (28–31) | 55,5% | phải là **30 cố định** |
+| `sell_through_rate` | mẫu số = `stock_on_hand + units_received` | 65,9% | phải là tồn **đầu kỳ** `stock_on_hand + units_sold` |
+| `overstock_flag` | biên `days_of_supply >= 90` | 93,6% | phải là `> 90` |
+| `days_of_supply` | đúng công thức nhưng thiếu `ROUND(…, 1)` | 100% ở `atol=1`, **69,5%** ở `atol=1e-6` | kết luận đúng, nhưng đúng vì dung sai lỏng |
+
+Ba lần cùng một kiểu lỗi ⇒ không phải tai nạn mà là thiếu một vế của kỷ luật. Vế đầy đủ có **hai** ý:
+
+1. **"Trông giống dẫn xuất" không đủ để xóa cột** — chỉ xóa khi khớp 100%.
+2. **Gần-khớp là lý do THỬ BIẾN THỂ, không phải bằng chứng cột độc lập.** Ba biến thể phải thử
+   trước khi kết luận: mẫu số (cố định / động / tồn đầu kỳ), bước làm tròn, biên `>` vs `>=`.
+
+Và ràng buộc bao trùm cả hai: **mọi khẳng định "khớp 100%" phải ghi rõ dung sai.** `days_of_supply`
+cho thấy cả hai chiều hỏng — `atol` lỏng biến *gần đúng* thành *đúng*, `atol` chặt mà thiếu bước
+làm tròn thì biến *đúng* thành *sai*. Cell §5 của `normalization.ipynb` giữ nguyên bốn công thức
+sai ở trên để con số 55,5 / 65,9 / 93,6 / 69,5 tái lập được, không chỉ được kể lại.
 
 ---
 
@@ -596,9 +625,6 @@ erDiagram
         int     units_received
         int     units_sold
         int     stockout_days
-        decimal fill_rate
-        decimal sell_through_rate
-        boolean overstock_flag
     }
     web_traffic {
         date    traffic_date PK
@@ -641,7 +667,7 @@ không nối vào cây giao dịch. `sales.csv` **không** xuất hiện: nó l�
 | `product_return` | 39.939 | FK trỏ dòng hàng |
 | `review_title_label` | 18 | **MỚI** — tách 3NF |
 | `review` | 113.551 | bỏ `customer_id`, `rating` |
-| `inventory_snapshot` | 60.247 | 17 → 9 cột |
+| `inventory_snapshot` | 60.247 | 17 → 6 cột |
 | `web_traffic` | 3.652 | 1:1 |
 | `daily_sales_forecast` | 548 | `sample_submission` |
 | **Tổng** | **3.235.699** | **19 bảng** (+ `sales` là view) |
@@ -693,7 +719,7 @@ Ghi "✅ 3NF" cho chúng sẽ là một khẳng định không có cell chứng 
 | `zip` lưu hai nơi | `orders` **và** `customers` | chỉ `customer` (§4.2) |
 | `payment_method` lưu hai nơi | `orders` **và** `payments` | chỉ `"order"` (§4.4) |
 | `rating` lặp theo từng đánh giá | 113.551 dòng | 18 dòng `review_title_label` (§4.3) |
-| Cột tính được | `payment_value`, `stockout_flag`, `days_of_supply`, cả `sales.csv` | bỏ / chuyển thành view (§5) |
+| Cột tính được | `payment_value`, cả 5 cột dẫn xuất của `inventory`, cả `sales.csv` | bỏ / chuyển thành view (§5) |
 
 ---
 
@@ -865,13 +891,11 @@ CREATE TABLE inventory_snapshot (
     units_received    INTEGER       NOT NULL,
     units_sold        INTEGER       NOT NULL,   -- ⚠ không khớp order_item (star_schema.md §6 mục 3)
     stockout_days     SMALLINT      NOT NULL,
-    fill_rate         DECIMAL(6,4)  NOT NULL,   -- GIỮ: không tính được từ cột trên (§5)
-    sell_through_rate DECIMAL(6,4)  NOT NULL,   -- GIỮ
-    overstock_flag    BOOLEAN       NOT NULL,   -- GIỮ
     PRIMARY KEY (snapshot_date, product_id)
-);   -- 60.247 dòng; 17 → 9 cột
--- ĐÃ BỎ: product_name/category/segment (2NF), year/month (2NF),
---         stockout_flag + days_of_supply (dẫn xuất 100%), reorder_flag (chết)
+);   -- 60.247 dòng; 17 → 6 cột
+-- ĐÃ BỎ: product_name/category/segment (2NF), year/month (2NF), reorder_flag (chết),
+--         và cả 5 cột dẫn xuất — stockout_flag, days_of_supply, fill_rate,
+--         sell_through_rate, overstock_flag (đều khớp 100%, công thức ở §5)
 
 CREATE TABLE web_traffic (
     traffic_date             DATE         PRIMARY KEY,
@@ -923,7 +947,7 @@ Danh sách 10 vấn đề chất lượng dữ liệu và quy tắc kiểm tra k
 | **Sau 1NF** | 15 | **+1 bảng** `order_item_promotion`; `order_item` thêm `line_number` |
 | **Sau 2NF** | 15 | **+0 bảng** — chỉ chuyển cột: `inventory` 17 → 12 cột (3 cột về `product`, 2 cột về `snapshot_date`) |
 | **Sau 3NF** | 20 | **+5 bảng** `product_model`, `region`, `city`, `district`, `review_title_label`; `geography` → `zip_area`; bỏ 5 cột sao chép ở `customers`/`orders`/`payments`/`reviews` |
-| Sau khi bỏ dẫn xuất (§5) | **19** | `sales` → **view**; `payment` còn 2 cột; `inventory_snapshot` 12 → 9 cột |
+| Sau khi bỏ dẫn xuất (§5) | **19** | `sales` → **view**; `payment` còn 2 cột; `inventory_snapshot` 12 → 6 cột |
 
 Ba quan sát đọc thẳng từ bảng này:
 
