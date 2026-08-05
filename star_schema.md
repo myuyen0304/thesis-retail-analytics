@@ -146,9 +146,9 @@ erDiagram
         int     units_received
         int     units_sold
         int     stockout_days
-        decimal days_of_supply "ban cong tinh"
-        decimal fill_rate
-        decimal sell_through_rate
+        decimal days_of_supply "ban cong tinh, dan xuat"
+        decimal fill_rate "dan xuat"
+        decimal sell_through_rate "dan xuat"
     }
     fact_return {
         string  return_id PK
@@ -219,6 +219,13 @@ quan hệ 1:1 / 1:0..1 với `orders` — chúng trở thành cột của `fact_
 
 **Bán cộng tính (semi-additive):** `stock_on_hand` và `days_of_supply` **không được SUM qua nhiều ngày** —
 chỉ cộng được theo sản phẩm trong *cùng một* mốc snapshot. Qua thời gian phải dùng AVG hoặc lấy mốc cuối.
+
+**Measure dẫn xuất giữ có chủ ý:** 5 cột cuối của `fact_inventory_snapshot` (`days_of_supply`,
+`fill_rate`, `sell_through_rate`, `stockout_flag`, `overstock_flag`) đều **tính được** từ
+`stock_on_hand` / `units_sold` / `stockout_days`, khớp 100% trên cả 60.247 dòng — công thức ở
+`normalized_schema.md` §5. Mô hình chuẩn hóa bỏ hết; ở đây **giữ lại** để khỏi tính lại mỗi truy vấn.
+Đó là phi chuẩn hóa có chủ đích (§9.5 của tài liệu kia), không phải bỏ sót — nhưng ETL phải **tính**
+chúng theo công thức, đừng chép thẳng từ `inventory.csv`.
 
 ---
 
@@ -346,7 +353,7 @@ Nhưng nó là fact **duy nhất phải mở rộng quá 2022-12-31** để ch�
 
 | # | Vấn đề | Mức độ | Xử lý đề xuất |
 |---|---|---|---|
-| 1 | **`products.price` có 2 hệ đơn vị**: 688 SP giá 9–984, 1.724 SP giá 1.007–40.950. Cùng `(name, size, color)` xuất hiện ở cả hai (12.596 vs 34,03). Xen kẽ theo `product_id`, không thành khối | 🔴 Cao | **Lỗi dữ liệu, không phải trục phân tích.** Đừng tạo thuộc tính `price_tier`. Đặt rule cảnh báo khi load. Nhóm giá thấp chiếm 7,46% số dòng bán nhưng chỉ 1,06% doanh thu. **Cờ `dim_product.price_anomaly` chỉ dùng để LỌC khi load và audit — không được GROUP BY** (xem ghi chú bên dưới bảng) |
+| 1 | **`products.price` có 2 hệ đơn vị**: 688 SP giá 9–984, 1.724 SP giá 1.007–40.950. Cùng `(name, size, color)` xuất hiện ở cả hai (12.596 vs 34,03). Xen kẽ theo `product_id`, không thành khối. **Nhưng ranh giới thật là 100, không phải 1000** — xem ghi chú bên dưới bảng | 🔴 Cao | **Lỗi dữ liệu, không phải trục phân tích.** Đừng tạo thuộc tính `price_tier`. Đặt rule cảnh báo khi load ở ngưỡng `price < 100`. **Cờ `dim_product.price_anomaly` chỉ dùng để LỌC khi load và audit — không được GROUP BY** |
 | 2 | **`signup_date` sinh ngẫu nhiên**: 73,8% đơn trước ngày đăng ký | 🔴 Cao | Không dùng tính tenure/cohort. Đánh dấu không đáng tin trong catalog |
 | 3 | **`inventory.units_sold` không khớp đơn hàng thực** (khớp 2,85%) | 🟠 Trung bình | Coi `fact_inventory_snapshot` là nguồn độc lập, **không reconcile** với `fact_order_item` |
 | 4 | **`orders.order_status` vs `returns` mâu thuẫn**: 36.142 đơn status `returned` nhưng bảng `returns` chỉ phủ 36.062 đơn | 🟠 Trung bình | Chọn 1 nguồn sự thật; ghi rõ trong metric layer |
@@ -357,6 +364,18 @@ Nhưng nó là fact **duy nhất phải mở rộng quá 2022-12-31** để ch�
 | 9 | ~~1 dòng `return_quantity` > số lượng đã mua~~ → **cảnh báo giả**: chỉ xuất hiện khi join `returns` với `order_items` bằng `(order_id, product_id)`, vốn **không phải khóa** | 🟢 Nhỏ | **Không** chặn khi load. Gán `line_number` theo thứ tự nguồn rồi join — 0 vi phạm / 39.939 (`normalized_schema.md` §2.1, §8) |
 | 10 | `reviews.customer_id` dư thừa (suy được từ `order_id`, lệch 0) | 🟢 Nhỏ | Bỏ cột |
 
+> **Ngưỡng của `price_anomaly` là 100, không phải 1000.** Ngưỡng 1000 gộp nhầm hai quần thể
+> khác hẳn nhau (`data_model.ipynb` §8.1):
+>
+> | Lát cắt | Số SKU | Từng bán? | Đóng góp |
+> |---|---:|---|---|
+> | `price < 100` | 654 | **0 SKU nào** | 0% số dòng, 0% doanh thu — đây mới là lỗi dữ liệu |
+> | `100 ≤ price < 1.000` | 34 (30 có giao dịch) | bán ở **đúng giá niêm yết** (trung vị `unit_price/price` = 0,976; `unit_price` trung vị 712,68) | 7,46% số dòng, 1,06% doanh thu |
+>
+> Nghĩa là con số "7,46% số dòng / 1,06% doanh thu" thuộc về **30 SKU hàng rẻ hợp lệ**, không phải
+> về 688 SKU nghi lỗi — bản trước của mục này gán nhầm nó cho cả nhóm. Và cờ đặt ở `< 1000` sẽ
+> đánh dấu 30 sản phẩm bình thường là lỗi dữ liệu.
+>
 > **Về `dim_product.price_anomaly`:** đây là cờ *chất lượng dữ liệu*, không phải thuộc tính phân tích.
 > Nó tồn tại để lọc/audit lúc load, và **không được dùng làm khóa GROUP BY** — nếu gom nhóm theo nó,
 > bạn đang biến một lỗi dữ liệu thành một chiều phân tích giả.
@@ -416,7 +435,7 @@ CREATE TABLE dim_product (
     color         VARCHAR(16)   NOT NULL,
     current_price DECIMAL(14,4) NOT NULL,           -- snapshot, KHÔNG phải giá lịch sử
     current_cogs  DECIMAL(14,4) NOT NULL,
-    price_anomaly BOOLEAN       NOT NULL            -- current_price < 1000, xem §6 muc 1
+    price_anomaly BOOLEAN       NOT NULL            -- current_price < 100, xem §6 muc 1
 );   -- 2.412 dòng, SCD Type 1
 
 CREATE TABLE dim_promotion (
@@ -488,13 +507,23 @@ CREATE TABLE fact_inventory_snapshot (               -- periodic snapshot, BÁN 
     units_received    INTEGER       NOT NULL,
     units_sold        INTEGER       NOT NULL,       -- ⚠ không khớp fact_order_item
     stockout_days     SMALLINT      NOT NULL,
-    days_of_supply    DECIMAL(10,2) NOT NULL,       -- ⚠ KHÔNG SUM
+    days_of_supply    DECIMAL(10,1) NOT NULL,       -- ⚠ KHÔNG SUM;  ↓ 5 cột dưới đây đều DẪN XUẤT
     fill_rate         DECIMAL(6,4)  NOT NULL,
     sell_through_rate DECIMAL(6,4)  NOT NULL,
     stockout_flag     BOOLEAN       NOT NULL,
     overstock_flag    BOOLEAN       NOT NULL,
     PRIMARY KEY (date_sk, product_sk)
 );   -- 60.247 dòng, 126 mốc cuối tháng, phủ 1.624/2.412 SP
+-- 5 cột cuối là measure DẪN XUẤT, giữ lại CÓ CHỦ Ý (phi chuẩn hóa, đúng tinh thần
+-- normalized_schema.md §9.5) để khỏi tính lại mỗi truy vấn — không phải bỏ sót.
+-- Suy được từ 4 cột trên, khớp 100% / 60.247 dòng (normalized_schema.md §5):
+--   stockout_flag     = stockout_days > 0
+--   days_of_supply    = ROUND(stock_on_hand/(units_sold/30), 1)
+--   fill_rate         = ROUND(1 − stockout_days/30, 4)
+--   sell_through_rate = ROUND(units_sold/(stock_on_hand + units_sold), 4)
+--   overstock_flag    = days_of_supply > 90
+-- ETL phải TÍNH lại 5 cột này, đừng chép thẳng từ inventory.csv — có công thức rồi thì
+-- chép nguồn là mở đường cho hai giá trị khác nhau của cùng một đại lượng.
 
 CREATE TABLE fact_return (
     return_id       VARCHAR(16)   PRIMARY KEY,
