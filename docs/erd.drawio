@@ -185,7 +185,7 @@
 <mxCell id="r5b" value="1" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r5" target="PAYMENTS"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r6" value="được giao bởi" style="rhombus;double=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="2150" y="3180" width="210" height="108" as="geometry"/></mxCell>
 <mxCell id="r6a" value="1" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="ORDERS" target="r6"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="r6b" value="0..1" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r6" target="SHIPMENTS"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="r6b" value="1" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r6" target="SHIPMENTS"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r7" value="được bán trong" style="rhombus;double=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3613" y="1714" width="210" height="108" as="geometry"/></mxCell>
 <mxCell id="r7a" value="1" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="PRODUCTS" target="r7"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r7b" value="N" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r7" target="ORDER_ITEMS"><mxGeometry relative="1" as="geometry"/></mxCell>
@@ -203,13 +203,13 @@
 <mxCell id="r11b" value="N" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r11" target="RETURNS"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r12" value="được đánh giá" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3613" y="2490" width="210" height="108" as="geometry"/></mxCell>
 <mxCell id="r12a" value="1" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="ORDER_ITEMS" target="r12"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="r12b" value="0..1" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r12" target="REVIEWS"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="r12b" value="1" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r12" target="REVIEWS"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r13" value="được tổng hợp theo ngày từ" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1013" y="1714" width="210" height="108" as="geometry"/></mxCell>
 <mxCell id="r13a" value="1" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;dashed=1;dashPattern=10 6;" edge="1" parent="1" source="SALES" target="r13"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r13b" value="N" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;dashed=1;dashPattern=10 6;" edge="1" parent="1" source="r13" target="ORDERS"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r14" value="có lưu lượng truy cập" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="363" y="2490" width="210" height="108" as="geometry"/></mxCell>
 <mxCell id="r14a" value="1" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;dashed=1;dashPattern=10 6;" edge="1" parent="1" source="SALES" target="r14"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="r14b" value="0..1" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;dashed=1;dashPattern=10 6;" edge="1" parent="1" source="r14" target="WEB_TRAFFIC"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="r14b" value="1" style="shape=link;endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;dashed=1;dashPattern=10 6;" edge="1" parent="1" source="r14" target="WEB_TRAFFIC"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="title" value="SƠ ĐỒ THỰC THỂ – LIÊN KẾT (ERD) – ký hiệu Chen" style="text;html=1;align=center;verticalAlign=middle;fontSize=40;fontStyle=1;fontColor=#0b3a63;" vertex="1" parent="1"><mxGeometry x="1868" y="20" width="2400" height="70" as="geometry"/></mxCell>
 <mxCell id="legend" value="CHÚ THÍCH: hình chữ nhật = thực thể · viền đôi = thực thể yếu · viền nét đứt = thực thể suy diễn
 hình thoi = quan hệ · viền đôi = quan hệ định danh · elip = thuộc tính · gạch chân = khóa · nét đứt = suy diễn" style="shape=note;whiteSpace=wrap;html=1;size=20;verticalAlign=top;align=left;spacingLeft=10;fillColor=#fff8e1;strokeColor=#d6b656;fontSize=18;" vertex="1" parent="1"><mxGeometry x="80" y="5004" width="2100" height="110" as="geometry"/></mxCell>
@@ -228,13 +228,17 @@ hình thoi = quan hệ · viền đôi = quan hệ định danh · elip = thuộ
   stockout_flag = (stockout_days &gt; 0); sell_through_rate = units_sold/(stock_on_hand + units_sold);
   days_of_supply = stock_on_hand/(units_sold/30); payment_value = Σ(quantity × unit_price − discount_amount).
   Tất cả đều khớp 100%. Giữ chúng khi xây đặc trưng sẽ gây đa cộng tuyến hoàn hảo.
-• Mỗi dòng hàng có tối đa MỘT đánh giá (113.551 dòng ứng 113.551 cặp khác nhau) nên quan hệ là 1:0..1,
-  nhưng có thể có nhiều lượt trả hàng (39.939 dòng / 39.937 cặp) nên quan hệ trả hàng là 1:N.
+• Mỗi dòng hàng có tối đa MỘT đánh giá (113.551 dòng ứng đúng 113.551 cặp khác nhau) nên quan hệ đánh giá là 1:1,
+  với ORDER_ITEMS tham gia bộ phận. Ngược lại, một dòng hàng có thể bị trả nhiều lần (39.939 dòng / 39.937 cặp)
+  nên quan hệ trả hàng là 1:N.
 • Tham gia toàn bộ (đường đôi) đều đo trên dữ liệu: 100% đơn có dòng hàng và có thanh toán; chỉ 87,5% đơn có giao vận,
   74,0% khách từng đặt hàng, 66,3% sản phẩm từng bán, 38,7% dòng hàng có khuyến mại — các bên này tham gia bộ phận.
 • 3 cột product_name / category / segment trong inventory.csv không đưa vào mô hình vì là bản sao nguyên văn từ PRODUCTS.
   Đối soát: 93 cột của 13 tệp − 15 cột khóa ngoại − 3 cột sao chép = 75 thuộc tính, khớp đúng với sơ đồ.
-• Tồn tại phụ thuộc hàm review_title → rating (18 nhãn xác định duy nhất 1 mức điểm); hai cột này dư thừa lẫn nhau." style="shape=note;whiteSpace=wrap;html=1;size=20;verticalAlign=top;align=left;spacingLeft=10;fillColor=#fff8e1;strokeColor=#d6b656;fontSize=16;" vertex="1" parent="1"><mxGeometry x="80" y="5144" width="2480" height="400" as="geometry"/></mxCell>
+• Tồn tại phụ thuộc hàm review_title → rating (18 nhãn xác định duy nhất 1 mức điểm); hai cột này dư thừa lẫn nhau.
+• Sơ đồ dùng thuần ký hiệu Chen: bản số chỉ ghi 1 hoặc N, còn tính bắt buộc/tùy chọn thể hiện bằng đường đôi/đường đơn,
+  không trộn với hệ ký hiệu (min, max). Ví dụ ORDERS–SHIPMENTS ghi 1:1 nhưng đường phía ORDERS là đường đơn,
+  nghĩa là một đơn có tối đa một lần giao vận và 12,5% số đơn chưa từng phát sinh giao vận." style="shape=note;whiteSpace=wrap;html=1;size=20;verticalAlign=top;align=left;spacingLeft=10;fillColor=#fff8e1;strokeColor=#d6b656;fontSize=16;" vertex="1" parent="1"><mxGeometry x="80" y="5144" width="2480" height="400" as="geometry"/></mxCell>
 </root></mxGraphModel>
 </diagram>
 </mxfile>

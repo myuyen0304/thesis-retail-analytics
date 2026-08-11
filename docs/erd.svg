@@ -125,7 +125,7 @@
 <line x1="2747" y1="4699" x2="2260" y2="3233" stroke="#333" stroke-width="2.2"/>
 <line x1="2739" y1="4701" x2="2251" y2="3235" stroke="#333" stroke-width="2.2"/>
 <rect x="2417" y="3759" width="38" height="28" fill="#fff" rx="4"/>
-<text x="2436" y="3780" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">0..1</text>
+<text x="2436" y="3780" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">1</text>
 <line x1="4368" y1="1768" x2="3718" y2="1768" stroke="#333" stroke-width="2.6"/>
 <rect x="3940" y="1751" width="38" height="28" fill="#fff" rx="4"/>
 <text x="3958" y="1772" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">1</text>
@@ -166,7 +166,7 @@
 <line x1="4371" y1="3317" x2="3721" y2="2541" stroke="#333" stroke-width="2.2"/>
 <line x1="4365" y1="3323" x2="3715" y2="2547" stroke="#333" stroke-width="2.2"/>
 <rect x="3940" y="2814" width="38" height="28" fill="#fff" rx="4"/>
-<text x="3958" y="2835" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">0..1</text>
+<text x="3958" y="2835" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">1</text>
 <line x1="468" y1="1772" x2="1118" y2="1772" stroke="#333" stroke-width="2.2" stroke-dasharray="10,6"/>
 <line x1="468" y1="1764" x2="1118" y2="1764" stroke="#333" stroke-width="2.2" stroke-dasharray="10,6"/>
 <rect x="858" y="1751" width="38" height="28" fill="#fff" rx="4"/>
@@ -181,7 +181,7 @@
 <line x1="472" y1="3320" x2="472" y2="2544" stroke="#333" stroke-width="2.2" stroke-dasharray="10,6"/>
 <line x1="464" y1="3320" x2="464" y2="2544" stroke="#333" stroke-width="2.2" stroke-dasharray="10,6"/>
 <rect x="449" y="2814" width="38" height="28" fill="#fff" rx="4"/>
-<text x="468" y="2835" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">0..1</text>
+<text x="468" y="2835" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">1</text>
 <polygon points="1118,564 1223,618 1118,672 1013,618" fill="#ffe6cc" stroke="#d79b00" stroke-width="2.6"/>
 <text x="1118" y="623" font-size="17" fill="#663c00" text-anchor="middle">cư trú tại</text>
 <polygon points="1118,1139 1223,1193 1118,1247 1013,1193" fill="#ffe6cc" stroke="#d79b00" stroke-width="2.6"/>
@@ -399,7 +399,7 @@
 <text x="2743" y="4706" font-size="20" font-weight="700" fill="#0b3a63" text-anchor="middle">SHIPMENTS</text>
 <text x="3068" y="76" font-size="48" font-weight="700" fill="#0b3a63" text-anchor="middle">SƠ ĐỒ THỰC THỂ – LIÊN KẾT (ERD)</text>
 <text x="3068" y="132" font-size="28" fill="#444" text-anchor="middle">Mức khái niệm – ký hiệu Chen · Bộ dữ liệu thương mại điện tử thời trang 2012–2022</text>
-<rect x="80" y="4984" width="1320" height="586" fill="#fafafa" stroke="#888" stroke-width="2" rx="8"/>
+<rect x="80" y="4984" width="1320" height="634" fill="#fafafa" stroke="#888" stroke-width="2" rx="8"/>
 <text x="106" y="5024" font-size="25" font-weight="700" fill="#111">CHÚ THÍCH KÝ HIỆU</text>
 <rect x="106" y="5046" width="88" height="34" fill="#dae8fc" stroke="#6c8ebf" stroke-width="2.6"/>
 <text x="230" y="5070" font-size="22" fill="#222">Thực thể (Entity)</text>
@@ -427,28 +427,34 @@
 <text x="230" y="5502" font-size="22" fill="#222">Nét đứt = liên kết suy diễn hoặc qua cột dư thừa, không phải khóa ngoại vật lý</text>
 <line x1="100" y1="5538" x2="200" y2="5538" stroke="#333" stroke-width="2.2"/>
 <line x1="100" y1="5546" x2="200" y2="5546" stroke="#333" stroke-width="2.2"/>
-<text x="230" y="5550" font-size="22" fill="#222">Đường đôi = tham gia toàn bộ (mọi thực thể bên đó đều phải tham gia quan hệ)</text>
-<rect x="80" y="5606" width="2480" height="850" fill="#fff8e1" stroke="#d6b656" stroke-width="2" rx="8"/>
-<text x="106" y="5646" font-size="21" fill="#5a4300" font-weight="700">Ghi chú về mô hình khái niệm (mọi kết luận đều đã kiểm chứng trực tiếp trên dữ liệu):</text>
-<text x="106" y="5683" font-size="21" fill="#5a4300" font-weight="400">• Khóa ngoại KHÔNG vẽ thành thuộc tính — liên kết giữa các thực thể đã do hình thoi quan hệ biểu diễn.</text>
-<text x="106" y="5720" font-size="21" fill="#5a4300" font-weight="400">• RETURNS và REVIEWS nối vào ORDER_ITEMS chứ không nối riêng vào ORDERS và PRODUCTS: cặp (order_id, product_id)</text>
-<text x="106" y="5757" font-size="21" fill="#5a4300" font-weight="400">  của chúng nằm trọn trong ORDER_ITEMS (0 dòng lệch) — mỗi lượt trả hàng / đánh giá gắn với một dòng hàng cụ thể.</text>
-<text x="106" y="5794" font-size="21" fill="#5a4300" font-weight="400">• ORDER_ITEMS, PAYMENTS, SHIPMENTS, INVENTORY là thực thể yếu. ORDER_ITEMS phải là thực thể (không thể là hình thoi)</text>
-<text x="106" y="5831" font-size="21" fill="#5a4300" font-weight="400">  vì bản thân nó còn tham gia quan hệ với PROMOTIONS, RETURNS và REVIEWS.</text>
-<text x="106" y="5868" font-size="21" fill="#5a4300" font-weight="400">• SALES là thực thể suy diễn: Revenue = Σ(quantity × unit_price), COGS = Σ(quantity × products.cogs), gộp theo</text>
-<text x="106" y="5905" font-size="21" fill="#5a4300" font-weight="400">  orders.order_date — kiểm chứng sai số 0,00 trên cả 3.833 ngày. Tập sales.Date trùng khớp tuyệt đối với orders.order_date.</text>
-<text x="106" y="5942" font-size="21" fill="#5a4300" font-weight="400">• Quan hệ SALES–ORDERS và SALES–WEB_TRAFFIC nối theo trục thời gian (nét đứt), không phải khóa ngoại vật lý.</text>
-<text x="106" y="5979" font-size="21" fill="#5a4300" font-weight="400">• Bộ dữ liệu có 14 tệp nhưng mô hình chỉ 13 thực thể: sample_submission.csv là khuôn dạng nộp kết quả dự báo</text>
-<text x="106" y="6016" font-size="21" fill="#5a4300" font-weight="400">  (548 ngày tương lai, giá trị chỉ minh họa), không phải thực thể nghiệp vụ nên không đưa vào ERD.</text>
-<text x="106" y="6053" font-size="21" fill="#5a4300" font-weight="400">• 11 thuộc tính suy diễn đã được xác minh bằng công thức, không phải phỏng đoán. Ví dụ: fill_rate = 1 − stockout_days/30;</text>
-<text x="106" y="6090" font-size="21" fill="#5a4300" font-weight="400">  stockout_flag = (stockout_days &gt; 0); sell_through_rate = units_sold/(stock_on_hand + units_sold);</text>
-<text x="106" y="6127" font-size="21" fill="#5a4300" font-weight="400">  days_of_supply = stock_on_hand/(units_sold/30); payment_value = Σ(quantity × unit_price − discount_amount).</text>
-<text x="106" y="6164" font-size="21" fill="#5a4300" font-weight="400">  Tất cả đều khớp 100%. Giữ chúng khi xây đặc trưng sẽ gây đa cộng tuyến hoàn hảo.</text>
-<text x="106" y="6201" font-size="21" fill="#5a4300" font-weight="400">• Mỗi dòng hàng có tối đa MỘT đánh giá (113.551 dòng ứng 113.551 cặp khác nhau) nên quan hệ là 1:0..1,</text>
-<text x="106" y="6238" font-size="21" fill="#5a4300" font-weight="400">  nhưng có thể có nhiều lượt trả hàng (39.939 dòng / 39.937 cặp) nên quan hệ trả hàng là 1:N.</text>
-<text x="106" y="6275" font-size="21" fill="#5a4300" font-weight="400">• Tham gia toàn bộ (đường đôi) đều đo trên dữ liệu: 100% đơn có dòng hàng và có thanh toán; chỉ 87,5% đơn có giao vận,</text>
-<text x="106" y="6312" font-size="21" fill="#5a4300" font-weight="400">  74,0% khách từng đặt hàng, 66,3% sản phẩm từng bán, 38,7% dòng hàng có khuyến mại — các bên này tham gia bộ phận.</text>
-<text x="106" y="6349" font-size="21" fill="#5a4300" font-weight="400">• 3 cột product_name / category / segment trong inventory.csv không đưa vào mô hình vì là bản sao nguyên văn từ PRODUCTS.</text>
-<text x="106" y="6386" font-size="21" fill="#5a4300" font-weight="400">  Đối soát: 93 cột của 13 tệp − 15 cột khóa ngoại − 3 cột sao chép = 75 thuộc tính, khớp đúng với sơ đồ.</text>
-<text x="106" y="6423" font-size="21" fill="#5a4300" font-weight="400">• Tồn tại phụ thuộc hàm review_title → rating (18 nhãn xác định duy nhất 1 mức điểm); hai cột này dư thừa lẫn nhau.</text>
+<text x="230" y="5550" font-size="22" fill="#222">Đường đôi = tham gia toàn bộ · Đường đơn = tham gia bộ phận (có thể không tham gia)</text>
+<text x="150" y="5598" font-size="24" font-weight="700" fill="#111" text-anchor="middle">1  ·  N</text>
+<text x="230" y="5598" font-size="22" fill="#222">Số 1 / N cạnh thực thể = số bản thể của CHÍNH thực thể đó ứng với một bản thể bên kia</text>
+<rect x="80" y="5654" width="2480" height="998" fill="#fff8e1" stroke="#d6b656" stroke-width="2" rx="8"/>
+<text x="106" y="5694" font-size="21" fill="#5a4300" font-weight="700">Ghi chú về mô hình khái niệm (mọi kết luận đều đã kiểm chứng trực tiếp trên dữ liệu):</text>
+<text x="106" y="5731" font-size="21" fill="#5a4300" font-weight="400">• Khóa ngoại KHÔNG vẽ thành thuộc tính — liên kết giữa các thực thể đã do hình thoi quan hệ biểu diễn.</text>
+<text x="106" y="5768" font-size="21" fill="#5a4300" font-weight="400">• RETURNS và REVIEWS nối vào ORDER_ITEMS chứ không nối riêng vào ORDERS và PRODUCTS: cặp (order_id, product_id)</text>
+<text x="106" y="5805" font-size="21" fill="#5a4300" font-weight="400">  của chúng nằm trọn trong ORDER_ITEMS (0 dòng lệch) — mỗi lượt trả hàng / đánh giá gắn với một dòng hàng cụ thể.</text>
+<text x="106" y="5842" font-size="21" fill="#5a4300" font-weight="400">• ORDER_ITEMS, PAYMENTS, SHIPMENTS, INVENTORY là thực thể yếu. ORDER_ITEMS phải là thực thể (không thể là hình thoi)</text>
+<text x="106" y="5879" font-size="21" fill="#5a4300" font-weight="400">  vì bản thân nó còn tham gia quan hệ với PROMOTIONS, RETURNS và REVIEWS.</text>
+<text x="106" y="5916" font-size="21" fill="#5a4300" font-weight="400">• SALES là thực thể suy diễn: Revenue = Σ(quantity × unit_price), COGS = Σ(quantity × products.cogs), gộp theo</text>
+<text x="106" y="5953" font-size="21" fill="#5a4300" font-weight="400">  orders.order_date — kiểm chứng sai số 0,00 trên cả 3.833 ngày. Tập sales.Date trùng khớp tuyệt đối với orders.order_date.</text>
+<text x="106" y="5990" font-size="21" fill="#5a4300" font-weight="400">• Quan hệ SALES–ORDERS và SALES–WEB_TRAFFIC nối theo trục thời gian (nét đứt), không phải khóa ngoại vật lý.</text>
+<text x="106" y="6027" font-size="21" fill="#5a4300" font-weight="400">• Bộ dữ liệu có 14 tệp nhưng mô hình chỉ 13 thực thể: sample_submission.csv là khuôn dạng nộp kết quả dự báo</text>
+<text x="106" y="6064" font-size="21" fill="#5a4300" font-weight="400">  (548 ngày tương lai, giá trị chỉ minh họa), không phải thực thể nghiệp vụ nên không đưa vào ERD.</text>
+<text x="106" y="6101" font-size="21" fill="#5a4300" font-weight="400">• 11 thuộc tính suy diễn đã được xác minh bằng công thức, không phải phỏng đoán. Ví dụ: fill_rate = 1 − stockout_days/30;</text>
+<text x="106" y="6138" font-size="21" fill="#5a4300" font-weight="400">  stockout_flag = (stockout_days &gt; 0); sell_through_rate = units_sold/(stock_on_hand + units_sold);</text>
+<text x="106" y="6175" font-size="21" fill="#5a4300" font-weight="400">  days_of_supply = stock_on_hand/(units_sold/30); payment_value = Σ(quantity × unit_price − discount_amount).</text>
+<text x="106" y="6212" font-size="21" fill="#5a4300" font-weight="400">  Tất cả đều khớp 100%. Giữ chúng khi xây đặc trưng sẽ gây đa cộng tuyến hoàn hảo.</text>
+<text x="106" y="6249" font-size="21" fill="#5a4300" font-weight="400">• Mỗi dòng hàng có tối đa MỘT đánh giá (113.551 dòng ứng đúng 113.551 cặp khác nhau) nên quan hệ đánh giá là 1:1,</text>
+<text x="106" y="6286" font-size="21" fill="#5a4300" font-weight="400">  với ORDER_ITEMS tham gia bộ phận. Ngược lại, một dòng hàng có thể bị trả nhiều lần (39.939 dòng / 39.937 cặp)</text>
+<text x="106" y="6323" font-size="21" fill="#5a4300" font-weight="400">  nên quan hệ trả hàng là 1:N.</text>
+<text x="106" y="6360" font-size="21" fill="#5a4300" font-weight="400">• Tham gia toàn bộ (đường đôi) đều đo trên dữ liệu: 100% đơn có dòng hàng và có thanh toán; chỉ 87,5% đơn có giao vận,</text>
+<text x="106" y="6397" font-size="21" fill="#5a4300" font-weight="400">  74,0% khách từng đặt hàng, 66,3% sản phẩm từng bán, 38,7% dòng hàng có khuyến mại — các bên này tham gia bộ phận.</text>
+<text x="106" y="6434" font-size="21" fill="#5a4300" font-weight="400">• 3 cột product_name / category / segment trong inventory.csv không đưa vào mô hình vì là bản sao nguyên văn từ PRODUCTS.</text>
+<text x="106" y="6471" font-size="21" fill="#5a4300" font-weight="400">  Đối soát: 93 cột của 13 tệp − 15 cột khóa ngoại − 3 cột sao chép = 75 thuộc tính, khớp đúng với sơ đồ.</text>
+<text x="106" y="6508" font-size="21" fill="#5a4300" font-weight="400">• Tồn tại phụ thuộc hàm review_title → rating (18 nhãn xác định duy nhất 1 mức điểm); hai cột này dư thừa lẫn nhau.</text>
+<text x="106" y="6545" font-size="21" fill="#5a4300" font-weight="400">• Sơ đồ dùng thuần ký hiệu Chen: bản số chỉ ghi 1 hoặc N, còn tính bắt buộc/tùy chọn thể hiện bằng đường đôi/đường đơn,</text>
+<text x="106" y="6582" font-size="21" fill="#5a4300" font-weight="400">  không trộn với hệ ký hiệu (min, max). Ví dụ ORDERS–SHIPMENTS ghi 1:1 nhưng đường phía ORDERS là đường đơn,</text>
+<text x="106" y="6619" font-size="21" fill="#5a4300" font-weight="400">  nghĩa là một đơn có tối đa một lần giao vận và 12,5% số đơn chưa từng phát sinh giao vận.</text>
 </svg>
