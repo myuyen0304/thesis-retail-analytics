@@ -152,7 +152,7 @@
 <text x="3478" y="2261" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">1</text>
 <line x1="4368" y1="3320" x2="3718" y2="2544" stroke="#333" stroke-width="2.6"/>
 <rect x="3940" y="2814" width="38" height="28" fill="#fff" rx="4"/>
-<text x="3958" y="2835" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">N</text>
+<text x="3958" y="2835" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">0..1</text>
 <line x1="468" y1="1768" x2="1118" y2="1768" stroke="#333" stroke-width="2.6" stroke-dasharray="10,6"/>
 <rect x="858" y="1751" width="38" height="28" fill="#fff" rx="4"/>
 <text x="878" y="1772" font-size="21" font-weight="700" fill="#111" text-anchor="middle" dominant-baseline="middle">1</text>
@@ -251,27 +251,27 @@
 <ellipse cx="5386" cy="450" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
 <text x="5386" y="455" font-size="15" fill="#111" text-anchor="middle">stockout_days</text>
 <ellipse cx="5574" cy="450" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
-<text x="5574" y="455" font-size="15" fill="#111" text-anchor="middle">days_of_supply</text>
+<text x="5574" y="455" font-size="15" fill="#111" text-anchor="middle">overstock_flag</text>
 <ellipse cx="5762" cy="450" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
-<text x="5762" y="455" font-size="15" fill="#111" text-anchor="middle">stockout_flag</text>
-<ellipse cx="5950" cy="450" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
-<text x="5950" y="455" font-size="15" fill="#111" text-anchor="middle">overstock_flag</text>
-<ellipse cx="5386" cy="382" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
-<text x="5386" y="387" font-size="15" fill="#111" text-anchor="middle">reorder_flag</text>
-<ellipse cx="5574" cy="382" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
-<text x="5574" y="387" font-size="15" fill="#111" text-anchor="middle">sell_through_rate</text>
+<text x="5762" y="455" font-size="15" fill="#111" text-anchor="middle">reorder_flag</text>
+<ellipse cx="5950" cy="450" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
+<text x="5950" y="455" font-size="15" fill="#666" text-anchor="middle">days_of_supply</text>
+<ellipse cx="5386" cy="382" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
+<text x="5386" y="387" font-size="15" fill="#666" text-anchor="middle">fill_rate</text>
+<ellipse cx="5574" cy="382" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
+<text x="5574" y="387" font-size="15" fill="#666" text-anchor="middle">stockout_flag</text>
 <ellipse cx="5762" cy="382" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
-<text x="5762" y="387" font-size="15" fill="#666" text-anchor="middle">fill_rate</text>
+<text x="5762" y="387" font-size="15" fill="#666" text-anchor="middle">sell_through_rate</text>
 <ellipse cx="5950" cy="382" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
 <text x="5950" y="387" font-size="15" fill="#666" text-anchor="middle">year</text>
 <ellipse cx="5668" cy="314" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
 <text x="5668" y="319" font-size="15" fill="#666" text-anchor="middle">month</text>
 <ellipse cx="218" cy="1700" rx="86" ry="24" fill="#d5e8d4" stroke="#82b366" stroke-width="2"/>
 <text x="218" y="1705" font-size="15" fill="#111" text-anchor="middle" text-decoration="underline">Date</text>
-<ellipse cx="218" cy="1768" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
-<text x="218" y="1773" font-size="15" fill="#111" text-anchor="middle">Revenue</text>
-<ellipse cx="218" cy="1836" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
-<text x="218" y="1841" font-size="15" fill="#111" text-anchor="middle">COGS</text>
+<ellipse cx="218" cy="1768" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
+<text x="218" y="1773" font-size="15" fill="#666" text-anchor="middle">Revenue</text>
+<ellipse cx="218" cy="1836" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
+<text x="218" y="1841" font-size="15" fill="#666" text-anchor="middle">COGS</text>
 <ellipse cx="1486" cy="1868" rx="86" ry="24" fill="#d5e8d4" stroke="#82b366" stroke-width="2"/>
 <text x="1486" y="1873" font-size="15" fill="#111" text-anchor="middle" text-decoration="underline">order_id</text>
 <ellipse cx="1674" cy="1868" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
@@ -321,9 +321,9 @@
 <ellipse cx="656" cy="3488" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
 <text x="656" y="3493" font-size="15" fill="#111" text-anchor="middle">traffic_source</text>
 <ellipse cx="1580" cy="3420" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
-<text x="1580" y="3425" font-size="15" fill="#111" text-anchor="middle">payment_value</text>
-<ellipse cx="1768" cy="3420" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2"/>
-<text x="1768" y="3425" font-size="15" fill="#111" text-anchor="middle">installments</text>
+<text x="1580" y="3425" font-size="15" fill="#111" text-anchor="middle">installments</text>
+<ellipse cx="1768" cy="3420" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
+<text x="1768" y="3425" font-size="15" fill="#666" text-anchor="middle">payment_value</text>
 <ellipse cx="1956" cy="3420" rx="86" ry="24" fill="#f5f5f5" stroke="#777777" stroke-width="2" stroke-dasharray="7,5"/>
 <text x="1956" y="3425" font-size="15" fill="#666" text-anchor="middle">payment_method</text>
 <ellipse cx="2786" cy="3420" rx="86" ry="24" fill="#d5e8d4" stroke="#82b366" stroke-width="2"/>
@@ -408,7 +408,7 @@
 <text x="230" y="5454" font-size="22" fill="#222">Thuộc tính suy diễn – tính lại được từ dữ liệu khác</text>
 <line x1="100" y1="5494" x2="200" y2="5494" stroke="#333" stroke-width="2.6" stroke-dasharray="10,6"/>
 <text x="230" y="5502" font-size="22" fill="#222">Nét đứt = liên kết suy diễn hoặc qua cột dư thừa, không phải khóa ngoại vật lý</text>
-<rect x="80" y="5558" width="2480" height="443" fill="#fff8e1" stroke="#d6b656" stroke-width="2" rx="8"/>
+<rect x="80" y="5558" width="2480" height="665" fill="#fff8e1" stroke="#d6b656" stroke-width="2" rx="8"/>
 <text x="106" y="5598" font-size="21" fill="#5a4300" font-weight="700">Ghi chú về mô hình khái niệm (mọi kết luận đều đã kiểm chứng trực tiếp trên dữ liệu):</text>
 <text x="106" y="5635" font-size="21" fill="#5a4300" font-weight="400">• Khóa ngoại KHÔNG vẽ thành thuộc tính — liên kết giữa các thực thể đã do hình thoi quan hệ biểu diễn.</text>
 <text x="106" y="5672" font-size="21" fill="#5a4300" font-weight="400">• RETURNS và REVIEWS nối vào ORDER_ITEMS chứ không nối riêng vào ORDERS và PRODUCTS: cặp (order_id, product_id)</text>
@@ -420,4 +420,10 @@
 <text x="106" y="5894" font-size="21" fill="#5a4300" font-weight="400">• Quan hệ SALES–ORDERS và SALES–WEB_TRAFFIC nối theo trục thời gian (nét đứt), không phải khóa ngoại vật lý.</text>
 <text x="106" y="5931" font-size="21" fill="#5a4300" font-weight="400">• Bộ dữ liệu có 14 tệp nhưng mô hình chỉ 13 thực thể: sample_submission.csv là khuôn dạng nộp kết quả dự báo</text>
 <text x="106" y="5968" font-size="21" fill="#5a4300" font-weight="400">  (548 ngày tương lai, giá trị chỉ minh họa), không phải thực thể nghiệp vụ nên không đưa vào ERD.</text>
+<text x="106" y="6005" font-size="21" fill="#5a4300" font-weight="400">• 11 thuộc tính suy diễn đã được xác minh bằng công thức, không phải phỏng đoán. Ví dụ: fill_rate = 1 − stockout_days/30;</text>
+<text x="106" y="6042" font-size="21" fill="#5a4300" font-weight="400">  stockout_flag = (stockout_days &gt; 0); sell_through_rate = units_sold/(stock_on_hand + units_sold);</text>
+<text x="106" y="6079" font-size="21" fill="#5a4300" font-weight="400">  days_of_supply = stock_on_hand/(units_sold/30); payment_value = Σ(quantity × unit_price − discount_amount).</text>
+<text x="106" y="6116" font-size="21" fill="#5a4300" font-weight="400">  Tất cả đều khớp 100%. Giữ chúng khi xây đặc trưng sẽ gây đa cộng tuyến hoàn hảo.</text>
+<text x="106" y="6153" font-size="21" fill="#5a4300" font-weight="400">• Mỗi dòng hàng có tối đa MỘT đánh giá (113.551 dòng ứng 113.551 cặp khác nhau) nên quan hệ là 1:0..1,</text>
+<text x="106" y="6190" font-size="21" fill="#5a4300" font-weight="400">  nhưng có thể có nhiều lượt trả hàng (39.939 dòng / 39.937 cặp) nên quan hệ trả hàng là 1:N.</text>
 </svg>

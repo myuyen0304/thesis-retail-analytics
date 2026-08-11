@@ -65,17 +65,17 @@
 <mxCell id="la23" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a23" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="a24" value="stockout_days" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="5300" y="426" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la24" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a24" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a25" value="days_of_supply" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="5488" y="426" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a25" value="overstock_flag" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="5488" y="426" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la25" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a25" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a26" value="stockout_flag" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="5676" y="426" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a26" value="reorder_flag" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="5676" y="426" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la26" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a26" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a27" value="overstock_flag" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="5864" y="426" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a27" value="days_of_supply" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="5864" y="426" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la27" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a27" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a28" value="reorder_flag" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="5300" y="358" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a28" value="fill_rate" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="5300" y="358" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la28" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a28" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a29" value="sell_through_rate" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="5488" y="358" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a29" value="stockout_flag" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="5488" y="358" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la29" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a29" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a30" value="fill_rate" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="5676" y="358" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a30" value="sell_through_rate" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="5676" y="358" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la30" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a30" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="a31" value="year" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="5864" y="358" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la31" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a31" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
@@ -83,9 +83,9 @@
 <mxCell id="la32" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a32" target="INVENTORY"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="a33" value="Date" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=4;" vertex="1" parent="1"><mxGeometry x="132" y="1676" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la33" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a33" target="SALES"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a34" value="Revenue" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="132" y="1744" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a34" value="Revenue" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="132" y="1744" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la34" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a34" target="SALES"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a35" value="COGS" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="132" y="1812" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a35" value="COGS" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="132" y="1812" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la35" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a35" target="SALES"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="a36" value="order_id" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=4;" vertex="1" parent="1"><mxGeometry x="1400" y="1844" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la36" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a36" target="ORDERS"><mxGeometry relative="1" as="geometry"/></mxCell>
@@ -135,9 +135,9 @@
 <mxCell id="la58" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a58" target="WEB_TRAFFIC"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="a59" value="traffic_source" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="570" y="3464" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la59" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a59" target="WEB_TRAFFIC"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a60" value="payment_value" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1494" y="3396" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a60" value="installments" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1494" y="3396" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la60" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a60" target="PAYMENTS"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="a61" value="installments" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#777777;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1682" y="3396" width="172" height="48" as="geometry"/></mxCell>
+<mxCell id="a61" value="payment_value" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="1682" y="3396" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la61" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a61" target="PAYMENTS"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="a62" value="payment_method" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontSize=12;dashed=1;fontColor=#666666;" vertex="1" parent="1"><mxGeometry x="1870" y="3396" width="172" height="48" as="geometry"/></mxCell>
 <mxCell id="la62" value="" style="endArrow=none;html=1;rounded=0;strokeColor=#aaaaaa;" edge="1" parent="1" source="a62" target="PAYMENTS"><mxGeometry relative="1" as="geometry"/></mxCell>
@@ -203,7 +203,7 @@
 <mxCell id="r11b" value="N" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r11" target="RETURNS"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r12" value="được đánh giá" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3613" y="2490" width="210" height="108" as="geometry"/></mxCell>
 <mxCell id="r12a" value="1" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="ORDER_ITEMS" target="r12"><mxGeometry relative="1" as="geometry"/></mxCell>
-<mxCell id="r12b" value="N" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r12" target="REVIEWS"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="r12b" value="0..1" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;" edge="1" parent="1" source="r12" target="REVIEWS"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r13" value="được tổng hợp theo ngày từ" style="rhombus;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1013" y="1714" width="210" height="108" as="geometry"/></mxCell>
 <mxCell id="r13a" value="1" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;dashed=1;dashPattern=10 6;" edge="1" parent="1" source="SALES" target="r13"><mxGeometry relative="1" as="geometry"/></mxCell>
 <mxCell id="r13b" value="N" style="endArrow=none;html=1;rounded=0;strokeColor=#333333;fontSize=14;fontStyle=1;dashed=1;dashPattern=10 6;" edge="1" parent="1" source="r13" target="ORDERS"><mxGeometry relative="1" as="geometry"/></mxCell>
@@ -223,7 +223,13 @@ hình thoi = quan hệ · viền đôi = quan hệ định danh · elip = thuộ
   orders.order_date — kiểm chứng sai số 0,00 trên cả 3.833 ngày. Tập sales.Date trùng khớp tuyệt đối với orders.order_date.
 • Quan hệ SALES–ORDERS và SALES–WEB_TRAFFIC nối theo trục thời gian (nét đứt), không phải khóa ngoại vật lý.
 • Bộ dữ liệu có 14 tệp nhưng mô hình chỉ 13 thực thể: sample_submission.csv là khuôn dạng nộp kết quả dự báo
-  (548 ngày tương lai, giá trị chỉ minh họa), không phải thực thể nghiệp vụ nên không đưa vào ERD." style="shape=note;whiteSpace=wrap;html=1;size=20;verticalAlign=top;align=left;spacingLeft=10;fillColor=#fff8e1;strokeColor=#d6b656;fontSize=16;" vertex="1" parent="1"><mxGeometry x="80" y="5144" width="2480" height="400" as="geometry"/></mxCell>
+  (548 ngày tương lai, giá trị chỉ minh họa), không phải thực thể nghiệp vụ nên không đưa vào ERD.
+• 11 thuộc tính suy diễn đã được xác minh bằng công thức, không phải phỏng đoán. Ví dụ: fill_rate = 1 − stockout_days/30;
+  stockout_flag = (stockout_days &gt; 0); sell_through_rate = units_sold/(stock_on_hand + units_sold);
+  days_of_supply = stock_on_hand/(units_sold/30); payment_value = Σ(quantity × unit_price − discount_amount).
+  Tất cả đều khớp 100%. Giữ chúng khi xây đặc trưng sẽ gây đa cộng tuyến hoàn hảo.
+• Mỗi dòng hàng có tối đa MỘT đánh giá (113.551 dòng ứng 113.551 cặp khác nhau) nên quan hệ là 1:0..1,
+  nhưng có thể có nhiều lượt trả hàng (39.939 dòng / 39.937 cặp) nên quan hệ trả hàng là 1:N." style="shape=note;whiteSpace=wrap;html=1;size=20;verticalAlign=top;align=left;spacingLeft=10;fillColor=#fff8e1;strokeColor=#d6b656;fontSize=16;" vertex="1" parent="1"><mxGeometry x="80" y="5144" width="2480" height="400" as="geometry"/></mxCell>
 </root></mxGraphModel>
 </diagram>
 </mxfile>
