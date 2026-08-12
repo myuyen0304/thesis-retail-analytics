@@ -124,7 +124,7 @@ Em kiểm tra xem mọi giá trị khóa ngoại ở bảng con có thực sự 
 hàng ghi mã khách mà bảng khách hàng không có ai mang mã đó thì gọi là **bản ghi mồ côi**, dữ liệu bị
 hỏng.
 
-Kết quả: kiểm tra **16 quan hệ trên 4.055.881 bản ghi, không có bản ghi mồ côi nào**.
+Kết quả: kiểm tra **15 quan hệ trên 4.815.470 bản ghi, không có bản ghi mồ côi nào**.
 
 Đồng thời em đo **độ phủ ngược lại** — bao nhiêu phần trăm bản ghi ở bảng cha thực sự được tham chiếu.
 Con số này về sau dùng để xác định quan hệ bắt buộc hay tùy chọn khi vẽ ERD:
@@ -512,7 +512,7 @@ thể nghiệp vụ, nên không đưa vào mô hình khái niệm. Nó vẫn đ
 | Từ điển dữ liệu | 96 trường của 14 bảng, kèm 17 cảnh báo chất lượng dữ liệu |
 | Sơ đồ ERD | 13 thực thể · 75 thuộc tính · 15 quan hệ |
 | Trong đó | 4 thực thể yếu · 1 thực thể suy diễn · 11 thuộc tính suy diễn · 5 quan hệ định danh |
-| Kiểm định | 16 quan hệ trên 4.055.881 bản ghi, 0 bản ghi mồ côi |
+| Kiểm định | 15 quan hệ trên 4.815.470 bản ghi, 0 bản ghi mồ côi |
 
 Toàn bộ số liệu đều kiểm chứng được bằng cách chạy lại trên dữ liệu gốc. Đây là cơ sở để nhóm em bước
 sang giai đoạn xây dựng đặc trưng và huấn luyện mô hình dự báo.
