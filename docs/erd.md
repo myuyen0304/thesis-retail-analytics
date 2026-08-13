@@ -1,6 +1,42 @@
-# ERD — Datathon 2026 Round 1
+# Sơ đồ quan hệ mức logic (Relational Diagram)
 
-Mô hình dữ liệu dạng **star/snowflake schema** quanh trục `orders`. Xem chi tiết cột tại [data-dictionary.md](data-dictionary.md).
+Mô hình dữ liệu dạng **star/snowflake schema** quanh trục `orders`. Xem chi tiết cột tại
+[data-dictionary.md](data-dictionary.md).
+
+---
+
+## ⚠️ Đọc trước: tài liệu này khác gì với `erd.svg`
+
+Bộ tài liệu có **hai sơ đồ ở hai mức mô hình khác nhau**. Cả hai đều đúng, nhưng mô tả cùng một dữ liệu
+theo hai góc nhìn — nên có chỗ trông như vênh nhau.
+
+| | Tài liệu này (`erd.md`) | [`erd.svg`](erd.svg) |
+|---|---|---|
+| Mức mô hình | **Logic** (triển khai) | **Khái niệm** |
+| Ký hiệu | Chân chim, bảng có cột | Chen: chữ nhật, hình thoi, elip |
+| Trả lời câu hỏi | Dữ liệu **lưu ở bảng nào**, khóa ra sao | Dữ liệu **là gì**, liên quan ra sao |
+| Khóa ngoại | Vẽ thành cột trong bảng | Không vẽ — đã thành hình thoi quan hệ |
+
+### Chỗ khác biệt dễ gây hiểu nhầm nhất
+
+Tài liệu này ghi `RETURNS` và `REVIEWS` nối vào **`ORDERS`** và **`PRODUCTS`** thành hai quan hệ riêng.
+Còn `erd.svg` vẽ chúng nối vào **`ORDER_ITEMS`** thành một quan hệ duy nhất.
+
+**Cả hai đều đúng, ở hai mức khác nhau:**
+
+- **Ở mức logic** — tệp `returns.csv` thực sự có **hai cột khóa ngoại tách rời** là `order_id` và
+  `product_id`. Mô tả đúng cấu trúc vật lý thì phải vẽ hai quan hệ.
+- **Ở mức khái niệm** — hai cột đó **không độc lập**: chúng luôn đi thành cặp và cùng trỏ tới **một dòng
+  hàng cụ thể**. Đã kiểm chứng: mọi cặp `(order_id, product_id)` của `returns` và `reviews` đều nằm trọn
+  trong `order_items`, **0 dòng lệch**.
+
+Nói cách khác, khách trả lại *"hai cái áo size M màu đỏ trong đơn số 5"* — đó là **một dòng hàng**, chứ
+không phải trả đơn số 5 và trả sản phẩm X như hai việc riêng biệt. Mô hình khái niệm phản ánh ngữ nghĩa
+nghiệp vụ đó; mô hình logic phản ánh cách dữ liệu được lưu trữ.
+
+Đây chính là lý do quy trình thiết kế cơ sở dữ liệu đi theo thứ tự **ERD khái niệm → ánh xạ → mô hình
+quan hệ**: bước ánh xạ sẽ tách quan hệ với thực thể yếu `ORDER_ITEMS` thành cặp khóa ngoại
+`(order_id, product_id)` như thấy trong tệp CSV.
 
 ---
 
@@ -155,15 +191,24 @@ erDiagram
 | `orders` | `payments` | **1 : 1** | 646,945 = 646,945, `order_id` duy nhất cả hai bên |
 | `orders` | `order_items` | **1 : N** | 646,945 → 714,669 dòng (TB 1.10 dòng/đơn, tối đa 5). ⚠️ 16 cặp `(order_id, product_id)` trùng → cặp này **không phải PK hợp lệ** |
 | `orders` | `shipments` | **1 : 0..1** | 566,067 (87.5%) — chỉ đơn đã `shipped`/`delivered`/`returned` |
-| `orders` | `returns` | **1 : 0..N** | 39,939 dòng trên 36,062 đơn distinct (5.6% đơn) |
-| `orders` | `reviews` | **1 : 0..N** | 113,551 dòng trên 111,369 đơn distinct (17.2% đơn) |
+| `orders` | `returns` ² | **1 : 0..N** | 39,939 dòng trên 36,062 đơn distinct (5.6% đơn) |
+| `orders` | `reviews` ² | **1 : 0..N** | 113,551 dòng trên 111,369 đơn distinct (17.2% đơn) |
 | `customers` | `orders` | **1 : 0..N** | 121,930 khách → 646,945 đơn. Chỉ **90,246 khách (74.0%) có đơn** → TB 7.17 đơn/khách *có giao dịch* (không phải 5.31) |
 | `geography` | `customers` | **1 : 0..N** | 39,948 zip → 121,930 khách; chỉ 31,491 zip (78.8%) có khách |
 | `products` | `order_items` | **1 : 0..N** | 2,412 SKU → 714,669 dòng. Chỉ **1,598 SKU (66.3%) từng bán** |
 | `products` | `inventory` | **1 : 0..N** | 126 tháng × ~478 SKU = 60,247. Chỉ 1,624 SKU (67.3%) được kiểm kê — không phải tích Descartes |
 | `promotions` | `order_items` | **1 : N** | 50 KM → 276,316 dòng có KM (38.7%) |
 
-**Toàn vẹn tham chiếu: 0 khóa mồ côi trên mọi quan hệ đã kiểm tra.**
+**Toàn vẹn tham chiếu: 0 khóa mồ côi trên mọi quan hệ đã kiểm tra** — 15 quan hệ, 4.815.470 bản ghi.
+
+² `returns` và `reviews` mỗi bảng có **hai cột khóa ngoại** `order_id` và `product_id`, nên ở mức logic
+đây là hai quan hệ tách rời tới `orders` và `products`. Nhưng hai cột luôn đi thành cặp và cùng trỏ tới
+một dòng trong `order_items` (đã kiểm chứng: 0 dòng lệch), nên **ở mức khái niệm chúng gộp thành một
+quan hệ duy nhất với `ORDER_ITEMS`** — xem [`erd.svg`](erd.svg) và phần ghi chú đầu tài liệu này.
+
+Bản số đo được ở mức dòng hàng: `ORDER_ITEMS` → `RETURNS` là **1:N** (39.939 dòng / 39.937 cặp, tức có
+dòng bị trả nhiều lần), còn `ORDER_ITEMS` → `REVIEWS` là **1:1** (113.551 dòng / đúng 113.551 cặp, mỗi
+dòng hàng có tối đa một đánh giá).
 
 ---
 
