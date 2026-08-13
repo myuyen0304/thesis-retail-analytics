@@ -1,305 +1,333 @@
-# Sơ đồ quan hệ mức logic (Relational Diagram)
+# Sơ đồ thực thể – liên kết (ERD) — mô tả chi tiết
 
-Mô hình dữ liệu dạng **star/snowflake schema** quanh trục `orders`. Xem chi tiết cột tại
-[data-dictionary.md](data-dictionary.md).
+Tài liệu này mô tả bằng chữ nội dung của sơ đồ [`erd.svg`](erd.svg). Mỗi thực thể, thuộc tính và quan hệ
+nêu ở đây đều tương ứng một-một với ký hiệu trên hình.
+
+**Mức mô hình:** khái niệm · **Ký hiệu:** Chen · **Tệp nguồn chỉnh sửa:** [`erd.drawio`](erd.drawio)
+
+![Sơ đồ ERD](erd.svg)
 
 ---
 
-## ⚠️ Đọc trước: tài liệu này khác gì với `erd.svg`
+## 1. Tổng quan
 
-Bộ tài liệu có **hai sơ đồ ở hai mức mô hình khác nhau**. Cả hai đều đúng, nhưng mô tả cùng một dữ liệu
-theo hai góc nhìn — nên có chỗ trông như vênh nhau.
+| Thành phần | Số lượng |
+|---|---:|
+| Thực thể | **13** |
+| ├ trong đó thực thể yếu | 4 |
+| └ trong đó thực thể suy diễn | 1 |
+| Thuộc tính | **75** |
+| ├ trong đó thuộc tính khóa | 8 |
+| └ trong đó thuộc tính suy diễn | 11 |
+| Mối quan hệ | **15** |
+| └ trong đó quan hệ định danh | 5 |
 
-| | Tài liệu này (`erd.md`) | [`erd.svg`](erd.svg) |
+Bộ dữ liệu có 14 tệp nhưng mô hình chỉ 13 thực thể: `sample_submission.csv` là khuôn dạng nộp kết quả dự
+báo (548 ngày tương lai, giá trị chỉ minh họa), không phải thực thể nghiệp vụ nên không đưa vào mô hình
+khái niệm. Nó vẫn được mô tả đầy đủ trong [`data-dictionary.md`](data-dictionary.md).
+
+---
+
+## 2. Ý nghĩa ký hiệu trên sơ đồ
+
+| Ký hiệu | Ý nghĩa |
+|---|---|
+| Hình chữ nhật | Thực thể |
+| Hình chữ nhật **viền đôi** | Thực thể yếu — không tự định danh, phải mượn khóa của thực thể chủ |
+| Hình chữ nhật **viền nét đứt** | Thực thể suy diễn — toàn bộ giá trị tính lại được từ thực thể khác |
+| Hình thoi | Mối quan hệ |
+| Hình thoi **viền đôi** | Quan hệ định danh — cấp danh tính cho thực thể yếu |
+| Hình elip | Thuộc tính |
+| Elip **chữ gạch chân** | Thuộc tính khóa |
+| Elip **nét đứt gạch chân** | Khóa bộ phận của thực thể yếu |
+| Elip **nét đứt** | Thuộc tính suy diễn |
+| Số `1` / `N` cạnh thực thể | Bản số — số bản thể của **chính thực thể đó** ứng với một bản thể bên kia |
+| **Đường đôi** | Tham gia toàn bộ — mọi bản thể đều phải tham gia quan hệ |
+| **Đường đơn** | Tham gia bộ phận — có thể không tham gia |
+| **Đường nét đứt** | Liên kết không phải khóa ngoại vật lý |
+
+Sơ đồ dùng **thuần ký hiệu Chen**: bản số chỉ ghi `1` hoặc `N`, còn tính bắt buộc hay tùy chọn thể hiện
+bằng kiểu đường — không trộn với hệ ký hiệu `(min, max)`.
+
+---
+
+## 3. Mười ba thực thể
+
+Ký hiệu cột "Loại": **K** = khóa · **KBP** = khóa bộ phận · **SD** = suy diễn · *(trống)* = thuộc tính thường.
+
+### `GEOGRAPHY` — 4 thuộc tính
+
+| Thuộc tính | Loại | Ghi chú |
 |---|---|---|
-| Mức mô hình | **Logic** (triển khai) | **Khái niệm** |
-| Ký hiệu | Chân chim, bảng có cột | Chen: chữ nhật, hình thoi, elip |
-| Trả lời câu hỏi | Dữ liệu **lưu ở bảng nào**, khóa ra sao | Dữ liệu **là gì**, liên quan ra sao |
-| Khóa ngoại | Vẽ thành cột trong bảng | Không vẽ — đã thành hình thoi quan hệ |
+| `zip` | **K** | 39.948 mã vùng |
+| `city` | | 42 thành phố |
+| `region` | | East, Central, West |
+| `district` | | `District #01`–`#39`. **Không lồng trong `city`** — một mã quận thuộc tới 16 thành phố |
 
-### Chỗ khác biệt dễ gây hiểu nhầm nhất
+### `CUSTOMERS` — 6 thuộc tính
 
-Tài liệu này ghi `RETURNS` và `REVIEWS` nối vào **`ORDERS`** và **`PRODUCTS`** thành hai quan hệ riêng.
-Còn `erd.svg` vẽ chúng nối vào **`ORDER_ITEMS`** thành một quan hệ duy nhất.
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `customer_id` | **K** | 121.930 khách |
+| `signup_date` | | ⚠️ **73,8% đơn hàng đặt trước ngày này** — không dùng được cho đặc trưng đoàn hệ |
+| `gender` | | Female, Male, Non-binary |
+| `age_group` | | 5 nhóm |
+| `acquisition_channel` | | 6 kênh |
+| `city` | **SD** | Suy từ `GEOGRAPHY` qua mã vùng |
 
-**Cả hai đều đúng, ở hai mức khác nhau:**
+*Cột `zip` đã chuyển thành quan hệ "cư trú tại".*
 
-- **Ở mức logic** — tệp `returns.csv` thực sự có **hai cột khóa ngoại tách rời** là `order_id` và
-  `product_id`. Mô tả đúng cấu trúc vật lý thì phải vẽ hai quan hệ.
-- **Ở mức khái niệm** — hai cột đó **không độc lập**: chúng luôn đi thành cặp và cùng trỏ tới **một dòng
-  hàng cụ thể**. Đã kiểm chứng: mọi cặp `(order_id, product_id)` của `returns` và `reviews` đều nằm trọn
-  trong `order_items`, **0 dòng lệch**.
+### `PRODUCTS` — 8 thuộc tính
 
-Nói cách khác, khách trả lại *"hai cái áo size M màu đỏ trong đơn số 5"* — đó là **một dòng hàng**, chứ
-không phải trả đơn số 5 và trả sản phẩm X như hai việc riêng biệt. Mô hình khái niệm phản ánh ngữ nghĩa
-nghiệp vụ đó; mô hình logic phản ánh cách dữ liệu được lưu trữ.
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `product_id` | **K** | Liên tục 1–2.412 |
+| `product_name` | | 186 tên bị nhân bản |
+| `category` | | Streetwear, Outdoor, Casual, GenZ |
+| `segment` | | 8 phân khúc. **Không lồng hoàn toàn trong `category`** — `Activewear` ở cả `Casual` lẫn `Outdoor` |
+| `size` | | S, M, L, XL |
+| `color` | | 10 màu |
+| `price` | | Giá niêm yết — chỉ tham chiếu, khác giá giao dịch |
+| `cogs` | | **Giá vốn đơn vị — đầu vào trực tiếp của biến mục tiêu `COGS`** |
 
-Đây chính là lý do quy trình thiết kế cơ sở dữ liệu đi theo thứ tự **ERD khái niệm → ánh xạ → mô hình
-quan hệ**: bước ánh xạ sẽ tách quan hệ với thực thể yếu `ORDER_ITEMS` thành cặp khóa ngoại
-`(order_id, product_id)` như thấy trong tệp CSV.
+### `PROMOTIONS` — 10 thuộc tính
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `promo_id` | **K** | 50 chương trình |
+| `promo_name` | | |
+| `promo_type` | | percentage, fixed |
+| `discount_value` | | Nghĩa phụ thuộc `promo_type` |
+| `start_date`, `end_date` | | Khoảng hiệu lực ~30 ngày |
+| `applicable_category` | | ⚠️ Thiếu 80% — **giá trị thiếu nghĩa là "áp dụng mọi danh mục"**, không phải lỗi |
+| `promo_channel` | | 5 kênh |
+| `stackable_flag` | | Cho phép cộng dồn |
+| `min_order_value` | | Giá trị đơn tối thiểu |
+
+### `ORDERS` — 6 thuộc tính
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `order_id` | **K** | 646.945 đơn. ID **không liên tục** — khuyết 187.452 giá trị |
+| `order_date` | | **Mốc ghi nhận doanh thu** |
+| `order_status` | | 6 giá trị theo vòng đời — quyết định hoàn toàn việc có bản ghi giao vận / trả hàng |
+| `payment_method` | | 5 phương thức |
+| `device_type` | | mobile, desktop, tablet |
+| `order_source` | | 6 kênh |
+
+*Hai cột `customer_id` và `zip` đã chuyển thành quan hệ.*
+
+### `ORDER_ITEMS` — 3 thuộc tính · **thực thể yếu**
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `quantity` | | 1–8 |
+| `unit_price` | | **Giá giao dịch thực tế** — chỉ 3/714.669 dòng trùng giá niêm yết |
+| `discount_amount` | | Bằng 0 ở 61,3% số dòng |
+
+**Vì sao là thực thể yếu:** một "dòng hàng" chỉ có nghĩa khi biết thuộc đơn nào. Cặp
+`(order_id, product_id)` tưởng là khóa nhưng có **16 cặp bị trùng** trên 714.669 dòng → không có khóa
+tự nhiên hợp lệ.
+
+**Vì sao là thực thể chứ không phải hình thoi:** quan hệ nhiều–nhiều có thuộc tính thường được vẽ thành
+hình thoi. Nhưng `ORDER_ITEMS` còn tham gia **ba quan hệ khác** với `PROMOTIONS`, `RETURNS`, `REVIEWS`.
+Trong ký hiệu Chen, một quan hệ không thể có quan hệ con → buộc phải là thực thể (**thực thể kết hợp**).
+
+**Đây là thực thể quan trọng nhất của đề tài** — hai biến mục tiêu sinh trực tiếp từ nó.
+
+### `PAYMENTS` — 3 thuộc tính · **thực thể yếu**
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `installments` | | 1, 2, 3, 6, 12 — **thuộc tính thật duy nhất của bảng** |
+| `payment_value` | **SD** | `= Σ(quantity × unit_price − discount_amount)` của đơn, khớp 100% |
+| `payment_method` | **SD** | Trùng khớp 100% với `orders.payment_method` |
+
+**Phân biệt quan trọng:** `payment_value` là số tiền **thực thu** (đã trừ giảm giá), còn `Revenue` trong
+`SALES` là doanh thu **gộp**. Hai đại lượng khác nhau, chênh đúng bằng tổng giảm giá.
+
+### `SHIPMENTS` — 3 thuộc tính · **thực thể yếu**
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `ship_date` | | Cách ngày đặt 0–3 ngày |
+| `delivery_date` | | Cách ngày xuất kho 2–7 ngày |
+| `shipping_fee` | | **Không nằm trong `Revenue`** |
+
+### `RETURNS` — 5 thuộc tính
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `return_id` | **K** | 39.939 lượt trả |
+| `return_date` | | Cách ngày đặt 5–31 ngày |
+| `return_reason` | | 5 lý do, phổ biến nhất là `wrong_size` |
+| `return_quantity` | | 1–8 |
+| `refund_amount` | | **Không** suy diễn được (thử `return_quantity × unit_price` chỉ khớp 0,64%) |
+
+### `REVIEWS` — 4 thuộc tính
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `review_id` | **K** | 113.551 đánh giá |
+| `review_date` | | Cách ngày đặt 3–40 ngày |
+| `rating` | | Thang 1–5, trung bình 3,94 |
+| `review_title` | | 18 tiêu đề định sẵn — **không phải văn bản tự do**. Tồn tại phụ thuộc hàm `review_title → rating` |
+
+### `INVENTORY` — 13 thuộc tính · **thực thể yếu**
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `snapshot_date` | **KBP** | Ngày cuối tháng, 126 kỳ |
+| `stock_on_hand` | | Tồn kho cuối kỳ |
+| `units_received` | | Nhập trong kỳ |
+| `units_sold` | | Bán trong kỳ theo sổ kho |
+| `stockout_days` | | 0–28 ngày |
+| `overstock_flag` | | **Không** suy diễn được (ngưỡng tốt nhất chỉ khớp 83%) |
+| `reorder_flag` | | ⚠️ **Hằng số 0** trên toàn bộ dữ liệu — không mang thông tin |
+| `days_of_supply` | **SD** | `= round(stock_on_hand / (units_sold/30), 1)` |
+| `fill_rate` | **SD** | `= 1 − stockout_days/30` |
+| `stockout_flag` | **SD** | `= (stockout_days > 0)` |
+| `sell_through_rate` | **SD** | `= units_sold / (stock_on_hand + units_sold)` |
+| `year`, `month` | **SD** | Tách từ `snapshot_date` |
+
+**6 trên 13 thuộc tính là suy diễn** — quá nửa bảng không mang thông tin độc lập. Cộng thêm
+`reorder_flag` là hằng số, chỉ còn 6 cột thực sự có giá trị.
+
+**Vì sao là thực thể yếu:** một dòng tồn kho được xác định bởi **cặp** (ngày chốt sổ, sản phẩm), không
+chỉ bởi ngày. `snapshot_date` một mình không đủ định danh nên là **khóa bộ phận**.
+
+### `SALES` — 3 thuộc tính · **thực thể suy diễn** · BIẾN MỤC TIÊU
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `Date` | **K** | 3.833 ngày liên tục, không thiếu ngày nào |
+| `Revenue` | **SD** | `= Σ(quantity × unit_price)` |
+| `COGS` | **SD** | `= Σ(quantity × products.cogs)` |
+
+**Vì sao vẽ viền nét đứt:** toàn bộ nội dung tính lại được từ `ORDER_ITEMS` với **sai số 0,00 trên cả
+3.833 ngày**. Đây không phải dữ liệu gốc độc lập.
+
+### `WEB_TRAFFIC` — 7 thuộc tính
+
+| Thuộc tính | Loại | Ghi chú |
+|---|---|---|
+| `date` | **K** | 3.652 ngày, bắt đầu 2013-01-01 |
+| `sessions` | | 7.973–50.947 phiên/ngày |
+| `unique_visitors` | | Tỷ lệ ~0,76 so với `sessions` |
+| `page_views` | | |
+| `bounce_rate` | | Biên độ 0,0032–0,0058 — gần như hằng số, sức giải thích thấp |
+| `avg_session_duration_sec` | | 100,1–319,9 giây |
+| `traffic_source` | | ⚠️ **Không phải phân rã theo kênh** — mỗi ngày chỉ một dòng kèm một nhãn |
+
+**Hạn chế:** thiếu 181 ngày đầu so với `SALES`, và **không có dữ liệu cho giai đoạn dự báo 2023–2024**.
 
 ---
 
-## 1. Sơ đồ quan hệ tổng thể
+## 4. Mười lăm mối quan hệ
 
-```mermaid
-erDiagram
-    GEOGRAPHY   ||--o{ CUSTOMERS   : "zip"
-    GEOGRAPHY   ||--o{ ORDERS      : "zip (dư thừa)"
-    CUSTOMERS   ||--o{ ORDERS      : "customer_id"
-    CUSTOMERS   ||--o{ REVIEWS     : "customer_id (dư thừa)"
+Cách đọc: số cạnh thực thể cho biết **có bao nhiêu bản thể của chính thực thể đó** ứng với một bản thể
+bên kia. Cột "Tham gia" ghi bên nào là toàn bộ (đường đôi).
 
-    ORDERS      ||--|{ ORDER_ITEMS : "order_id"
-    ORDERS      ||--|| PAYMENTS    : "order_id (1:1)"
-    ORDERS      |o--o| SHIPMENTS   : "order_id (87.5%)"
-    ORDERS      ||--o{ RETURNS     : "order_id (5.6%)"
-    ORDERS      ||--o{ REVIEWS     : "order_id (17.2%)"
+| # | Quan hệ | Bản số | Tham gia toàn bộ | Ghi chú |
+|---:|---|---|---|---|
+| 1 | `CUSTOMERS` — *cư trú tại* — `GEOGRAPHY` | N : 1 | `CUSTOMERS` | Chỉ 78,8% mã vùng có khách |
+| 2 | `ORDERS` — *giao đến* — `GEOGRAPHY` | N : 1 | `ORDERS` | *Nét đứt* — `orders.zip` trùng 100% `customers.zip` |
+| 3 | `CUSTOMERS` — *đặt* — `ORDERS` | 1 : N | `ORDERS` | Chỉ 74,0% khách từng đặt hàng |
+| 4 | `CUSTOMERS` — *viết* — `REVIEWS` | 1 : N | `REVIEWS` | *Nét đứt* — `reviews.customer_id` suy được qua `ORDERS` |
+| 5 | `ORDERS` — *gồm* — `ORDER_ITEMS` | 1 : N | **cả hai** | **Định danh.** 1–5 dòng/đơn, TB 1,10 |
+| 6 | `ORDERS` — *thanh toán bằng* — `PAYMENTS` | 1 : 1 | **cả hai** | **Định danh.** 646.945 = 646.945, 1:1 tuyệt đối |
+| 7 | `ORDERS` — *được giao bởi* — `SHIPMENTS` | 1 : 1 | `SHIPMENTS` | **Định danh.** Chỉ 87,5% đơn có giao vận |
+| 8 | `PRODUCTS` — *được bán trong* — `ORDER_ITEMS` | 1 : N | `ORDER_ITEMS` | **Định danh.** Chỉ 66,3% sản phẩm từng bán |
+| 9 | `PRODUCTS` — *được kiểm kê* — `INVENTORY` | 1 : N | `INVENTORY` | **Định danh.** Chỉ 67,3% sản phẩm có trong sổ kho |
+| 10 | `PROMOTIONS` — *áp dụng cho* — `ORDER_ITEMS` | 1 : N | `PROMOTIONS` | Chỉ 38,7% dòng hàng có khuyến mại |
+| 11 | `PROMOTIONS` — *cộng dồn cho* — `ORDER_ITEMS` | 1 : N | — | *Nét đứt* — `promo_id_2` rỗng 99,97%, chỉ 206 dòng |
+| 12 | `ORDER_ITEMS` — *bị trả lại* — `RETURNS` | 1 : N | `RETURNS` | 39.939 dòng / 39.937 cặp → có dòng bị trả nhiều lần |
+| 13 | `ORDER_ITEMS` — *được đánh giá* — `REVIEWS` | 1 : 1 | `REVIEWS` | 113.551 dòng / **đúng** 113.551 cặp → tối đa 1 đánh giá |
+| 14 | `SALES` — *được tổng hợp theo ngày từ* — `ORDERS` | 1 : N | **cả hai** | *Nét đứt* — nối theo trục thời gian |
+| 15 | `SALES` — *có lưu lượng truy cập* — `WEB_TRAFFIC` | 1 : 1 | `WEB_TRAFFIC` | *Nét đứt* — 181 ngày đầu không có dữ liệu lưu lượng |
 
-    PRODUCTS    ||--o{ ORDER_ITEMS : "product_id"
-    PRODUCTS    ||--o{ RETURNS     : "product_id"
-    PRODUCTS    ||--o{ REVIEWS     : "product_id"
-    PRODUCTS    ||--o{ INVENTORY   : "product_id"
+### Ba quan hệ cần giải thích thêm
 
-    PROMOTIONS  ||--o{ ORDER_ITEMS : "promo_id / promo_id_2"
+**Quan hệ 12 và 13 — vì sao nối vào `ORDER_ITEMS` chứ không vào `ORDERS` và `PRODUCTS`**
 
-    ORDER_ITEMS }o--|| SALES       : "aggregate by order_date"
+Tệp `returns.csv` và `reviews.csv` mỗi tệp có hai cột `order_id` và `product_id`, nhìn qua tưởng là hai
+quan hệ riêng. Nhưng hai cột đó **luôn đi thành cặp**: mọi cặp `(order_id, product_id)` của chúng đều
+nằm trọn trong `order_items`, **0 dòng lệch**.
 
-    GEOGRAPHY {
-        int    zip PK
-        string city
-        enum   region "Central|East|West"
-        string district
-    }
-    CUSTOMERS {
-        int    customer_id PK
-        int    zip FK
-        string city "denormalized"
-        date   signup_date "KHONG TIN CAY - sau order_date o 73.8% don"
-        enum   gender
-        enum   age_group
-        enum   acquisition_channel
-    }
-    PRODUCTS {
-        int    product_id PK
-        string product_name "186 ten bi nhan ban"
-        enum   category "Casual|GenZ|Outdoor|Streetwear"
-        enum   segment "KHONG long trong category"
-        enum   size
-        string color
-        float  price "gia hien tai, KHONG dung cho lich su"
-        float  cogs "hang so -> tinh COGS target"
-    }
-    PROMOTIONS {
-        string promo_id PK
-        string promo_name
-        enum   promo_type "percentage|fixed"
-        float  discount_value
-        date   start_date
-        date   end_date
-        string applicable_category "80% null"
-        enum   promo_channel
-        int    stackable_flag
-        float  min_order_value
-    }
-    ORDERS {
-        int    order_id PK
-        date   order_date
-        int    customer_id FK
-        int    zip FK "denormalized"
-        enum   order_status
-        enum   payment_method
-        enum   device_type
-        enum   order_source
-    }
-    ORDER_ITEMS {
-        int    order_id FK
-        int    product_id FK
-        int    quantity
-        float  unit_price "gia thuc te lich su"
-        float  discount_amount "KHONG tru khoi Revenue"
-        string promo_id FK "61% null"
-        string promo_id_2 FK "99.97% null"
-    }
-    PAYMENTS {
-        int    order_id PK
-        enum   payment_method "denormalized"
-        float  payment_value "NET sau giam gia"
-        int    installments "1|2|3|6|12"
-    }
-    SHIPMENTS {
-        int    order_id PK
-        date   ship_date
-        date   delivery_date
-        float  shipping_fee "khong nam trong Revenue"
-    }
-    RETURNS {
-        string return_id PK
-        int    order_id FK
-        int    product_id FK
-        date   return_date
-        enum   return_reason
-        int    return_quantity
-        float  refund_amount "khong anh huong sales.csv"
-    }
-    REVIEWS {
-        string review_id PK
-        int    order_id FK
-        int    product_id FK
-        int    customer_id FK "denormalized"
-        date   review_date
-        int    rating "1-5"
-        string review_title
-    }
-    INVENTORY {
-        date   snapshot_date PK "cuoi thang"
-        int    product_id PK
-        int    stock_on_hand
-        int    units_received
-        int    units_sold
-        int    stockout_days
-        float  days_of_supply "co outlier 68100"
-        float  fill_rate "= 1 - stockout_days/30, suy dien"
-        int    stockout_flag
-        int    overstock_flag
-        int    reorder_flag "luon = 0"
-        float  sell_through_rate
-    }
-    SALES {
-        date   Date PK
-        float  Revenue "TARGET"
-        float  COGS "TARGET"
-    }
-    WEB_TRAFFIC {
-        date   date PK
-        int    sessions
-        int    unique_visitors
-        int    page_views
-        float  bounce_rate
-        float  avg_session_duration_sec
-        enum   traffic_source
-    }
+Nghĩa là mỗi lượt trả hàng gắn với **một dòng hàng cụ thể** — khách trả lại *"hai cái áo size M màu đỏ
+trong đơn số 5"*, chứ không phải trả đơn số 5 và trả sản phẩm X như hai việc riêng biệt.
+
+*Lưu ý:* khi ánh xạ mô hình khái niệm này sang mô hình quan hệ, một quan hệ tới thực thể yếu
+`ORDER_ITEMS` sẽ tách thành **cặp khóa ngoại** `(order_id, product_id)` — đúng như cấu trúc thấy trong
+tệp CSV. Hai cách thể hiện không mâu thuẫn, chỉ khác mức mô hình.
+
+**Quan hệ 14 — vì sao `SALES` có quan hệ dù không có cột khóa ngoại nào**
+
+Trong tệp CSV, `sales` không có cột nào trỏ sang `orders`. Nhưng tập ngày của `sales` **trùng khớp tuyệt
+đối** với tập `orders.order_date` — cùng 3.833 ngày, không lệch ngày nào. Quan hệ tồn tại thật, chỉ là
+nối qua **giá trị ngày** chứ không qua mã khóa, nên vẽ nét đứt để phân biệt với khóa ngoại vật lý.
+
+**Vì sao `INVENTORY` không nối với `SALES`**
+
+`inventory.snapshot_date` cũng nằm trong khoảng thời gian của `SALES`, nhưng ở **mức tháng** (126 kỳ),
+khác độ chi tiết với `SALES` (theo ngày). Thời gian của nó là khóa bộ phận nội tại của thực thể yếu,
+không phải tham chiếu tới `SALES`.
+
+---
+
+## 5. Bốn quy tắc thiết kế
+
+| Quy tắc | Kết quả trên sơ đồ |
+|---|---|
+| **1.** Khóa ngoại không vẽ thành thuộc tính — liên kết đã do hình thoi biểu diễn | 15 cột FK → 15 hình thoi |
+| **2.** Thực thể có khóa chính là khóa ngoại, hoặc không có khóa hợp lệ → thực thể yếu | 4 hình chữ nhật viền đôi |
+| **3.** Thuộc tính tính lại được bằng công thức → đánh dấu suy diễn | 11 elip nét đứt |
+| **4.** Loại bỏ cái không phải thực thể nghiệp vụ | Bỏ `sample_submission` và 3 cột sao chép |
+
+### Phép đối soát — chứng minh không sót không bịa
+
+```
+93 cột (13 tệp)  −  15 cột khóa ngoại  −  3 cột sao chép  =  75 thuộc tính
 ```
 
-`WEB_TRAFFIC` **không có khóa ngoại** với bất kỳ bảng nào — chỉ join được với `SALES` qua trục ngày.
+Ba cột bị loại là `product_name`, `category`, `segment` trong `inventory.csv` — bản sao nguyên văn từ
+`PRODUCTS`, thuộc về thực thể sản phẩm chứ không phải thuộc tính của tồn kho.
+
+Đếm elip trên sơ đồ được đúng **75**. Mỗi cột của dữ liệu gốc đều có một trong ba số phận: thành thuộc
+tính, thành quan hệ, hoặc bị loại có lý do ghi rõ.
 
 ---
 
-## 2. Bậc quan hệ (cardinality) — đã kiểm chứng
+## 6. Đường dẫn từ dữ liệu giao dịch tới biến mục tiêu
 
-| Từ | Đến | Bậc | Bằng chứng |
-|---|---|---|---|
-| `orders` | `payments` | **1 : 1** | 646,945 = 646,945, `order_id` duy nhất cả hai bên |
-| `orders` | `order_items` | **1 : N** | 646,945 → 714,669 dòng (TB 1.10 dòng/đơn, tối đa 5). ⚠️ 16 cặp `(order_id, product_id)` trùng → cặp này **không phải PK hợp lệ** |
-| `orders` | `shipments` | **1 : 0..1** | 566,067 (87.5%) — chỉ đơn đã `shipped`/`delivered`/`returned` |
-| `orders` | `returns` ² | **1 : 0..N** | 39,939 dòng trên 36,062 đơn distinct (5.6% đơn) |
-| `orders` | `reviews` ² | **1 : 0..N** | 113,551 dòng trên 111,369 đơn distinct (17.2% đơn) |
-| `customers` | `orders` | **1 : 0..N** | 121,930 khách → 646,945 đơn. Chỉ **90,246 khách (74.0%) có đơn** → TB 7.17 đơn/khách *có giao dịch* (không phải 5.31) |
-| `geography` | `customers` | **1 : 0..N** | 39,948 zip → 121,930 khách; chỉ 31,491 zip (78.8%) có khách |
-| `products` | `order_items` | **1 : 0..N** | 2,412 SKU → 714,669 dòng. Chỉ **1,598 SKU (66.3%) từng bán** |
-| `products` | `inventory` | **1 : 0..N** | 126 tháng × ~478 SKU = 60,247. Chỉ 1,624 SKU (67.3%) được kiểm kê — không phải tích Descartes |
-| `promotions` | `order_items` | **1 : N** | 50 KM → 276,316 dòng có KM (38.7%) |
-
-**Toàn vẹn tham chiếu: 0 khóa mồ côi trên mọi quan hệ đã kiểm tra** — 15 quan hệ, 4.815.470 bản ghi.
-
-² `returns` và `reviews` mỗi bảng có **hai cột khóa ngoại** `order_id` và `product_id`, nên ở mức logic
-đây là hai quan hệ tách rời tới `orders` và `products`. Nhưng hai cột luôn đi thành cặp và cùng trỏ tới
-một dòng trong `order_items` (đã kiểm chứng: 0 dòng lệch), nên **ở mức khái niệm chúng gộp thành một
-quan hệ duy nhất với `ORDER_ITEMS`** — xem [`erd.svg`](erd.svg) và phần ghi chú đầu tài liệu này.
-
-Bản số đo được ở mức dòng hàng: `ORDER_ITEMS` → `RETURNS` là **1:N** (39.939 dòng / 39.937 cặp, tức có
-dòng bị trả nhiều lần), còn `ORDER_ITEMS` → `REVIEWS` là **1:1** (113.551 dòng / đúng 113.551 cặp, mỗi
-dòng hàng có tối đa một đánh giá).
-
----
-
-## 3. Đường dẫn từ dữ liệu giao dịch → target
-
-Đây là quan hệ quan trọng nhất trong toàn bộ mô hình:
-
-```mermaid
-flowchart LR
-    OI["order_items<br/>quantity, unit_price"]
-    O["orders<br/>order_date"]
-    P["products<br/>cogs"]
-    S["sales.csv<br/>Revenue, COGS"]
-
-    OI -->|order_id| O
-    OI -->|product_id| P
-    O  --> S
-    P  --> S
-
-    style S fill:#2d6a4f,color:#fff
-```
+Quan hệ quan trọng nhất của cả mô hình, đã kiểm chứng sai số **0,00 trên 3.833/3.833 ngày**:
 
 ```sql
-SELECT  o.order_date                        AS "Date",
-        SUM(oi.quantity * oi.unit_price)    AS "Revenue",   -- GROSS, không trừ discount
-        SUM(oi.quantity * p.cogs)           AS "COGS"
+SELECT  o.order_date                      AS "Date",
+        SUM(oi.quantity * oi.unit_price)  AS "Revenue",   -- GỘP, không trừ discount
+        SUM(oi.quantity * p.cogs)         AS "COGS"
 FROM    order_items oi
-JOIN    orders   o ON o.order_id   = oi.order_id            -- KHÔNG lọc order_status
+JOIN    orders   o ON o.order_id   = oi.order_id          -- KHÔNG lọc order_status
 JOIN    products p ON p.product_id = oi.product_id
 GROUP BY o.order_date;
 ```
 
-Kiểm chứng: khớp **0 sai lệch** trên cả 3,833 ngày (max diff = 0.0000 cho cả `Revenue` lẫn `COGS`).
+Ba cạm bẫy làm sai biến mục tiêu:
 
-Ba cạm bẫy làm sai target:
-- ❌ trừ `discount_amount` → lệch ở 1,707/3,833 ngày
-- ❌ lọc bỏ `order_status = 'cancelled'` → mất ~9% doanh thu
-- ❌ trừ `returns.refund_amount` → sai, returns không tác động
+- ❌ Trừ `discount_amount` → lệch ở 1.707/3.833 ngày (đúng các ngày có khuyến mại)
+- ❌ Lọc bỏ `order_status = 'cancelled'` → mất ~9,2% doanh thu
+- ❌ Trừ `returns.refund_amount` → sai, trả hàng không tác động tới `sales.csv`
 
 ---
 
-## 4. Trục thời gian — các cột ngày và độ phủ
+## 7. Kết quả kiểm định
 
-```
-2012-01  2012-07  2013-01                      2022-12  2023-01        2024-07
-   |        |        |                             |        |             |
-customers.signup_date ──────────────────────────────┤        │             │
-        ├── orders.order_date ───────────────────────┤        │             │
-        ├── shipments.ship_date / delivery_date ─────┤        │             │
-        ├── returns.return_date ─────────────────────┤        │             │
-        ├── reviews.review_date ─────────────────────┤        │             │
-        ├── inventory.snapshot_date (cuối tháng) ────┤        │             │
-        ├── SALES.Date  ◄── TRAIN ───────────────────┤        │             │
-                 ├── promotions.start/end_date ──2022-11      │             │
-                 ├── web_traffic.date ───────────────┤        │             │
-                                                              └── TEST ─────┘
-                                                                (548 ngày)
-```
-
-| Khoảng trống | Ý nghĩa |
+| Nội dung | Kết quả |
 |---|---|
-| `web_traffic` bắt đầu 2013-01 (muộn hơn `sales` 6 tháng) | Mất 181 ngày khi inner-join |
-| `web_traffic` kết thúc 2022-12 | **Không có giá trị cho test set** → phải tự dự báo nếu muốn dùng |
-| `promotions` kết thúc 2022-11-18 | Không biết lịch KM 2023–2024 → phải suy ra chu kỳ hàng năm |
-| `inventory` chỉ có 126 điểm tháng | Cần forward-fill/interpolate nếu ghép vào chuỗi ngày |
-| ⚠️ `customers.signup_date` bắt đầu 2012-01, **sớm hơn `orders` 6 tháng nhưng vẫn sau đơn hàng ở 73.8% trường hợp** | Trục thời gian của `signup_date` **không nhất quán** với `order_date` — không dùng để tính thâm niên hay cohort |
+| Toàn vẹn tham chiếu | 15 quan hệ · 4.815.470 bản ghi · **0 bản ghi mồ côi** |
+| Khóa chính | 8/9 bảng có khóa hợp lệ; `order_items` **không có** |
+| Thuộc tính suy diễn | 5 công thức được xác nhận, 2 giả thuyết bị bác bỏ |
+| Biến mục tiêu | Tái tạo sai số **0,00** trên 3.833/3.833 ngày |
+| Đối soát thuộc tính | 93 − 15 − 3 = 75, **khớp** với sơ đồ |
 
-**Nguyên tắc:** mọi biến ngoại sinh dùng cho test set phải là loại **biết trước được** (ngày lễ, thứ trong tuần, mùa vụ, chu kỳ KM lặp lại). Các biến quan sát (`web_traffic`, `inventory`) chỉ dùng được cho phân tích hoặc như biến trung gian cần dự báo riêng.
-
----
-
-## 5. Các phân rã target khai thác được
-
-Vì target tái tạo được từ dữ liệu chi tiết, có thể dựng nhiều chuỗi con để làm **hierarchical forecasting** rồi cộng lại:
-
-```mermaid
-flowchart TD
-    S["sales.csv<br/>Revenue / COGS theo ngày"]
-    S --> C["theo category<br/>(4 nhóm)"]
-    S --> G["theo region<br/>(3 vùng)"]
-    S --> CH["theo order_source<br/>(6 kênh)"]
-    S --> D["theo device_type<br/>(3 loại)"]
-    S --> ST["theo order_status<br/>(6 trạng thái)"]
-    S --> A["theo age_group<br/>(5 nhóm)"]
-    S --> SG["theo segment<br/>(8 phân khúc)"]
-```
-
-Ngoài ra, `Revenue` phân tách thành **số đơn × giá trị đơn TB**, hoặc **số khách × tần suất mua × giá trị TB** — mỗi thành phần có động lực khác nhau và có thể dự báo riêng.
-
-⚠️ **Ba lưu ý khi dựng phân rã:**
-
-1. **`category` và `segment` KHÔNG lồng nhau.** `Activewear` xuất hiện ở cả `Casual` lẫn `Outdoor`, nên không thể xếp `segment` làm cấp con của `category`. Muốn phân cấp thật phải dùng cặp `(category, segment)` — 9 tổ hợp thực tế, không phải 4 × 8.
-2. **Phân rã theo `category` mất cân bằng nặng.** `Streetwear` chiếm 79.9% doanh thu, ba nhóm còn lại cộng lại chỉ 20.1% (`Casual` 2.8%, `GenZ` 2.1%). Các chuỗi con nhỏ sẽ rất nhiễu và đóng góp không đáng kể khi cộng ngược lên.
-3. **Không phân rã theo bất kỳ chiều nào của `customers`.** `age_group`, `gender`, `acquisition_channel` chỉ nối được qua `customer_id`, nhưng `signup_date` không đáng tin (73.8% đơn đặt trước ngày đăng ký) nên mọi chiều khách hàng có yếu tố thời gian đều rủi ro. Chiều nhân khẩu học tĩnh (`age_group`, `gender`) vẫn dùng được vì không phụ thuộc `signup_date`.
+Quy trình kiểm định đầy đủ kèm mã nguồn chạy lại được: [`quy-trinh-kiem-dinh.md`](quy-trinh-kiem-dinh.md)
