@@ -1,0 +1,170 @@
+%% Relational diagram sau chuẩn hóa 3NF
+%% Nguồn: docs/normalized_schema.md §6.2 và DDL §8
+%% Kết luận bảo vệ: product_name -> category, segment là FD nghiệp vụ.
+%% product_name -> size, color đúng trên snapshot nhưng không được xem là FD nghiệp vụ,
+%% vì một model có thể có nhiều biến thể; size, color tiếp tục nằm trong product.
+erDiagram
+    region       ||--o{ city         : "gồm"
+    region       ||--o{ district     : "gồm"
+    city         ||--o{ zip_area     : "chứa"
+    district     ||--o{ zip_area     : "chứa"
+    zip_area     ||--o{ customer     : "cư trú"
+
+    product_model      ||--o{ product : "biến thể"
+    review_title_label ||--o{ review  : "nhãn"
+
+    customer  ||--o{ order       : "đặt"
+    order     ||--|{ order_item  : "gồm"
+    order     ||--|| payment     : "thanh toán"
+    order     ||--o| shipment    : "giao"
+    product   ||--o{ order_item  : "được bán"
+
+    order_item ||--o{ order_item_promotion : "áp dụng"
+    promotion  ||--o{ order_item_promotion : "áp dụng"
+
+    order_item ||--o| product_return : "bị trả"
+    order_item ||--o| review         : "được đánh giá"
+
+    product ||--o{ inventory_snapshot : "tồn kho"
+
+    region {
+        string region PK
+    }
+
+    city {
+        string city   PK
+        string region FK
+    }
+
+    district {
+        string district PK
+        string region   FK
+    }
+
+    zip_area {
+        int    zip      PK
+        string city     FK
+        string district FK
+    }
+
+    customer {
+        int    customer_id         PK
+        int    zip                 FK
+        string gender
+        string age_group
+        string acquisition_channel
+        date   signup_date "KHONG dang tin"
+    }
+
+    product_model {
+        string product_name PK
+        string category
+        string segment
+    }
+
+    product {
+        int     product_id   PK
+        string  product_name FK
+        string  size
+        string  color
+        decimal list_price "snapshot hien tai"
+        decimal unit_cogs
+    }
+
+    promotion {
+        string  promo_id            PK
+        string  promo_name          UK
+        string  promo_type
+        decimal discount_value
+        date    start_date
+        date    end_date
+        string  applicable_category
+        string  promo_channel
+        boolean stackable_flag
+        int     min_order_value
+    }
+
+    order {
+        int    order_id       PK
+        date   order_date
+        int    customer_id    FK
+        string order_status
+        string payment_method
+        string device_type
+        string order_source
+    }
+
+    order_item {
+        int     order_id        PK, FK
+        int     line_number     PK
+        int     product_id      FK
+        int     quantity
+        decimal unit_price "gia TAI THOI DIEM BAN"
+        decimal discount_amount
+    }
+
+    order_item_promotion {
+        int    order_id    PK, FK
+        int    line_number PK, FK
+        string promo_id    PK, FK
+    }
+
+    payment {
+        int order_id     PK, FK
+        int installments
+    }
+
+    shipment {
+        int     order_id      PK, FK
+        date    ship_date
+        date    delivery_date
+        decimal shipping_fee
+    }
+
+    product_return {
+        string  return_id       PK
+        int     order_id        FK
+        int     line_number     FK
+        date    return_date
+        string  return_reason
+        int     return_quantity
+        decimal refund_amount
+    }
+
+    review_title_label {
+        string review_title PK
+        int    rating
+    }
+
+    review {
+        string review_id    PK
+        int    order_id     FK
+        int    line_number  FK
+        date   review_date
+        string review_title FK
+    }
+
+    inventory_snapshot {
+        date    snapshot_date PK
+        int     product_id    PK, FK
+        int     stock_on_hand
+        int     units_received
+        int     units_sold
+        int     stockout_days
+    }
+
+    web_traffic {
+        date    traffic_date PK
+        int     sessions
+        int     unique_visitors
+        int     page_views
+        decimal bounce_rate
+        decimal avg_session_duration_sec
+        string  traffic_source
+    }
+
+    daily_sales_forecast {
+        date    forecast_date PK
+        decimal revenue
+        decimal cogs
+    }
