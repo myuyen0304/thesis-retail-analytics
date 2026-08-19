@@ -229,3 +229,6 @@ data/
 
 # Cấu hình Claude Code cục bộ
 .claude/
+
+# Du lieu da lam sach (sinh ra tu data/ bang notebook Data-Cleaning)
+data_clean/
