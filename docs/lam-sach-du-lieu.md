@@ -181,7 +181,7 @@ Cần có thư mục `data/` chứa 14 tệp CSV gốc. Kết quả ghi ra `data
 | Đường dẫn | Nội dung |
 |---|---|
 | `data_clean/*.csv` | 14 tệp đã làm sạch, 84 cột |
-| `data_clean/_nhat_ky_lam_sach.csv` | Nhật ký 21 thao tác kèm căn cứ từng thao tác |
+| `data_clean/_nhat_ky_lam_sach.csv` | Nhật ký 22 thao tác kèm căn cứ từng thao tác |
 
 Thư mục `data_clean/` **không đẩy lên git** (111 MB, là dữ liệu dẫn xuất) — chạy lại notebook là có.
 
