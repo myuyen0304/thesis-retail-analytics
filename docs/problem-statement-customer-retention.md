@@ -194,6 +194,31 @@ mức tham khảo, không phải KPI.
 
 ---
 
+## 8b. Ma trận truy vết — chuỗi thiết kế nối liền
+
+Đây là phần chứng minh thiết kế **chặt chẽ**, không phải gom một đống chỉ số rời rạc. Đọc theo
+hàng ngang: mỗi câu hỏi nghiên cứu đều truy được xuống tới một KPI có hành động.
+
+| Câu hỏi | Giả thuyết | Measure dùng | Metric tính ra | KPI giám sát |
+|---|---|---|---|---|
+| RQ1 Cấu trúc tập khách | — | M1, M2, M6 | Me1, Me2, Me8 | K3, K4 |
+| RQ2 Thu nạp & giữ chân đổi thế nào | H2 | M2, M5 | Me4, Me5 | K1, K2 |
+| RQ3 Mất khách hay giảm tần suất | H1 | M2, M3 | Me3, Me10 | K1, K2 |
+| RQ4 Suy giảm đều hay gãy đột ngột | H3, H4 | M4, M5, M7 | Me6 | K5 |
+| RQ5 Kênh có phân hóa giá trị | H5 | M8 | Me9 | — *(bác bỏ, xem Mục 9)* |
+| RQ6 Nền khách có đỡ nổi 2023–24 | H6 | M2, M4 | Me7 | K6 |
+| RQ7 Ưu tiên ngân sách vào đâu | H1, H2, H5 | M1, M6, M8 | Me1, Me8, Me9 | K3, K4 |
+
+**Ba điều bảng này cho thấy:**
+
+1. **Không có Measure thừa** — cả 8 measure đều được ít nhất một câu hỏi dùng tới.
+2. **Không có câu hỏi cụt** — mỗi RQ đều dẫn tới KPI có ngưỡng và hành động, trừ RQ5 vốn kết
+   luận là *bác bỏ*, nên đúng ra không được đẻ ra KPI nào.
+3. **RQ5 là kiểm chứng âm có giá trị** — nó ngăn nhóm xây một KPI theo kênh mà dữ liệu không
+   đỡ nổi. Một thiết kế tốt phải biết **dừng** khi bằng chứng không đủ.
+
+---
+
 ## 9. Một phát hiện đi ngược tài liệu tham khảo
 
 Tài liệu tham khảo (Mục X.2.4 và X.3.4) đề xuất **tái phân bổ ngân sách theo kênh**, với lập
