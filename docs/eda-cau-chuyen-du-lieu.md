@@ -5,6 +5,10 @@
 >
 > Liên quan: [data-dictionary.md](data-dictionary.md) · [erd.svg](erd.svg) ·
 > [quy-trinh-kiem-dinh.md](quy-trinh-kiem-dinh.md)
+>
+> **Đơn vị tiền:** dữ liệu là mô phỏng, đơn vị tiền tệ không xác định — ký hiệu *đvtt*.
+> Doanh thu gộp 11 năm là **16,43 tỷ đvtt**. Mọi giá trị tuyệt đối chỉ nên dùng để so sánh
+> tương đối; kết luận nên dựa trên **tỷ lệ và thứ hạng**.
 
 ---
 
@@ -25,7 +29,7 @@ Nhìn vào doanh thu 11 năm, câu chuyện có vẻ đơn giản và buồn:
 | 2021 | 1,04 | −1,09% | 9,77% |
 | 2022 | 1,17 | +12,15% | 12,77% |
 
-Doanh nghiệp đạt đỉnh năm 2016 với 2,10 nghìn tỷ, rồi rơi xuống 1,04 nghìn tỷ năm 2021 — **mất 50,5%**.
+Doanh nghiệp đạt đỉnh năm 2016 với 2,10 tỷ, rồi rơi xuống 1,04 tỷ năm 2021 — **mất 50,5%**.
 Năm 2022 mới hồi phục nhẹ.
 
 Câu hỏi tự nhiên: **doanh nghiệp đã mất gì?** Khách mua ít tiền hơn mỗi lần, hay ít khách mua hơn?
@@ -154,20 +158,20 @@ kết quả sai lệch**, vì trung bình hóa qua một điểm đứt. Mức n
 
 ## Chương 5 — Cứ 100 đồng ghi nhận thì 17 đồng bốc hơi
 
-Doanh thu gộp 11 năm là 16.430 tỷ. Nhưng không phải toàn bộ số đó về túi doanh nghiệp:
+Doanh thu gộp 11 năm là 16,43 tỷ đvtt. Nhưng không phải toàn bộ số đó về túi doanh nghiệp:
 
-| Khoản thất thoát | Giá trị (tỷ) | % doanh thu gộp |
+| Khoản thất thoát | Giá trị (tỷ đvtt) | % doanh thu gộp |
 |---|---:|---:|
-| Đơn bị hủy | 1.516 | **9,23%** |
-| Đơn bị trả lại | 908 | 5,52% |
-| Giảm giá khuyến mại | 750 | 4,56% |
-| *(Tiền hoàn trả thực tế)* | *511* | *3,11%* |
-| **Doanh thu thực sự giữ lại** | **13.654** | **83,10%** |
+| Đơn bị hủy | 1,52 | **9,23%** |
+| Đơn bị trả lại | 0,91 | 5,52% |
+| Giảm giá khuyến mại | 0,75 | 4,56% |
+| *(Tiền hoàn trả thực tế)* | *0,51* | *3,11%* |
+| **Doanh thu thực sự giữ lại** | **13,65** | **83,10%** |
 
 Khoản lớn nhất là **hủy đơn: 9,23%**, gấp gần ba lần tổn thất do trả hàng. Đây là loại thất thoát rẻ
 nhất để khắc phục — đơn bị hủy chưa tốn chi phí giao vận, chỉ tốn chi phí thu hút khách.
 
-> **Hàm ý kinh doanh:** giảm tỷ lệ hủy đơn từ 9,23% xuống 5% sẽ thu về khoảng **695 tỷ** trong cùng
+> **Hàm ý kinh doanh:** giảm tỷ lệ hủy đơn từ 9,23% xuống 5% sẽ thu về khoảng **695 triệu** trong cùng
 > khoảng thời gian — nhiều hơn toàn bộ ngân sách giảm giá 11 năm cộng lại.
 
 Cần lưu ý một đặc điểm kế toán quan trọng đã phát hiện khi lập từ điển dữ liệu: **biến `Revenue` trong
@@ -207,14 +211,14 @@ doanh thu.
 sản phẩm là 19,78%. Doanh nghiệp đang dồn lực bán thứ ít lời nhất.
 
 **Hàm ý:** dịch chuyển 10 điểm phần trăm doanh thu từ `Streetwear` sang `GenZ` sẽ nâng biên lợi nhuận
-gộp thêm khoảng 0,6 điểm phần trăm — tương đương **99 tỷ** lợi nhuận tăng thêm trên tổng doanh thu 11
+gộp thêm khoảng 0,6 điểm phần trăm — tương đương **99 triệu** lợi nhuận tăng thêm trên tổng doanh thu 11
 năm, mà không cần bán thêm một đồng doanh thu nào.
 
 ---
 
 ## Chương 7 — Khuyến mại không tạo ra doanh thu
 
-Doanh nghiệp chạy 50 chương trình khuyến mại, phủ **1.707 trên 3.833 ngày (44,5%)**, chi 750 tỷ tiền
+Doanh nghiệp chạy 50 chương trình khuyến mại, phủ **1.707 trên 3.833 ngày (44,5%)**, chi 750 triệu tiền
 giảm giá. Câu hỏi: có hiệu quả không?
 
 **So sánh thô:**
@@ -256,7 +260,7 @@ Kiểm chứng thêm ở mức dòng hàng:
 > đang gắn vào những dòng hàng vốn có giá trị thấp hơn.
 
 Em dùng từ *"không tìm thấy bằng chứng"* thay vì *"khuyến mại phản tác dụng"*, vì phân tích này không
-kiểm soát được các yếu tố khác. Nhưng với 750 tỷ đã chi, việc **không chứng minh được hiệu quả** đã đủ
+kiểm soát được các yếu tố khác. Nhưng với 750 triệu đã chi, việc **không chứng minh được hiệu quả** đã đủ
 là một cảnh báo đáng để doanh nghiệp thiết kế thử nghiệm A/B nghiêm túc trước khi tiếp tục.
 
 ---
@@ -293,7 +297,7 @@ Giữa bức tranh ảm đạm, tệp khách hàng lại là điểm sáng:
 | Mua 2–4 lần | 27.028 | 29,9% |
 | **Mua từ 5 lần trở lên** | **40.860** | **45,3%** |
 
-**45,3% khách hàng đã mua từ 5 lần trở lên** — tỷ lệ mua lại rất cao so với mặt bằng thương mại điện tử.
+**45,3% khách từng mua đã quay lại từ 5 lần trở lên** (40.860 trên 90.246) — tỷ lệ mua lại rất cao so với mặt bằng thương mại điện tử.
 Top 20% khách hàng đóng góp **60,6%** doanh thu.
 
 Nhưng cũng có khoảng trống lớn: **31.684 khách hàng (26,0%) đã đăng ký tài khoản nhưng chưa từng mua**.
@@ -326,9 +330,9 @@ Về mặt dự báo, đây là thành phần mạnh nhất của chuỗi — m�
 |---:|---|---|---|
 | 1 | **Điều tra và khắc phục tỷ lệ chuyển đổi** thay vì đổ tiền vào quảng cáo | CVR sụp 72% trong khi traffic tăng 63% | Khôi phục CVR về 0,7% sẽ gấp đôi số đơn |
 | 2 | **Xem lại chính sách giá** | Giá tăng 54%, giỏ hàng nhỏ đi, khách rời bỏ | Nguyên nhân gốc của chuỗi suy giảm |
-| 3 | **Giảm tỷ lệ hủy đơn** từ 9,23% | Khoản thất thoát lớn nhất, rẻ nhất để sửa | ~695 tỷ nếu giảm về 5% |
-| 4 | **Tái cơ cấu danh mục** sang nhóm biên cao | Streetwear 80% doanh thu nhưng biên chỉ 13,24% | ~99 tỷ lợi nhuận nếu dịch 10 điểm % |
-| 5 | **Dừng khuyến mại đại trà, chuyển sang thử nghiệm có đối chứng** | Không có bằng chứng hiệu quả, đã chi 750 tỷ | Tiết kiệm ngân sách giảm giá |
+| 3 | **Giảm tỷ lệ hủy đơn** từ 9,23% | Khoản thất thoát lớn nhất, rẻ nhất để sửa | ~695 triệu nếu giảm về 5% |
+| 4 | **Tái cơ cấu danh mục** sang nhóm biên cao | Streetwear 80% doanh thu nhưng biên chỉ 13,24% | ~99 triệu lợi nhuận nếu dịch 10 điểm % |
+| 5 | **Dừng khuyến mại đại trà, chuyển sang thử nghiệm có đối chứng** | Không có bằng chứng hiệu quả, đã chi 750 triệu | Tiết kiệm ngân sách giảm giá |
 
 Hai việc **không nên** làm, vì dữ liệu cho thấy sẽ lãng phí:
 

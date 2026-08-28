@@ -1,11 +1,13 @@
 # Phát biểu vấn đề: Sụp đổ giữ chân khách hàng — động cơ thật sau đà giảm doanh thu
 
-> **Bản độc lập thứ hai.** Bản thứ nhất ([`problem-statement-revenue-decline.md`](problem-statement-revenue-decline.md))
-> chọn hướng D1 — Doanh thu & Lợi nhuận. Bản này chọn hướng **D2 — Khách hàng**, và đi sâu
-> hơn một tầng: không dừng ở *"doanh thu giảm do ít đơn hơn"*, mà truy tiếp **vì sao ít đơn hơn**.
+> **Phát biểu vấn đề cho phần phân tích của khóa luận.**
 >
-> Khác biệt về phương pháp: **mọi con số dưới đây đều do tự tính từ dữ liệu gốc**, không trích
-> lại từ tài liệu tham khảo. Script tái lập nêu ở Mục 10.
+> Tài liệu tham khảo *Retail Analytics & Forecasting* (VinDatathon 2026 Round 1 — cùng bộ dữ
+> liệu) đề xuất 5 hướng phân tích: D1 Doanh thu, D2 Khách hàng, D3 Sản phẩm, D4 Marketing,
+> D5 Vận hành. Tài liệu này chọn **D2 — Khách hàng**.
+>
+> **Mọi con số dưới đây đều tự tính từ dữ liệu gốc**, không trích lại từ tài liệu tham khảo.
+> Script tái lập nêu ở Mục 11.
 
 ---
 
@@ -14,10 +16,13 @@
 Tài liệu tham khảo đề xuất 5 hướng (D1 Doanh thu, D2 Khách hàng, D3 Sản phẩm, D4 Marketing,
 D5 Vận hành). Chọn D2 vì ba lý do:
 
-**Thứ nhất — nó nằm ngay sau kết luận của D1.** Phân tích D1 dừng lại ở *"đà giảm chủ yếu do
-giảm số đơn"*. Nhưng **số đơn là kết quả, không phải nguyên nhân**. Đơn hàng do khách hàng
-tạo ra, nên câu hỏi kế tiếp bắt buộc phải là: *ít đơn hơn vì ít khách hơn, hay vì mỗi khách mua
-thưa hơn?* Không trả lời được câu này thì mọi đề xuất hành động đều là đoán.
+**Thứ nhất — nó nằm ngay sau chỗ phân tích doanh thu dừng lại.** Bước EDA của khóa luận
+(xem [`eda-cau-chuyen-du-lieu.md`](eda-cau-chuyen-du-lieu.md)) đã xác định: doanh thu mất
+**50,5%** từ đỉnh 2016, và mức giảm đến từ **số đơn** chứ không phải giá trị mỗi đơn — số đơn
+sụp trong khi AOV còn tăng **+50,7%**. Nhưng **số đơn là kết quả, không phải nguyên nhân**.
+Đơn hàng do khách hàng tạo ra, nên câu hỏi kế tiếp bắt buộc phải là: *ít đơn hơn vì ít khách
+hơn, hay vì mỗi khách mua thưa hơn?* Không trả lời được câu này thì mọi đề xuất hành động
+đều là đoán.
 
 **Thứ hai — bước làm sạch đã mở đường cho phân tích này.** Cột `signup_date` gốc có **73,8%
 đơn đặt trước ngày đăng ký** nên không dùng được để tính thâm niên hay cohort. Bước làm sạch
@@ -241,9 +246,14 @@ phần dễ rời đã rời hết, phần còn lại là nhóm lặp lại ổn
 > **Dự báo nên đi ngang quanh mức 2022, không nên tiếp tục dốc xuống.** Đây là một giả định
 > có căn cứ cơ chế, kiểm chứng được — không phải cảm tính về đường xu hướng.
 
-Điều này bổ sung cho ba giả định kỹ thuật của bản thứ nhất (sample weighting, Fourier
-seasonality, không dự báo COGS qua tỷ số cố định) một giả định thứ tư: **ràng buộc mức
-(level constraint) cho giai đoạn dự báo**.
+Tài liệu tham khảo (Phần C) rút ra ba quyết định kỹ thuật từ EDA chuỗi thời gian:
+
+1. **Sample weighting + calibration** — vì ba chế độ có phân phối tách biệt
+2. **Fourier seasonality** — vì hình dạng mùa vụ ổn định trong khi mức thay đổi
+3. **Không dự báo COGS qua tỷ số cố định** — vì biên Q3 năm lẻ vượt 1,0
+
+Phân tích cohort ở trên bổ sung **giả định thứ tư**: **ràng buộc mức (level constraint) cho
+giai đoạn dự báo**, với căn cứ là quy mô nền khách lặp lại đã ổn định ba năm liền.
 
 ---
 

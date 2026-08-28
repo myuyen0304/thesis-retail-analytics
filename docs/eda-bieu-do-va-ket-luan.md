@@ -1,9 +1,15 @@
 # Kết quả EDA — Biểu đồ và kết luận
 
 > Mỗi phần gồm ba lớp: **biểu đồ** → **số liệu đọc được** → **kết luận rút ra**.
-> Toàn bộ biểu đồ sinh trực tiếp từ dữ liệu gốc bằng `matplotlib`.
+> Toàn bộ biểu đồ sinh trực tiếp từ dữ liệu gốc bằng
+> [`scripts/ve_bieu_do.py`](../scripts/ve_bieu_do.py) — chạy `python scripts/ve_bieu_do.py`
+> từ thư mục gốc dự án để dựng lại cả 11 hình.
 >
 > Bản kể chuyện đầy đủ: [eda-cau-chuyen-du-lieu.md](eda-cau-chuyen-du-lieu.md)
+>
+> **Đơn vị tiền:** dữ liệu là mô phỏng, đơn vị tiền tệ không xác định — ký hiệu *đvtt*.
+> Doanh thu gộp 11 năm là **16,43 tỷ đvtt**. Kết luận nên dựa trên **tỷ lệ và thứ hạng**
+> thay vì giá trị tuyệt đối.
 
 ---
 
@@ -13,8 +19,8 @@
 
 **Số liệu đọc được**
 
-- Đỉnh cao nhất: **2016 với 2,10 nghìn tỷ**
-- Đáy: **2021 với 1,04 nghìn tỷ** — mất **50,5%** so với đỉnh
+- Đỉnh cao nhất: **2016 với 2,10 tỷ**
+- Đáy: **2021 với 1,04 tỷ** — mất **50,5%** so với đỉnh
 - Năm gãy mạnh nhất: **2019, giảm 38,6% chỉ trong một năm**
 - 2022 hồi phục nhẹ +12,15%, nhưng vẫn thấp hơn đỉnh 44%
 
@@ -122,19 +128,19 @@
 
 **Số liệu đọc được**
 
-| Khoản thất thoát | Giá trị | % doanh thu gộp |
+| Khoản thất thoát | Giá trị (tỷ đvtt) | % doanh thu gộp |
 |---|---:|---:|
-| Đơn bị hủy | 1.516 tỷ | **9,23%** |
-| Tiền hoàn trả | 511 tỷ | 3,11% |
-| Giảm giá khuyến mại | 750 tỷ | 4,56% |
-| **Thực sự giữ lại** | **13.654 tỷ** | **83,10%** |
+| Đơn bị hủy | 1,52 tỷ | **9,23%** |
+| Tiền hoàn trả | 0,51 tỷ | 3,11% |
+| Giảm giá khuyến mại | 0,75 tỷ | 4,56% |
+| **Thực sự giữ lại** | **13,65 tỷ** | **83,10%** |
 
 **Kết luận**
 
 > **Hủy đơn là khoản thất thoát lớn nhất — 9,23%, gấp gần ba lần tiền hoàn trả.** Đây cũng là loại thất
 > thoát *rẻ nhất để khắc phục*: đơn bị hủy chưa tốn chi phí giao vận, chỉ tốn chi phí thu hút khách.
 >
-> Giảm tỷ lệ hủy đơn từ 9,23% xuống 5% sẽ thu về khoảng **695 tỷ** — nhiều hơn toàn bộ ngân sách giảm
+> Giảm tỷ lệ hủy đơn từ 9,23% xuống 5% sẽ thu về khoảng **695 triệu** — nhiều hơn toàn bộ ngân sách giảm
 > giá 11 năm cộng lại.
 >
 > Về mặt kế toán, cần nêu rõ: biến `Revenue` trong dữ liệu **tính gộp cả đơn đã hủy và đơn bị trả lại**.
@@ -186,7 +192,7 @@
 > trung vị của danh mục sản phẩm (19,78%). Doanh nghiệp đang dồn lực bán thứ ít lời nhất.
 >
 > Dịch chuyển 10 điểm phần trăm doanh thu từ `Streetwear` sang `GenZ` sẽ nâng biên lợi nhuận gộp thêm
-> khoảng 0,6 điểm phần trăm — tương đương **99 tỷ lợi nhuận tăng thêm mà không cần bán thêm một đồng
+> khoảng 0,6 điểm phần trăm — tương đương **99 triệu lợi nhuận tăng thêm mà không cần bán thêm một đồng
 > doanh thu nào**.
 
 ---
@@ -220,7 +226,7 @@
 *Về khuyến mại:*
 - Ngày có khuyến mại: doanh thu TB **3,99 triệu**; ngày không có: **4,52 triệu** → thấp hơn **11,8%**
 - Số lượng mua trung bình mỗi dòng: **4,49** khi có khuyến mại so với **4,50** khi không
-- Đã chi **750 tỷ** tiền giảm giá, phủ 44,5% số ngày
+- Đã chi **750 triệu** tiền giảm giá, phủ 44,5% số ngày
 
 *Về thời gian giao hàng:*
 - Tỷ lệ trả hàng dao động **6,08%–6,51%** với mọi mức thời gian giao từ 2 đến 10 ngày
@@ -230,7 +236,7 @@
 
 > **Không tìm thấy bằng chứng khuyến mại làm tăng doanh thu.** Số lượng mua trung bình giống hệt nhau —
 > khuyến mại không khiến khách mua nhiều hơn. Em dùng cụm *"không tìm thấy bằng chứng"* thay vì *"phản
-> tác dụng"*, vì phân tích quan sát không kiểm soát được các yếu tố khác. Nhưng với 750 tỷ đã chi, việc
+> tác dụng"*, vì phân tích quan sát không kiểm soát được các yếu tố khác. Nhưng với 750 triệu đã chi, việc
 > **không chứng minh được hiệu quả** đã đủ là cảnh báo để thiết kế thử nghiệm có đối chứng.
 >
 > **Giao hàng nhanh không làm giảm trả hàng.** Đơn giao trong 2 ngày bị trả gần bằng đơn giao trong 10
@@ -266,8 +272,8 @@
 |---:|---|---|---|
 | 1 | Chuyển đổi sụp 72% trong khi lưu lượng tăng 63% | Điều tra và khắc phục phễu chuyển đổi | Khôi phục CVR về 0,7% sẽ gấp đôi số đơn |
 | 2 | Giá tăng 54%, giỏ hàng nhỏ đi, khách rời bỏ | Xem lại chính sách giá | Nguyên nhân gốc của chuỗi suy giảm |
-| 3 | Hủy đơn chiếm 9,23% doanh thu | Giảm tỷ lệ hủy về 5% | ~695 tỷ |
-| 4 | Streetwear 80% doanh thu nhưng biên chỉ 13,24% | Tái cơ cấu sang nhóm biên cao | ~99 tỷ nếu dịch 10 điểm % |
+| 3 | Hủy đơn chiếm 9,23% doanh thu | Giảm tỷ lệ hủy về 5% | ~695 triệu |
+| 4 | Streetwear 80% doanh thu nhưng biên chỉ 13,24% | Tái cơ cấu sang nhóm biên cao | ~99 triệu nếu dịch 10 điểm % |
 | 5 | Khuyến mại không chứng minh được hiệu quả | Dừng đại trà, chuyển sang thử nghiệm A/B | Tiết kiệm ngân sách giảm giá |
 
 **Hai việc dữ liệu cho thấy KHÔNG nên làm:**
