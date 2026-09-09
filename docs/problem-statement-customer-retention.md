@@ -202,6 +202,12 @@ riêng, có đầu ra xác định, giao cho một người làm xong được, 
 | **BTN5** | Nền khách hiện tại đỡ nổi 2023–24 không? | RQ6 · H6 | Ràng buộc mức cho mô hình | ⏳ Sơ bộ |
 | **BTN6** | Ngân sách giới hạn nên đi đâu? | RQ7 · RQ5, H5 | Xếp hạng can thiệp | ⏳ Sơ bộ |
 
+> **RQ1–RQ7 được định nghĩa đầy đủ ở [Mục 4](#4-câu-hỏi-nghiên-cứu--theo-4-cấp-phân-tích).**
+> Thứ tự BTN **không** trùng thứ tự RQ, vì hai bảng xếp theo hai trục khác nhau: BTN theo **mạch
+> phụ thuộc** (BTN2 → BTN3 → BTN4), còn RQ theo **bốn cấp phân tích** (Descriptive → Diagnostic
+> → Predictive → Prescriptive). Riêng BTN6 gom hai RQ: **RQ7** là câu hỏi chính, **RQ5** vào làm
+> *đầu vào loại trừ* — kết quả p = 0,533 loại bỏ phương án phân bổ ngân sách theo kênh.
+
 ### Sơ đồ cây
 
 ```
