@@ -449,6 +449,13 @@ M11 **19,4%** · M12 **30,57%** có khuyến mãi.
 > sẽ tạo thiên lệch chọn mẫu nghiêm trọng, vì người chịu đánh giá vốn đã khác người không đánh
 > giá. Trong Mục 9, M11 **đã bị loại khỏi mô hình** vì lý do này.
 
+**Khối kiểm chứng.**
+*Nguồn:* 7 bảng — `customers`, `orders`, `order_items`, `shipments`, `returns`, `reviews`,
+`promotions` · bộ lọc ghi ở cột *Bộ lọc* từng dòng · grain ghi ở cột *Grain*.
+*Phép kiểm:* kiểm cực trị (Kỹ thuật 3) — mọi độ phủ phải nằm trong [0, 1].
+*Kết quả:* M9 96,5% · M10 6,14% · M11 19,4% · M12 30,57% — đều hợp lệ, **khớp**. M13 giảm đơn
+điệu 121.930 → 55.738 đúng như kỳ vọng với một rổ đóng.
+
 ---
 
 ## 7. Metrics — chỉ số dẫn xuất
@@ -477,6 +484,12 @@ phải số lượng measure. "Doanh thu quý 4" chỉ dùng một measure nhưn
 > khách chưa từng mua **không có recency** nên không thể nằm trong tử số, nhưng con số 79,7%
 > lại bao gồm họ. Hệ quả nghiêm trọng hơn tên gọi — K3 và K4 cũ **chồng lấn tử số**, hai KPI
 > cùng một phần tử số nhưng hai hành động khác nhau, không giám sát được.
+
+**Khối kiểm chứng.**
+*Nguồn:* dẫn xuất từ M1–M13 · bộ lọc kế thừa từ measure gốc · grain: theo từng metric.
+*Phép kiểm:* kiểm grain tử số/mẫu số (Kỹ thuật 2) — mọi tỷ lệ phải cùng đơn vị đếm.
+*Kết quả:* Me8a mẫu số = toàn bộ đăng ký (121.930), Me8b mẫu số = chỉ nhóm đã mua (90.246) —
+hai mẫu số **khác nhau và đã tách rời**, hết chồng lấn. **Khớp.**
 
 ---
 
@@ -521,6 +534,13 @@ trọn đời so với 7,58**. Chạy theo K1/K3′ bằng khuyến mãi sẽ l�
 >
 > Ngưỡng 30% đặt bằng đúng mức hiện tại (30,6%), tức **"không được xấu thêm"** — đây là ngưỡng
 > giữ nguyên trạng, không phải mục tiêu cải thiện, và không phải chuẩn ngành.
+
+**Khối kiểm chứng.**
+*Nguồn:* dẫn xuất từ Me1–Me13 · mốc `REF` = 2022-12-31.
+*Phép kiểm:* kiểm cực trị (Kỹ thuật 3) — mỗi KPI phải có ngưỡng đạt được về mặt cấu trúc.
+*Kết quả:* K2 cũ **trượt phép kiểm này** (mục tiêu tăng trưởng trên một rổ chỉ có thể co lại)
+nên đã thay bằng K2′; K4 trượt vì là chỉ số tồn nên đã hạ cấp. Bảy KPI còn lại **khớp**, và
+bộ chỉ số có đúng một guardrail (K7).
 
 ---
 
@@ -572,7 +592,16 @@ khảo dừng ở phân khúc RFM và ma trận cohort — cả hai đều mô t
 | Đơn đầu **có** khuyến mãi | 26.759 | **4,59** | 67,8% |
 | Đơn đầu **không** khuyến mãi | 60.840 | **7,56** | 76,9% |
 
-Khoảng cách thô: **−39,2%**. Kaplan–Meier xác nhận, log-rank χ² = 873,80 · **p = 4,9×10⁻¹⁹²**:
+Khoảng cách thô: **−39,2%**. Đường Kaplan–Meier xác nhận, log-rank χ² = 873,80 ·
+**p = 4,9×10⁻¹⁹²**:
+
+![Đường Kaplan–Meier tách theo promo_first](hinh/12-kaplan-meier-promo.png)
+
+Đọc biểu đồ: trục dọc là **tỷ lệ khách chưa quay lại mua** — đường thấp hơn nghĩa là quay lại
+nhiều hơn. Tại mốc một năm, khoảng cách giữa hai nhóm là **10,0 điểm phần trăm**. Vùng mờ quanh
+mỗi đường là khoảng tin cậy 95% — hẹp đến mức gần như không nhìn thấy, do cỡ mẫu lớn.
+
+Số liệu tại các mốc:
 
 | Tỷ lệ **chưa** quay lại sau | 90 ngày | 180 ngày | 365 ngày | 730 ngày |
 |---|---:|---:|---:|---:|
@@ -731,6 +760,14 @@ Tài liệu tham khảo (Phần C) rút ra ba quyết định kỹ thuật từ 
 
 Phân tích cohort bổ sung **giả định thứ tư**: **ràng buộc mức (level constraint)** cho giai đoạn
 dự báo, với căn cứ là quy mô nền khách lặp lại đã ổn định ba năm liền.
+
+**Khối kiểm chứng.**
+*Nguồn:* `orders` · cột `customer_id`, `order_date` · **cả hai bộ lọc** · grain: mỗi năm ·
+2020–2022.
+*Phép kiểm:* kiểm chứng chéo bằng đường khác (Kiểm 3 ở F2) — tính lại theo `live` và `ALL`.
+*Kết quả:* `live` 22.738 → 22.438 → 22.999 và `ALL` 24.335 → 23.984 → 24.696 — **hai bộ lọc độc
+lập cùng cho một hình dạng** (giảm nhẹ rồi nhích lên). **Khớp.** Nhưng n = 3 nên chỉ kết luận
+được *chưa thấy dấu hiệu tiếp tục rơi*.
 
 ---
 
