@@ -5,6 +5,20 @@
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [1. Nguyên tắc](#1-nguyên-tắc)
+- [2. Kết quả](#2-kết-quả)
+- [3. Tám nhóm thao tác](#3-tám-nhóm-thao-tác)
+- [4. Hai phép kiểm chứng an toàn](#4-hai-phép-kiểm-chứng-an-toàn)
+- [5. Cách chạy lại](#5-cách-chạy-lại)
+- [6. Ba quyết định đáng nói khi báo cáo](#6-ba-quyết-định-đáng-nói-khi-báo-cáo)
+- [7. Bước tiếp theo](#7-bước-tiếp-theo)
+
+---
+<!-- muc-luc -->
+
 ## 1. Nguyên tắc
 
 > **Mọi thao tác làm sạch đều phải có căn cứ từ bước Từ điển dữ liệu.**

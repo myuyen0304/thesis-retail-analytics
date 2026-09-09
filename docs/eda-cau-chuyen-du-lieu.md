@@ -12,6 +12,27 @@
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [Mở đầu — Một doanh nghiệp mất gần một nửa doanh thu](#mở-đầu--một-doanh-nghiệp-mất-gần-một-nửa-doanh-thu)
+- [Chương 1 — Không phải khách chi ít đi, mà là ít người mua](#chương-1--không-phải-khách-chi-ít-đi-mà-là-ít-người-mua)
+- [Chương 2 — Người vào cửa hàng vẫn đông, nhưng không ai mua](#chương-2--người-vào-cửa-hàng-vẫn-đông-nhưng-không-ai-mua)
+- [Chương 3 — Thủ phạm: giá đã tăng 54%](#chương-3--thủ-phạm-giá-đã-tăng-54)
+- [Chương 4 — Cú sụp 2019 không chừa một ai](#chương-4--cú-sụp-2019-không-chừa-một-ai)
+- [Chương 5 — Cứ 100 đồng ghi nhận thì 17 đồng bốc hơi](#chương-5--cứ-100-đồng-ghi-nhận-thì-17-đồng-bốc-hơi)
+- [Chương 6 — Hai phần ba danh mục sản phẩm chưa từng bán được món nào](#chương-6--hai-phần-ba-danh-mục-sản-phẩm-chưa-từng-bán-được-món-nào)
+- [Chương 7 — Khuyến mại không tạo ra doanh thu](#chương-7--khuyến-mại-không-tạo-ra-doanh-thu)
+- [Chương 8 — Giao hàng nhanh không làm giảm trả hàng](#chương-8--giao-hàng-nhanh-không-làm-giảm-trả-hàng)
+- [Chương 9 — Tin tốt: khách đã mua thì khá trung thành](#chương-9--tin-tốt-khách-đã-mua-thì-khá-trung-thành)
+- [Chương 10 — Mùa vụ ngược quy luật ngành](#chương-10--mùa-vụ-ngược-quy-luật-ngành)
+- [Tổng hợp — Năm khuyến nghị theo thứ tự ưu tiên](#tổng-hợp--năm-khuyến-nghị-theo-thứ-tự-ưu-tiên)
+- [Hàm ý cho bài toán dự báo](#hàm-ý-cho-bài-toán-dự-báo)
+- [Giới hạn của phân tích](#giới-hạn-của-phân-tích)
+
+---
+<!-- muc-luc -->
+
 ## Mở đầu — Một doanh nghiệp mất gần một nửa doanh thu
 
 Nhìn vào doanh thu 11 năm, câu chuyện có vẻ đơn giản và buồn:

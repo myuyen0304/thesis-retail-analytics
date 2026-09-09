@@ -13,6 +13,26 @@
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [1. Doanh thu 11 năm](#1-doanh-thu-11-năm)
+- [2. Doanh thu giảm vì đâu: ít khách hay khách chi ít?](#2-doanh-thu-giảm-vì-đâu-ít-khách-hay-khách-chi-ít)
+- [3. Biểu đồ quan trọng nhất: lưu lượng tăng, đơn hàng giảm](#3-biểu-đồ-quan-trọng-nhất-lưu-lượng-tăng-đơn-hàng-giảm)
+- [4. Nguyên nhân: giá đã tăng 54%](#4-nguyên-nhân-giá-đã-tăng-54)
+- [5. Cú sụp 2019 xảy ra ở đâu?](#5-cú-sụp-2019-xảy-ra-ở-đâu)
+- [6. Tiền rò rỉ ở đâu](#6-tiền-rò-rỉ-ở-đâu)
+- [7. Danh mục sản phẩm tập trung cực đoan](#7-danh-mục-sản-phẩm-tập-trung-cực-đoan)
+- [8. Nghịch lý danh mục](#8-nghịch-lý-danh-mục)
+- [9. Mùa vụ](#9-mùa-vụ)
+- [10. Hai giả thuyết bị dữ liệu bác bỏ](#10-hai-giả-thuyết-bị-dữ-liệu-bác-bỏ)
+- [11. Điểm sáng: tệp khách hàng](#11-điểm-sáng-tệp-khách-hàng)
+- [Tổng hợp — Từ số liệu đến hành động](#tổng-hợp--từ-số-liệu-đến-hành-động)
+- [Giới hạn cần nêu rõ](#giới-hạn-cần-nêu-rõ)
+
+---
+<!-- muc-luc -->
+
 ## 1. Doanh thu 11 năm
 
 ![Doanh thu theo năm](hinh/01-doanh-thu-theo-nam.png)

@@ -10,6 +10,24 @@
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [1. Vì sao chọn vấn đề này](#1-vì-sao-chọn-vấn-đề-này)
+- [2. Quan sát khởi đầu: biên lợi nhuận nhấp nhô rất đều](#2-quan-sát-khởi-đầu-biên-lợi-nhuận-nhấp-nhô-rất-đều)
+- [3. Phát biểu vấn đề (Problem Statement)](#3-phát-biểu-vấn-đề-problem-statement)
+- [4. Câu hỏi nghiên cứu — theo 4 cấp phân tích](#4-câu-hỏi-nghiên-cứu--theo-4-cấp-phân-tích)
+- [5. Giả thuyết](#5-giả-thuyết)
+- [6. Measures — độ đo thô](#6-measures--độ-đo-thô)
+- [7. Metrics — chỉ số dẫn xuất](#7-metrics--chỉ-số-dẫn-xuất)
+- [8. KPI — chỉ số gắn mục tiêu và ngưỡng hành động](#8-kpi--chỉ-số-gắn-mục-tiêu-và-ngưỡng-hành-động)
+- [8b. Ma trận truy vết — chuỗi thiết kế nối liền](#8b-ma-trận-truy-vết--chuỗi-thiết-kế-nối-liền)
+- [9. Ý nghĩa cho bài toán dự báo Revenue/COGS](#9-ý-nghĩa-cho-bài-toán-dự-báo-revenuecogs)
+- [10. Tái lập số liệu](#10-tái-lập-số-liệu)
+
+---
+<!-- muc-luc -->
+
 ## 1. Vì sao chọn vấn đề này
 
 **Khóa luận dự báo hai biến: `Revenue` và `COGS`.** Gần như toàn bộ sự chú ý — của tài liệu

@@ -8,6 +8,29 @@ Mọi con số dưới đây được kiểm chứng trực tiếp trên file, k
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [0. Tổng quan các bảng](#0-tổng-quan-các-bảng)
+- [1. `sales.csv` — TARGET](#1-salescsv--target)
+- [2. `sample_submission.csv` — Format nộp bài](#2-samplesubmissioncsv--format-nộp-bài)
+- [3. `orders.csv` — Header đơn hàng](#3-orderscsv--header-đơn-hàng)
+- [4. `order_items.csv` — Chi tiết dòng đơn](#4-orderitemscsv--chi-tiết-dòng-đơn)
+- [5. `payments.csv` — Thanh toán](#5-paymentscsv--thanh-toán)
+- [6. `shipments.csv` — Vận chuyển](#6-shipmentscsv--vận-chuyển)
+- [7. `returns.csv` — Trả hàng](#7-returnscsv--trả-hàng)
+- [8. `reviews.csv` — Đánh giá](#8-reviewscsv--đánh-giá)
+- [9. `inventory.csv` — Snapshot tồn kho](#9-inventorycsv--snapshot-tồn-kho)
+- [10. `web_traffic.csv` — Traffic website](#10-webtrafficcsv--traffic-website)
+- [11. `customers.csv` — Dimension khách hàng](#11-customerscsv--dimension-khách-hàng)
+- [12. `products.csv` — Dimension sản phẩm](#12-productscsv--dimension-sản-phẩm)
+- [13. `geography.csv` — Dimension địa lý](#13-geographycsv--dimension-địa-lý)
+- [14. `promotions.csv` — Dimension khuyến mãi](#14-promotionscsv--dimension-khuyến-mãi)
+- [Tổng kết chất lượng dữ liệu](#tổng-kết-chất-lượng-dữ-liệu)
+
+---
+<!-- muc-luc -->
+
 ## 0. Tổng quan các bảng
 
 | File | Số dòng | Grain (1 dòng = ?) | Khóa chính | Vai trò |

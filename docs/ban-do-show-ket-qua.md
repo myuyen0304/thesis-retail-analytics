@@ -6,6 +6,19 @@
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [0. Chuẩn bị trước khi vào phòng](#0-chuẩn-bị-trước-khi-vào-phòng)
+- [1. Bảng tra nhanh](#1-bảng-tra-nhanh)
+- [2. Bốn chỗ đáng dừng lâu](#2-bốn-chỗ-đáng-dừng-lâu)
+- [3. Nếu giảng viên bảo "chạy lại cho tôi xem"](#3-nếu-giảng-viên-bảo-chạy-lại-cho-tôi-xem)
+- [4. Bốn câu hỏi khó và chỗ show tương ứng](#4-bốn-câu-hỏi-khó-và-chỗ-show-tương-ứng)
+- [5. Thứ tự thao tác gọn nhất](#5-thứ-tự-thao-tác-gọn-nhất)
+
+---
+<!-- muc-luc -->
+
 ## 0. Chuẩn bị trước khi vào phòng
 
 **Mở sẵn hai cửa sổ, chuyển qua lại bằng `Alt + Tab`:**

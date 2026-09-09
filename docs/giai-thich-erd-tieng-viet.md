@@ -27,6 +27,32 @@
 
 # PHẦN 2 — Dịch thuộc tính từng bảng
 
+<!-- muc-luc -->
+## Mục lục
+
+- [`GEOGRAPHY` — Địa lý](#geography--địa-lý)
+- [`CUSTOMERS` — Khách hàng](#customers--khách-hàng)
+- [`PRODUCTS` — Sản phẩm](#products--sản-phẩm)
+- [`PROMOTIONS` — Chương trình khuyến mại](#promotions--chương-trình-khuyến-mại)
+- [`ORDERS` — Đơn hàng](#orders--đơn-hàng)
+- [`ORDER_ITEMS` — Dòng hàng trong đơn](#orderitems--dòng-hàng-trong-đơn)
+- [`PAYMENTS` — Thanh toán](#payments--thanh-toán)
+- [`SHIPMENTS` — Giao vận](#shipments--giao-vận)
+- [`RETURNS` — Trả hàng](#returns--trả-hàng)
+- [`REVIEWS` — Đánh giá](#reviews--đánh-giá)
+- [`INVENTORY` — Tồn kho](#inventory--tồn-kho)
+- [`SALES` — Doanh thu ngày · BIẾN CẦN DỰ BÁO](#sales--doanh-thu-ngày--biến-cần-dự-báo)
+- [`WEB_TRAFFIC` — Lưu lượng website](#webtraffic--lưu-lượng-website)
+- [Luồng chính: hành trình một đơn hàng](#luồng-chính-hành-trình-một-đơn-hàng)
+- [Luồng phụ trợ](#luồng-phụ-trợ)
+- [Sơ đồ luồng](#sơ-đồ-luồng)
+- [1. Doanh thu ghi nhận ngay lúc đặt hàng](#1-doanh-thu-ghi-nhận-ngay-lúc-đặt-hàng)
+- [2. Trạng thái đơn quyết định luồng có đi tiếp không](#2-trạng-thái-đơn-quyết-định-luồng-có-đi-tiếp-không)
+- [3. `ORDER_ITEMS` là trung tâm của mọi thứ](#3-orderitems-là-trung-tâm-của-mọi-thứ)
+
+---
+<!-- muc-luc -->
+
 ## `GEOGRAPHY` — Địa lý
 
 | Thuộc tính | Nghĩa |

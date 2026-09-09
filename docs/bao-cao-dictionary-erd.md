@@ -5,6 +5,18 @@
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [1. Bối cảnh](#1-bối-cảnh)
+- [2. PHẦN A — TỪ ĐIỂN DỮ LIỆU](#2-phần-a--từ-điển-dữ-liệu)
+- [3. PHẦN B — SƠ ĐỒ ERD](#3-phần-b--sơ-đồ-erd)
+- [4. Tổng kết](#4-tổng-kết)
+- [Phụ lục — Câu hỏi dự đoán](#phụ-lục--câu-hỏi-dự-đoán)
+
+---
+<!-- muc-luc -->
+
 ## 1. Bối cảnh
 
 Đề tài của nhóm em là dự báo doanh thu và giá vốn hàng bán theo ngày cho một doanh nghiệp bán lẻ thời

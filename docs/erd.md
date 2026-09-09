@@ -9,6 +9,20 @@ nêu ở đây đều tương ứng một-một với ký hiệu trên hình.
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [1. Tổng quan](#1-tổng-quan)
+- [2. Ý nghĩa ký hiệu trên sơ đồ](#2-ý-nghĩa-ký-hiệu-trên-sơ-đồ)
+- [3. Mười ba thực thể](#3-mười-ba-thực-thể)
+- [4. Mười lăm mối quan hệ](#4-mười-lăm-mối-quan-hệ)
+- [5. Bốn quy tắc thiết kế](#5-bốn-quy-tắc-thiết-kế)
+- [6. Đường dẫn từ dữ liệu giao dịch tới biến mục tiêu](#6-đường-dẫn-từ-dữ-liệu-giao-dịch-tới-biến-mục-tiêu)
+- [7. Kết quả kiểm định](#7-kết-quả-kiểm-định)
+
+---
+<!-- muc-luc -->
+
 ## 1. Tổng quan
 
 | Thành phần | Số lượng |

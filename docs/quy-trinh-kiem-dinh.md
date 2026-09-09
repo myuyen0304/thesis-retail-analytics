@@ -8,6 +8,18 @@
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [1. Môi trường và cách chạy lại](#1-môi-trường-và-cách-chạy-lại)
+- [2. Nguyên tắc làm việc](#2-nguyên-tắc-làm-việc)
+- [3. Chín bước kiểm định — mã nguồn và kết quả](#3-chín-bước-kiểm-định--mã-nguồn-và-kết-quả)
+- [4. Cách vẽ sơ đồ ERD](#4-cách-vẽ-sơ-đồ-erd)
+- [5. Tổng hợp kết quả kiểm định](#5-tổng-hợp-kết-quả-kiểm-định)
+
+---
+<!-- muc-luc -->
+
 ## 1. Môi trường và cách chạy lại
 
 ```

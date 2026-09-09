@@ -9,6 +9,28 @@
 > **Mọi con số đều tự tính từ dữ liệu gốc**, không trích lại từ bất kỳ tài liệu nào. Script
 > tái lập và các phép kiểm chứng nêu ở Mục 12.
 
+<!-- muc-luc -->
+## Mục lục
+
+- [Quy ước bộ lọc — áp dụng toàn tài liệu](#quy-ước-bộ-lọc--áp-dụng-toàn-tài-liệu)
+- [1. Vì sao chọn vấn đề này](#1-vì-sao-chọn-vấn-đề-này)
+- [2. Trục phân tích: chuỗi phân rã ba tầng](#2-trục-phân-tích-chuỗi-phân-rã-ba-tầng)
+- [3. Phát biểu vấn đề (Problem Statement)](#3-phát-biểu-vấn-đề-problem-statement)
+- [3b. Cây bài toán — rã bài toán lớn thành sáu bài toán nhỏ](#3b-cây-bài-toán--rã-bài-toán-lớn-thành-sáu-bài-toán-nhỏ)
+- [4. Câu hỏi nghiên cứu — theo 4 cấp phân tích](#4-câu-hỏi-nghiên-cứu--theo-4-cấp-phân-tích)
+- [5. Giả thuyết](#5-giả-thuyết)
+- [6. Measures — độ đo thô](#6-measures--độ-đo-thô)
+- [7. Metrics — chỉ số dẫn xuất](#7-metrics--chỉ-số-dẫn-xuất)
+- [8. KPI — chỉ số gắn mục tiêu và ngưỡng hành động](#8-kpi--chỉ-số-gắn-mục-tiêu-và-ngưỡng-hành-động)
+- [8b. Ma trận truy vết — chuỗi thiết kế nối liền](#8b-ma-trận-truy-vết--chuỗi-thiết-kế-nối-liền)
+- [9. BTN4 — Cơ chế: biến nào tại đơn đầu quyết định khách quay lại ⭐](#9-btn4--cơ-chế-biến-nào-tại-đơn-đầu-quyết-định-khách-quay-lại-)
+- [10. Một phát hiện đi ngược tài liệu tham khảo](#10-một-phát-hiện-đi-ngược-tài-liệu-tham-khảo)
+- [11. Ý nghĩa cho bài toán dự báo Revenue/COGS](#11-ý-nghĩa-cho-bài-toán-dự-báo-revenuecogs)
+- [12. Tái lập và chứng minh số liệu](#12-tái-lập-và-chứng-minh-số-liệu)
+
+---
+<!-- muc-luc -->
+
 ## Quy ước bộ lọc — áp dụng toàn tài liệu
 
 Đây là nguồn của gần như mọi sai lệch số liệu giữa hai người cùng phân tích một bộ dữ liệu,

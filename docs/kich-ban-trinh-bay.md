@@ -6,6 +6,22 @@
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [CHUẨN BỊ TRƯỚC KHI VÀO (2 phút)](#chuẩn-bị-trước-khi-vào-2-phút)
+- [CHẶNG 1 — MỞ ĐẦU · 1 phút](#chặng-1--mở-đầu--1-phút)
+- [CHẶNG 2 — TỪ ĐIỂN DỮ LIỆU · 3 phút](#chặng-2--từ-điển-dữ-liệu--3-phút)
+- [CHẶNG 3 — SƠ ĐỒ ERD · 4 phút](#chặng-3--sơ-đồ-erd--4-phút)
+- [CHẶNG 4 — BẰNG CHỨNG · 1,5 phút](#chặng-4--bằng-chứng--15-phút)
+- [CHẶNG 5 — CHỐT · 30 giây](#chặng-5--chốt--30-giây)
+- [Bảy câu hay bị hỏi](#bảy-câu-hay-bị-hỏi)
+- [Khi gặp câu không biết](#khi-gặp-câu-không-biết)
+- [Nếu được hỏi thêm về phân tích](#nếu-được-hỏi-thêm-về-phân-tích)
+
+---
+<!-- muc-luc -->
+
 ## CHUẨN BỊ TRƯỚC KHI VÀO (2 phút)
 
 Mở sẵn **4 tab trình duyệt** theo đúng thứ tự này, để chuyển tab là đúng mạch:
