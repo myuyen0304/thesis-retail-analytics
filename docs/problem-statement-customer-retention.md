@@ -73,6 +73,12 @@ Doanh thu
 > sự cố đơn lẻ mà là **hai sự cố xảy ra đồng thời và nhân lên nhau**. Số hạng tương tác âm vì
 > hai mức giảm chồng lấn — trừ ra để tránh đếm trùng.
 
+**Khối kiểm chứng.**
+*Nguồn:* `orders` · cột `order_id`, `customer_id`, `order_date` · bộ lọc **`live`** · grain: mỗi
+đơn · mốc 2013 và 2022.
+*Phép kiểm:* kiểm tổng (Kỹ thuật 1) — ba thành phần phải cộng lại bằng tổng mức giảm.
+*Kết quả:* 72,2% + 45,2% + (−17,4%) = 100% — **khớp**.
+
 ### 2.2 Tầng 3 — tách hiệu ứng cơ học ra khỏi tín hiệu thật ⭐
 
 `customers.csv` là **danh sách đóng 121.930 người**. "Khách mua lần đầu mỗi năm" được rút từ một
@@ -131,6 +137,13 @@ biến mất. Tính đến 31/12/2022, cấu trúc tập khách hàng như sau:
 | Đã mua, ngủ đông > 365 ngày | 65.493 | 53,7% |
 | Đang hoạt động ≤ 365 ngày | 24.753 | 20,3% |
 | **Tổng** | **121.930** | **100%** |
+
+**Khối kiểm chứng.**
+*Nguồn:* `customers` + `orders` · cột `customer_id`, `order_date` · bộ lọc **`ALL`** (mẫu số là
+toàn bộ đăng ký) · grain: mỗi khách · mốc `REF` = 2022-12-31.
+*Phép kiểm:* kiểm tổng + kiểm grain (Kỹ thuật 1 và 2) — ba nhóm rời nhau, phủ kín, cùng mẫu số.
+*Kết quả:* 31.684 + 65.493 + 24.753 = 121.930 — **khớp**. Chính phép kiểm này bắt được lỗi
+grain của Me8 cũ.
 
 **Vấn đề — đây là thất bại KÍCH HOẠT, không phải thất bại thu nạp.**
 
@@ -218,6 +231,43 @@ và can thiệp nào giữ lại được?
 > khách giữ lại. Mỗi bài toán nhỏ ứng với đúng một thành phần trong phân rã đó, nên chúng phủ
 > kín nguyên nhân chứ không bỏ sót."*
 
+### BTN1 · Tập khách hàng đang ở trạng thái nào?
+
+> **Bối cảnh.** 121.930 tài khoản đăng ký, trong đó 72,3% từng phát sinh giao dịch hợp lệ. Trong
+> nhóm đã mua, 25,7% chỉ mua đúng một lần.
+>
+> **Khoảng trống.** Chưa biết 121.930 tài khoản phân bố ra sao giữa ba trạng thái — chưa mua,
+> ngủ đông, đang hoạt động. Ba nhóm này cần ba can thiệp hoàn toàn khác nhau (kích hoạt lần
+> đầu / giành lại / giữ chân), mà ngân sách chỉ đủ cho một. Không biết quy mô từng nhóm thì
+> không xếp được thứ tự ưu tiên.
+>
+> **Câu hỏi.** Tại mốc 31/12/2022, 121.930 tài khoản phân bố thế nào giữa ba trạng thái, và
+> nhóm nào lớn nhất?
+>
+> **Đầu ra.** Bảng ba trạng thái kèm quy mô, buộc phải cộng lại đúng tổng đăng ký.
+>
+> **Trạng thái.** ✅ Xong. 31.684 chưa mua (26,0%) · 65.493 ngủ đông > 365 ngày (53,7%) ·
+> 24.753 đang hoạt động (20,3%). Kiểm tổng khớp 121.930. Nhóm ngủ đông lớn gấp đôi nhóm chưa
+> mua — đây là phát hiện đảo thứ tự ưu tiên so với trực giác ban đầu.
+
+### BTN2 · Mất khách hay khách mua thưa đi?
+
+> **Bối cảnh.** Số đơn hàng giảm từ 69.756 (2013) xuống 32.620 (2022), mất 37.136 đơn tức
+> −53,2%. Cùng kỳ, khách hoạt động giảm −38,4% và tần suất mua giảm −24,1%.
+>
+> **Khoảng trống.** Hai nguyên nhân cùng giảm nên chưa quy được trách nhiệm. Chúng đòi hỏi hai
+> can thiệp khác hẳn nhau — thu hút thêm người mua, hay làm người đang mua quay lại thường
+> xuyên hơn. Chọn sai thì tiền đổ vào chỗ không phải nút thắt.
+>
+> **Câu hỏi.** Trong 37.136 đơn mất đi, bao nhiêu do ít khách hơn và bao nhiêu do mỗi khách
+> mua thưa hơn?
+>
+> **Đầu ra.** Phân rã ba thành phần `ΔĐơn = ΔKhách×TS₀ + Khách₀×ΔTS + tương tác`.
+>
+> **Trạng thái.** ✅ Xong. Số khách 72,2% · tần suất 45,2% · tương tác −17,4%. Mất khách là
+> nguyên nhân chính nhưng mất tần suất cũng gần một nửa — **hai sự cố đồng thời**, sửa một cái
+> không đủ.
+
 ### BTN3 · Kích hoạt hỏng hay giữ chân hỏng?
 
 > **Bối cảnh.** Trong 121.930 tài khoản, chỉ 72,3% từng phát sinh giao dịch. Số khách mua lần
@@ -255,6 +305,47 @@ và can thiệp nào giữ lại được?
 > **Trạng thái.** ✅ Xong — xem Mục 9. Kết quả chính: hiệu ứng thật nhỏ hơn tín hiệu thô rất
 > nhiều, và hai trong ba giả thuyết mới bị bác bỏ.
 
+### BTN5 · Nền khách hiện tại đỡ nổi 2023–2024 không?
+
+> **Bối cảnh.** Số khách hoạt động đã đi ngang ba năm liền: 22.738 → 22.438 → **22.999**
+> (`live`), và 2022 còn nhích lên. Cùng lúc, doanh thu từ khách mới chỉ còn 4,2% — nền khách cũ
+> đang gánh gần như toàn bộ.
+>
+> **Khoảng trống.** Hai cách nhìn cho hai dự báo trái ngược: ngoại suy xu hướng dài hạn nói
+> 2023–2024 tiếp tục giảm, còn cấu trúc khách hàng nói đi ngang. Chưa có căn cứ để chọn, mà
+> chọn sai thì sai số của cả chương dự báo lệch một chiều có hệ thống.
+>
+> **Câu hỏi.** Chuỗi khách hoạt động 2020–2022 là một chế độ ổn định thật, hay chỉ là đoạn giữa
+> của đà rơi chưa kết thúc?
+>
+> **Đầu ra.** Một ràng buộc mức (level constraint) cho chương mô hình, kèm kiểm định điểm gãy
+> để xác nhận 2019 là điểm chuyển chế độ.
+>
+> **Trạng thái.** ⏳ Sơ bộ. Ba điểm đi ngang chỉ đủ để nói **chưa thấy dấu hiệu tiếp tục rơi**,
+> chưa đủ khẳng định chế độ ổn định — n = 3 là quá mỏng. Cần chạy Chow test hoặc Bai–Perron trên
+> chuỗi ngày để xác định điểm gãy có ý nghĩa thống kê.
+
+### BTN6 · Ngân sách giới hạn nên đi đâu?
+
+> **Bối cảnh.** Ba nhóm mục tiêu với quy mô rất khác nhau: 31.684 chưa từng mua, 65.493 ngủ
+> đông, 22.999 đang hoạt động. Chi phí và hiệu quả kỳ vọng của ba can thiệp tương ứng chưa được
+> đo.
+>
+> **Khoảng trống.** Ba phương án cạnh tranh nhau trên cùng một ngân sách, chưa có căn cứ định
+> lượng để xếp hạng. Nghiêm trọng hơn: phương án phân bổ theo kênh thu nạp — cách làm mà tài
+> liệu tham khảo đề xuất — đã bị loại bằng ANOVA (p = 0,533), nhưng chưa có gì thay thế vào chỗ
+> trống đó.
+>
+> **Câu hỏi.** Với cùng một đồng ngân sách, can thiệp nào tạo ra nhiều đơn hàng tăng thêm nhất,
+> và ràng buộc nào ngăn việc đạt mục tiêu bằng cách phá biên lợi nhuận?
+>
+> **Đầu ra.** Bảng xếp hạng ba can thiệp theo số đơn tăng thêm trên mỗi đơn vị chi phí, kèm
+> guardrail chặn lạm dụng khuyến mãi.
+>
+> **Trạng thái.** ⏳ Sơ bộ. Đã có hai mảnh: (a) loại được phương án phân bổ theo kênh, (b) K7
+> chặn việc đẩy K1/K3′ bằng giảm giá sâu. Còn thiếu mô hình chi phí cho ba can thiệp — đây là
+> phần phụ thuộc dữ liệu ngoài phạm vi bộ này (không có bảng chi phí marketing).
+
 ---
 
 ## 4. Câu hỏi nghiên cứu — theo 4 cấp phân tích
@@ -291,6 +382,38 @@ Mỗi giả thuyết ghi rõ **trạng thái**. Ghi cả cái bị bác bỏ —
 > **không bác bỏ được giả thuyết không** về khác biệt giữa các kênh — không phải "đã chứng minh
 > các kênh như nhau". Muốn kết luận tương đương một cách hợp lệ phải dùng **kiểm định tương
 > đương** với ngưỡng cho trước.
+
+### 5.1 H3 đã được kiểm soát confound thế nào
+
+H3 kết luận chất lượng cohort suy giảm đơn điệu. Nhưng có một **confound lựa chọn** phải xử lý
+trước khi kết luận đó đứng vững:
+
+> Cohort 2021 gồm những người đã đăng ký từ lâu mà mãi 2021 mới mua lần đầu — **theo định nghĩa
+> là phần cặn ít gắn bó nhất của rổ**. So retention của họ với cohort 2013 (những người mua ngay,
+> hào hứng nhất) là so **hai tầng lựa chọn khác nhau**, không phải so chất lượng theo thời gian.
+
+Bản giao việc đề xuất hai cách kiểm soát. Kết quả:
+
+**Cách 1 — đưa `cohort_year` vào mô hình làm biến kiểm soát.** ✅ Đã làm, xem Mục 9.3.
+Sau khi kiểm soát đồng thời khuyến mãi, thời gian giao, trả hàng, giá trị đơn và danh mục tại
+đơn đầu, `cohort_year` vẫn có **HR = 0,7478 · p < 0,0001**: mỗi năm cohort muộn hơn làm giảm
+25% khả năng quay lại. **Suy giảm chất lượng cohort không giải thích được bằng các đặc điểm
+quan sát được của đơn đầu** — H3 đứng vững.
+
+**Cách 2 — phân tầng theo độ trễ từ ngày đăng ký tới đơn đầu.** ❌ **Không thực hiện được.**
+Cách này cần `signup_date`, và kiểm tra cho thấy nó hỏng nặng hơn dự kiến:
+
+| | |
+|---|---:|
+| Trung vị độ trễ | **−1.820 ngày** |
+| Tỷ lệ khách có độ trễ **âm** | **89,1%** |
+
+Gần chín phần mười khách "mua trước khi đăng ký" — độ trễ không mang nghĩa gì, nên không phân
+tầng được. Ghi nhận là một giới hạn, không cố dùng.
+
+**Kết luận sau kiểm soát:** H3 **không đổi**, nhưng phải kèm giới hạn — phần confound lựa chọn
+còn lại (*ai là người trì hoãn mua*) không kiểm soát được bằng dữ liệu hiện có, vì biến duy
+nhất đo được điều đó là `signup_date` và nó không dùng được.
 
 ---
 
@@ -339,8 +462,8 @@ phải số lượng measure. "Doanh thu quý 4" chỉ dùng một measure nhưn
 | Me2 | Tỷ lệ mua lại | `#(M7 ≥ 2) / M2` | **74,3%** | RQ1 |
 | Me3 | Tần suất mua/năm | `M3(năm) / M2(năm)` | 1,87 → **1,42** | RQ3, H1 |
 | Me4 | Khách mua lần đầu mỗi năm | `#(year(M5) = Y)` | 24.407 → **1.328** | RQ2, H2 |
-| Me5 | Giữ chân năm +N | `khách cohort C mua ở năm C+N / |C|` | 49,5% → **7,0%** | RQ2, H3 |
-| Me6 | Giá trị cohort 3 năm | `SUM(rev 3 năm đầu) / |cohort|` | 78.589 → **35.378** | RQ4, H3 |
+| Me5 | Giữ chân năm +N | `khách cohort C mua ở năm C+N` / cỡ cohort C | 49,5% → **7,0%** | RQ2, H3 |
+| Me6 | Giá trị cohort 3 năm | `SUM(rev 3 năm đầu)` / cỡ cohort | 78.589 → **35.378** | RQ4, H3 |
 | Me7 | Tỷ trọng doanh thu khách mới | `rev khách mới / tổng rev` | 55,4% → **4,2%** | RQ6 |
 | **Me8a** 🆕 | Tỷ lệ chưa kích hoạt | `(M1 − M2) / M1` | **26,0%** | K4, BTN1 |
 | **Me8b** 🆕 | Tỷ lệ ngủ đông | `#(recency > 365) / M2` | **72,6%** | K3′, BTN1 |
@@ -529,6 +652,15 @@ quan sát**; nó không xử lý được confound ẩn.
 Muốn tiến gần nhân quả thật cần thiết kế khác: thử nghiệm ngẫu nhiên có đối chứng, hoặc khai
 thác một cú sốc ngoại sinh trong lịch khuyến mãi theo kiểu difference-in-differences.
 
+**Khối kiểm chứng cho Mục 9.**
+*Nguồn:* `orders` ⋈ `order_items` ⋈ `products` ⋈ `shipments` ⋈ `returns` · bộ lọc **`live`** ·
+grain: mỗi khách (đơn đầu tiên) · cắt cụt tại `REF` = 2022-12-31.
+*Phép kiểm:* kiểm cực trị (Kỹ thuật 3) + kiểm chứng chéo bằng đường khác (Kiểm 3 ở F2).
+*Kết quả:* mọi HR và tỷ lệ nằm trong miền hợp lệ; tỷ lệ Kaplan–Meier tại t = 0 bằng đúng 1,000
+theo định nghĩa; **hai đường độc lập cùng chỉ ra khoảng cách promo** — log-rank
+(χ² = 873,80 · p = 4,9×10⁻¹⁹²) và Cox (HR = 0,9482 · p < 0,0001) — **khớp về chiều và ý nghĩa**.
+Sau matching HR = 0,9461, lệch so với Cox chưa tới 0,3% — **khớp**.
+
 ---
 
 ## 10. Một phát hiện đi ngược tài liệu tham khảo
@@ -555,6 +687,13 @@ Hai cách giải thích, cần phân biệt trước khi kết luận:
 
 Dù theo cách nào, **kết luận thực hành giống nhau: không thể biện minh cho đề xuất tái phân bổ
 ngân sách theo kênh dựa trên bộ dữ liệu này.**
+
+**Khối kiểm chứng.**
+*Nguồn:* `order_items` ⋈ `orders` ⋈ `customers` · cột `acquisition_channel` · bộ lọc **`live`** ·
+grain: mỗi khách · toàn kỳ 2012–2022.
+*Phép kiểm:* kiểm cực trị (Kỹ thuật 3) — sáu nhóm phủ kín tập khách có kênh, tổng số khách khớp.
+*Kết quả:* 88.123 khách chia hết vào 6 kênh; LTV mọi nhóm dương và cùng bậc độ lớn; ANOVA
+F = 0,823 · p = 0,533 — **khớp**, không có nhóm nào lệch bất thường.
 
 ---
 
@@ -652,6 +791,31 @@ khác nhau**:
 Sai số cả hai đường: **1,7×10⁻¹⁶**. Nếu bất kỳ số nào trong sáu số kia sai thì hai tổng đã không
 gặp nhau.
 
+**Kiểm 4 · `sales.csv` khớp cách hiểu doanh thu tới từng đồng**
+
+Dựng lại doanh thu ngày từ `Σ(quantity × unit_price)` rồi so với `sales.csv` do ban tổ chức cung
+cấp:
+
+| | |
+|---|---:|
+| Số ngày đối chiếu | 3.833 |
+| Tỷ lệ tính lại / gốc | min **1,000000** · max **1,000000** |
+| Sai số tuyệt đối lớn nhất | **0,0000** |
+
+Không phải xấp xỉ — khớp chính xác trên cả 3.833 ngày. Chứng minh cách hiểu về doanh thu trùng
+với định nghĩa của bảng mục tiêu.
+
+**Kiểm 5 · `payment_value` = gross − discount, khớp 100%**
+
+| | |
+|---|---:|
+| Số đơn đối chiếu | 646.945 |
+| Tỷ lệ khớp (±0,01) | **100,0000%** |
+| Sai số lớn nhất | **0,0000** |
+
+Chứng minh cách hiểu cấu trúc chiết khấu là đúng — nền tảng cho việc khai báo M4 là gross ở
+Mục 6.
+
 > **Câu nói khi bị hỏi "chứng minh đi":**
 >
 > *"Em không chứng minh từng số riêng lẻ. Em thiết kế để các số buộc phải khớp nhau — nếu một
@@ -678,7 +842,32 @@ dùng `ALL` mà không khai báo, gây lệch nhỏ ở hầu hết các chỉ s
 35.378, net/live 33.542, gross/ALL 38.663 — không cái nào khớp. Tài liệu này dùng **35.378** và
 ghi rõ định nghĩa; cần đối chiếu lại cách tính với người giao việc.
 
-### 12.4 Đơn vị tiền
+### 12.4 Đối chiếu tiêu chí nghiệm thu
+
+| Tiêu chí | Trạng thái | Ở đâu |
+|---|---|---|
+| Phản biện *"rổ có hạn thì khách mới giảm là đương nhiên"* — có bảng phân rã trả lời? | ✅ | Mục 2.2 |
+| Phản biện *"kết luận thu nạp hỏng, nhưng đăng ký tăng đều mà"* — đã xử lý? | ✅ | Mục 3 |
+| Mọi con số có nói rõ đã loại `cancelled` hay chưa? | ✅ | Quy ước đầu tài liệu + cột *Bộ lọc* ở Mục 6 |
+| Giả thuyết không bác bỏ được H₀ có ghi đúng cách, kèm thống kê? | ✅ | H5 — F = 0,823 · p = 0,533 |
+| Có ít nhất một mô hình đi sang **cơ chế**? | ✅ | Mục 9 — Cox PH + PSM |
+| Kết luận nhân quả có nói rõ kiểm soát gì, còn confound nào? | ✅ | Mục 5.1 và 9.6 |
+| Bài toán lớn đã rã thành sáu bài toán nhỏ, mỗi cái có khoảng trống và đầu ra riêng? | ✅ | Mục 3b — sáu khối năm dòng |
+| Có sơ đồ cây dùng được cho slide bảo vệ? | ✅ | Mục 3b |
+| Script kiểm chứng Phần D in đủ 8 dòng `OK`? | ✅ | 8/8 + kiểm tổng |
+| Bộ KPI đã có ít nhất một guardrail chặn chi phí? | ✅ | K7 |
+| Mọi số chính đạt tầng 4–5 trong thứ bậc dẫn chứng? | ✅ | Năm phép kiểm ở 12.2 |
+| Đã rà hết bảng F6 — sửa số sai, khai báo bộ lọc cho số còn lại? | ✅ | Mục 12.3 |
+
+**Hai bài toán còn ở mức sơ bộ — và lý do:**
+
+- **BTN5** cần kiểm định điểm gãy (Chow test / Bai–Perron) để nâng từ *"chưa thấy dấu hiệu tiếp
+  tục rơi"* lên *"đã xác nhận chế độ ổn định"*. Đây là việc làm được với dữ liệu hiện có.
+- **BTN6** cần mô hình chi phí cho ba can thiệp, mà **bộ dữ liệu không có bảng chi phí
+  marketing**. Đây là giới hạn dữ liệu, không phải việc chưa làm — nên ghi rõ thay vì ước tính
+  bừa.
+
+### 12.5 Đơn vị tiền
 
 Dữ liệu là mô phỏng, đơn vị tiền tệ không xác định — ký hiệu *đvtt*. Mọi giá trị tuyệt đối chỉ
 nên dùng để so sánh tương đối; kết luận nên dựa trên **tỷ lệ và thứ hạng**.
