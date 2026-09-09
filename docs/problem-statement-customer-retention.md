@@ -28,7 +28,7 @@ mọi chỉ số so với **tổng tài khoản đăng ký** dùng `ALL`. Mỗi 
 ## 1. Vì sao chọn vấn đề này
 
 **Thứ nhất — nó nằm ngay sau chỗ phân tích doanh thu dừng lại.** Bước EDA của khóa luận
-(xem [`eda-cau-chuyen-du-lieu.md`](eda-cau-chuyen-du-lieu.md)) xác định doanh thu mất **44,4%**
+(xem bước EDA trên nhánh `docs/duythong`) xác định doanh thu mất **44,4%**
 từ đỉnh 2016 đến 2022, và mức giảm đến từ **số đơn** chứ không phải giá trị mỗi đơn — AOV còn
 tăng **+50,7%**. Nhưng **số đơn là kết quả, không phải nguyên nhân**. Đơn hàng do khách hàng tạo
 ra, nên câu hỏi kế tiếp bắt buộc là: *ít đơn hơn vì ít khách hơn, hay vì mỗi khách mua thưa hơn?*
