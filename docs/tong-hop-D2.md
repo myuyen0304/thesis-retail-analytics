@@ -8,6 +8,24 @@
 
 ---
 
+<!-- muc-luc -->
+## Mục lục
+
+- [1. Bài toán lớn](#1-bài-toán-lớn)
+- [2. Cây bài toán và tiến độ](#2-cây-bài-toán-và-tiến-độ)
+- [3. Bốn phát hiện chính](#3-bốn-phát-hiện-chính)
+- [4. Chín giả thuyết và kết quả](#4-chín-giả-thuyết-và-kết-quả)
+- [5. Phương pháp đã dùng](#5-phương-pháp-đã-dùng)
+- [6. Bộ chỉ số](#6-bộ-chỉ-số)
+- [7. Kiểm chứng số liệu](#7-kiểm-chứng-số-liệu)
+- [8. Sản phẩm](#8-sản-phẩm)
+- [9. Việc chưa xong](#9-việc-chưa-xong)
+- [10. Ba điều thành thật nên nói trước khi bị hỏi](#10-ba-điều-thành-thật-nên-nói-trước-khi-bị-hỏi)
+- [11. Nối sang chương mô hình](#11-nối-sang-chương-mô-hình)
+
+---
+<!-- muc-luc -->
+
 ## 1. Bài toán lớn
 
 > Doanh thu mất **44,4%** từ đỉnh 2016. Mức giảm đến từ **số đơn**, không phải giá trị mỗi đơn —
