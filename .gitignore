@@ -232,3 +232,6 @@ data/
 
 # Du lieu da lam sach (sinh ra tu data/ bang notebook Data-Cleaning)
 data_clean/
+
+# Moi truong ao cho phan phan bien
+.venv/

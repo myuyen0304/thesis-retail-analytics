@@ -1,0 +1,8 @@
+# Moi truong cho phan phan bien D2.
+# Tu dung tu import cua scripts/*.py — file goc khong duoc gui kem.
+pandas>=2.0
+numpy>=1.24
+scipy>=1.10
+scikit-learn>=1.3
+lifelines>=0.28
+matplotlib>=3.7
