@@ -99,10 +99,10 @@ Từ đó về sau, chạy mọi script bằng:
 
 | # | Chủ đề | Yêu cầu | Kết luận | Ai làm |
 |:--:|---|---|---|---|
-| A1 | Cohort | Cohort là gì? Giải thích dễ hiểu, chính xác | | |
-| A2 | `first_order_date` | Nằm ở đâu? Tính thế nào? | | |
-| A3 | Pool và tỷ lệ hút | Là gì, có ý nghĩa gì, phục vụ mục đích gì? | | |
-| A4 | Phân rã logarit | `Δln(Khách mới) = Δln(Pool) + Δln(Tỷ lệ hút)` nghĩa là gì? | | |
+| A1 | Cohort | Cohort là gì? Giải thích dễ hiểu, chính xác | ✅ Xong — nhóm theo năm `first_order_date`; **cohort 2012+2013 = 69,5% nền khách 2022** | Claude |
+| A2 | `first_order_date` | Nằm ở đâu? Tính thế nào? | ✅ Xong — **không có sẵn**, phải tự tính; cả 3 số `signup_date` đều KHỚP | Claude |
+| A3 | Pool và tỷ lệ hút | Là gì, có ý nghĩa gì, phục vụ mục đích gì? | ✅ Xong — bảng 11 năm (đã sửa theo B1); tỷ lệ hút **24,09% → 3,78%** | Claude |
+| A4 | Phân rã logarit | `Δln(Khách mới) = Δln(Pool) + Δln(Tỷ lệ hút)` nghĩa là gì? | ✅ Xong — 2 ví dụ; tính lại **36,4% / 63,6%** (tài liệu ghi 26,9/73,1) | Claude |
 | A5 | Công thức từng metric | Giải thích Me1–Me13 (và M1–M13, K1–K7) | | |
 | A6 | Số liệu trong 6 BTN | Từng con số lấy từ đâu? | | |
 | A7 | Mốc so sánh 2013 | Vì sao bảng bắt đầu 2013 mà không phải 2012? | | |
@@ -115,7 +115,7 @@ Từ đó về sau, chạy mọi script bằng:
 | # | Chỗ trong tài liệu | Câu hỏi | Kết luận | Ai làm |
 |:--:|---|---|---|---|
 | B1 | Mục 2.2 · M13 | Rổ chưa mua lấy ở đâu ra? | ❌ **LỆCH** — vòng lặp bỏ cohort 2012; rổ cạn 26,9% → **36,4%** | Claude |
-| B2 | Mục 12.2 · Kiểm 2 | Phép kiểm này có thể thất bại không? | | |
+| B2 | Mục 12.2 · Kiểm 2 | Phép kiểm này có thể thất bại không? | ❌ **HẰNG ĐÚNG** — Pool triệt tiêu; cặp bịa 7/3 vẫn khớp. Đã đề xuất phép kiểm có thể vỡ | Claude |
 | B3 | Mục 12.2 · Kiểm 4 | Khớp `sales.csv` bằng bộ lọc nào? | | |
 | B4 | Mục 11 · BTN5 · H6 | Nền khách "ổn định" gồm những ai? | | |
 | B5 | Mục 3 ↔ Mục 9 | Mô hình trọng tâm phục vụ nửa nào của vấn đề? | | |
@@ -177,6 +177,117 @@ và vì sao nhầm lẫn giữa chúng sẽ dẫn tới kết luận sai? (Xem t
 
 **Xong khi:** một người chưa biết gì đọc xong tự gán được cohort cho một khách bất kỳ.
 
+#### Trả lời A1
+
+Script: [`scripts/phan_bien/a01_cohort.py`](../../scripts/phan_bien/a01_cohort.py)
+
+##### (1) Cohort là gì — bằng lời thường
+
+**Cohort là một nhóm khách hàng bắt đầu mua cùng một thời kỳ, và được theo dõi cùng nhau suốt
+về sau.** Giống như "khóa 2013" của một trường: cùng nhập học năm 2013, rồi xem sau 1 năm, 2 năm,
+5 năm còn bao nhiêu người ở lại.
+
+Vì sao nhóm theo **thời điểm bắt đầu** thay vì theo tuổi, vùng, hay kênh? Vì ba cách kia trả lời
+câu *"khách khác nhau ở chỗ nào"*, còn cohort trả lời câu *"khách hàng thu về năm nay có tốt bằng
+khách thu về năm ngoái không"*. Đó là câu hỏi về **chất lượng theo thời gian**, và chỉ nhóm theo
+thời điểm bắt đầu mới trả lời được.
+
+##### (2) Định nghĩa chính xác đang dùng trong tài liệu
+
+> **Cohort của một khách = năm của `first_order_date`**, trong đó `first_order_date` là ngày sớm
+> nhất khách đó có một đơn hàng **hợp lệ** (bộ lọc `live`, tức loại `cancelled`).
+
+- "Cohort 2013" = tập những khách có đơn hợp lệ đầu tiên rơi vào năm 2013. Đo được: **24.407 người**.
+- **Một khách thuộc đúng một cohort.** Đã kiểm: số giá trị cohort duy nhất trên mỗi khách = **1**,
+  vì `MIN()` chỉ trả về một ngày.
+- Nguồn: `orders.csv` cột `order_date`, `customer_id`, `order_status` · bộ lọc `live` · grain: mỗi khách.
+
+##### (3) Ba khách thật
+
+| | `customer_id` | Đơn hàng | `signup_date` | `first_order_date` | Cohort |
+|---|---:|---|---|---|:--:|
+| **A** nhiều đơn, trải nhiều năm | 1 | 2012-07-25 *(delivered)* · 2014-05-31 · 2015-07-31 · 2017-04-23 · 2020-02-24 · 2021-04-24 | 2021-12-30 | 2012-07-25 | **2012** |
+| **B** chỉ một đơn | 4 | 2020-06-28 *(delivered)* | 2017-11-29 | 2020-06-28 | **2020** |
+| **C** có đơn hủy trước | 52 | 2012-09-25 **cancelled** · 2013-10-23 *(delivered)* · 2014-03-31 · 2015-04-17 · 2016-10-10 | 2017-09-23 | 2013-10-23 | **2013** |
+
+Khách C là ví dụ quan trọng nhất: đơn **đầu tiên** của họ là 25/09/2012, nhưng đơn đó bị hủy. Theo
+bộ lọc `live` họ thuộc **cohort 2013**, theo `ALL` thì thuộc **cohort 2012**. Cùng một người, hai
+cohort — tùy quy ước. Đo được **2.123** khách chỉ có đơn hủy và **5.967** khách có ngày khác nhau
+giữa hai bộ lọc, tổng **8.090 khách** bị ảnh hưởng bởi lựa chọn này.
+
+##### (4) Cohort trả lời được câu mà nhìn theo năm không trả lời được
+
+Nhìn theo **năm**, chỉ thấy tổng số khách hoạt động:
+
+```
+2013:37.352  2014:38.351  2015:38.707  2016:38.883  2017:37.584
+2018:35.829  2019:25.550  2020:22.738  2021:22.438  2022:22.999
+```
+
+Biết doanh thu 2019 giảm — nhưng **không biết vì sao**: ít khách mới, hay khách cũ bỏ đi?
+
+Nhìn theo **cohort**, thấy 22.999 khách hoạt động năm 2022 *là ai*:
+
+| Cohort | Số khách 2022 | % |
+|---:|---:|---:|
+| 2012 | 8.522 | **37,1%** |
+| 2013 | 7.463 | **32,4%** |
+| 2014 | 2.637 | 11,5% |
+| 2015 | 1.275 | 5,5% |
+| 2016–2021 | 1.774 | 7,7% |
+| 2022 | 1.328 | 5,8% |
+
+> **Phát hiện:** hai cohort **2012 và 2013 chiếm 69,5%** nền khách hiện tại. Doanh nghiệp đang
+> sống nhờ khách thu về từ 9–10 năm trước. Nhìn theo năm **không thể** thấy điều này.
+
+##### (5) Ma trận cohort
+
+- **Hàng** = cohort (năm mua lần đầu)
+- **Cột** = tuổi cohort (số năm kể từ năm mua lần đầu; cột 0 là chính năm đó)
+- **Ô** = số khách của cohort đó còn phát sinh đơn trong năm tương ứng
+
+Số khách:
+
+| Cohort | Tuổi 0 | 1 | 2 | 3 | 4 | 5 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 2012 | 20.603 | 12.945 | 12.992 | 13.135 | 13.213 | 12.728 |
+
+Quy ra % (chia cho cột 0) — đây chính là **retention**:
+
+| Cohort | 0 | 1 | 2 | 3 | 4 | 5 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 2012 | 100,0 | **62,8** | 63,1 | 63,8 | 64,1 | 61,8 |
+| 2013 | 100,0 | **49,5** | 49,9 | 49,7 | 48,4 | 46,4 |
+| 2014 | 100,0 | 34,8 | 35,6 | 33,7 | 32,1 | 21,9 |
+| 2015 | 100,0 | 27,3 | 27,6 | 25,0 | 16,3 | 14,3 |
+| 2016 | 100,0 | 21,3 | 20,0 | 12,6 | 10,9 | 10,7 |
+| 2017 | 100,0 | 15,7 | 11,4 | 9,3 | 9,3 | 8,6 |
+| 2018 | 100,0 | 9,4 | 8,0 | 7,8 | 8,6 | — |
+| 2019 | 100,0 | 7,8 | 7,3 | 7,3 | — | — |
+| 2020 | 100,0 | 6,5 | 6,7 | — | — | — |
+| 2021 | 100,0 | **7,0** | — | — | — | — |
+
+Cột 0 luôn bằng 100% **theo định nghĩa** — đây là phép kiểm cực trị: ra khác 100% là công thức sai.
+
+> **Lệch so với tài liệu.** Tài liệu ghi retention năm +1 rơi *"49,5% → 7,0%"*, tức lấy cohort
+> **2013** làm mốc đầu. Nhưng cohort **2012 cao hơn hẳn: 62,8%**. Nếu tính cả 2012 thì đà rơi là
+> **62,8% → 7,0%**, dốc hơn nhiều. Xem A7 ý 4.
+
+##### (6) Hệ quả của việc dùng `first_order_date` thay `signup_date`
+
+Cohort ở đây là *"nhóm theo năm **mua lần đầu**"*, **không phải** *"nhóm theo năm **đăng ký**"*.
+Hai cách hiểu này khác nhau ở chỗ:
+
+- Nhóm theo **đăng ký** trả lời: *"người vào danh sách năm nay có chuyển thành khách tốt không?"*
+- Nhóm theo **mua lần đầu** trả lời: *"người bắt đầu mua năm nay có mua lâu dài không?"*
+
+Nhầm hai cái sẽ dẫn tới kết luận sai vì **người chưa từng mua hoàn toàn không có mặt** trong cách
+thứ hai. Khách A minh họa rõ: đăng ký **2021-12-30** nhưng mua lần đầu **2012-07-25** — sớm hơn
+ngày đăng ký hơn **9 năm**. Nếu gán cohort theo `signup_date`, khách A rơi vào "cohort 2021" và
+lịch sử mua 9 năm của họ bị gán nhầm cho một cohort mới toanh.
+
+---
+
 ---
 
 ### A2. `first_order_date` nằm ở đâu? Tính như thế nào?
@@ -218,6 +329,109 @@ một cột lại chỗ dùng được chỗ không.
 
 **Xong khi:** có đoạn code tính lại `first_order_date` chạy được, và một người khác đọc xong tự
 tính lại ra đúng cùng kết quả.
+
+#### Trả lời A2
+
+Script: [`scripts/phan_bien/a02_first_order_date.py`](../../scripts/phan_bien/a02_first_order_date.py)
+
+##### (1) Nó nằm ở đâu? — **Không tìm thấy ở đâu cả**
+
+| File | Các cột |
+|---|---|
+| `customers.csv` | `customer_id`, `signup_date`, `zip`, `city`, `gender`, `age_group`, `acquisition_channel` |
+| `orders.csv` | `order_id`, `customer_id`, `order_date`, `order_status`, `payment_method`, `order_source`, `device_type`, `zip` |
+
+**`first_order_date` không có trong file nào.** Đây là cột **phải tự tạo** — đó là câu trả lời đúng.
+
+##### (2) Tính thế nào
+
+**Bằng lời:** với mỗi khách, lấy **ngày sớm nhất** trong số các đơn hàng **hợp lệ** của họ.
+
+```python
+live = orders[orders.order_status != 'cancelled']
+first_order_date = live.groupby('customer_id')['order_date'].min()
+```
+
+Nguồn: `orders.csv` · cột `customer_id`, `order_date`, `order_status` · bộ lọc **`live`** ·
+grain: **mỗi khách**.
+
+**Vì sao chọn `live`?** Câu tự kiểm mà đề bài gợi ý trả lời luôn: một khách chỉ có đúng một đơn và
+đơn đó bị `cancelled` thì —
+
+| Bộ lọc | Khách đó có `first_order_date` không? |
+|---|---|
+| `ALL` | **Có** — dù chưa từng phát sinh giao dịch thật |
+| `live` | **Không** — đúng với thực tế |
+
+Đơn bị hủy không tạo doanh thu, nên coi là "đã bắt đầu mua" là sai. Chọn `live`.
+
+**Khác biệt định lượng giữa hai cách:**
+
+| | Số khách |
+|---|---:|
+| Có `first_order_date` theo `ALL` | 90.246 |
+| Có `first_order_date` theo `live` | **88.123** |
+| Chỉ có ở `ALL` *(toàn đơn hủy)* | 2.123 |
+| Có cả hai nhưng **ngày khác nhau** | 5.967 |
+| **Tổng bị ảnh hưởng** | **8.090** |
+
+Con số 5.967 đáng chú ý — đó là những khách có đơn hủy **trước** đơn hợp lệ đầu tiên, nên hai bộ
+lọc cho hai ngày khác nhau, và có thể rơi vào **hai cohort khác nhau**.
+
+##### (3) Ví dụ bằng số thật — `customer_id = 52`
+
+| `order_date` | `order_status` |
+|---|---|
+| 2012-09-25 | **cancelled** |
+| 2013-10-23 | delivered |
+| 2014-03-31 | delivered |
+| 2015-04-17 | delivered |
+| 2016-10-10 | delivered |
+
+| Cách tính | `first_order_date` | Cohort |
+|---|---|:--:|
+| `ALL` | 2012-09-25 | 2012 |
+| **`live`** | **2013-10-23** | **2013** |
+
+Tài liệu dùng `live`, nên khách 52 thuộc **cohort 2013**.
+
+##### (4) Vì sao không dùng `signup_date` — cả ba con số **KHỚP**
+
+| Con số | Tài liệu | Tính lại | Grain · bộ lọc |
+|---|---:|---:|---|
+| Đơn đặt trước ngày đăng ký | 73,8% | **73,8%** (433.723 / 587.483) | mỗi đơn · `live` |
+| Khách có độ trễ âm | 89,1% | **89,1%** (78.482 / 88.123) | mỗi khách · `live` |
+| Trung vị độ trễ | −1.820 ngày | **−1.820 ngày** | mỗi khách · `live` |
+
+Phân vị độ trễ: p5 = −3.414 · p25 = −2.661 · **p50 = −1.820** · p75 = −837 · p95 = +654.
+
+**"Độ trễ âm" nghĩa là gì bằng lời thường:** khách mua hàng **trước khi** tài khoản của họ được
+tạo ra. Trung vị −1.820 ngày tức **khoảng 5 năm** trước. Chuyện này bất khả thi về nghiệp vụ —
+không ai đặt hàng trên một tài khoản chưa tồn tại.
+
+**Vì sao nó khiến `signup_date` không dùng được để gán cohort:** gán cohort là xếp khách theo
+**thứ tự thời gian bắt đầu**. Nếu ngày đăng ký nằm sau ngày mua tới 5 năm thì thứ tự đó vô nghĩa —
+khách A ở A1 đăng ký 2021 nhưng mua từ 2012 sẽ bị xếp vào "cohort 2021" cùng nhóm với người thật
+sự mới, làm hỏng toàn bộ phép so sánh chất lượng theo thời gian.
+
+##### (5) Chỗ vẫn dùng `signup_date` được
+
+Mục 3 dùng chuỗi số tài khoản đăng ký mới mỗi năm:
+
+```
+2012:957   2013:2.989   2014:5.034   2015:7.133   2016:9.202   2017:11.078
+2018:13.011   2019:15.058   2020:17.211   2021:19.154   2022:21.103
+```
+
+**Vì sao chỗ này dùng được mà chỗ kia không:** ở đây `signup_date` chỉ được dùng để **đếm số lượng
+theo năm**, hoàn toàn **không so** với `order_date`. Sai lệch đã chứng minh nằm ở **quan hệ giữa
+hai cột**, không nằm ở phân bố của riêng `signup_date`. Một cột có thể sai khi đặt cạnh cột khác
+mà vẫn dùng được khi đứng một mình.
+
+> Cần thận trọng: đây là lập luận **hợp lý** nhưng chưa được kiểm chứng. Xem B20 — nếu độ trễ có
+> quy luật hệ thống thì bản thân chuỗi đăng ký cũng có thể bị dịch.
+
+---
 
 ---
 
@@ -283,6 +497,116 @@ chỉ nhìn "số khách mới" thì kết luận gì, còn nhìn thêm tỷ l�
 
 **Xong khi:** người đọc trả lời được "vì sao không chỉ đếm số khách mới cho xong" mà không cần
 đọc lại tài liệu gốc.
+
+#### Trả lời A3
+
+Script: [`scripts/phan_bien/a03_pool_ty_le_hut.py`](../../scripts/phan_bien/a03_pool_ty_le_hut.py)
+
+> **Mọi số dưới đây dùng dãy Pool đã sửa theo B1**, không dùng dãy sai trong tài liệu.
+
+##### (a) Là gì
+
+**Pool (M13) — "rổ chưa mua đầu năm".** Bằng lời thường: *số người đã có tên trong danh sách khách
+hàng nhưng tính đến đầu năm đó vẫn chưa mua gì lần nào.*
+
+- Đếm những ai: khách trong `customers.csv` **chưa** có đơn hợp lệ nào trước năm Y.
+- Mốc thời gian: **đầu năm Y** (trước ngày 1 tháng 1).
+- Gọi là "rổ" vì đó là **nguồn** mà khách mới được rút ra — muốn có khách mua lần đầu năm Y thì
+  phải lấy từ rổ này, không lấy từ đâu khác.
+- Grain: mỗi khách · bộ lọc `live` · nguồn `customers.csv` + `orders.csv`.
+
+**Tỷ lệ hút (Me11).** Bằng lời thường: *trong 100 người còn nằm trong rổ đầu năm, có mấy người
+chịu mua lần đầu trong năm đó.*
+
+| | |
+|---|---|
+| Tử số | Số khách mua lần đầu trong năm Y — grain: **mỗi khách** |
+| Mẫu số | Pool đầu năm Y — grain: **mỗi khách** |
+| Cùng grain? | **Có** — cả hai đều đếm người, và tử số là tập con của mẫu số |
+
+**"Danh sách đóng" nghĩa là gì.** `customers.csv` có đúng **121.930 dòng** và không bao giờ thêm
+dòng mới trong toàn bộ 11 năm dữ liệu. Hệ quả: mỗi khách rời rổ (bằng cách mua lần đầu) thì rổ nhỏ
+đi vĩnh viễn, **không có ai bổ sung vào**. Nên Pool **chỉ có thể co lại**. Đã kiểm: Pool giảm đơn
+điệu qua cả 11 năm — đúng **True**.
+
+##### Bảng đầy đủ
+
+| Năm | Pool đầu năm | Khách mua lần đầu | Tỷ lệ hút | Pool giảm so năm trước |
+|---:|---:|---:|---:|---:|
+| 2012 | 121.930 | 20.603 | 16,90% | — |
+| 2013 | 101.327 | 24.407 | **24,09%** | −20.603 |
+| 2014 | 76.920 | 13.277 | 17,26% | −24.407 |
+| 2015 | 63.643 | 8.783 | 13,80% | −13.277 |
+| 2016 | 54.860 | 6.406 | 11,68% | −8.783 |
+| 2017 | 48.454 | 4.788 | 9,88% | −6.406 |
+| 2018 | 43.666 | 3.724 | 8,53% | −4.788 |
+| 2019 | 39.942 | 1.908 | 4,78% | −3.724 |
+| 2020 | 38.034 | 1.526 | 4,01% | −1.908 |
+| 2021 | 36.508 | 1.373 | 3,76% | −1.526 |
+| 2022 | 35.135 | 1.328 | **3,78%** | −1.373 |
+
+Pool cuối 2022 = 121.930 − 88.123 = **33.807** — khớp đúng số "chưa từng mua" ở B15.
+
+##### (b) Có ý nghĩa gì
+
+Ví dụ đồng phục trong đề bài, chuyển sang số thật:
+
+> Đầu 2013 có **101.327** người chưa mua. Đến đầu 2022 chỉ còn **35.135** người. Rổ đã vơi đi
+> **65%**. Kể cả nếu doanh nghiệp bán tốt **y hệt** như 2013, số khách mua lần đầu năm 2022 vẫn
+> phải giảm — đơn giản vì không còn người để hút.
+
+Đó là phần **cơ học**. Phần **tín hiệu thật** là: cùng một người còn trong rổ, năm 2013 có 24,09%
+chịu mua, năm 2022 chỉ còn 3,78%. Hai thứ này khác hẳn nhau:
+
+- Rổ cạn → **không phải lỗi của ai**, là hệ quả tất yếu của danh sách đóng.
+- Tỷ lệ hút giảm → **là vấn đề kinh doanh**, vì cùng đối tượng mà kém thuyết phục hơn 6,4 lần.
+
+##### (c) Phục vụ mục đích gì
+
+**1. Bác lại một phản biện cụ thể.** Mục 2.2 nêu rõ câu phản biện dự kiến:
+
+> *"Rổ khách có hạn thì đương nhiên khách mới giảm, sao gọi là thất bại?"*
+
+Nếu **không** tách Pool ra thì không cãi lại được — vì người phản biện **đúng một phần**: rổ có
+cạn thật, đóng góp **36,4%** mức giảm. Chỉ khi tách được mới nói được: *"vâng, rổ cạn thật, nhưng
+nó chỉ giải thích 36,4%; còn 63,6% là do tỷ lệ chuyển đổi sụp 6,4 lần."*
+
+**2. Làm lộ ra một KPI thiết kế sai.**
+
+| | K2 cũ | K2′ mới |
+|---|---|---|
+| Đo gì | Tăng trưởng **số khách mới**: `Me4(Y)/Me4(Y−1) − 1` | **Tỷ lệ hút** từ pool: `Me4(Y)/M13(Y)` |
+| Ngưỡng | ≥ 0% | Không giảm so năm trước |
+| Vấn đề | Nguồn của số đếm này **chắc chắn cạn** | — |
+
+Vì sao K2 cũ sai **về cấu trúc**: đặt mục tiêu tăng trưởng trên một số đếm mà mẫu số của nó chỉ có
+thể co lại. Đội ngũ có làm tốt đến mấy cũng không đạt được — đó không phải KPI, đó là một cái bẫy.
+
+**3. Ví dụ số cho thấy hai cách nhìn dẫn tới hai quyết định ngân sách khác nhau:**
+
+| Cách đặt mục tiêu | Đòi hỏi gì | Khả thi? |
+|---|---|---|
+| *"Khách mới 2023 bằng mức 2013"* → 24.407 người | Tỷ lệ hút phải đạt **69,5%** trên Pool 35.135 | ❌ Cao hơn cả đỉnh lịch sử 24,09% |
+| *"Tỷ lệ hút 2023 về mức 2013"* → 24,09% | Thu được **8.464** khách mới | ✅ Có tiền lệ, đã từng đạt |
+
+Cùng một nỗ lực, cách đặt thứ nhất bị đánh giá là thất bại, cách thứ hai là thành công lớn
+(+537% so với 1.328 khách của 2022). **Chỉ số sai làm đội ngũ bỏ cuộc oan.**
+
+##### (d) Ví dụ hai năm — 2016 và 2021
+
+| | 2016 | 2021 | Thay đổi |
+|---|---:|---:|---:|
+| Pool đầu năm | 54.860 | 36.508 | −33,5% |
+| Tỷ lệ hút | 11,68% | 3,76% | −67,8% |
+| **Khách mua lần đầu** | **6.406** | **1.373** | **−78,6%** |
+
+- Chỉ nhìn **số khách mới**: giảm 78,6% — nghe như sụp đổ hoàn toàn.
+- Nhìn thêm **tỷ lệ hút**: rổ co 33,5%, còn khả năng thuyết phục giảm 67,8%.
+
+Hai kết luận khác nhau: cách một nói *"mất gần 4/5 khách mới"*; cách hai nói *"1/3 là do hết
+người để hút, 2/3 là do hút kém đi"*. Chỉ cách hai chỉ ra được **nên can thiệp vào đâu**.
+
+---
 
 ---
 
@@ -361,6 +685,103 @@ chứng minh được nguyên nhân nào **gây ra** cái nào không? Có nói 
 5. Viết (e): nêu rõ phân rã này **không** chứng minh nhân quả và **không** tự nói nên làm gì. Không viết nó như bằng chứng (xem B2).
 
 **Xong khi:** người đọc tự làm lại được phân rã cho một cặp năm khác mà không cần hỏi thêm.
+
+#### Trả lời A4
+
+Script: [`scripts/phan_bien/a04_phan_ra_logarit.py`](../../scripts/phan_bien/a04_phan_ra_logarit.py)
+
+##### (a) Vì sao phần trăm không cộng được
+
+| Bước | Phép tính | Kết quả |
+|---|---|---:|
+| Bắt đầu | | 100 |
+| Tăng 100% | 100 × 2 | 200 |
+| Giảm 50% | 200 × 0,5 | **100** ← về đúng chỗ cũ |
+| Cộng phần trăm | +100% + (−50%) = +50% → 100 × 1,5 | **150** ← **SAI** |
+
+Nguyên nhân: hai bước là phép **nhân** (×2 rồi ×0,5), nhưng phần trăm chỉ cộng được khi thứ nó mô
+tả cũng **cộng** với nhau. Ở đây 50% của bước hai tính trên **200**, không phải trên 100 — hai
+phần trăm có hai mẫu số khác nhau nên không cộng được.
+
+**Vấn đề này xuất hiện mỗi khi hai yếu tố nhân với nhau**, không riêng ví dụ này. `Khách mới =
+Pool × Tỷ lệ hút` chính là một phép nhân như vậy.
+
+##### (b) Logarit sửa bằng cách nào
+
+Tính chất: **`ln(a × b) = ln(a) + ln(b)`**.
+
+Bằng lời thường: logarit **biến phép nhân thành phép cộng**. Mà cộng thì **chia phần trách nhiệm
+được** — mỗi số hạng đứng riêng, cộng lại vừa đúng tổng.
+
+Kiểm ngay với ví dụ trên: `ln(2) = +0,6931`, `ln(0,5) = −0,6931`, tổng = **0,0000** — đúng bằng
+"không thay đổi". Cộng phần trăm cho +50%, cộng logarit cho 0. Logarit đúng.
+
+> Lý do dùng logarit **không phải** vì nó "chính xác hơn". Nó chỉ là công cụ **duy nhất** biến
+> nhân thành cộng để chia được trách nhiệm.
+
+##### (c) Đẳng thức nói gì
+
+Dịch sang một câu không ký hiệu:
+
+> **Mức thay đổi của số khách mua lần đầu tách được thành đúng hai phần — phần do rổ thay đổi và
+> phần do tỷ lệ hút thay đổi — và hai phần này cộng lại vừa đúng, không thừa không thiếu.**
+
+**Vì sao không có số hạng tương tác** trong khi Mục 2.1 lại có: vì phân rã logarit **không** dùng
+phép xấp xỉ. Nó là một **đẳng thức đại số đúng tuyệt đối** — `ln(P₁h₁) − ln(P₀h₀)` bằng đúng
+`[ln P₁ − ln P₀] + [ln h₁ − ln h₀]`, không dư gì. Còn phân rã số học ở Mục 2.1 tách
+`ΔK×TS₀ + K₀×ΔTS` thì thiếu mất phần `ΔK×ΔTS`, phải bù bằng số hạng tương tác. Chi tiết xem **B6**.
+
+##### (d) Ví dụ — làm hai lần
+
+**Lần 1 — số tròn, tính tay được**
+
+| | Năm đầu | Năm sau |
+|---|---:|---:|
+| Pool | 1.000 | 500 |
+| Tỷ lệ hút | 20% | 10% |
+| Khách mới | 200 | 50 |
+
+| Bước | Phép tính | Kết quả |
+|---|---|---:|
+| ln tổng | `ln(50/200) = ln(0,25)` | **−1,3863** |
+| ln Pool | `ln(500/1.000) = ln(0,50)` | −0,6931 |
+| ln tỷ lệ hút | `ln(0,10/0,20) = ln(0,50)` | −0,6931 |
+| Cộng lại | `−0,6931 + (−0,6931)` | **−1,3863** ✅ sai số 0 |
+| Tỷ trọng | Pool 50,0% · tỷ lệ hút 50,0% | |
+
+**Lần 2 — số thật, dãy Pool đã sửa theo B1**
+
+| | 2013 | 2022 |
+|---|---:|---:|
+| Pool đầu năm | 101.327 | 35.135 |
+| Khách mua lần đầu | 24.407 | 1.328 |
+| Tỷ lệ hút | 24,09% | 3,78% |
+
+| Thành phần | ln | Tỷ trọng |
+|---|---:|---:|
+| **Tổng** | **−2,9112** | 100% |
+| Rổ cạn | −1,0592 | **36,4%** |
+| Tỷ lệ hút | −1,8520 | **63,6%** |
+
+Kiểm tổng: −1,0592 + (−1,8520) = −2,9112 — **sai số 0,00** (chính xác đến hết chữ số máy).
+
+> **So với tài liệu: LỆCH.** Tài liệu ghi **26,9% / 73,1%**, tính lại được **36,4% / 63,6%**.
+> Nguyên nhân đã truy ở **B1** — dãy Pool trong tài liệu bỏ sót cohort 2012.
+
+##### (e) Phân rã này **không** nói được gì
+
+Ba giới hạn phải nói rõ, kẻo bị hỏi ngược:
+
+1. **Không chứng minh nhân quả.** Nó chỉ **chia** con số theo một đẳng thức đại số, hoàn toàn
+   không nói nguyên nhân nào **gây ra** cái nào. Rổ cạn và tỷ lệ hút giảm có thể cùng do một
+   nguyên nhân thứ ba mà phân rã này không thấy.
+2. **Không tự nói nên làm gì.** Biết tỷ lệ hút chiếm 63,6% không đồng nghĩa với biết cách nâng
+   nó lên.
+3. **Không kiểm được dữ liệu đúng hay sai.** Đẳng thức **luôn đúng** với mọi giá trị Pool — kể cả
+   giá trị bịa. Đây chính là nội dung **B2**, và cũng là lý do dãy Pool sai ở B1 lọt qua được
+   "phép kiểm" ở Mục 12.2.
+
+---
 
 ---
 
@@ -848,6 +1269,101 @@ phép kiểm thay thế **có thể sai** — tức tồn tại giá trị đầ
 **Kiểm luôn cùng lúc.** `scripts/nghiem_thu_D2.py` in ra 8 dòng `OK`, trong đó có hai dòng cho
 Me11. Xem nó so giá trị tính được với cái gì. Tiêu chí nghiệm thu đó có phát hiện được sai số
 ở câu B1 không, hay chỉ phát hiện được thay đổi so với lần chạy trước?
+
+#### Trả lời B2
+
+**Kết luận: Kiểm 2 là một HẰNG ĐÚNG. Nó không thể vỡ, nên không kiểm được gì về dãy Pool.**
+
+Script: [`scripts/phan_bien/b02_kiem2_co_the_vo_khong.py`](../../scripts/phan_bien/b02_kiem2_co_the_vo_khong.py)
+
+##### (1) Khai triển đại số
+
+Đặt `P` = Pool, `m` = khách mới, `h` = tỷ lệ hút = `m / P`.
+
+```
+  Δln(P) + Δln(h)
+= [ln P₁ − ln P₀] + [ln h₁ − ln h₀]
+= [ln P₁ − ln P₀] + [ln(m₁/P₁) − ln(m₀/P₀)]
+= ln P₁ − ln P₀ + ln m₁ − ln P₁ − ln m₀ + ln P₀
+=                 ln m₁          − ln m₀
+= Δln(m)
+```
+
+**Mọi số hạng chứa `P` đều triệt tiêu.** Đẳng thức đúng với **mọi** giá trị Pool.
+
+##### (2) Kiểm bằng số — thay Pool bằng bốn bộ khác nhau
+
+Khách mới giữ nguyên: 2013 = 24.407 · 2022 = 1.328 · `ln tổng = −2,911196`
+
+| Bộ Pool | P₀ | P₁ | ln P | ln h | Tổng | Khớp? |
+|---|---:|---:|---:|---:|---:|:--:|
+| Số tài liệu *(sai)* | 121.930 | 55.738 | −0,7828 | −2,1284 | −2,911196 | **KHỚP** |
+| Số đúng theo M13 | 101.327 | 35.135 | −1,0592 | −1,8520 | −2,911196 | **KHỚP** |
+| Cặp bịa 7 và 3 | 7 | 3 | −0,8473 | −2,0639 | −2,911196 | **KHỚP** |
+| Cặp bịa 999 và 1 | 999 | 1 | −6,9068 | +3,9956 | −2,911196 | **KHỚP** |
+
+Kể cả cặp Pool **bịa hoàn toàn** (7 và 3) vẫn cho tổng **giống hệt đến chữ số cuối**.
+
+> **Kết luận:** Kiểm 2 chỉ chứng minh rằng `ln` hoạt động đúng như định nghĩa toán học của nó.
+> Nó **không** chứng minh dãy Pool đúng, cũng không chứng minh dữ liệu đúng. Đây đúng là loại lỗi
+> mà chính tài liệu đã bắt được ở chỗ khác: *"tỷ trọng khách mới năm khai trương bằng 100% theo
+> định nghĩa"*.
+
+##### (3) `nghiem_thu_D2.py` so Me11 với cái gì?
+
+```python
+("Me11  hut tu pool 2013", new_by_year[2013]/M13[2013]*100, 20.02),
+("Me11  hut tu pool 2022", new_by_year[2022]/M13[2022]*100,  2.38),
+```
+
+Nó so giá trị tính được với **hai con số hardcode 20,02 và 2,38** — tức là số của **chính lần chạy
+trước**. Nếu vòng lặp Pool sai thì cả vế tính lẫn vế kỳ vọng đều sai giống nhau, và script vẫn in
+`OK`.
+
+> **Vậy 8 dòng `OK` chứng minh gì?** Chỉ chứng minh **kết quả không đổi so với lần chạy trước** —
+> đó là *kiểm hồi quy* (regression test), không phải *kiểm tính đúng*. Nó **không** phát hiện được
+> sai số ở B1, và thực tế đã không phát hiện.
+
+##### (4) Phép kiểm thay thế — phải có điểm neo tuyệt đối
+
+**Thử lần một — chưa đủ.** Đề xuất đầu tiên của tôi là kiểm tính đóng của danh sách:
+
+```
+Pool(Y) − Pool(Y+1)  ==  số khách mua lần đầu trong năm Y
+```
+
+Chạy thử: khớp cả 10 năm với dãy đúng. **Nhưng cũng khớp với dãy sai** —
+`Pool(2013) − Pool(2014) = 24.407 = khách mới 2013` ✅ — vì dãy sai chỉ lệch một **hằng số**, mà
+phép trừ thì triệt tiêu hằng số. Phép kiểm này vẫn không bắt được B1.
+
+**Thử lần hai — thêm điểm neo tuyệt đối.** Phải ràng buộc **giá trị đầu dãy**, không chỉ ràng buộc
+các hiệu:
+
+```
+Điều kiện 1:  Pool(Y) − Pool(Y+1) == khách mua lần đầu(Y)     [ràng buộc hiệu]
+Điều kiện 2:  Pool(năm đầu tiên có dữ liệu) == M1              [ràng buộc mức]
+```
+
+| Dãy | Điều kiện 1 | Điều kiện 2 | Kết quả |
+|---|:--:|:--:|:--:|
+| Dãy đúng (bắt đầu 2012) | ✅ | `Pool(2012) = 121.930 = M1` ✅ | **PASS** |
+| Dãy sai (bắt đầu 2013) | ✅ | Không có `Pool(2012)` để neo ❌ | **VỠ** |
+
+**Đầu vào làm nó vỡ:** chính dãy Pool hiện có trong tài liệu. Đó là bằng chứng phép kiểm này thật
+sự kiểm được cái gì đó — khác với Kiểm 2.
+
+##### (5) Đề xuất sửa Mục 12.2
+
+> **Câu hiện tại (Kiểm 2):** *"Phân rã ln: rổ cạn + tỷ lệ hút = tổng, sai số 4,4×10⁻¹⁶ ✓"*
+>
+> **Đề xuất thay bằng:** *"Kiểm tính đóng của rổ: `Pool(Y) − Pool(Y+1)` bằng đúng số khách mua lần
+> đầu năm Y, và `Pool(2012)` bằng đúng tổng tài khoản đăng ký. Phép kiểm này **vỡ** nếu dãy Pool
+> bị lệch mức hoặc lệch nhịp."*
+>
+> Đồng thời **bỏ** Kiểm 2 khỏi danh sách bằng chứng, hoặc ghi rõ nó chỉ là **kiểm nhất quán đại
+> số** chứ không phải kiểm dữ liệu.
+
+---
 
 ---
 
