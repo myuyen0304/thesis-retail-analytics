@@ -120,17 +120,17 @@ Từ đó về sau, chạy mọi script bằng:
 | B4 | Mục 11 · BTN5 · H6 | Nền khách "ổn định" gồm những ai? | ✅ **Chế độ ổn định** — cohort ≤2015 = 86,5% khách / 89,8% doanh thu, cơ cấu đứng yên 3 năm; sống sót tuổi 7–10 = 0,91–1,02 | Claude |
 | B5 | Mục 3 ↔ Mục 9 | Mô hình trọng tâm phục vụ nửa nào của vấn đề? | | |
 | B6 | Mục 2.1 ↔ Mục 2.2 | Sao hai tầng dùng hai phương pháp phân rã? | ✅ H1 **không đổi**, nhưng logarit cho **63,8/36,2** thay vì 72,2/45,2 — phải khai báo phương pháp | Claude |
-| B7 | Mục 9.3 | `cohort_year` dạng tuyến tính đã kiểm chưa? | | |
+| B7 | Mục 9.3 | `cohort_year` dạng tuyến tính đã kiểm chưa? | ❌ **BÁC BỎ** — LR 91,47 · p = 8,2e-16; tuyến tính hỏng từ 2020 (lệch tới 2,40×) | Claude |
 | B8 | Mục 8 · K1, K7 | Hai ngưỡng này đặt trên căn cứ gì? | | |
 | B9 | Mục 5 ↔ Mục 11 | H4 đang ⏳ hay đã xác lập? | ❌ **H4 BỊ BÁC BỎ** — mô phỏng cho +0,68% trong khi thực tế −38,60%; là cú sốc thời kỳ | Claude |
 | **B10** 🆕 | Mục 12.2 · cả 5 kiểm | Phép kiểm nào có thể vỡ, phép nào là hằng đúng? | | |
-| **B11** 🆕 | Mục 9.3 · `cohort_year` | HR 0,7478 là hiệu ứng **cohort** hay hiệu ứng **thời kỳ**? | | |
-| **B12** 🆕 | Mục 9 · `promo_first` | Có phải chỉ là **mùa** của đơn đầu? | | |
+| **B11** 🆕 | Mục 9.3 · `cohort_year` | HR 0,7478 là hiệu ứng **cohort** hay hiệu ứng **thời kỳ**? | ⚠️ **CẢ HAI** — cohort 2013 (cùng người) rơi 61,2% → 46,0% đúng 2019; thêm biến thời kỳ thì HR **lật 0,74 → 1,16** | Claude |
+| **B12** 🆕 | Mục 9 · `promo_first` | Có phải chỉ là **mùa** của đơn đầu? | ⚠️ Là biến mùa mạnh (0% → 58,3% theo tháng) nhưng kiểm soát mùa **không đổi HR**. H7 giữ, thu hẹp | Claude |
 | **B13** 🆕 | Mục 2.1 · tần suất | Cùng người mua thưa đi, hay đổi thành phần khách? | | |
-| **B14** 🆕 | Mục 9.3–9.4 · Cox & PSM | `penalizer`, ghép có hoàn lại, cân bằng sau ghép | | |
+| **B14** 🆕 | Mục 9.3–9.4 · Cox & PSM | `penalizer`, ghép có hoàn lại, cân bằng sau ghép | ⚠️ Ghép **có hoàn lại** (18.106 đối chứng cho 25.827 cặp, 1 người dùng tối đa 9 lần); SMD sau ghép **đạt**; PSM không phải đường kiểm chứng độc lập | Claude |
 | **B15** 🆕 | Mục 3 · "chưa từng mua" | 26,0% hay 27,7%? Khách chỉ có đơn `cancelled` đứng ở đâu? | ❌ **LỆCH** — Me1 dùng `live`, Me8a dùng `ALL`; cộng lại 98,26%. Đúng là **27,73%** | Claude |
 | **B16** 🆕 | Mục 7 · Me5, Me6 | Cửa sổ năm dương lịch có lệch theo tháng mua đầu không? | | |
-| **B17** 🆕 | Mục 9 · p-value | Cỡ hiệu ứng ở đâu? Đổi HR ra điểm phần trăm | | |
+| **B17** 🆕 | Mục 9 · p-value | Cỡ hiệu ứng ở đâu? Đổi HR ra điểm phần trăm | ✅ Xong — promo chỉ **1,4 điểm %** (= **367 người**), cohort_year **35,4 điểm** (mạnh hơn 25,8 lần) | Claude |
 | **B18** 🆕 | Mục 11 · ràng buộc mức | Cụ thể là con số gì, đưa vào mô hình thế nào? | | |
 | **B19** 🆕 | Mục 8 · K1–K7 | KPI nào đo được kịp, KPI nào có đòn bẩy thật? | | |
 | **B20** 🆕 | Mục 3, 5.1 · `signup_date` | Độ trễ âm là lệch có hệ thống hay ngẫu nhiên — sửa được không? | | |
@@ -1921,6 +1921,84 @@ lại theo giai đoạn.
 **Trả lời xong khi:** có kết quả so sánh tuyến tính vs phân loại/spline, và kết luận phát biểu
 "giảm 25% mỗi năm" giữ nguyên hay phải sửa.
 
+#### Trả lời B7
+
+**Kết luận: DẠNG TUYẾN TÍNH BỊ BÁC BỎ (LR = 91,47 · df = 9 · p = 8,2×10⁻¹⁶). Câu "giảm 25% mỗi
+năm" phải viết lại theo giai đoạn.**
+
+Script: [`scripts/phan_bien/b07_cohort_year_dang_ham.py`](../../scripts/phan_bien/b07_cohort_year_dang_ham.py)
+
+##### (1) Schoenfeld kiểm cái gì — hai chuyện khác nhau
+
+| | Kiểm điều gì |
+|---|---|
+| **Schoenfeld residuals** | *Giả định tỷ lệ nguy cơ theo thời gian* — hệ số của biến có giữ nguyên suốt thời gian theo dõi không? |
+| **Dạng hàm của biến** | Quan hệ giữa biến và log-hazard có tuyến tính không? |
+
+Mục 9.5 ghi `cohort_year` p = 0,269 → "không vi phạm". **Đúng**, nhưng đó là không vi phạm giả định
+**PH**, hoàn toàn **không phải** bằng chứng cho dạng tuyến tính. Hai chuyện độc lập với nhau.
+
+##### (2) Một lỗi kỹ thuật phải xử lý trước
+
+Chạy LR test lần đầu với `penalizer=0.01` (đúng như script gốc) cho **LR = −157,46** — **âm**, điều
+bất khả thi với hai mô hình lồng nhau. Nguyên nhân: phạt L2 đánh nặng hơn vào mô hình nhiều tham số
+(17 dummy) so với mô hình một hệ số. **Phải fit lại với `penalizer=0`.**
+
+| | Log-likelihood | Số tham số |
+|---|---:|---:|
+| Tuyến tính | −664.302,95 | 8 |
+| Phân loại | −664.257,21 | 17 |
+
+**LR = 91,47 · df = 9 · p = 8,242×10⁻¹⁶ → BÁC BỎ dạng tuyến tính.**
+
+##### (3) HR từng năm — mô hình phân loại
+
+| Cohort | HR | CI 95% | p |
+|---:|---:|---|---:|
+| 2013 | 0,7916 | [0,7750 – 0,8085] | 8,5×10⁻¹⁰⁴ |
+| 2014 | 0,5402 | [0,5268 – 0,5539] | < 10⁻³⁰⁰ |
+| 2015 | 0,4237 | [0,4110 – 0,4368] | < 10⁻³⁰⁰ |
+| 2016 | 0,3149 | [0,3036 – 0,3267] | < 10⁻³⁰⁰ |
+| 2017 | 0,2374 | [0,2268 – 0,2486] | < 10⁻³⁰⁰ |
+| 2018 | 0,1773 | [0,1674 – 0,1879] | < 10⁻³⁰⁰ |
+| **2019** | **0,1422** | [0,1298 – 0,1558] | < 10⁻³⁰⁰ |
+| **2020** | **0,1229** | [0,1094 – 0,1381] | 9,6×10⁻²⁷⁴ |
+| **2021** | **0,1199** | [0,1039 – 0,1385] | 1,3×10⁻¹⁸³ |
+| **2022** | **0,1313** | [0,1074 – 0,1605] | 1,5×10⁻⁸⁷ |
+
+##### (4) Hình dạng — tuyến tính hỏng ở đâu
+
+| Năm | HR tuyến tính dự đoán | HR phân loại thật | Lệch |
+|---:|---:|---:|---:|
+| 2013 | 0,7478 | 0,7916 | 1,06× |
+| 2014 | 0,5592 | 0,5402 | 0,97× |
+| 2015 | 0,4182 | 0,4237 | 1,01× |
+| 2016 | 0,3127 | 0,3149 | 1,01× |
+| 2017 | 0,2339 | 0,2374 | 1,02× |
+| 2018 | 0,1749 | 0,1773 | 1,01× |
+| 2019 | 0,1308 | 0,1422 | 1,09× |
+| **2020** | 0,0978 | 0,1229 | **1,26×** |
+| **2021** | 0,0731 | 0,1199 | **1,64×** |
+| **2022** | 0,0547 | 0,1313 | **2,40×** |
+
+> **Tuyến tính khớp rất tốt 2013–2018** (lệch 0,97–1,02×) rồi **hỏng hẳn từ 2020** (1,26× → 2,40×).
+> Nguyên nhân: dạng tuyến tính buộc HR phải **tiếp tục rơi 25% mỗi năm mãi mãi**, trong khi thực tế
+> chuỗi **đi ngang từ 2019**: 0,1422 → 0,1229 → 0,1199 → **0,1313** (còn bật lên ở 2022).
+
+Điều này khớp với B4 (chế độ ổn định) và A7 (Me6 bật lên ở cohort 2020).
+
+##### (5) Viết lại phát biểu
+
+> **Hiện tại (Mục 9.4 ①):** *"mỗi năm cohort muộn hơn làm giảm 25% khả năng quay lại"*
+>
+> **Đề xuất:** *"Chất lượng cohort suy giảm theo hai giai đoạn khác hẳn nhau. Từ cohort 2013 đến
+> 2018, mỗi năm muộn hơn làm giảm khoảng 25% khả năng quay lại (HR 0,79 → 0,18). Từ cohort 2019
+> trở đi chuỗi **đi ngang** quanh HR 0,12–0,14 và không rơi thêm. Kiểm định tỷ số hợp lý bác bỏ dạng
+> tuyến tính (LR = 91,47 · df = 9 · p < 10⁻¹⁵), nên **không được** ngoại suy mức giảm 25%/năm sang
+> các cohort sau 2019."*
+
+---
+
 ---
 
 ### B8. Ngưỡng K1 và K7 đặt trên căn cứ gì?
@@ -2140,6 +2218,95 @@ hai?
 muộn hơn làm giảm 25%"* cho đúng với thứ dữ liệu thật sự cho phép nói. Nếu là thời kỳ thì H3,
 9.4 ① và khuyến nghị ở BTN6 đổi thế nào?
 
+#### Trả lời B11
+
+**Kết luận: CẢ HAI, nhưng bước gãy 2019 là hiệu ứng THỜI KỲ rõ ràng. Bằng chứng mạnh nhất: cùng
+một nhóm người (cohort 2013) rơi từ ~62% xuống ~44% đúng năm 2019 rồi đứng yên.**
+
+Script: [`scripts/phan_bien/b11_cohort_hay_thoi_ky.py`](../../scripts/phan_bien/b11_cohort_hay_thoi_ky.py)
+
+##### (1) Chỉ số không phụ thuộc cohort
+
+Với mỗi năm Y: tỷ lệ khách **đã hoạt động năm Y−1** mua lại trong năm Y (`live`, grain: mỗi khách):
+
+| Cohort | Retention +1 **theo cohort** | Tỷ lệ mua tiếp **theo thời kỳ** |
+|---:|---:|---:|
+| 2014 | 34,8% | 58,4% |
+| 2015 | 27,3% | 58,9% |
+| 2016 | 21,3% | 57,2% |
+| 2017 | 15,7% | 54,8% |
+| **2018** | 9,4% | **41,7%** ← gãy |
+| 2019 | 7,8% | 40,4% |
+| 2020 | 6,5% | 40,9% |
+| 2021 | 7,0% | 42,3% |
+
+Chuỗi **thời kỳ cũng rơi**: 57,2% (2016) → 41,7% (2018) rồi đứng yên ~41%. Mức rơi tương đối
+**−29%**, không nhỏ.
+
+##### (2) Bằng chứng quyết định — chỉ cohort 2013, cùng một nhóm người
+
+| Năm | Hoạt động Y−1 | Mua tiếp | Tỷ lệ |
+|---:|---:|---:|---:|
+| 2015 | 12.082 | 7.919 | **65,5%** |
+| 2016 | 12.171 | 7.861 | 64,6% |
+| 2017 | 12.138 | 7.678 | 63,3% |
+| 2018 | 11.804 | 7.224 | 61,2% |
+| **2019** | 11.325 | 5.205 | **46,0%** ← rơi 15,2 điểm |
+| 2020 | 8.252 | 3.564 | 43,2% |
+| 2021 | 7.321 | 3.223 | 44,0% |
+| 2022 | 7.232 | 3.235 | 44,7% |
+
+> **Đây là bằng chứng không bác được.** Cùng một nhóm người, cohort của họ **không đổi**, tuổi
+> cohort chỉ tăng đều — nhưng hành vi rơi **đột ngột 15,2 điểm đúng năm 2019** rồi đứng yên ở mức
+> mới. Không có giải thích nào theo cohort làm được điều đó. **Đây là cú sốc thời kỳ.**
+
+##### (3) Cox thêm biến thời kỳ
+
+Thêm `ty_le_sau_2019` = tỷ lệ thời gian theo dõi rơi vào sau 01/01/2019:
+
+| | HR `cohort_year` | HR `ty_le_sau_2019` |
+|---|---:|---:|
+| Mô hình gốc | **0,7412** | — |
+| Thêm biến thời kỳ | **1,1591** | 0,0011 (p < 10⁻³⁰⁰) |
+
+> **HR `cohort_year` lật dấu hoàn toàn**: từ 0,7412 (*mỗi cohort muộn hơn kém 26%*) thành 1,1591
+> (*mỗi cohort muộn hơn **tốt hơn** 16%*).
+>
+> **Nhưng phải đọc kết quả này rất thận trọng.** `ty_le_sau_2019` gần như **cộng tuyến hoàn toàn**
+> với `cohort_year` — cohort muộn thì theo cấu tạo có toàn bộ thời gian theo dõi nằm sau 2019.
+> HR = 0,0011 là giá trị cực đoan phi thực tế, dấu hiệu điển hình của cộng tuyến. Đây chính là
+> **bài toán tuổi – thời kỳ – cohort**: với dữ liệu quan sát, ba yếu tố này **không tách được**
+> bằng hồi quy.
+>
+> Nên kết quả này **không** dùng để kết luận "cohort không có tác dụng". Nó chỉ chứng minh hệ số
+> `cohort_year` = 0,7478 **không bền vững** — thay đổi đặc tả một chút là nó lật dấu.
+
+##### (4) Kết luận: cả hai, nhưng phải phân vai
+
+| Hiện tượng | Nguyên nhân | Bằng chứng |
+|---|---|---|
+| Chất lượng cohort giảm dần 2013 → 2018 | **Cohort** (một phần) | Chuỗi thời kỳ chỉ rơi 29% trong khi chuỗi cohort rơi 80% — phần dư là cohort thật |
+| **Bước gãy đột ngột 2019** | **THỜI KỲ** | Cohort 2013 (cùng người) rơi 61,2% → 46,0% |
+| Đi ngang từ 2019 | **Thời kỳ** (chế độ mới) | Cả hai chuỗi đều đứng yên sau 2019 |
+
+##### (5) Viết lại và các chỗ bị ảnh hưởng
+
+> **Mục 9.4 ① — đề xuất:** *"Biến `cohort_year` có HR = 0,7478, nhưng con số này **không tách được**
+> hiệu ứng cohort khỏi hiệu ứng thời kỳ (bài toán tuổi–thời kỳ–cohort). Bằng chứng cho thấy có cả
+> hai: chuỗi retention theo thời kỳ — đo trên tập khách bất kể cohort — cũng rơi từ 57,2% (2016)
+> xuống 41,7% (2018); và riêng cohort 2013, cùng một nhóm người, rơi từ 61,2% xuống 46,0% đúng năm
+> 2019. Phần bước gãy 2019 là **thời kỳ**; phần suy giảm dần 2013–2018 mới có thể quy cho cohort."*
+
+**H3** (Mục 5): phải thu hẹp thêm một lần nữa — ngoài giới hạn cohort 2012–2019 (từ A7), còn phải
+ghi rõ *"suy giảm quan sát được trộn lẫn hiệu ứng cohort và hiệu ứng thời kỳ; dữ liệu quan sát
+không tách được hai thứ này."*
+
+**BTN6** (khuyến nghị ngân sách): nếu phần lớn là thời kỳ thì **can thiệp vào chất lượng thu nạp
+sẽ không hiệu quả** — vấn đề không nằm ở việc "khách mới ngày càng tệ" mà ở một thay đổi môi trường
+tác động lên tất cả. Khuyến nghị nên chuyển trọng tâm sang **tìm nguyên nhân cú sốc 2019**.
+
+---
+
 ---
 
 ### B12. `promo_first` có phải chỉ là **mùa** của đơn đầu?
@@ -2174,6 +2341,83 @@ chứ không phải vì **khuyến mãi**.
 
 **Trả lời xong khi:** có HR `promo_first` sau khi thêm mùa, và một câu kết luận H7 giữ, thu hẹp,
 hay bỏ.
+
+#### Trả lời B12
+
+**Kết luận: `promo_first` ĐÚNG LÀ biến mùa vụ rất mạnh — nhưng kiểm soát mùa KHÔNG làm đổi HR.
+H7 giữ được, với điều kiện thu hẹp về cỡ hiệu ứng (xem B17).**
+
+Script: [`scripts/phan_bien/b12_promo_hay_mua.py`](../../scripts/phan_bien/b12_promo_hay_mua.py)
+
+##### (1) Lịch khuyến mãi có cố định không? — **Có**
+
+Các chiến dịch bắt đầu **đúng ngày mỗi năm**: 18/03 · 23/06 · 30/08 · 18/11 — mỗi mốc lặp lại
+9–10 lần trong 11 năm.
+
+##### (2) Bảng chéo `promo_first` × tháng của đơn đầu
+
+| Tháng | Số khách | Có promo | % có promo |
+|---:|---:|---:|---:|
+| 1 | 3.677 | 253 | 6,9% |
+| 2 | 4.408 | 1.096 | 24,9% |
+| **3** | 7.284 | 4.248 | **58,3%** |
+| 4 | 9.499 | 4.029 | 42,4% |
+| **5** | 8.559 | 0 | **0,0%** |
+| 6 | 7.789 | 2.032 | 26,1% |
+| 7 | 10.667 | 3.896 | 36,5% |
+| 8 | 10.716 | 2.165 | 20,2% |
+| 9 | 7.372 | 3.773 | 51,2% |
+| **10** | 5.578 | 137 | **2,5%** |
+| 11 | 4.676 | 1.083 | 23,2% |
+| 12 | 7.374 | 4.047 | 54,9% |
+
+> **Biên độ 58,3 điểm phần trăm.** Tháng 5 có **đúng 0%**, tháng 10 chỉ 2,5%, còn tháng 3 tới 58,3%.
+> Nghi ngờ của đề bài **được xác nhận**: `promo_first` mang rất nhiều thông tin mùa vụ.
+
+##### (3) Cox thêm tháng của đơn đầu
+
+| Mô hình | HR `promo_first` | CI 95% |
+|---|---:|---|
+| Chưa có tháng | 0,9541 | [0,9370 – 0,9715] |
+| **Đã thêm tháng** *(11 dummy)* | **0,9542** | [0,9356 – 0,9731] |
+| Thay đổi | **+0,0%** | |
+
+> **Kết quả bất ngờ: HR gần như không nhúc nhích.** Dù `promo_first` tương quan mạnh với tháng,
+> việc kiểm soát tháng không hấp thụ được hiệu ứng của nó. Nghĩa là hiệu ứng promo **không phải**
+> chỉ là mùa trá hình.
+
+##### (4) So sánh trong cùng cửa sổ khuyến mãi
+
+Trong mỗi tháng, so khách **có** promo với khách **không** promo (nhóm sau tồn tại vì promo chỉ áp
+dụng cho một số `applicable_category` / `min_order_value`):
+
+| Tháng | Có promo *(% mua lại)* | Không promo *(% mua lại)* | Chênh |
+|---:|---|---|---:|
+| 2 | 1.096 *(84,4%)* | 3.312 *(72,5%)* | **+11,9** |
+| 3 | 4.248 *(71,7%)* | 3.036 *(70,8%)* | +0,9 |
+| 4 | 4.029 *(71,0%)* | 5.470 *(70,3%)* | +0,7 |
+| 6 | 2.032 *(64,0%)* | 5.757 *(65,8%)* | −1,8 |
+| 7 | 3.896 *(65,8%)* | 6.771 *(84,9%)* | **−19,1** |
+| 8 | 2.165 *(68,5%)* | 8.551 *(79,6%)* | −11,1 |
+| 9 | 3.773 *(64,2%)* | 3.599 *(92,7%)* | **−28,5** |
+| 11 | 1.083 *(63,3%)* | 3.593 *(80,6%)* | −17,4 |
+| 12 | 4.047 *(63,5%)* | 3.327 *(93,1%)* | **−29,6** |
+
+> **Chênh lệch không nhất quán về dấu**: từ **+11,9** (tháng 2) tới **−29,6** (tháng 12). Nếu
+> khuyến mãi có một tác động hành vi ổn định thì dấu phải giống nhau ở mọi tháng. Ở đây nó đổi dấu,
+> nên cái đang đo được nhiều khả năng là **đặc điểm của nhóm khách chọn mua lúc nào**, không phải
+> tác động của bản thân khuyến mãi.
+
+##### (5) Kết luận H7
+
+> **H7 GIỮ, nhưng phải thu hẹp mạnh.** Hiệu ứng sống sót qua kiểm soát mùa (HR không đổi), nên
+> không thể quy hết cho mùa vụ. Nhưng: (a) cỡ hiệu ứng chỉ **1,4 điểm phần trăm** (xem B17);
+> (b) chênh lệch thô trong từng tháng **đổi dấu**, cho thấy đây không phải một tác động hành vi
+> ổn định. Phát biểu đúng nhất: *"đơn đầu có khuyến mãi đi kèm khả năng quay lại thấp hơn khoảng
+> 1,4 điểm phần trăm sau khi kiểm soát; hiệu ứng có ý nghĩa thống kê nhưng nhỏ tới mức không đủ
+> làm căn cứ cắt ngân sách khuyến mãi."*
+
+---
 
 ---
 
@@ -2236,6 +2480,95 @@ vào. Chú ý 2013 chỉ có cohort ≤ 2013 nên phải nói rõ so sánh thế
 
 **Trả lời xong khi:** HR trước / sau khi bỏ penalizer; số đối chứng bị tái sử dụng; bảng SMD trước
 / sau ghép; và một câu nói rõ PSM đóng góp gì ngoài Cox.
+
+#### Trả lời B14
+
+Script: [`scripts/phan_bien/b14_penalizer_psm.py`](../../scripts/phan_bien/b14_penalizer_psm.py)
+
+##### (1) `penalizer` — ảnh hưởng nhỏ tới HR, nhưng phá hỏng LR test
+
+Mô hình **hội tụ bình thường** với `penalizer=0`.
+
+| Biến | HR (p=0) | HR (p=0,01) | Chênh |
+|---|---:|---:|---:|
+| `promo_first` | 0,9541 | 0,9482 | −0,61% |
+| `delivery_days` | 1,0024 | 1,0024 | −0,00% |
+| `returned_first` | 0,9770 | 0,9774 | +0,04% |
+| `log_aov` | 1,0081 | 1,0074 | −0,08% |
+| `cohort_year` | 0,7412 | 0,7478 | +0,90% |
+| `category_first_GenZ` | 1,0554 | 1,0412 | −1,35% |
+| `category_first_Outdoor` | 1,0668 | 1,0557 | −1,04% |
+| `category_first_Streetwear` | 1,0659 | 1,0533 | −1,18% |
+
+CI của `promo_first`: p=0 → [0,9370 – 0,9715] (rộng 0,0345) · p=0,01 → [0,9314 – 0,9653]
+(rộng 0,0339). Phạt làm CI **hẹp đi chút ít** — đúng như dự đoán, hệ số co về 1.
+
+> **Ảnh hưởng lên HR không đáng kể (< 1,4%).** Nhưng phạt **phá hỏng phép so sánh mô hình**: ở B7,
+> LR test với `penalizer=0.01` cho giá trị **âm** (−157,46), bất khả thi. Bất kỳ so sánh
+> likelihood nào cũng phải chạy với `penalizer=0`.
+>
+> **Đề xuất:** ghi rõ trong Mục 9.3 rằng mô hình dùng phạt L2 `penalizer=0.01`, và nêu HR không
+> phạt để đối chiếu.
+
+##### (2) Ghép **CÓ HOÀN LẠI** — tài liệu chưa nói
+
+| | |
+|---|---:|
+| Số cặp ghép được | 25.827 / 25.827 (100,0%) |
+| **Số khách đối chứng KHÁC NHAU** | **18.106** |
+| Trung bình mỗi đối chứng bị dùng | 1,43 lần |
+| **Số lần một đối chứng bị dùng nhiều nhất** | **9** |
+
+Phân bố: 12.673 người dùng 1 lần · 3.814 dùng 2 lần · 1.151 dùng 3 lần · 322 dùng 4 lần ·
+107 dùng 5 lần · 30 dùng 6 lần.
+
+> Tài liệu ghi *"ghép được 100%"* — đúng, nhưng **không nói** rằng 25.827 cặp chỉ dựa trên
+> **18.106 người đối chứng khác nhau**. Ghép có hoàn lại làm **sai số chuẩn bị đánh giá thấp**,
+> vì các cặp không độc lập với nhau.
+
+##### (3) Cân bằng sau ghép — **đạt**
+
+| Biến | SMD trước | SMD sau |
+|---|---:|---:|
+| `delivery_days` | −0,0071 | −0,0033 |
+| `returned_first` | +0,0050 | −0,0020 |
+| **`log_aov`** | **−0,2297** | **+0,0135** |
+| **`cohort_year`** | **+0,3934** | **+0,0124** |
+| `category_first_GenZ` | −0,0468 | +0,0064 |
+| `category_first_Outdoor` | +0,0548 | −0,0102 |
+| `category_first_Streetwear` | −0,0230 | +0,0043 |
+
+Quy ước |SMD| < 0,1 là cân bằng tốt.
+
+> **Đây là kết quả tích cực và nên đưa vào tài liệu.** Trước ghép, `cohort_year` (0,3934) và
+> `log_aov` (0,2297) đều **mất cân bằng rõ**. Sau ghép cả hai xuống dưới 0,014. Việc ghép **thật
+> sự có tác dụng** — điều mà tài liệu chưa chứng minh bao giờ.
+
+##### (4) PSM đóng góp gì ngoài Cox?
+
+| | HR `promo_first` |
+|---|---:|
+| Cox đầy đủ | 0,9541 |
+| Sau PSM | 0,9453 |
+
+PSM ghép trên **đúng các biến** Cox đã kiểm soát (`cohort_year`, `log_aov`, `delivery_days`,
+`returned_first`, danh mục). Hai phương pháp dùng **cùng một thông tin**.
+
+> **Kết quả gần nhau là điều PHẢI xảy ra**, không phải bằng chứng độc lập.
+>
+> **Đề xuất viết lại Mục 9.4 ③:**
+>
+> *Hiện tại:* "Hiệu ứng **không biến mất** sau khi ghép cặp — đây là kết quả mạnh nhất của phần này."
+>
+> *Sửa thành:* **"Propensity score matching ghép trên đúng các biến mà Cox đã kiểm soát, nên việc
+> hai phương pháp cho kết quả gần nhau (0,9541 và 0,9453) là điều phải xảy ra — đây không phải một
+> đường kiểm chứng độc lập. Đóng góp thật của PSM là **bằng chứng cân bằng**: trước ghép,
+> `cohort_year` có SMD = 0,393 và `log_aov` có SMD = −0,230, đều mất cân bằng; sau ghép cả hai
+> xuống dưới 0,014. Nghĩa là hiệu ứng còn lại không phải do hai nhóm khác nhau ở các biến này.
+> Lưu ý ghép là **có hoàn lại** — 25.827 cặp dựa trên 18.106 đối chứng khác nhau, một người bị
+> dùng tối đa 9 lần — nên sai số chuẩn báo cáo là ước lượng thấp."**
+
+---
 
 ---
 
@@ -2418,6 +2751,73 @@ hiểu được?"*. HR là tỷ số nguy cơ, không phải số khách.
 
 **Trả lời xong khi:** bảng điểm-phần-trăm hiệu chỉnh cho `promo_first` và `cohort_year`, và câu
 kết luận H7 viết lại bằng đơn vị đó.
+
+#### Trả lời B17
+
+**Kết luận: sau khi kiểm soát, hiệu ứng khuyến mãi chỉ còn 1,4 điểm phần trăm — bằng 367 người
+trên 26.759. `cohort_year` mạnh hơn 25,8 lần.**
+
+Script: [`scripts/phan_bien/b17_co_hieu_ung.py`](../../scripts/phan_bien/b17_co_hieu_ung.py)
+
+Cách tính: dùng `predict_survival_function` trên hai hồ sơ **giống hệt nhau** (các biến khác đặt ở
+giá trị trung bình), chỉ khác đúng biến đang xét. Đại lượng báo cáo là `1 − S(t)` = tỷ lệ khách
+**đã** quay lại sau t ngày.
+
+##### (1) `promo_first`
+
+| Hồ sơ | 365 ngày | 730 ngày |
+|---|---:|---:|
+| Đơn đầu **không** khuyến mãi | 37,8% | 53,7% |
+| Đơn đầu **có** khuyến mãi | 36,4% | 52,0% |
+| **Chênh** | **−1,4 điểm** | **−1,7 điểm** |
+
+So với **10,0 điểm** thô ở Mục 9.2 — sau khi kiểm soát chỉ còn **1,4 điểm**, tức **86% khoảng cách
+thô là do các biến khác**, chủ yếu là cohort.
+
+##### (2) `cohort_year`
+
+| Hồ sơ | 365 ngày | 730 ngày |
+|---|---:|---:|
+| Cohort 2013 | 49,6% | 67,1% |
+| Cohort 2018 | 14,2% | 22,0% |
+| **Chênh** | **−35,4 điểm** | **−45,1 điểm** |
+
+##### (3) So sánh độ lớn
+
+| Biến | Chênh tại 365 ngày |
+|---|---:|
+| `promo_first` (0 → 1) | **1,4 điểm** |
+| `cohort_year` (2013 → 2018) | **35,4 điểm** |
+
+**`cohort_year` mạnh hơn 25,8 lần.**
+
+##### (4) Quy ra số người
+
+26.759 khách có đơn đầu kèm khuyến mãi. Nếu họ **không** có khuyến mãi, số người quay lại trong
+một năm sẽ nhiều hơn **367 người**.
+
+> **367 người trên 26.759** — đó là toàn bộ cỡ hiệu ứng đang được báo cáo với p = 1,7×10⁻⁷.
+
+##### (5) Quy tắc báo cáo đề xuất cho cả tài liệu
+
+1. **p-value:** nhỏ hơn 0,001 thì chỉ ghi `p < 0,001`. Viết `p = 4,9×10⁻¹⁹²` không mang thêm thông
+   tin — với n ≈ 87.000 thì gần như mọi hiệu ứng đều có ý nghĩa thống kê.
+2. **Mọi kết luận phải kèm cỡ hiệu ứng** bằng đơn vị người quản lý hiểu được (điểm phần trăm hoặc
+   số người), **kèm khoảng tin cậy**.
+3. **Không dùng p-value để xếp hạng tầm quan trọng.** Ở đây `promo_first` có p rất nhỏ nhưng cỡ
+   hiệu ứng nhỏ hơn `cohort_year` 25,8 lần.
+
+##### (6) Viết lại kết luận H7
+
+> **Hiện tại (Mục 5):** *"H7 ✅ đúng nhưng hiệu ứng nhỏ — HR 0,948"*
+>
+> **Đề xuất:** *"**H7 — đúng về mặt thống kê, không đáng kể về mặt thực hành.** Sau khi kiểm soát
+> cohort, danh mục, giá trị đơn, thời gian giao và trả hàng, đơn đầu có khuyến mãi làm tỷ lệ quay
+> lại trong một năm giảm **1,4 điểm phần trăm** (37,8% → 36,4%), tương đương **367 người** trên
+> 26.759 khách. Khoảng cách thô 10,0 điểm ở Mục 9.2 chủ yếu đến từ hiệu ứng cohort, không phải
+> khuyến mãi. Cỡ hiệu ứng này **không đủ làm căn cứ** cho bất kỳ quyết định cắt ngân sách nào."*
+
+---
 
 ---
 
