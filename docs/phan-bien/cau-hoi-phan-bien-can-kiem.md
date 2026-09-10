@@ -107,7 +107,7 @@ Từ đó về sau, chạy mọi script bằng:
 | A6 | Số liệu trong 6 BTN | Từng con số lấy từ đâu? | | |
 | A7 | Mốc so sánh 2013 | Vì sao bảng bắt đầu 2013 mà không phải 2012? | ✅ Xong — 2012 phủ 49,5% năm; bỏ 2012 làm số **đẹp hơn**; **giải được bí ẩn 32.743 = cohort 2019**; Me6 **không đơn điệu** | Claude |
 | **A8** 🆕 | Bảng ký hiệu | Mọi ký hiệu trong tài liệu, một bảng tra duy nhất; riêng khối survival (Mục 9) giải bằng ví dụ một khách | | |
-| **A9** 🆕 | Đẳng thức phân rã ba tầng | Từng thành phần là gì, kiểm số cho 2013 và 2022; AOV và "giành lại" nằm ở đâu? | | |
+| **A9** 🆕 | Đẳng thức phân rã ba tầng | Từng thành phần là gì, kiểm số cho 2013 và 2022; AOV và "giành lại" nằm ở đâu? | ⚠️ Đúng vì **định nghĩa**; "phủ kín" SAI — AOV không ai phụ trách, **"giành lại" = 52,9%** bị che | Claude |
 | **A10** 🆕 | "Quay lại" và "hoạt động" | Hai định nghĩa "quay lại", ba con số "hoạt động" — cái nào dùng ở đâu? | | |
 
 ### Phần B — Chỗ cần kiểm chứng
@@ -126,14 +126,14 @@ Từ đó về sau, chạy mọi script bằng:
 | **B10** 🆕 | Mục 12.2 · cả 5 kiểm | Phép kiểm nào có thể vỡ, phép nào là hằng đúng? | | |
 | **B11** 🆕 | Mục 9.3 · `cohort_year` | HR 0,7478 là hiệu ứng **cohort** hay hiệu ứng **thời kỳ**? | ⚠️ **CẢ HAI** — cohort 2013 (cùng người) rơi 61,2% → 46,0% đúng 2019; thêm biến thời kỳ thì HR **lật 0,74 → 1,16** | Claude |
 | **B12** 🆕 | Mục 9 · `promo_first` | Có phải chỉ là **mùa** của đơn đầu? | ⚠️ Là biến mùa mạnh (0% → 58,3% theo tháng) nhưng kiểm soát mùa **không đổi HR**. H7 giữ, thu hẹp | Claude |
-| **B13** 🆕 | Mục 2.1 · tần suất | Cùng người mua thưa đi, hay đổi thành phần khách? | | |
+| **B13** 🆕 | Mục 2.1 · tần suất | Cùng người mua thưa đi, hay đổi thành phần khách? | ✅ Câu BTN2 **giữ được** — cohort 2012 giảm 32,9%, cohort 2013 giảm 10,4%. Shift-share **không dùng được** (tương tác −88%) | Claude |
 | **B14** 🆕 | Mục 9.3–9.4 · Cox & PSM | `penalizer`, ghép có hoàn lại, cân bằng sau ghép | ⚠️ Ghép **có hoàn lại** (18.106 đối chứng cho 25.827 cặp, 1 người dùng tối đa 9 lần); SMD sau ghép **đạt**; PSM không phải đường kiểm chứng độc lập | Claude |
 | **B15** 🆕 | Mục 3 · "chưa từng mua" | 26,0% hay 27,7%? Khách chỉ có đơn `cancelled` đứng ở đâu? | ❌ **LỆCH** — Me1 dùng `live`, Me8a dùng `ALL`; cộng lại 98,26%. Đúng là **27,73%** | Claude |
-| **B16** 🆕 | Mục 7 · Me5, Me6 | Cửa sổ năm dương lịch có lệch theo tháng mua đầu không? | | |
+| **B16** 🆕 | Mục 7 · Me5, Me6 | Cửa sổ năm dương lịch có lệch theo tháng mua đầu không? | ⚠️ **Có** — chênh **19,3 điểm** theo tháng; Me5 lệch ≤4,0 điểm (giữ được), **Me6 lệch tới +27,6%** (phải đổi) | Claude |
 | **B17** 🆕 | Mục 9 · p-value | Cỡ hiệu ứng ở đâu? Đổi HR ra điểm phần trăm | ✅ Xong — promo chỉ **1,4 điểm %** (= **367 người**), cohort_year **35,4 điểm** (mạnh hơn 25,8 lần) | Claude |
 | **B18** 🆕 | Mục 11 · ràng buộc mức | Cụ thể là con số gì, đưa vào mô hình thế nào? | | |
 | **B19** 🆕 | Mục 8 · K1–K7 | KPI nào đo được kịp, KPI nào có đòn bẩy thật? | | |
-| **B20** 🆕 | Mục 3, 5.1 · `signup_date` | Độ trễ âm là lệch có hệ thống hay ngẫu nhiên — sửa được không? | | |
+| **B20** 🆕 | Mục 3, 5.1 · `signup_date` | Độ trễ âm là lệch có hệ thống hay ngẫu nhiên — sửa được không? | ❌ **KHÔNG SỬA ĐƯỢC** — Spearman **0,0023** (p=0,49), SD 3,5 năm, ANOVA kênh p=0,842 | Claude |
 | **B21** 🆕 | Toàn tài liệu · dữ liệu mô phỏng | Kết luận nào còn đứng nếu bộ sinh gán ngẫu nhiên? | | |
 
 ---
@@ -1241,6 +1241,94 @@ kín nguyên nhân chứ không bỏ sót"*. Đây là câu giảng viên sẽ b
 
 **Xong khi:** có bảng thành phần kèm số cho 2013 và 2022, có câu trả lời rõ cho AOV và cho
 "giành lại", và một đề xuất sửa (hoặc giữ) câu "phủ kín" ở Mục 3b.
+
+#### Trả lời A9
+
+**Kết luận: đẳng thức đúng vì ĐỊNH NGHĨA, không phải vì dữ liệu. Câu "phủ kín" SAI ở hai chỗ —
+AOV không có bài toán nhỏ nào, và "giành lại" chiếm 52,9% mà đẳng thức không thể hiện được.**
+
+Script: [`scripts/phan_bien/a09_dang_thuc_ba_tang.py`](../../scripts/phan_bien/a09_dang_thuc_ba_tang.py)
+
+##### (1) Bảng thành phần
+
+Nguồn: `orders.csv` + `order_items.csv` · bộ lọc `live`.
+
+| Thành phần | Đếm gì | Grain | 2013 | 2022 | Thay đổi |
+|---|---|---|---:|---:|---:|
+| Doanh thu | `Σ(quantity×unit_price)` | dòng hàng | 1.504.550.974 | 1.061.061.965 | −29,5% |
+| Số đơn | `COUNT(order_id)` | mỗi đơn | 69.756 | 32.620 | −53,2% |
+| Khách hoạt động | `COUNTD(customer_id)` | mỗi khách | 37.352 | 22.999 | −38,4% |
+| Tần suất | `đơn / khách` | — | 1,8675 | 1,4183 | −24,1% |
+| AOV | `doanh thu / đơn` | — | 21.569 | 32.528 | **+50,8%** |
+| Khách mới | `cohort = năm Y` | mỗi khách | 24.407 | 1.328 | −94,6% |
+| Khách giữ lại | `khách hoạt động − khách mới` | mỗi khách | 12.945 | 21.671 | +67,4% |
+
+##### (2) Kiểm số ba dòng đẳng thức
+
+| Năm | Dòng | Phép tính | Kết quả | |
+|---|---|---|---:|:--:|
+| 2013 | 1 | 69.756 × 21.568,77 | 1.504.550.974 | ✅ |
+| 2013 | 2 | (37.352 × 1,8675) × 21.568,77 | 1.504.550.974 | ✅ |
+| 2013 | 3 | (24.407 + 12.945) × 1,8675 × 21.568,77 | 1.504.550.974 | ✅ |
+| 2022 | 1 | 32.620 × 32.527,96 | 1.061.061.965 | ✅ |
+| 2022 | 2 | (22.999 × 1,4183) × 32.527,96 | 1.061.061.965 | ✅ |
+| 2022 | 3 | (1.328 + 21.671) × 1,4183 × 32.527,96 | 1.061.061.965 | ✅ |
+
+> **Đẳng thức đúng vì ĐỊNH NGHĨA, không phải vì dữ liệu.** Tần suất *được định nghĩa* là đơn/khách,
+> AOV *được định nghĩa* là doanh thu/đơn — thay vào thì các mẫu số triệt tiêu. Đây là một **đồng
+> nhất thức**, không thể sai với bất kỳ dữ liệu nào.
+>
+> Hệ quả: **không được dùng nó làm bằng chứng** cho bất cứ điều gì (cùng loại vấn đề với Kiểm 2, B2).
+
+##### (3) Kiểm dòng ba bằng đường độc lập
+
+| Năm | Phần dư từ đẳng thức | Đếm trực tiếp *(`first_order_date` < Y và có đơn năm Y)* | |
+|---|---:|---:|:--:|
+| 2013 | 12.945 | 12.945 | ✅ KHỚP |
+| 2022 | 21.671 | 21.671 | ✅ KHỚP |
+
+##### (4) "Khách giữ lại" là ai? — có **nhóm thứ ba** bị che
+
+Bóc 22.999 khách hoạt động 2022:
+
+| Nhóm | Số khách | % |
+|---|---:|---:|
+| Khách mới *(cohort 2022)* | 1.328 | 5,8% |
+| **Giữ lại thật** *(có đơn cả năm 2021)* | **9.495** | **41,3%** |
+| **GIÀNH LẠI** *(nghỉ ≥ 1 năm rồi mua lại)* | **12.176** | **52,9%** |
+| **Tổng** | **22.999** | 100% |
+
+Kiểm tổng: 1.328 + 9.495 + 12.176 = 22.999 ✅
+
+> **Đây là phát hiện quan trọng nhất của câu này.** Nhóm **"giành lại" chiếm 52,9%** — **nhiều hơn
+> cả nhóm giữ lại thật (41,3%)**. Đẳng thức hai số hạng gộp cả hai vào "khách giữ lại", che mất
+> việc **hơn một nửa nền khách hiện tại là người đã từng bỏ đi rồi quay lại**.
+>
+> BTN1 và BTN6 nói tới **ba** can thiệp (kích hoạt / giành lại / giữ chân) nhưng đẳng thức chỉ có
+> **hai** số hạng. Đây là chỗ lệch thật giữa khung phân tích và khung hành động.
+>
+> **Đề xuất:** đổi dòng ba thành **ba số hạng**:
+> `Khách hoạt động = Khách mới + Khách giữ lại + Khách giành lại`
+
+##### (5) AOV đi đâu?
+
+AOV tăng **+50,8%** — thành phần này **không đứng yên**, nó là thành phần **duy nhất tăng** trong
+cả đẳng thức. Nhưng rà sáu bài toán nhỏ: BTN1 trạng thái · BTN2 khách vs tần suất · BTN3 kích hoạt
+vs giữ chân · BTN4 cơ chế đơn đầu · BTN5 nền khách 2023–24 · BTN6 ngân sách — **không cái nào phụ
+trách AOV**.
+
+##### (6) Đề xuất sửa câu "phủ kín" ở Mục 3b
+
+> **Hiện tại:** *"mỗi bài toán nhỏ ứng với đúng một thành phần trong phân rã đó, nên chúng phủ kín
+> nguyên nhân chứ không bỏ sót"*
+>
+> **Đề xuất:** *"Năm bài toán nhỏ đầu ứng với các thành phần **số lượng** trong phân rã: khách hoạt
+> động, tần suất, khách mới, khách giữ lại. **AOV nằm ngoài phạm vi** — nó tăng +50,8% cùng kỳ và
+> cần một phân tích giá riêng, không thuộc bài toán khách hàng. Ngoài ra, dòng thứ ba của đẳng thức
+> gộp 'giữ lại' và 'giành lại' làm một; bóc riêng cho thấy nhóm giành lại chiếm 52,9% nền khách
+> 2022, nhiều hơn nhóm giữ lại thật (41,3%) — đây là căn cứ cho can thiệp thứ ba ở BTN6."*
+
+---
 
 ---
 
@@ -2450,6 +2538,58 @@ vào. Chú ý 2013 chỉ có cohort ≤ 2013 nên phải nói rõ so sánh thế
 **Trả lời xong khi:** hai con số nội cohort / cơ cấu, và kết luận câu *"mỗi khách mua thưa hơn"*
 ở BTN2 giữ nguyên hay phải viết lại.
 
+#### Trả lời B13
+
+**Kết luận: CẢ HAI đều thật, nhưng phân rã shift-share cho kết quả KHÔNG DÙNG ĐƯỢC vì lỗi cấu
+trúc. Câu "mỗi khách mua thưa hơn" GIỮ ĐƯỢC — nhìn riêng từng cohort thì họ đúng là mua thưa đi.**
+
+Script: [`scripts/phan_bien/b13_tan_suat_shift_share.py`](../../scripts/phan_bien/b13_tan_suat_shift_share.py)
+
+##### (1) Phân rã shift-share — và vì sao nó hỏng
+
+| Thành phần | Giá trị | Tỷ trọng |
+|---|---:|---:|
+| Tần suất 2013 → 2022 | 1,8675 → 1,4183 | −0,4492 |
+| Nội cohort *(cùng cohort mua thưa đi)* | −0,3815 | 84,9% |
+| Cơ cấu *(đổi tỷ trọng cohort)* | −0,4630 | 103,1% |
+| Tương tác | +0,3953 | **−88,0%** |
+
+> **Kết quả này KHÔNG dùng được.** Số hạng tương tác **−88,0%** lớn gần bằng chính hai thành phần
+> kia — dấu hiệu phân rã bị hỏng.
+>
+> **Nguyên nhân là lỗi cấu trúc, không phải lỗi tính.** Năm 2013 chỉ tồn tại cohort ≤ 2013; các
+> cohort 2014–2022 phải gán trọng số `w₀ = 0` vì **chúng chưa ra đời**. Shift-share giả định hai
+> kỳ có **cùng tập nhóm**, giả định đó bị vi phạm hoàn toàn ở đây. Ghi ra thay vì báo cáo ba con số
+> vô nghĩa.
+
+##### (2) Đường thay thế — nhìn riêng từng cohort
+
+Chỉ hai cohort tồn tại ở **cả hai năm** (2012 và 2013) mới so được:
+
+| Cohort | Tần suất 2013 | Tần suất 2022 | Thay đổi |
+|---:|---:|---:|---:|
+| 2012 | 2,404 | 1,613 | **−32,9%** |
+| 2013 | 1,583 | 1,419 | **−10,4%** |
+
+> **Đây là câu trả lời thật.** Cùng một nhóm người, cohort không đổi — và họ **đúng là mua thưa
+> đi**: cohort 2012 giảm 32,9%, cohort 2013 giảm 10,4%. Hiệu ứng nội cohort **có thật**, không phải
+> ảo ảnh do đổi cơ cấu.
+>
+> Nhưng mức giảm tổng là −24,1%, nằm **giữa** hai con số này — nên cơ cấu cũng có phần đóng góp.
+> Hai hiệu ứng cùng tồn tại, chỉ là không tách được sạch bằng shift-share.
+
+##### (3) Kết luận cho BTN2
+
+> **Câu "mỗi khách mua thưa hơn" GIỮ ĐƯỢC**, vì chứng minh được trực tiếp trên hai cohort tồn tại
+> suốt kỳ.
+>
+> **Nhưng nên bổ sung một câu cảnh báo:** *"Mức giảm tần suất tổng (−24,1%) trộn hai hiệu ứng: cùng
+> một cohort mua thưa đi (cohort 2012 giảm 32,9%, cohort 2013 giảm 10,4%) và cơ cấu cohort thay
+> đổi. Phân rã shift-share không tách được hai hiệu ứng này vì các cohort muộn không tồn tại ở kỳ
+> gốc — số hạng tương tác chiếm −88%, lớn gần bằng chính các thành phần."*
+
+---
+
 ---
 
 ### B14. Cox và PSM — `penalizer`, ghép có hoàn lại, và cân bằng sau ghép
@@ -2721,6 +2861,91 @@ Year-End Sale — liên quan B12), thì so retention giữa cohort đang so hai 
 **Trả lời xong khi:** hai phiên bản đặt cạnh nhau, chênh bao nhiêu, và đề xuất tài liệu dùng
 phiên bản nào (kèm lý do). Nếu giữ năm dương lịch thì phải ghi giới hạn này ở đâu.
 
+#### Trả lời B16
+
+**Kết luận: CÓ lệch, và lệch có hệ thống. Me5 lệch tới 4,0 điểm; Me6 lệch tới +27,6%.
+Đề xuất chuyển sang cửa sổ theo ngày.**
+
+Script: [`scripts/phan_bien/b16_cua_so_nam_duong_lich.py`](../../scripts/phan_bien/b16_cua_so_nam_duong_lich.py)
+
+##### (1) Cohort 2013 — retention năm +1 theo tháng mua đầu
+
+| Tháng mua đầu | 1 | 6 | 7 | 8 | 9 | 10 | 11 | **12** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Retention +1 | **59,8%** | 47,8 | 47,0 | 43,7 | 44,0 | 46,2 | 43,2 | **40,5%** |
+
+**Chênh 19,3 điểm phần trăm** giữa người mua đầu tháng 1 và tháng 12 — đúng như đề bài dự đoán.
+Người mua tháng 12 chỉ có 1 tháng ở "năm 0" nên ít cơ hội, đồng thời "năm +1" của họ bắt đầu ngay.
+
+##### (2) Phân bố tháng mua đầu có khác nhau giữa các cohort không? — **Có**
+
+| Cohort | T1 | T2 | T3 | T4 | T5 | ... | T12 |
+|---|---:|---:|---:|---:|---:|---|---:|
+| 2013 | **6,6%** | **8,3%** | 11,4 | 14,1 | 12,0 | | 6,0 |
+| 2020 | **3,7%** | **4,5%** | 12,5 | 13,4 | 13,4 | | 6,6 |
+
+Cohort 2013 có **14,9%** khách mua đầu trong T1–T2, cohort 2020 chỉ **8,2%**. Cohort 2013 được
+**lợi** vì nhiều khách đầu năm hơn — chính nhóm có retention cao nhất.
+
+##### (3) Tính lại theo cửa sổ ngày
+
+**Me5** — năm +1 = ngày 1–365 sau đơn đầu:
+
+| Cohort | Năm dương lịch | 365 ngày | Chênh |
+|---:|---:|---:|---:|
+| 2012 | 62,8% | 63,5% | +0,7 |
+| 2013 | 49,5% | 50,1% | +0,6 |
+| 2014 | 34,8% | 35,6% | +0,9 |
+| 2015 | 27,3% | 28,9% | +1,6 |
+| 2016 | 21,3% | 23,3% | +2,0 |
+| 2017 | 15,7% | 19,0% | **+3,3** |
+| 2018 | 9,4% | 13,4% | **+4,0** |
+| 2019 | 7,8% | 9,4% | +1,6 |
+| 2020 | 6,5% | 8,3% | +1,8 |
+| 2021 | 7,0% | 8,1% | +1,1 |
+
+**Me6** — 3 năm = 1.095 ngày:
+
+| Cohort | Năm dương lịch | 1.095 ngày | Chênh |
+|---:|---:|---:|---:|
+| 2012 | 101.962 | 130.082 | **+27,6%** |
+| 2013 | 78.589 | 88.742 | **+12,9%** |
+| 2014 | 57.672 | 63.423 | +10,0% |
+| 2015 | 46.511 | 50.973 | +9,6% |
+| 2016 | 43.459 | 45.574 | +4,9% |
+| 2017 | 36.593 | 38.220 | +4,4% |
+| 2018 | 34.966 | 36.048 | +3,1% |
+| 2019 | 32.743 | 33.721 | +3,0% |
+
+##### (4) Đánh giá và đề xuất
+
+**Me5 — lệch nhỏ nhưng có hệ thống.** Mọi chênh đều **dương** (phiên bản ngày luôn cao hơn), lớn
+nhất 4,0 điểm ở cohort 2018. Đà rơi đổi từ **49,5% → 7,0%** thành **50,1% → 8,1%** — kết luận định
+tính không đổi.
+
+**Me6 — lệch lớn và không đều.** Từ +27,6% (cohort 2012) xuống +3,0% (cohort 2019). Vì lệch **giảm
+dần theo cohort**, nó làm đà giảm của Me6 **trông dốc hơn thực tế**: phiên bản năm dương lịch cho
+101.962 → 32.743 (−67,9%), phiên bản ngày cho 130.082 → 33.721 (**−74,1%**). Hai con số khác nhau
+6,2 điểm.
+
+> **Đề xuất: chuyển sang cửa sổ theo ngày cho Me6, giữ năm dương lịch cho Me5.**
+>
+> - **Me6 phải đổi** — lệch tới 27,6% và không đều theo cohort, đủ để làm sai kết luận về tốc độ
+>   suy giảm.
+> - **Me5 giữ được** — lệch tối đa 4,0 điểm, không đổi kết luận, và cửa sổ năm dương lịch dễ
+>   giải thích hơn khi báo cáo.
+>
+> **Nếu giữ năm dương lịch cho cả hai**, phải ghi giới hạn này vào **Mục 7, ngay dưới bảng Metric**:
+>
+> *"Me5 và Me6 dùng cửa sổ **năm dương lịch**, nên độ dài cửa sổ thực tế phụ thuộc tháng mua đầu:
+> khách mua tháng 1 có gần 12 tháng ở tuổi 0, khách mua tháng 12 chỉ có 1 tháng. Trong cohort 2013,
+> retention năm +1 chênh **19,3 điểm** giữa hai nhóm này. Vì phân bố tháng mua đầu khác nhau giữa
+> các cohort (cohort 2013 có 14,9% khách mua đầu T1–T2, cohort 2020 chỉ 8,2%), phép so sánh giữa
+> cohort có sai lệch nhẹ. Tính lại theo cửa sổ 365/1.095 ngày: Me5 lệch tối đa 4,0 điểm, Me6 lệch
+> từ +3,0% đến +27,6%."*
+
+---
+
 ---
 
 ### B17. p = 4,9×10⁻¹⁹² — cỡ hiệu ứng ở đâu?
@@ -2909,6 +3134,86 @@ minh vế "không sửa được".
 
 **Trả lời xong khi:** kết luận *sửa được / không*, kèm hình phân bố. Nếu sửa được, chạy thử Cách 2
 ở Mục 5.1 và báo H3 đổi hay không.
+
+#### Trả lời B20
+
+**Kết luận: KHÔNG SỬA ĐƯỢC. `signup_date` không mang thông tin thứ tự nào — Spearman = 0,0023
+(p = 0,49). Cách 2 ở Mục 5.1 vẫn không thực hiện được.**
+
+Script: [`scripts/phan_bien/b20_signup_lag.py`](../../scripts/phan_bien/b20_signup_lag.py)
+
+![Phân bố độ trễ đăng ký](../hinh/b20-signup-lag.png)
+
+##### (1) Phân bố độ trễ — **tản mát**, không có đỉnh
+
+| Phân vị | p1 | p5 | p25 | p50 | p75 | p95 | p99 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Ngày | −3.800 | −3.414 | −2.661 | **−1.820** | −837 | +654 | +1.146 |
+
+| | |
+|---|---:|
+| Trung bình | −1.659 ngày |
+| **Độ lệch chuẩn** | **1.269 ngày = 3,5 năm** |
+| Độ rộng p5–p95 | 4.068 ngày = **11,1 năm** |
+
+> Độ rộng p5–p95 là **11,1 năm** — gần bằng toàn bộ khoảng thời gian của dữ liệu. Đây là phân bố
+> **tản mát**, không phải một cột bị dịch một hằng số.
+
+##### (2) Có phụ thuộc hệ thống không?
+
+**Theo năm mua đầu — có, nhưng là hệ quả cơ học:**
+
+| Năm mua đầu | 2012 | 2014 | 2016 | 2018 | 2020 | 2022 |
+|---|---:|---:|---:|---:|---:|---:|
+| Trung vị độ trễ | −2.573 | −1.943 | −1.222 | −434 | +270 | +954 |
+
+Xu hướng này **không phải quy luật sửa được**: ai mua sớm thì đương nhiên có độ trễ âm nhiều hơn,
+vì `signup_date` phân bố khá đều trên toàn kỳ. Đây là hệ quả số học, không phải một offset có thể
+trừ ra.
+
+**Theo kênh thu nạp — không:**
+
+| Kênh | direct | email | organic | paid | referral | social |
+|---|---:|---:|---:|---:|---:|---:|
+| Trung vị | −1.832 | −1.825 | −1.820 | −1.816 | −1.822 | −1.816 |
+
+**ANOVA: F = 0,410 · p = 0,842** — không có khác biệt giữa các kênh. Sáu kênh cho sáu giá trị nằm
+trong khoảng 16 ngày của nhau.
+
+##### (3) Thứ tự xếp hạng có giữ được không? — **KHÔNG**
+
+**Spearman(`signup_date`, `first_order_date`) = 0,0023 · p = 0,487**
+
+> **Đây là con số quyết định.** Tương quan hạng bằng **0,0023** — về mặt thống kê là **không có
+> quan hệ nào cả**. Người đăng ký sớm hơn **không** có xu hướng mua sớm hơn.
+>
+> Nghĩa là `signup_date` không chỉ **lệch** so với `first_order_date` — nó **hoàn toàn độc lập**
+> với hành vi mua. Không thể dùng để phân tầng "đăng ký sớm / muộn" theo bất kỳ cách nào.
+
+##### (4) Kết luận và hệ quả
+
+| Câu hỏi | Trả lời |
+|---|---|
+| Độ trễ tập trung hay tản mát? | **Tản mát** — SD 3,5 năm, p5–p95 rộng 11,1 năm |
+| Có phụ thuộc hệ thống? | Theo năm: có nhưng cơ học · Theo kênh: **không** (p = 0,842) |
+| Thứ tự xếp hạng giữ được? | **Không** — Spearman 0,0023 |
+| **Sửa được không?** | **KHÔNG** |
+
+**Cách 2 ở Mục 5.1** (phân tầng theo độ trễ đăng ký để kiểm soát confound lựa chọn) **vẫn không
+thực hiện được**. Tài liệu kết luận đúng, nhưng trước đây mới chứng minh vế *"hỏng"*; giờ đã chứng
+minh thêm vế *"không sửa được"*.
+
+> **Đề xuất bổ sung vào Mục 5.1:**
+>
+> *"Cách 2 không thực hiện được, và đã kiểm chứng là **không cứu được**: độ trễ giữa `signup_date`
+> và `first_order_date` có độ lệch chuẩn 3,5 năm, không phụ thuộc kênh thu nạp (ANOVA p = 0,842),
+> và tương quan hạng giữa hai cột chỉ **0,0023** (p = 0,49). `signup_date` độc lập hoàn toàn với
+> hành vi mua nên không phân tầng được theo bất kỳ cách nào."*
+
+> **Liên quan B21.** Một cột ngày mà **hoàn toàn không tương quan** với hành vi mua của chính khách
+> đó là dấu hiệu mạnh của **trường được gán ngẫu nhiên** trong bộ sinh dữ liệu mô phỏng.
+
+---
 
 ---
 
