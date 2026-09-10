@@ -235,3 +235,7 @@ data_clean/
 
 # Moi truong ao cho phan phan bien
 .venv/
+
+# Cache Python
+__pycache__/
+*.pyc

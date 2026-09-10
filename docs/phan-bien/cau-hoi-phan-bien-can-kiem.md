@@ -103,12 +103,12 @@ Từ đó về sau, chạy mọi script bằng:
 | A2 | `first_order_date` | Nằm ở đâu? Tính thế nào? | ✅ Xong — **không có sẵn**, phải tự tính; cả 3 số `signup_date` đều KHỚP | Claude |
 | A3 | Pool và tỷ lệ hút | Là gì, có ý nghĩa gì, phục vụ mục đích gì? | ✅ Xong — bảng 11 năm (đã sửa theo B1); tỷ lệ hút **24,09% → 3,78%** | Claude |
 | A4 | Phân rã logarit | `Δln(Khách mới) = Δln(Pool) + Δln(Tỷ lệ hút)` nghĩa là gì? | ✅ Xong — 2 ví dụ; tính lại **36,4% / 63,6%** (tài liệu ghi 26,9/73,1) | Claude |
-| A5 | Công thức từng metric | Giải thích Me1–Me13 (và M1–M13, K1–K7) | | |
-| A6 | Số liệu trong 6 BTN | Từng con số lấy từ đâu? | | |
+| A5 | Công thức từng metric | Giải thích Me1–Me13 (và M1–M13, K1–K7) | ✅ Nhóm 1 đủ 6 ô; **Me5/Me6/Me7 dừng ở 3 cohort khác nhau** (2021/2020/2022) mà không ghi nhãn | Claude |
+| A6 | Số liệu trong 6 BTN | Từng con số lấy từ đâu? | ✅ Bảng truy vết đủ; **BTN6 trộn hai bộ lọc trong cùng một dòng**; tỷ lệ mua lại có 3 giá trị do 3 mẫu số | Claude |
 | A7 | Mốc so sánh 2013 | Vì sao bảng bắt đầu 2013 mà không phải 2012? | ✅ Xong — 2012 phủ 49,5% năm; bỏ 2012 làm số **đẹp hơn**; **giải được bí ẩn 32.743 = cohort 2019**; Me6 **không đơn điệu** | Claude |
-| **A8** 🆕 | Bảng ký hiệu | Mọi ký hiệu trong tài liệu, một bảng tra duy nhất; riêng khối survival (Mục 9) giải bằng ví dụ một khách | | |
+| **A8** 🆕 | Bảng ký hiệu | Mọi ký hiệu trong tài liệu, một bảng tra duy nhất; riêng khối survival (Mục 9) giải bằng ví dụ một khách | ✅ Xong — **concordance 0,65 chỉ hơn đoán mò 15 điểm**, không nên gọi là "mô hình dự đoán" | Claude |
 | **A9** 🆕 | Đẳng thức phân rã ba tầng | Từng thành phần là gì, kiểm số cho 2013 và 2022; AOV và "giành lại" nằm ở đâu? | ⚠️ Đúng vì **định nghĩa**; "phủ kín" SAI — AOV không ai phụ trách, **"giành lại" = 52,9%** bị che | Claude |
-| **A10** 🆕 | "Quay lại" và "hoạt động" | Hai định nghĩa "quay lại", ba con số "hoạt động" — cái nào dùng ở đâu? | | |
+| **A10** 🆕 | "Quay lại" và "hoạt động" | Hai định nghĩa "quay lại", ba con số "hoạt động" — cái nào dùng ở đâu? | ⚠️ **34,1%** khách có nhãn ngược nhau giữa Me5 và Cox; **97% chênh "hoạt động" là do BỘ LỌC**, chỉ 3% do cửa sổ | Claude |
 
 ### Phần B — Chỗ cần kiểm chứng
 
@@ -118,12 +118,12 @@ Từ đó về sau, chạy mọi script bằng:
 | B2 | Mục 12.2 · Kiểm 2 | Phép kiểm này có thể thất bại không? | ❌ **HẰNG ĐÚNG** — Pool triệt tiêu; cặp bịa 7/3 vẫn khớp. Đã đề xuất phép kiểm có thể vỡ | Claude |
 | B3 | Mục 12.2 · Kiểm 4 | Khớp `sales.csv` bằng bộ lọc nào? | ⚠️ **`ALL`** — nhưng mọi chỉ số doanh thu của tài liệu dùng `live`; hai chương lệch **9,23%** | Claude |
 | B4 | Mục 11 · BTN5 · H6 | Nền khách "ổn định" gồm những ai? | ✅ **Chế độ ổn định** — cohort ≤2015 = 86,5% khách / 89,8% doanh thu, cơ cấu đứng yên 3 năm; sống sót tuổi 7–10 = 0,91–1,02 | Claude |
-| B5 | Mục 3 ↔ Mục 9 | Mô hình trọng tâm phục vụ nửa nào của vấn đề? | | |
+| B5 | Mục 3 ↔ Mục 9 | Mô hình trọng tâm phục vụ nửa nào của vấn đề? | ⚠️ **GIỮ CHÂN**, không phải kích hoạt — 33.807 người chưa mua không có trong mẫu. Chọn hướng 1 (thu hẹp) | Claude |
 | B6 | Mục 2.1 ↔ Mục 2.2 | Sao hai tầng dùng hai phương pháp phân rã? | ✅ H1 **không đổi**, nhưng logarit cho **63,8/36,2** thay vì 72,2/45,2 — phải khai báo phương pháp | Claude |
 | B7 | Mục 9.3 | `cohort_year` dạng tuyến tính đã kiểm chưa? | ❌ **BÁC BỎ** — LR 91,47 · p = 8,2e-16; tuyến tính hỏng từ 2020 (lệch tới 2,40×) | Claude |
-| B8 | Mục 8 · K1, K7 | Hai ngưỡng này đặt trên căn cứ gì? | | |
+| B8 | Mục 8 · K1, K7 | Hai ngưỡng này đặt trên căn cứ gì? | ❌ **Cả hai phải sửa** — K7 (30,57%) **vi phạm ngưỡng ≤30% ngay ngày ban hành**; K1 đòi tăng 2,86 lần, mốc 20% cách 6 năm | Claude |
 | B9 | Mục 5 ↔ Mục 11 | H4 đang ⏳ hay đã xác lập? | ❌ **H4 BỊ BÁC BỎ** — mô phỏng cho +0,68% trong khi thực tế −38,60%; là cú sốc thời kỳ | Claude |
-| **B10** 🆕 | Mục 12.2 · cả 5 kiểm | Phép kiểm nào có thể vỡ, phép nào là hằng đúng? | | |
+| **B10** 🆕 | Mục 12.2 · cả 5 kiểm | Phép kiểm nào có thể vỡ, phép nào là hằng đúng? | ❌ **3/5 là hằng đúng** — Kiểm 1, 2, 3 không thể vỡ. Kiểm 3 (tài liệu gọi "mạnh nhất") thực ra **yếu nhất** | Claude |
 | **B11** 🆕 | Mục 9.3 · `cohort_year` | HR 0,7478 là hiệu ứng **cohort** hay hiệu ứng **thời kỳ**? | ⚠️ **CẢ HAI** — cohort 2013 (cùng người) rơi 61,2% → 46,0% đúng 2019; thêm biến thời kỳ thì HR **lật 0,74 → 1,16** | Claude |
 | **B12** 🆕 | Mục 9 · `promo_first` | Có phải chỉ là **mùa** của đơn đầu? | ⚠️ Là biến mùa mạnh (0% → 58,3% theo tháng) nhưng kiểm soát mùa **không đổi HR**. H7 giữ, thu hẹp | Claude |
 | **B13** 🆕 | Mục 2.1 · tần suất | Cùng người mua thưa đi, hay đổi thành phần khách? | ✅ Câu BTN2 **giữ được** — cohort 2012 giảm 32,9%, cohort 2013 giảm 10,4%. Shift-share **không dùng được** (tương tác −88%) | Claude |
@@ -131,10 +131,10 @@ Từ đó về sau, chạy mọi script bằng:
 | **B15** 🆕 | Mục 3 · "chưa từng mua" | 26,0% hay 27,7%? Khách chỉ có đơn `cancelled` đứng ở đâu? | ❌ **LỆCH** — Me1 dùng `live`, Me8a dùng `ALL`; cộng lại 98,26%. Đúng là **27,73%** | Claude |
 | **B16** 🆕 | Mục 7 · Me5, Me6 | Cửa sổ năm dương lịch có lệch theo tháng mua đầu không? | ⚠️ **Có** — chênh **19,3 điểm** theo tháng; Me5 lệch ≤4,0 điểm (giữ được), **Me6 lệch tới +27,6%** (phải đổi) | Claude |
 | **B17** 🆕 | Mục 9 · p-value | Cỡ hiệu ứng ở đâu? Đổi HR ra điểm phần trăm | ✅ Xong — promo chỉ **1,4 điểm %** (= **367 người**), cohort_year **35,4 điểm** (mạnh hơn 25,8 lần) | Claude |
-| **B18** 🆕 | Mục 11 · ràng buộc mức | Cụ thể là con số gì, đưa vào mô hình thế nào? | | |
-| **B19** 🆕 | Mục 8 · K1–K7 | KPI nào đo được kịp, KPI nào có đòn bẩy thật? | | |
+| **B18** 🆕 | Mục 11 · ràng buộc mức | Cụ thể là con số gì, đưa vào mô hình thế nào? | ✅ Xong — **1,16–1,23 tỷ** (thang `sales.csv`), KTC95% nền khách [22.028–23.422]; đoạn văn chép nguyên được | Claude |
+| **B19** 🆕 | Mục 8 · K1–K7 | KPI nào đo được kịp, KPI nào có đòn bẩy thật? | ⚠️ **K5 trễ 36 tháng**, **K7 gần như không có đòn bẩy**, **K4 nên bỏ khỏi bảng**. Đề xuất 2 chỉ số dẫn báo thay thế | Claude |
 | **B20** 🆕 | Mục 3, 5.1 · `signup_date` | Độ trễ âm là lệch có hệ thống hay ngẫu nhiên — sửa được không? | ❌ **KHÔNG SỬA ĐƯỢC** — Spearman **0,0023** (p=0,49), SD 3,5 năm, ANOVA kênh p=0,842 | Claude |
-| **B21** 🆕 | Toàn tài liệu · dữ liệu mô phỏng | Kết luận nào còn đứng nếu bộ sinh gán ngẫu nhiên? | | |
+| **B21** 🆕 | Toàn tài liệu · dữ liệu mô phỏng | Kết luận nào còn đứng nếu bộ sinh gán ngẫu nhiên? | ⚠️⚠️ **4 trường nghi ngẫu nhiên**. Nặng nhất: `reviews` và `returns` **không trùng MỘT ĐƠN NÀO** (kỳ vọng 6.208). H8/H9 phải đổi ❌ thành ⚠️ | Claude |
 
 ---
 ---
@@ -841,6 +841,113 @@ ngắn. Người đọc không tự dựng lại được.
 **Xong khi:** mỗi metric nhóm 1 có đủ sáu ô và ví dụ số khớp với tài liệu — hoặc **không khớp**
 và đã ghi rõ lệch bao nhiêu, lệch vì đâu.
 
+#### Trả lời A5
+
+Nguồn số: các script A3, A7, B1, B15, B16 đã chạy.
+
+##### Nhóm 1 — năm metric mang kết luận chính
+
+**Me4 — Khách mua lần đầu mỗi năm**
+
+| Ô | Nội dung |
+|---|---|
+| Tên | Số người lần đầu tiên mua hàng trong năm đó |
+| Câu hỏi nó trả lời | Mỗi năm có bao nhiêu người mới bắt đầu mua? |
+| Công thức | Đếm số khách có `first_order_date` rơi vào năm Y · `COUNT(customer_id WHERE year(M5)=Y)` |
+| Tử/Mẫu | Chỉ có tử số — đây là **số đếm**, không phải tỷ lệ |
+| Nguồn + bộ lọc | `orders.csv` · `order_date`, `customer_id` · **`live`** — đơn hủy không tính là đã bắt đầu mua |
+| Ví dụ số | 2013 = **24.407** · 2022 = **1.328** (−94,6%) · tài liệu ghi 24.407 → 1.328 ✅ **khớp** |
+
+**Me5 — Giữ chân năm +N**
+
+| Ô | Nội dung |
+|---|---|
+| Tên | Bao nhiêu phần trăm khách của một cohort còn mua ở năm thứ N sau đó |
+| Câu hỏi nó trả lời | Khách thu về năm C có còn mua sau N năm không? |
+| Công thức | Số khách cohort C có đơn ở năm C+N, chia cho cỡ cohort C |
+| Tử/Mẫu | Cùng grain (**mỗi khách**); tử số là tập con của mẫu số ✅ |
+| Nguồn + bộ lọc | `orders.csv` · **`live`** |
+| Ví dụ số | Cohort 2013 = **49,5%** · cohort 2021 = **7,0%** · tài liệu ghi 49,5% → 7,0% ✅ **khớp** |
+
+**Me6 — Giá trị cohort 3 năm**
+
+| Ô | Nội dung |
+|---|---|
+| Tên | Trung bình mỗi khách của một cohort mang lại bao nhiêu tiền trong 3 năm đầu |
+| Câu hỏi nó trả lời | Khách thu về năm C có giá trị bằng khách năm trước không? |
+| Công thức | `Σ doanh thu ở tuổi cohort 0,1,2` chia cho cỡ cohort |
+| Tử/Mẫu | **Khác grain** — tử số đếm **tiền**, mẫu số đếm **người**. Đây là *tiền trên mỗi người*, hợp lệ nhưng phải nói rõ |
+| Nguồn + bộ lọc | `order_items` ⋈ `orders` · **`live`** · doanh thu **gross** |
+| Ví dụ số | Cohort 2013 = **78.589** · cohort 2020 = **35.378** · tài liệu ghi 78.589 → 35.378 ✅ **khớp** |
+
+**Me7 — Tỷ trọng doanh thu khách mới**
+
+| Ô | Nội dung |
+|---|---|
+| Tên | Trong 100 đồng doanh thu năm nay, bao nhiêu đồng đến từ người mới bắt đầu mua |
+| Câu hỏi | Doanh nghiệp sống nhờ khách mới hay khách cũ? |
+| Công thức | `doanh thu của cohort Y trong năm Y / tổng doanh thu năm Y` |
+| Tử/Mẫu | Cùng grain (**tiền**) ✅ |
+| Nguồn + bộ lọc | `order_items` ⋈ `orders` · **`live`** |
+| Ví dụ số | 2013 = **55,4%** · 2022 = **4,2%** · tài liệu ghi 55,4% → 4,2% ✅ **khớp** |
+
+**Me11 — Tỷ lệ hút từ pool**
+
+| Ô | Nội dung |
+|---|---|
+| Tên | Trong 100 người còn chưa mua đầu năm, bao nhiêu người chịu mua trong năm |
+| Câu hỏi | Khả năng thuyết phục người chưa mua có giảm không? |
+| Công thức | `Me4(Y) / M13(Y)` |
+| Tử/Mẫu | Cùng grain (**mỗi khách**), tử số là tập con ✅ |
+| Nguồn + bộ lọc | `customers.csv` + `orders.csv` · **`live`** |
+| Ví dụ số | 2013 = **24,09%** · 2022 = **3,78%** · tài liệu ghi 20,02% → 2,38% ❌ **LỆCH** — xem **B1** |
+
+**M13** — đã trả lời đầy đủ ở **A3**.
+
+##### Ba chỗ bắt buộc phải nói rõ
+
+**(i) Me5, Me6, Me7 dừng ở ba cohort khác nhau — và tài liệu không ghi nhãn**
+
+| Metric | Cần bao nhiêu năm quan sát | Mốc cuối đo được | Tài liệu ghi |
+|---|---|:--:|---|
+| Me7 doanh thu khách mới | 0 | **2022** | "55,4% → 4,2%" — không ghi năm |
+| Me5 retention năm +1 | 1 | **cohort 2021** | "49,5% → 7,0%" — không ghi cohort |
+| Me6 giá trị 3 năm | 3 | **cohort 2020** | "78.589 → 35.378" — không ghi cohort |
+
+> **Đây là nguồn hiểu nhầm rất dễ mắc.** Ba con số cuối thuộc **ba mốc khác nhau** (2022 / 2021 /
+> 2020) nhưng đứng cạnh nhau như thể cùng một thời điểm.
+>
+> **Đề xuất ghi nhãn:** *"Me5 49,5% (cohort 2013) → 7,0% (cohort 2021)"* · *"Me6 78.589
+> (cohort 2013) → 35.378 (cohort 2020)"* · *"Me7 55,4% (2013) → 4,2% (2022)"*.
+
+**(ii) Grain là gì, và lỗi Me8 cũ**
+
+**Grain** = đơn vị mà mỗi dòng đại diện: một đơn hàng? một khách? một dòng hàng? một ngày?
+
+Mọi tỷ lệ phải trả lời được: *đang đếm cái gì chia cho cái gì, hai cái đó có cùng loại không?*
+
+Me8 cũ = `khách có recency > 365 / M1`:
+- **Tử số** ở cấp *khách đã mua* — chỉ nhóm này mới có recency
+- **Mẫu số** ở cấp *toàn bộ đăng ký* — gồm cả người chưa mua
+
+Hai cấp khác nhau → **sai grain**. Hệ quả nặng hơn tên gọi: K3 (nhắm nhóm ngủ đông) và K4 (nhắm
+nhóm chưa mua) dùng **chung một phần tử số**, nên đẩy KPI này lên có thể làm KPI kia xấu đi mà
+không ai biết. Tách đôi thành Me8a (mẫu số = toàn bộ) và Me8b (mẫu số = chỉ nhóm đã mua) là hết
+chồng lấn — chi tiết ở **B15**.
+
+**(iii) M4 là gross**
+
+| | Giá trị |
+|---|---:|
+| LTV trung bình theo **gross** | 169.247 |
+| LTV trung bình theo **net** *(trừ `discount_amount`)* | 161.523 |
+| Chênh | **+4,8%** |
+
+Chọn gross để nhất quán với `sales.csv` — mục tiêu của chương dự báo. **Nhưng xem B3**: `sales.csv`
+thực ra dùng bộ lọc `ALL` chứ không phải `live`, nên lý do "nhất quán" chỉ đúng một nửa.
+
+---
+
 ---
 
 ### A6. Các số liệu trong 6 BTN nằm ở đâu?
@@ -887,6 +994,69 @@ số được nêu ra mà không nói lấy từ đâu.
 
 **Xong khi:** bảng truy vết phủ hết số trong sáu BTN, cột cuối điền đủ, và có danh sách riêng
 các chỗ lệch.
+
+#### Trả lời A6
+
+##### Bảng truy vết
+
+| BTN | Con số | Metric | Nguồn | Bộ lọc | Grain | Tính lại ra |
+|---|---|---|---|---|---|---|
+| 1 | 121.930 tài khoản | M1 | customers | — | khách | **121.930** ✅ |
+| 1 | 72,3% từng giao dịch | Me1 | orders | `live` | khách | **72,27%** ✅ |
+| 1 | 25,7% chỉ mua một lần | — | orders | `live` | khách | **25,7%** ✅ |
+| 1 | 31.684 chưa mua (26,0%) | Me8a | customers+orders | **`ALL`** | khách | **33.807 (27,73%)** ❌ B15 |
+| 1 | 65.493 ngủ đông (53,7%) | Me8b | orders | **`ALL`** | khách | **65.071 (53,37%)** ❌ B15 |
+| 1 | 24.753 hoạt động (20,3%) | — | orders | **`ALL`** | khách | **23.052 (18,91%)** ❌ B15 |
+| 2 | 69.756 → 32.620 đơn | M3 | orders | `live` | đơn | ✅ |
+| 2 | −53,2% · khách −38,4% · tần suất −24,1% | Me3 | orders | `live` | đơn/khách | ✅ |
+| 2 | 72,2% / 45,2% / −17,4% | Me10 | orders | `live` | — | ✅ *(số học — xem B6)* |
+| 3 | 24.407 → 1.328 (−94,6%) | Me4 | orders | `live` | khách | ✅ |
+| 3 | retention 49,5% → 7,0% | Me5 | orders | `live` | khách | ✅ |
+| 3 | 26,9% / 73,1% | — | customers+orders | `live` | khách | **36,4% / 63,6%** ❌ B1 |
+| 4 | 74,1% mua lần hai | — | orders | `live` | khách | **74,1%** ✅ |
+| 4 | trung vị 308 ngày | Me12 | orders | `live` | khách | **308** ✅ |
+| 4 | 4,59 vs 7,56 đơn | — | orders | `live` | khách | ✅ |
+| 4 | khoảng cách 39,2% | — | orders | `live` | khách | ✅ |
+| 5 | 22.738 → 22.438 → 22.999 | — | orders | `live` | khách | ✅ |
+| 5 | doanh thu khách mới 4,2% | Me7 | orders+order_items | `live` | tiền | ✅ |
+| 6 | 31.684 / 65.493 / 22.999 | Me8a/8b | orders | **trộn** | khách | ❌ xem dưới |
+| 6 | ANOVA p = 0,533 | Me9 | orders+customers | `live` | khách | **p = 0,5329** ✅ |
+
+##### (1) Số bị lặp ở nhiều chỗ với giá trị khác nhau
+
+**Tỷ lệ mua lại — ba con số:**
+
+| Chỗ | Giá trị | Mẫu số |
+|---|---:|---|
+| BTN4 | **74,1%** | 87.599 khách trong mẫu Cox *(đã loại người có `thoi_gian ≤ 0`)* |
+| Me2 (Mục 7) | **74,3%** | 88.123 khách có `first_order_date` |
+| Mục 3 *(hàm ý)* | **74,3%** | 88.123 — vì "25,7% chỉ mua một lần" |
+
+> **Ba con số khác nhau vì mẫu số khác nhau**, không phải vì bộ lọc. Mẫu Cox loại thêm 524 khách
+> có đơn đầu và đơn hai **cùng ngày** (`thoi_gian = 0`). Chênh 0,2 điểm.
+>
+> **Đề xuất:** BTN4 ghi rõ *"74,1% trong mẫu Cox (87.599 khách, đã loại 524 người có đơn hai cùng
+> ngày với đơn đầu)"*.
+
+**"Hoạt động" — ba con số:** 22.999 / 24.753 / 24.696 — xem **A10**, đã tách được nguyên nhân.
+
+##### (2) Số không truy được về nguồn nào
+
+Không có. Mọi số trong sáu BTN đều truy được về một Metric hoặc Measure ở Mục 6–8.
+
+##### (3) Số đã lỗi thời
+
+| Số | Vấn đề |
+|---|---|
+| 26,9% / 73,1% *(BTN3)* | Sai do dãy Pool — **B1** |
+| 31.684 / 65.493 / 24.753 *(BTN1)* | Sai bộ lọc — **B15** |
+| BTN6 dùng 31.684 / 65.493 / **22.999** | **Trộn hai bộ lọc trong cùng một dòng** — hai số đầu theo `ALL`, số thứ ba theo `live`. Không cộng lại được. |
+
+> Chỗ thứ ba là lỗi nặng nhất trong ba: BTN6 nêu ba nhóm can thiệp với ba quy mô, nhưng hai nhóm
+> đo bằng `ALL` và một nhóm đo bằng `live`. Dưới quy ước thống nhất `live` (B15) phải là
+> **33.807 / 65.071 / 23.052**.
+
+---
 
 ---
 
@@ -1198,6 +1368,97 @@ là cả một bộ từ vựng khác — thời gian sống, sự kiện, cắt
 **Xong khi:** một người đọc Mục 9 lần đầu không phải tra gì bên ngoài, và tự tính lại được
 `thoi_gian` / `su_kien` cho một khách bất kỳ.
 
+#### Trả lời A8
+
+##### (1) Bảng tra ký hiệu
+
+| Ký hiệu | Đọc là | Định nghĩa một câu | Công thức | Grain | Bộ lọc | Mục |
+|---|---|---|---|---|---|---|
+| `live` | dữ liệu hợp lệ | Đơn hàng không bị hủy | `order_status != 'cancelled'` | đơn | — | mọi mục |
+| `ALL` | toàn bộ | Mọi đơn, kể cả đã hủy | — | đơn | — | Mục 3, 12.2 |
+| `REF` | mốc tham chiếu | Ngày cuối dữ liệu, dùng để tính recency | `2022-12-31` | — | — | Mục 3 |
+| cohort | nhóm cùng kỳ | Nhóm khách có chung năm mua lần đầu | `year(first_order_date)` | khách | `live` | 1, 2.2, 5.1, 7, 9 |
+| tuổi cohort | — | Số năm kể từ năm mua lần đầu | `năm − cohort` | khách | `live` | 7 |
+| recency | độ mới | Số ngày kể từ lần mua gần nhất tới `REF` | `REF − MAX(order_date)` | khách | ⚠️ **`ALL`** ở Mục 3 | 3, 7 |
+| Pool | rổ chưa mua | Số người đã đăng ký nhưng chưa mua, tính đầu năm | `M1 − Σ khách mới trước Y` | khách | `live` | 2.2, 6 |
+| Tỷ lệ hút | — | Phần trăm người trong rổ chịu mua trong năm | `Me4 / M13` | khách | `live` | 2.2, 7 |
+| `Δln` | delta log | Mức thay đổi đo bằng logarit, cộng lại được | `ln(x₁) − ln(x₀)` | — | — | 2.2 |
+| M / Me / K | measure/metric/KPI | Ba tầng chỉ số | — | — | — | 6, 7, 8 |
+| AOV | giá trị đơn TB | Doanh thu chia số đơn | `rev / đơn` | — | `live` | 1, 2 |
+| LTV | giá trị trọn đời | Tổng tiền một khách mang lại | `Σ rev` theo khách | khách | `live` | 7, 10 |
+| ⚠️ "quay lại" | — | **HAI NGHĨA** — xem A10 | — | — | — | 7 (Me5) vs 9 (Cox) |
+| ⚠️ "hoạt động" | — | **BA CON SỐ** — xem A10 | — | — | — | 2.1, 3, 11 |
+| ⚠️ "khách mới" | — | **HAI ĐƠN VỊ** (người vs tiền) | — | — | — | 2.2 vs 7 |
+
+##### Khối survival (Mục 9)
+
+| Ký hiệu | Đọc là | Định nghĩa một câu |
+|---|---|---|
+| `d1` | ngày đơn đầu | Ngày khách mua lần đầu (= `first_order_date`) |
+| `d2` | ngày đơn hai | Ngày khách mua lần thứ hai, nếu có |
+| `thoi_gian` | thời gian sống | Số ngày từ `d1` tới `d2`, hoặc tới `REF` nếu chưa có `d2` |
+| `su_kien` | sự kiện | 1 nếu đã mua lần hai, 0 nếu chưa |
+| cắt cụt | censoring | Trường hợp `su_kien = 0` — chưa xảy ra **tính đến hết dữ liệu**, không phải sẽ không xảy ra |
+| `S(t)` | hàm sống sót | Tỷ lệ khách **chưa** quay lại sau t ngày |
+| hazard | nguy cơ tức thời | Khả năng quay lại **tại đúng thời điểm t**, với điều kiện chưa quay lại trước đó |
+| **HR** | hazard ratio | Tỷ số nguy cơ giữa hai nhóm; `= 1` không ảnh hưởng, `< 1` chậm hơn, `> 1` nhanh hơn |
+| log-rank | — | Kiểm định hai đường Kaplan–Meier khác nhau thật hay do ngẫu nhiên |
+| Schoenfeld | — | Kiểm tra hệ số có giữ nguyên suốt thời gian không (giả định PH) |
+| propensity score | điểm xu hướng | Xác suất một khách rơi vào nhóm "có khuyến mãi", dự đoán từ các biến khác |
+| caliper | ngưỡng ghép | Khoảng cách tối đa cho phép khi ghép cặp |
+| concordance | — | Tỷ lệ cặp mà mô hình xếp đúng thứ tự; 0,5 = đoán mò |
+
+##### (2) Giải bằng ví dụ một khách thật
+
+| | Khách có đơn hai | Khách chưa có đơn hai |
+|---|---|---|
+| `customer_id` | 1 | *(một khách chỉ mua một lần, ví dụ id 4)* |
+| `d1` | 2012-07-25 | 2020-06-28 |
+| `d2` | 2014-05-31 | *(không có)* |
+| `thoi_gian` | `2014-05-31 − 2012-07-25` = **675 ngày** | `2022-12-31 − 2020-06-28` = **916 ngày** |
+| `su_kien` | **1** | **0** |
+
+**Vì sao người chưa mua lại không bị loại?** Vì ta **biết chắc** họ chưa quay lại trong 916 ngày —
+đó là thông tin thật. Loại họ đi sẽ chỉ còn lại người đã quay lại, làm tỷ lệ quay lại **luôn bằng
+100%**. Giữ họ với `su_kien = 0` chính là ý nghĩa của **cắt cụt**.
+
+##### Năm điểm phải giải thích bằng lời thường
+
+**`S(t)` — vì sao đường thấp hơn là tốt hơn?** `S(t)` đếm người **chưa** quay lại. Đường thấp
+nghĩa là ít người còn chưa quay lại, tức **nhiều người đã quay lại** — tốt.
+
+**HR = 0,948 của `promo_first` nghĩa là gì?**
+
+> ✅ **Đúng:** *"Tại mỗi thời điểm, nguy cơ (khả năng) quay lại của nhóm có khuyến mãi bằng 94,8%
+> so với nhóm không khuyến mãi."*
+>
+> ❌ **Sai:** *"Ít hơn 5,2% khách quay lại."*
+>
+> Hai câu **không tương đương**. HR nói về **tốc độ tại từng thời điểm**, không nói về **tổng số
+> người**. Quy ra số người thì chênh chỉ **1,4 điểm phần trăm** tại 365 ngày — xem **B17**.
+
+**HR = 0,7478 của `cohort_year` — so với mốc nào?** Script có dòng
+`X.cohort_year = X.cohort_year - X.cohort_year.min()`, tức biến được **trừ đi cohort sớm nhất
+trong mẫu (2012)**. Nên "mỗi năm muộn hơn" là **so với cohort 2012**, và giá trị 0 ứng với cohort
+2012. *(Xem B7: dạng tuyến tính này đã bị bác bỏ.)*
+
+**Concordance = 0,65 nghĩa là gì?** Lấy ngẫu nhiên hai khách, mô hình xếp đúng ai quay lại sớm hơn
+trong **65%** số trường hợp. **Đoán mò = 0,50.** Vậy 0,65 chỉ hơn đoán mò 15 điểm — **yếu**.
+
+> **Tài liệu KHÔNG nên gọi đây là "mô hình dự đoán".** Với concordance 0,65 nó là một **mô hình
+> giải thích** — dùng để đo hướng và độ lớn của từng yếu tố, không dùng để dự báo cá nhân.
+
+**Bốn phép kiểm — mỗi cái một câu:**
+
+| | Kiểm cái gì | Đọc kết quả thế nào |
+|---|---|---|
+| Log-rank | Hai đường Kaplan–Meier có khác nhau thật không | p nhỏ → khác thật |
+| Schoenfeld | Hệ số có đổi theo thời gian không | p < 0,05 → **vi phạm**, HR phải đọc như trung bình |
+| Propensity score | Xác suất rơi vào nhóm xử lý, dự từ các biến khác | Dùng để ghép cặp người giống nhau |
+| Caliper | Khoảng cách tối đa khi ghép | Ghép ngoài caliper thì loại |
+
+---
+
 ---
 
 ### A9. Đẳng thức phân rã ba tầng — từng thành phần là gì, và cây bài toán có "phủ kín" thật không?
@@ -1367,6 +1628,96 @@ trách AOV**.
 
 **Xong khi:** người đọc gặp từ "quay lại" hay "hoạt động" ở bất kỳ chỗ nào cũng biết đang là
 định nghĩa nào, và BTN1 với BTN6 dùng **cùng một** quy mô nhóm.
+
+#### Trả lời A10
+
+Script: [`scripts/phan_bien/a10_dinh_nghia_trung.py`](../../scripts/phan_bien/a10_dinh_nghia_trung.py)
+
+##### (1) Ba từ, nhiều nghĩa
+
+**"Quay lại"**
+
+| Định nghĩa | Chỗ dùng | Cửa sổ | Bộ lọc |
+|---|---|---|---|
+| Mua trong **năm dương lịch C+1** | Me5, K1 | năm | `live` |
+| Có **đơn thứ hai bất kỳ lúc nào** trước `REF` | Mục 9 (Cox) | toàn kỳ | `live` |
+
+**"Hoạt động"**
+
+| Giá trị | Chỗ dùng | Bộ lọc | Cửa sổ |
+|---:|---|---|---|
+| **22.999** | Mục 2.1, BTN5, BTN6 | `live` | có đơn trong năm 2022 |
+| **24.696** | Mục 11 | `ALL` | có đơn trong năm 2022 |
+| **24.753** | Mục 3, BTN1 | `ALL` | recency ≤ 365 ngày từ `REF` |
+
+**"Khách mới"**
+
+| Định nghĩa | Chỗ dùng | Đơn vị |
+|---|---|---|
+| Cỡ cohort Y | Mục 2.2 | **người** (1.328) |
+| Doanh thu cohort Y trong năm Y | Me7 | **tiền** |
+
+##### (2) Khách thật minh họa
+
+**Quay lại — `customer_id = 1`:**
+
+| | |
+|---|---|
+| Đơn đầu | 2012-07-25 → cohort 2012 |
+| Đơn hai | 2014-05-31 → năm 2014 |
+| Theo **Me5** (năm +1 = 2013) | ❌ **KHÔNG** quay lại |
+| Theo **Cox** | ✅ **CÓ** sự kiện, `thoi_gian` = 675 ngày |
+
+Cùng một người, hai nhãn ngược nhau. Và đây **không phải trường hợp hiếm**: **22.346 người =
+34,1%** số khách có đơn thứ hai rơi vào tình huống này.
+
+**Hoạt động — `customer_id = 89730`:**
+
+| | |
+|---|---|
+| Đơn gần nhất | 2021-12-31 *(delivered)* |
+| Theo **recency ≤ 365** từ `REF` = 2022-12-31 | ✅ hoạt động *(đúng 365 ngày)* |
+| Theo **có đơn trong năm 2022** | ❌ không hoạt động |
+
+Có **53 khách** thuộc tình huống này.
+
+##### (3) Tách hai nguyên nhân chênh lệch
+
+| Bước đổi | Từ → Đến | Chênh |
+|---|---|---:|
+| Đổi **bộ lọc** (`live` → `ALL`), giữ cửa sổ năm | 22.999 → 24.696 | **+1.697** |
+| Đổi **cửa sổ** (năm → recency), giữ `ALL` | 24.696 → 24.753 | **+57** |
+| Đổi **cửa sổ**, giữ `live` | 22.999 → 23.052 | +53 |
+
+> **Kết luận: 97% chênh lệch là do BỘ LỌC, chỉ 3% do cửa sổ.** Chênh 1.754 giữa 22.999 và 24.753
+> gồm 1.697 do bộ lọc và 57 do cửa sổ. Vấn đề nằm ở việc trộn `live` và `ALL`, không phải ở định
+> nghĩa cửa sổ.
+
+##### (4) Đề xuất định nghĩa chuẩn
+
+| Khái niệm | Đề xuất | Áp dụng |
+|---|---|---|
+| **"Quay lại"** | Giữ **hai tên khác nhau** — Cox bắt buộc dùng thời gian liên tục | `quay lại năm +1` (Me5, K1) và `có đơn thứ hai` (Mục 9) |
+| **"Hoạt động"** | Một định nghĩa: **có đơn `live` trong năm dương lịch** = **22.999** | Mọi chỗ |
+| **"Khách mới"** | Hai tên: `số khách mới` (người) và `doanh thu từ khách mới` (tiền) | Mục 2.2 vs Me7 |
+
+**Danh sách chỗ phải đổi:**
+
+| Chỗ | Đang dùng | Đổi thành |
+|---|---|---|
+| Mục 3 · bảng ba trạng thái | 24.753 (`ALL` + recency) | **23.052** (`live` + recency) — xem B15 |
+| Mục 11 | 24.335 / 23.984 / **24.696** (`ALL`) | 22.738 / 22.438 / **22.999** (`live`) |
+| BTN1 | 24.753 | **23.052** |
+| BTN6 | 22.999 | giữ **22.999** ✅ |
+| Mục 7 · Me5 | "quay lại" | đổi tên thành **"quay lại năm +1"** |
+| Mục 9 | "quay lại" | đổi tên thành **"có đơn thứ hai"** |
+
+> Sau khi sửa, **BTN1 và BTN6 dùng cùng quy mô nhóm** — điều mà đề bài yêu cầu.
+>
+> Lưu ý bảng ba trạng thái dùng **recency** còn Mục 11 dùng **có đơn trong năm**; hai cửa sổ này
+> chênh nhau chỉ 53 người nên có thể giữ cả hai, miễn ghi rõ.
+
+---
 
 ---
 ---
@@ -1875,6 +2226,76 @@ hay của *giữ chân*?
 
 **Trả lời xong khi:** xác nhận được nhóm nào vào mẫu Mục 9, và chọn hướng 1 hoặc 2 kèm lý do.
 
+#### Trả lời B5
+
+**Kết luận: nhóm chưa từng mua KHÔNG nằm trong mẫu. Mục 9 giải thích cơ chế GIỮ CHÂN, không phải
+kích hoạt. Chọn HƯỚNG 1 — thu hẹp phát biểu.**
+
+##### (1) Mẫu Mục 9 được dựng từ ai
+
+`btn4_survival.py` dòng 30–39:
+
+```python
+s = live.sort_values('order_date')
+first = s.groupby('customer_id').agg(oid1=..., d1=('order_date','first'))
+```
+
+Mẫu bắt đầu từ `live.groupby('customer_id')` — tức **chỉ những khách đã có ít nhất một đơn hợp
+lệ**. Người chưa từng mua **không có dòng nào** trong `orders`, nên không thể xuất hiện.
+
+| Nhóm | Số người | Trong mẫu Cox? |
+|---|---:|:--:|
+| Có đơn `live` | 88.123 | ✅ (87.599 sau khi loại `thoi_gian ≤ 0`) |
+| Chỉ có đơn `cancelled` | 2.123 | ❌ |
+| Chưa từng có đơn nào | 31.684 | ❌ |
+
+##### (2) Mục 9 giải thích cơ chế nào?
+
+> **GIỮ CHÂN.** Biến phụ thuộc là *thời gian từ đơn 1 đến đơn 2* — câu hỏi *"người đã mua có mua
+> tiếp không"*. Đó là định nghĩa của giữ chân.
+>
+> **Đối chiếu với Mục 3:** Mục 3 phát biểu đây là **thất bại kích hoạt** và cho rằng kích hoạt
+> chiếm 73,1% (thực ra 63,6% — xem B1) mức giảm khách mua lần đầu. Nhưng **mô hình trọng tâm của
+> khóa luận lại đo giữ chân**.
+>
+> **Đây là lệch thật giữa phát biểu vấn đề và mô hình trọng tâm.** BTN4 nằm dưới nhánh BTN3
+> (*kích hoạt hỏng hay giữ chân hỏng*) trong sơ đồ cây, nhưng nó chỉ trả lời được nửa sau.
+
+##### (3) Chọn hướng 1 — thu hẹp phát biểu
+
+**Lý do chọn hướng 1 thay vì hướng 2:**
+
+Dữ liệu về người chưa mua **gần như không có gì**. `customers.csv` chỉ có `zip`, `gender`,
+`age_group`, `acquisition_channel`, `signup_date`. Trong đó:
+
+- `acquisition_channel` — đã cho **p = 0,533** (Mục 10), không phân hóa
+- `signup_date` — đã chứng minh **không dùng được**, Spearman 0,0023 (B20)
+- `zip`, `gender`, `age_group` — chưa kiểm, nhưng B21 cho thấy nhiều trường trong bộ dữ liệu này
+  có dấu hiệu gán ngẫu nhiên
+
+> Một mô hình kích hoạt dựng trên ba biến còn lại nhiều khả năng cho **kết quả rỗng**, và kết quả
+> rỗng đó sẽ nói về **bộ sinh dữ liệu** chứ không nói về doanh nghiệp (xem B21). Bỏ công xây một
+> mô hình như vậy không tạo ra tri thức mới.
+
+##### (4) Đề xuất câu chữ
+
+> **Thêm vào đầu Mục 9:**
+>
+> *"Mô hình này đo **cơ chế giữ chân**: biến phụ thuộc là thời gian từ đơn đầu tới đơn thứ hai, nên
+> mẫu chỉ gồm 87.599 khách **đã từng mua**. Nhóm 33.807 người chưa từng mua **không có mặt** trong
+> mẫu.*
+>
+> *Vì vậy Mục 9 **không** giải thích cơ chế kích hoạt — phần chiếm 63,6% mức giảm khách mua lần đầu
+> theo Mục 2.2. Cơ chế kích hoạt nằm ngoài phạm vi vì dữ liệu không có biến nào mô tả người chưa
+> mua ngoài `acquisition_channel` (đã cho kết quả rỗng, p = 0,533) và `signup_date` (đã chứng minh
+> không dùng được, tương quan hạng 0,0023 với hành vi mua). Đây là **giới hạn dữ liệu thật**, ghi
+> ra rõ hơn là bỏ trống."*
+>
+> **Và sửa sơ đồ cây ở Mục 3b:** BTN4 hiện nằm dưới BTN3. Nên ghi rõ nó chỉ phủ **nhánh giữ chân**
+> của BTN3, còn nhánh kích hoạt chưa có bài toán nào đi vào cơ chế.
+
+---
+
 ---
 
 ### B6. Sao hai tầng phân rã dùng hai phương pháp khác nhau?
@@ -2118,6 +2539,75 @@ tốt đến đâu". Lập luận đó có áp được cho K1 không?
 **Trả lời xong khi:** kết luận hai ngưỡng giữ hay sửa; nếu sửa thì đề xuất giá trị mới kèm căn
 cứ (mốc lịch sử có lộ trình, hoặc mức khả thi rồi nâng dần).
 
+#### Trả lời B8
+
+**Kết luận: CẢ HAI ngưỡng đều phải sửa. K7 bị vi phạm ngay ngày ban hành. K1 mắc đúng lỗi mà tài
+liệu đã phê bình ở K2 cũ.**
+
+##### (1) K7 — vi phạm ngay từ đầu
+
+| | |
+|---|---:|
+| Giá trị hiện tại | **30,57%** |
+| Ngưỡng | **≤ 30%** |
+| Thỏa mãn? | **KHÔNG** |
+
+> **KPI này ở trạng thái VI PHẠM ngay ngày ban hành.** Hành động kèm theo — *"dừng mở rộng khuyến
+> mãi cho khách mới"* — bị kích hoạt từ ngày đầu tiên, dù chưa có gì thay đổi.
+>
+> Mà phần giải thích trong Mục 8 nói ngưỡng đặt *"bằng đúng mức hiện tại (30,6%), tức giữ nguyên
+> trạng"*. **Ý định và con số không khớp nhau**: muốn giữ nguyên trạng thì ngưỡng phải **≥** mức
+> hiện tại, không phải nhỏ hơn.
+
+**Đề xuất:** ngưỡng **≤ 31%** — cao hơn mức hiện tại một biên nhỏ, đúng với ý "không được xấu
+thêm". Hoặc viết `≤ 30,6%` nếu muốn chặt tuyệt đối.
+
+##### (2) K1 — mục tiêu 20% chưa có căn cứ
+
+Retention năm +1 cho mọi cohort:
+
+| Cohort | 2012 | 2013 | 2014 | 2015 | **2016** | 2017 | 2018 | 2019 | 2020 | 2021 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| % | 62,8 | 49,5 | 34,8 | 27,3 | **21,3** | 15,7 | 9,4 | 7,8 | 6,5 | **7,0** |
+
+| | |
+|---|---|
+| Cohort gần nhất đạt ≥ 20% | **2016** (21,3%) — cách đây **6 năm** |
+| Mức hiện tại | 7,0% (cohort 2021) |
+| Mục tiêu 20% đòi tăng | **2,86 lần** |
+| Căn cứ cho con số 20% trong tài liệu | **Không có** |
+
+##### (3) Áp lập luận phê bình K2 cũ vào K1
+
+Mục 8 phê bình K2 cũ: *"đặt KPI tăng trưởng trên một số đếm mà nguồn của nó chắc chắn cạn là thiết
+kế sai, đội ngũ không bao giờ đạt được dù làm tốt đến đâu."*
+
+**Lập luận này áp được cho K1 một phần, nhưng không hoàn toàn:**
+
+| | K2 cũ | K1 |
+|---|---|---|
+| Mẫu số có cạn về cấu trúc không? | **Có** — Pool chỉ co lại | **Không** — mỗi cohort có mẫu số riêng |
+| Mục tiêu có tiền lệ không? | Không | **Có** — cohort 2016 từng đạt 21,3% |
+| Có đạt được không? | **Không bao giờ** | Về lý thuyết có |
+
+> **K1 không sai về cấu trúc như K2 cũ.** Nhưng nó vẫn có vấn đề: đòi tăng **2,86 lần** trong một
+> bước, không có lộ trình, và mốc tham chiếu cách đây 6 năm — trong khi **B11** cho thấy phần lớn
+> suy giảm là **hiệu ứng thời kỳ**, tức nằm ngoài tầm can thiệp của đội ngũ.
+>
+> Đặt mục tiêu 20% mà nguyên nhân chính là cú sốc môi trường thì cũng là **giao việc bất khả thi**,
+> chỉ khác cơ chế với K2 cũ.
+
+**Đề xuất:** thay bằng **mục tiêu có lộ trình**:
+
+> **K1 (sửa).** Giữ chân năm +1 — hiện tại 7,0%.
+> **Ngưỡng: không giảm so với cohort trước, và đạt 10% trong vòng 2 cohort.**
+>
+> Căn cứ: mức 10% là cohort 2018 (9,4%) — gần nhất và khả thi. Đạt xong mới nâng mốc tiếp. Không
+> đặt thẳng 20% vì cohort gần nhất đạt mức đó là 2016, cách 6 năm, và phần lớn suy giảm từ đó tới
+> nay là hiệu ứng thời kỳ (xem B11) chứ không phải chất lượng vận hành.
+
+---
+
 ---
 
 ### B9. H4 đang ⏳ chưa kiểm định hay đã xác lập?
@@ -2266,6 +2756,65 @@ làm nó vỡ không?"*
 **Trả lời xong khi:** bảng năm dòng — *phép kiểm | quan hệ đại số | có thể vỡ không | nếu không,
 nó thực ra chứng minh gì | phép thay thế có thể vỡ*. Và đề xuất sửa câu nói bảo vệ ở cuối Mục
 12.2 cho đúng với những gì thật sự đã kiểm.
+
+#### Trả lời B10
+
+**Kết luận: 3 trong 5 phép kiểm là HẰNG ĐÚNG, không thể vỡ. Chỉ Kiểm 4 và Kiểm 5 là kiểm thật.**
+
+##### Bảng năm dòng
+
+| # | Quan hệ đại số | Có thể vỡ? | Nếu không, nó chứng minh gì | Phép thay thế có thể vỡ |
+|:--:|---|:--:|---|---|
+| **1** | `(M1 − b) + #(rec>365) + #(rec≤365) = M1`, trong đó `b` = số người mua | ❌ **Không** | Chỉ chứng minh phép cộng/trừ đúng. `b` sai bao nhiêu thì "chưa mua" sai ngược lại đúng bấy nhiêu, tổng vẫn = M1 | So `b` tính bằng hai đường: `COUNTD(orders.customer_id)` và `#(customers có first_order_date)` |
+| **2** | `Δln(P) + Δln(m/P) = Δln(m)` | ❌ **Không** | Chỉ chứng minh `ln(a·b)=ln a+ln b`. Cặp Pool bịa 7/3 vẫn khớp (xem B2) | `Pool(Y)−Pool(Y+1) = khách mới(Y)` **và** `Pool(2012) = M1` |
+| **3** | `ln(s)+ln(đ/s)+ln(r/đ)` = `ln(r)` ; `ln(k)+ln(đ/k)+ln(r/đ)` = `ln(r)` | ❌ **Không** | Cả hai vế rút gọn thành `ln(r₁)−ln(r₀)`. Hai "đường độc lập" thực ra là **cùng một đại lượng viết hai kiểu** | So doanh thu dựng từ `order_items` với doanh thu dựng từ `payments` — hai bảng khác nhau |
+| **4** | `Σ(qty×price) theo ngày = sales.Revenue` | ✅ **CÓ** | — | *(đã là kiểm thật)* |
+| **5** | `payment_value = Σ(qty×price − discount)` | ✅ **CÓ** | — | *(đã là kiểm thật)* |
+
+##### Khai triển Kiểm 3 — vì sao nó không thể vỡ
+
+```
+Đường 1: ln(sessions) + ln(đơn/sessions) + ln(rev/đơn)
+       = ln(sessions) + ln(đơn) − ln(sessions) + ln(rev) − ln(đơn)
+       = ln(rev)
+
+Đường 2: ln(khách) + ln(đơn/khách) + ln(rev/đơn)
+       = ln(khách) + ln(đơn) − ln(khách) + ln(rev) − ln(đơn)
+       = ln(rev)
+```
+
+> **Cả hai đều rút gọn thành `ln(rev)`.** Chúng không phải "hai đường tính độc lập" — chúng là
+> **cùng một đại lượng** `ln(rev₁/rev₀)` viết theo hai cách phân tách khác nhau. Số `sessions` có
+> sai bao nhiêu cũng không ảnh hưởng, vì nó xuất hiện hai lần với dấu ngược nhau.
+>
+> Tài liệu gọi đây là *"bằng chứng mạnh nhất"* — thực ra nó là **phép kiểm yếu nhất** trong năm cái.
+
+##### Kiểm 1 "bắt được lỗi grain của Me8 cũ" bằng cách nào?
+
+Không phải bằng chính phép cộng. Phép cộng luôn khớp. Cái bắt được lỗi là **việc buộc phải viết ra
+ba nhóm với mẫu số rõ ràng** — lúc đó mới lộ ra tử số của Me8 cũ trộn hai nhóm có mẫu số khác nhau.
+
+> Nghĩa là giá trị của Kiểm 1 nằm ở **kỷ luật trình bày**, không nằm ở phép tính. Nên viết đúng
+> như vậy thay vì gọi nó là bằng chứng số.
+
+##### Đề xuất sửa câu nói bảo vệ ở cuối Mục 12.2
+
+> **Hiện tại:** *"Em không chứng minh từng số riêng lẻ. Em thiết kế để các số buộc phải khớp nhau —
+> nếu một số sai thì phép kiểm chéo sẽ vỡ. Đây là năm phép kiểm đó, và cả năm đều khớp."*
+>
+> **Đề xuất:** *"Em có hai loại kiểm chứng khác nhau và phân biệt rõ chúng.*
+>
+> *Hai phép **kiểm chứng thật** — đối chiếu với bảng bên ngoài: doanh thu ngày dựng từ
+> `order_items` khớp `sales.csv` tới 0,00 trên 3.833 ngày, và `payment_value` khớp công thức
+> gross − discount 100% trên 646.945 đơn. Hai phép này **vỡ được** nếu cách hiểu dữ liệu sai.*
+>
+> *Ba phép còn lại là **kiểm nhất quán đại số** — chúng xác nhận em không nhầm phép tính, nhưng
+> không ràng buộc dữ liệu. Em ghi rõ điều này thay vì trình bày cả năm như nhau."*
+
+> **Ghi chú thành thật.** Chính vì Kiểm 2 không ràng buộc Pool nên lỗi ở **B1** — dãy Pool bỏ sót
+> cohort 2012 — đã lọt qua toàn bộ hệ thống kiểm chứng và cả 8 dòng `OK` của script nghiệm thu.
+
+---
 
 ---
 
@@ -3077,6 +3626,73 @@ ngang quanh mức 2022"*.
 **Trả lời xong khi:** một đoạn văn mà chương mô hình chép nguyên được, gồm con số, cách đưa vào,
 và điều kiện bác bỏ.
 
+#### Trả lời B18
+
+##### (1) Thứ được chuyển sang chương mô hình — một dòng
+
+> **Một khoảng cho mức doanh thu năm 2023–2024: 1,15–1,22 tỷ đvtt/năm theo thang `sales.csv`,
+> tương ứng nền khách hoạt động 22.028–23.422 người.**
+
+##### (2) Bốn cách đưa vào mô hình dự báo ngày
+
+| Cách | Làm thế nào | Giả định kéo theo |
+|---|---|---|
+| **Làm sàn** | Chặn dự báo không xuống dưới mức sàn | Giả định nền khách **không thể** rơi thêm — mạnh, cần B4 đỡ |
+| **Hồi quy viên** *(regularizer)* | Phạt mô hình khi tổng năm lệch khỏi khoảng | Mềm hơn; giả định khoảng đúng nhưng cho phép lệch có chi phí |
+| **Đặt drift = 0** | Bỏ số hạng xu hướng cho giai đoạn dự báo | Giả định chế độ 2020–2022 kéo dài; không cần khoảng cụ thể |
+| **Kiểm tra hậu nghiệm** | Dự báo tự do, rồi cảnh báo nếu tổng năm ra ngoài khoảng | Yếu nhất, nhưng **không** áp đặt gì lên mô hình |
+
+**Khuyến nghị: cách 2 hoặc cách 4.** Cách 1 quá mạnh so với `n = 3`; cách 3 mâu thuẫn với việc
+2022 đã nhích lên +4,3%.
+
+##### (3) Quy đổi ra doanh thu
+
+| | |
+|---|---:|
+| Khách hoạt động 2022 (`live`) | 22.999 |
+| × Tần suất 2022 | 1,4183 |
+| × AOV 2022 | 32.528 |
+| **= Doanh thu năm (`live`)** | **1,061 tỷ** |
+| `sales.csv` 2022 (`ALL`) | **1,170 tỷ** |
+| **Tỷ lệ `live`/`ALL`** | **0,9071** |
+
+> **Khớp hoàn hảo với B3.** Chênh 9,29% đúng bằng phần đơn `cancelled`. Nên quy đổi sang thang
+> `sales.csv` phải **chia cho 0,9071**.
+
+##### (4) Khoảng tin cậy và điều kiện bác bỏ
+
+Ba điểm 22.738 / 22.438 / 22.999 · trung bình **22.725** · độ lệch chuẩn **281**.
+
+**Khoảng tin cậy 95% cho mức trung bình: [22.028 – 23.422]** *(t-Student, df = 2)*
+
+Khoảng này **rất rộng so với biến động thật** — chính là hệ quả của `n = 3`.
+
+##### (5) Đoạn văn để chương mô hình chép nguyên
+
+> **Ràng buộc mức từ phân tích khách hàng (D2)**
+>
+> Phân tích cohort cho thấy nền khách hoạt động đã ổn định ba năm liền: 22.738 (2020) → 22.438
+> (2021) → 22.999 (2022), bộ lọc `live`. Đây là **chế độ ổn định**, không phải đuôi phân rã: cơ cấu
+> cohort đứng yên ở 86,5% cohort ≤ 2015 suốt ba năm, và 86,5% nền khách nằm ở tuổi cohort 7–10 —
+> vùng có tỷ lệ sống sót năm-sang-năm 0,91–1,02 (xem B4).
+>
+> **Khoảng đề xuất cho 2023–2024:** nền khách **22.028 – 23.422 người** (KTC 95%, n = 3), tương
+> ứng doanh thu **1,05 – 1,12 tỷ đvtt/năm** theo thang `live`, hay **1,16 – 1,23 tỷ** theo thang
+> `sales.csv` (chia cho 0,9071 — xem B3).
+>
+> **Cách đưa vào:** dùng làm **hồi quy viên** cho tổng doanh thu năm, hoặc **kiểm tra hậu nghiệm**.
+> **Không** dùng làm sàn cứng — `n = 3` quá mỏng cho một ràng buộc cứng.
+>
+> **Điều kiện bác bỏ:** nếu doanh thu thực 2023 nằm **ngoài khoảng 1,16–1,23 tỷ** (thang
+> `sales.csv`), ràng buộc này bị bác và phải quay lại phân tích cohort. Cụ thể: dưới 1,16 tỷ nghĩa
+> là nền khách đang rơi thật, trên 1,23 tỷ nghĩa là có nguồn tăng trưởng mà mô hình cohort không
+> thấy.
+>
+> **Giới hạn phải nói rõ:** ràng buộc này dựa trên ba điểm dữ liệu. Nó **không** thay thế cho kiểm
+> định điểm gãy (Chow test / Bai–Perron), vốn là việc còn bỏ ngỏ ở BTN5.
+
+---
+
 ---
 
 ### B19. Bảy KPI — cái nào đo được kịp, cái nào có đòn bẩy thật?
@@ -3103,6 +3719,58 @@ tỷ trọng chiết khấu trên doanh thu đơn đầu thay cho cờ có/khôn
 3. Danh sách KPI giữ / sửa / thay, kèm lý do một dòng.
 
 **Trả lời xong khi:** bảng đủ bảy dòng, và danh sách KPI đề nghị giữ / sửa / thay.
+
+#### Trả lời B19
+
+##### Bảng bảy KPI
+
+| KPI | Độ trễ đo | Đòn bẩy cụ thể | Ai chịu trách nhiệm | Bị "game" bằng cách nào |
+|---|---|---|---|---|
+| **K1** Giữ chân năm +1 | **12 tháng** sau khi cohort hình thành | Chuỗi nuôi dưỡng sau đơn đầu, email, ưu đãi lần 2 | Đội CRM / vòng đời | Giảm giá sâu cho đơn thứ hai — đẩy K1 lên nhưng phá K5 |
+| **K2′** Tỷ lệ hút từ pool | **12 tháng** | Chiến dịch kích hoạt nhóm chưa mua | Đội tăng trưởng | Chỉ nhắm nhóm dễ nhất trong pool, bỏ phần còn lại |
+| **K3′** Tỷ lệ ngủ đông | **~3 tháng** *(recency 365 ngày trượt)* | Chiến dịch giành lại nhóm recency 1–2 năm | Đội CRM | Kích một đơn giá trị rất nhỏ để reset recency |
+| **K4** Tỷ lệ kích hoạt tích lũy | — *(chỉ số tồn)* | Không có đòn bẩy trực tiếp | — | Không cần game — nó chỉ có thể tăng |
+| **K5** Giá trị cohort 3 năm | **36 tháng** ⚠️ | Chất lượng nguồn kích hoạt | Đội tăng trưởng | Thu hẹp cohort về nhóm giá trị cao, giảm quy mô |
+| **K6** Độ phụ thuộc khách cũ | **12 tháng** | Tăng doanh thu khách mới | Đội tăng trưởng | Đạt bằng cách để doanh thu khách cũ **giảm** |
+| **K7** Tỷ lệ đơn đầu có khuyến mãi | **~1 tháng** | Rất hạn chế — xem dưới | Đội marketing | Đổi khuyến mãi thành hình thức khác không gắn `promo_id` |
+
+##### Hai chỗ đáng ngờ mà đề bài nêu — xác nhận cả hai
+
+**K5 trễ 3 năm.** Năm 2022 chỉ đo được cohort 2020 (xem A7 ý 6). Một KPI mà kết quả của hành động
+hôm nay phải chờ tới **2025** mới thấy thì **không giám sát được gì** — nó là chỉ số đánh giá hồi
+tố, không phải chỉ số điều hành.
+
+**K7 gần như không có đòn bẩy.** Lịch khuyến mãi cố định theo ngày (B12 xác nhận: các chiến dịch
+bắt đầu đúng 18/03, 23/06, 30/08, 18/11 mỗi năm), và **khách tự chọn** lúc nào mua đơn đầu. Đội
+ngũ chỉ có hai cách đẩy K7 xuống: **bỏ khuyến mãi** hoặc **thu hẹp `applicable_category`**. Cả hai
+đều là quyết định chiến lược, không phải điều chỉnh vận hành.
+
+##### Danh sách giữ / sửa / thay
+
+| KPI | Đề nghị | Lý do |
+|---|---|---|
+| **K1** | **Sửa ngưỡng** | Mục tiêu 20% chưa có lộ trình — xem B8 |
+| **K2′** | **Giữ** | Công bằng theo thời gian, có đòn bẩy thật |
+| **K3′** | **Giữ** | Độ trễ ngắn nhất trong bộ, đòn bẩy rõ |
+| **K4** | **Bỏ khỏi bảng KPI** | Không có ngưỡng, không có đòn bẩy, chỉ có thể tăng. Chuyển xuống mục "chỉ số theo dõi" riêng |
+| **K5** | **Thay bằng chỉ số dẫn báo** | Trễ 36 tháng — không điều hành được |
+| **K6** | **Giữ, thêm cảnh báo** | Ghi rõ có thể đạt bằng cách để doanh thu khách cũ giảm |
+| **K7** | **Sửa ngưỡng + đổi công thức** | Ngưỡng vi phạm ngay ngày đầu (B8); cờ có/không quá thô |
+
+##### Hai chỉ số dẫn báo đề xuất thay thế
+
+**Thay K5** — *Tỷ lệ mua lại trong 90 ngày theo cohort*: đo được sau **3 tháng** thay vì 36 tháng,
+và là tín hiệu sớm cho giá trị 3 năm. Cùng đòn bẩy (chất lượng nguồn kích hoạt), cùng người chịu
+trách nhiệm.
+
+**Thay K7** — *Tỷ trọng chiết khấu trên doanh thu đơn đầu*: `Σ discount_amount / Σ gross` trên các
+đơn đầu. Ưu điểm so với cờ có/không:
+
+- **Liên tục** thay vì nhị phân — đo được mức độ, không chỉ có/không
+- **Có đòn bẩy thật** — đội ngũ điều chỉnh được mức chiết khấu mà không phải bỏ hẳn chương trình
+- **Khó game hơn** — đổi hình thức khuyến mãi vẫn bị tính nếu có giảm giá
+
+---
 
 ---
 
@@ -3248,6 +3916,103 @@ chân"*. Hai chuẩn khác nhau cho cùng một loại kết quả.
 
 **Trả lời xong khi:** danh sách trường nghi ngẫu nhiên kèm bằng chứng, và Mục 9.4 ② / Mục 10 /
 H8 / H9 được ghi theo **cùng một chuẩn**.
+
+#### Trả lời B21
+
+**Kết luận: ít nhất BỐN trường có dấu hiệu gán ngẫu nhiên. Phát hiện nặng nhất: `reviews` và
+`returns` không trùng NHAU MỘT ĐƠN NÀO trên 147 nghìn đơn.**
+
+Script: [`scripts/phan_bien/b21_truong_ngau_nhien.py`](../../scripts/phan_bien/b21_truong_ngau_nhien.py)
+
+##### (1) Kiểm từng trường bằng một tương quan lẽ ra phải tồn tại
+
+| Trường | Phép kiểm | Kết quả | Nghi ngẫu nhiên |
+|---|---|---|:--:|
+| `reviews` ⟷ `returns` | Số đơn có **cả hai** | **0** trên kỳ vọng **6.208** | ⚠️⚠️ **Rất mạnh** |
+| `delivery_days` | ANOVA theo vùng | 4,499 / 4,499 / 4,500 · **F = 0,015 · p = 0,985** | ⚠️ **Mạnh** |
+| `signup_date` | Spearman với `first_order_date` | **ρ = 0,0023 · p = 0,487** | ⚠️ **Mạnh** |
+| `acquisition_channel` | ANOVA LTV theo kênh | **F = 0,823 · p = 0,533** | ⚠️ **Mạnh** |
+| `rating` | Spearman với số đơn trọn đời | ρ = −0,0734 · p < 0,001 | Yếu — có liên hệ nhưng rất nhỏ |
+
+**Chi tiết phát hiện nặng nhất:**
+
+| | |
+|---|---:|
+| Số đơn có review | 111.369 |
+| Số đơn có trả hàng | 36.062 |
+| Tổng số đơn | 646.945 |
+| **Số đơn có CẢ HAI** | **0** |
+| Kỳ vọng nếu độc lập | **6.208** |
+
+> Quan sát **0** trên kỳ vọng **6.208** — xác suất xảy ra ngẫu nhiên là **thực tế bằng không**.
+> Bộ sinh dữ liệu gán review và trả hàng vào **hai tập rời nhau**.
+>
+> **Hệ quả:** không thể kiểm *"đơn bị trả có rating thấp hơn không"* — một quan hệ hiển nhiên phải
+> tồn tại trong dữ liệu thật. Đây không phải kết quả rỗng, đây là **dữ liệu không tồn tại**.
+
+`delivery_days` theo ba vùng: **4,499 / 4,499 / 4,500** — ba con số trùng nhau tới ba chữ số thập
+phân trên 566 nghìn đơn. Trong thực tế, vùng xa luôn giao chậm hơn.
+
+##### (2) Chia kết luận thành hai nhóm
+
+**Nhóm (i) — dựa trên cấu trúc thời gian và đếm đơn/khách.** Bộ sinh phải **có quy luật** mới tạo
+ra được, nên các kết luận này đứng vững:
+
+- Phân rã số đơn = khách × tần suất (BTN2, H1)
+- Pool và tỷ lệ hút (BTN3, H2)
+- Cohort retention và chất lượng cohort (H3)
+- Nền khách ổn định (H6, BTN5)
+- Bước gãy 2019 là cú sốc thời kỳ (B9, B11)
+
+**Nhóm (ii) — dựa trên trường có thể ngẫu nhiên.** Phải viết lại:
+
+| Kết luận | Trường dựa vào | Phải sửa thế nào |
+|---|---|---|
+| **H5** kênh không phân hóa LTV | `acquisition_channel` | ✅ Mục 10 đã ghi đúng — nêu cả hai khả năng |
+| **H8** giao hàng không ảnh hưởng giữ chân | `delivery_days` | ❌ **Phải sửa** — trường này không phân biệt cả theo vùng |
+| **H9** trả hàng không phải tín hiệu rời bỏ | `returns` | ❌ **Phải sửa** — không trùng review đơn nào |
+| Mục 5.1 không kiểm soát được confound | `signup_date` | ⚠️ Kết luận đúng nhưng nên nêu khả năng trường ngẫu nhiên |
+
+##### (3) Hai chuẩn khác nhau cho cùng một loại kết quả — xác nhận
+
+Đề bài nêu đúng. So sánh:
+
+| | Mục 10 (kênh) | Mục 9.4 ② (giao hàng) |
+|---|---|---|
+| Kết quả | p = 0,533, rỗng | p = 0,303, rỗng |
+| Tài liệu viết | *"nhiều khả năng gán ngẫu nhiên... không thể biện minh cho đề xuất"* | *"đầu tư rút ngắn giao hàng **không phải** đòn bẩy giữ chân"* |
+| Chuẩn áp dụng | Thận trọng ✅ | **Rút ra khuyến nghị thực hành** ❌ |
+
+**Cùng một loại kết quả, hai chuẩn khác nhau.**
+
+##### (4) Đề xuất — ba câu chữ cụ thể
+
+**Thêm vào đầu tài liệu (sau Quy ước bộ lọc):**
+
+> **Giới hạn về bản chất dữ liệu.** Bộ dữ liệu là **mô phỏng**. Kiểm tra cho thấy ít nhất bốn
+> trường có dấu hiệu được gán độc lập với hành vi khách hàng: `acquisition_channel` (ANOVA LTV
+> p = 0,533), `delivery_days` (ANOVA theo vùng p = 0,985, ba vùng chênh nhau 0,001 ngày),
+> `signup_date` (tương quan hạng với `first_order_date` = 0,0023), và cặp `reviews`/`returns`
+> (không trùng nhau **một đơn nào** trên 147 nghìn đơn, trong khi kỳ vọng độc lập là 6.208).
+>
+> **Quy tắc áp dụng cho toàn tài liệu:** kết quả **rỗng** trên một trường nghi ngẫu nhiên nói về
+> **bộ sinh dữ liệu**, không nói về doanh nghiệp, và **không được** chuyển thành khuyến nghị thực
+> hành.
+
+**Sửa Mục 9.4 ② (giao hàng và trả hàng):**
+
+> *Hiện tại:* "H8 và H9 bị bác bỏ. [...] **Đầu tư rút ngắn giao hàng không phải đòn bẩy giữ chân.**"
+>
+> *Đề xuất:* **"H8 và H9 cho kết quả rỗng: `delivery_days` p = 0,303 và `returned_first` p = 0,161.
+> Nhưng hai kết quả này **không diễn giải được về mặt kinh doanh**, vì cả hai trường đều có dấu
+> hiệu gán ngẫu nhiên: `delivery_days` không khác nhau giữa ba vùng (ANOVA p = 0,985), và `returns`
+> không trùng `reviews` một đơn nào. Kết quả rỗng ở đây phản ánh **bộ sinh dữ liệu**, không phản
+> ánh doanh nghiệp. Không rút ra khuyến nghị nào từ H8 và H9."**
+
+**Sửa Mục 5, cột trạng thái H8 và H9:** đổi từ ❌ **SAI** thành ⚠️ **Không kiểm được** — kèm ghi
+chú *"trường dữ liệu có dấu hiệu gán ngẫu nhiên"*.
+
+---
 
 ---
 
