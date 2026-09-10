@@ -105,7 +105,7 @@ Từ đó về sau, chạy mọi script bằng:
 | A4 | Phân rã logarit | `Δln(Khách mới) = Δln(Pool) + Δln(Tỷ lệ hút)` nghĩa là gì? | ✅ Xong — 2 ví dụ; tính lại **36,4% / 63,6%** (tài liệu ghi 26,9/73,1) | Claude |
 | A5 | Công thức từng metric | Giải thích Me1–Me13 (và M1–M13, K1–K7) | | |
 | A6 | Số liệu trong 6 BTN | Từng con số lấy từ đâu? | | |
-| A7 | Mốc so sánh 2013 | Vì sao bảng bắt đầu 2013 mà không phải 2012? | | |
+| A7 | Mốc so sánh 2013 | Vì sao bảng bắt đầu 2013 mà không phải 2012? | ✅ Xong — 2012 phủ 49,5% năm; bỏ 2012 làm số **đẹp hơn**; **giải được bí ẩn 32.743 = cohort 2019**; Me6 **không đơn điệu** | Claude |
 | **A8** 🆕 | Bảng ký hiệu | Mọi ký hiệu trong tài liệu, một bảng tra duy nhất; riêng khối survival (Mục 9) giải bằng ví dụ một khách | | |
 | **A9** 🆕 | Đẳng thức phân rã ba tầng | Từng thành phần là gì, kiểm số cho 2013 và 2022; AOV và "giành lại" nằm ở đâu? | | |
 | **A10** 🆕 | "Quay lại" và "hoạt động" | Hai định nghĩa "quay lại", ba con số "hoạt động" — cái nào dùng ở đâu? | | |
@@ -116,13 +116,13 @@ Từ đó về sau, chạy mọi script bằng:
 |:--:|---|---|---|---|
 | B1 | Mục 2.2 · M13 | Rổ chưa mua lấy ở đâu ra? | ❌ **LỆCH** — vòng lặp bỏ cohort 2012; rổ cạn 26,9% → **36,4%** | Claude |
 | B2 | Mục 12.2 · Kiểm 2 | Phép kiểm này có thể thất bại không? | ❌ **HẰNG ĐÚNG** — Pool triệt tiêu; cặp bịa 7/3 vẫn khớp. Đã đề xuất phép kiểm có thể vỡ | Claude |
-| B3 | Mục 12.2 · Kiểm 4 | Khớp `sales.csv` bằng bộ lọc nào? | | |
-| B4 | Mục 11 · BTN5 · H6 | Nền khách "ổn định" gồm những ai? | | |
+| B3 | Mục 12.2 · Kiểm 4 | Khớp `sales.csv` bằng bộ lọc nào? | ⚠️ **`ALL`** — nhưng mọi chỉ số doanh thu của tài liệu dùng `live`; hai chương lệch **9,23%** | Claude |
+| B4 | Mục 11 · BTN5 · H6 | Nền khách "ổn định" gồm những ai? | ✅ **Chế độ ổn định** — cohort ≤2015 = 86,5% khách / 89,8% doanh thu, cơ cấu đứng yên 3 năm; sống sót tuổi 7–10 = 0,91–1,02 | Claude |
 | B5 | Mục 3 ↔ Mục 9 | Mô hình trọng tâm phục vụ nửa nào của vấn đề? | | |
-| B6 | Mục 2.1 ↔ Mục 2.2 | Sao hai tầng dùng hai phương pháp phân rã? | | |
+| B6 | Mục 2.1 ↔ Mục 2.2 | Sao hai tầng dùng hai phương pháp phân rã? | ✅ H1 **không đổi**, nhưng logarit cho **63,8/36,2** thay vì 72,2/45,2 — phải khai báo phương pháp | Claude |
 | B7 | Mục 9.3 | `cohort_year` dạng tuyến tính đã kiểm chưa? | | |
 | B8 | Mục 8 · K1, K7 | Hai ngưỡng này đặt trên căn cứ gì? | | |
-| B9 | Mục 5 ↔ Mục 11 | H4 đang ⏳ hay đã xác lập? | | |
+| B9 | Mục 5 ↔ Mục 11 | H4 đang ⏳ hay đã xác lập? | ❌ **H4 BỊ BÁC BỎ** — mô phỏng cho +0,68% trong khi thực tế −38,60%; là cú sốc thời kỳ | Claude |
 | **B10** 🆕 | Mục 12.2 · cả 5 kiểm | Phép kiểm nào có thể vỡ, phép nào là hằng đúng? | | |
 | **B11** 🆕 | Mục 9.3 · `cohort_year` | HR 0,7478 là hiệu ứng **cohort** hay hiệu ứng **thời kỳ**? | | |
 | **B12** 🆕 | Mục 9 · `promo_first` | Có phải chỉ là **mùa** của đơn đầu? | | |
@@ -977,6 +977,183 @@ còn giữ nguyên được không, hay phải thu hẹp lại khoảng cohort?
 **Xong khi:** có câu trả lời bằng số cho cả sáu ý, ý kiến cho ba câu mở, và một đề xuất câu chữ
 cụ thể để thêm vào Mục 3 "Phạm vi".
 
+#### Trả lời A7
+
+Script: [`scripts/phan_bien/a07_moc_2013.py`](../../scripts/phan_bien/a07_moc_2013.py)
+
+> Hai file `docs/vi-sao-moc-2013.md` và `scripts/kiem_moc_2013.py` **không tồn tại trong repo**,
+> nên ràng buộc "không đọc trước" không áp dụng. Không có đường tính thứ hai để đối chiếu.
+
+##### (1) Độ dài kỳ thật của 2012
+
+`orders` bắt đầu **2012-07-04**, kết thúc **2022-12-31**.
+
+| Cách đếm | Kết quả |
+|---|---:|
+| `.nunique()` trên ngày — số ngày **CÓ** đơn | 181 |
+| `(max − min).days + 1` — số ngày được **PHỦ** | **181** |
+| Lệch | **0** |
+
+Hai cách trùng nhau, nghĩa là **không có ngày trống nào** trong kỳ. Nhưng câu hỏi *"kỳ dài bao
+nhiêu"* vẫn phải trả lời bằng **cách 2** — cách 1 trả lời câu khác (*"có bao nhiêu ngày phát sinh
+đơn"*), và hai cách chỉ trùng nhau ở đây do may mắn dữ liệu dày.
+
+**2012 phủ 181/366 = 49,5% năm.**
+
+##### (2) Kỳ ngắn hay kinh doanh yếu?
+
+| Năm | Tổng doanh thu | Ngày phủ | Doanh thu/ngày |
+|---|---:|---:|---:|
+| 2012 | 0,673 tỷ | 181 | **3,717 triệu** |
+| 2013 | 1,505 tỷ | 365 | **4,122 triệu** |
+
+Tỷ lệ mức/ngày 2012 so 2013 = **0,902** — chỉ thấp hơn 9,8%.
+
+> **Kết luận: tổng 2012 thấp chủ yếu do KỲ NGẮN, không phải kinh doanh yếu.** Quy đổi cả năm,
+> 2012 sẽ là **1,361 tỷ** thay vì 0,673 tỷ ghi nhận. Điều này đổi hẳn cách hiểu: 2012 **không**
+> phải năm tệ, nó chỉ là **nửa năm**.
+
+##### (3) 2012 là năm khai trương — hệ quả
+
+Tỷ trọng doanh thu đến từ khách mua lần đầu:
+
+| Năm | 2012 | 2013 | 2014 | 2015 | 2016 | 2017 | 2018 | 2019 | 2020 | 2021 | 2022 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| % | **100,0** | 55,4 | 23,9 | 14,1 | 9,9 | 7,7 | 6,5 | 5,1 | 5,0 | 4,6 | 4,2 |
+
+**2012 bằng đúng 100,0% — và buộc phải như vậy bất kể doanh nghiệp làm ăn thế nào**, vì năm đầu
+tiên thì mọi khách đều là khách mua lần đầu theo định nghĩa.
+
+> **Hệ quả cho phát biểu của tài liệu.** Câu *"tỷ trọng doanh thu khách mới sụt từ X xuống 4,2%"*
+> nếu lấy X = 100% (giá trị 2012) thì là một **hằng đúng**, không mang thông tin — giống hệt lỗi
+> mà chính tài liệu đã bắt được ở chỗ khác. Giá trị đầu tiên **có nghĩa** là năm **2013: 55,4%**.
+>
+> Tài liệu hiện ghi *"55,4% → 4,2%"* — **đúng**, đã tránh được bẫy này.
+
+##### (4) Kiểm nghi vấn chọn lọc số liệu
+
+Tỷ lệ quay lại năm +1 cho **tất cả** cohort:
+
+| Cohort | 2012 | 2013 | 2014 | 2015 | 2016 | 2017 | 2018 | 2019 | 2020 | 2021 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Retention +1 | **62,8** | 49,5 | 34,8 | 27,3 | 21,3 | 15,7 | 9,4 | 7,8 | 6,5 | **7,0** |
+
+| Cách trình bày | Đà rơi | Mức giảm |
+|---|---|---:|
+| Bỏ 2012 *(tài liệu đang dùng)* | 49,5% → 7,0% | 42,5 điểm |
+| **Kể cả 2012** | **62,8% → 7,0%** | **55,8 điểm** |
+
+> **Trả lời phản biện *"bỏ 2012 vì nó làm số xấu đi phải không?"*: KHÔNG — ngược lại.** Tính cả
+> 2012 thì đà rơi **dốc hơn 13,3 điểm**. Bỏ 2012 làm con số **đẹp hơn**, tức là nếu có động cơ
+> chọn lọc thì động cơ đó đi ngược hướng cáo buộc.
+
+##### (5) Vì sao chuỗi đăng ký vẫn dùng được 2012
+
+| | Ngày bắt đầu | Ngày phủ 2012 | % năm |
+|---|---|---:|---:|
+| `orders` | 2012-07-04 | 181 | **49,5%** |
+| `signup_date` | 2012-01-17 | 350 | **95,6%** |
+
+Hai cột **không cùng độ phủ**. `signup_date` gần như phủ trọn 2012, `orders` chỉ nửa năm.
+
+| | Số đăng ký 2012 | Tỷ lệ 2022/2012 |
+|---|---:|---:|
+| Nguyên bản | 957 | **22,1 lần** |
+| Quy đổi cả năm | 1.001 | **21,1 lần** |
+
+**Con số "gấp 22 lần" vẫn đứng** sau khi quy đổi (21,1 lần).
+
+> **Nhất quán hay tùy tiện?** Tôi kết luận là **nhất quán, nhưng chưa được khai báo**. Tài liệu
+> dùng 2012 ở chỗ cột đó phủ 95,6% và bỏ 2012 ở chỗ cột kia chỉ phủ 49,5% — đó là lựa chọn **đúng
+> về kỹ thuật**. Vấn đề là tài liệu **không nói ra lý do**, nên nhìn từ ngoài giống như tùy tiện.
+> Sửa được bằng một câu khai báo, không phải sửa số.
+
+##### (6) Mốc bên phải — ba chỉ số ba mốc khác nhau
+
+| Chỉ số | Cần bao nhiêu năm quan sát | Cohort cuối đo được |
+|---|---|:--:|
+| Doanh thu theo năm | 0 | **2022** |
+| Retention năm +1 | 1 | **2021** |
+| Giá trị cohort 3 năm | 3 | **2020** |
+
+**Ba mốc khác nhau.** Mục 3 hiện chỉ ghi `2012-07-04 → 2022-12-31` và **không nói gì** về mốc
+cohort — người đọc sẽ tưởng cả ba chỉ số cùng chạy tới 2022.
+
+##### Ba câu cần nêu ý kiến
+
+**(i) Có nên quy đổi 2012 về cả năm rồi giữ lại?**
+
+Có — **với những chỉ số chỉ vướng lý do độ dài kỳ**. Phân biệt:
+
+| Chỉ số | Vướng độ dài kỳ? | Vướng "năm khai trương"? | Giữ 2012 quy đổi? |
+|---|:--:|:--:|---|
+| Doanh thu, số đơn, số khách hoạt động | ✅ | ❌ | **Nên giữ** — nhân `366/181` là xong |
+| Retention năm +1 theo cohort | ❌ | ❌ | **Nên giữ nguyên**, không cần quy đổi |
+| % doanh thu từ khách mới | ✅ | ✅ | **Phải bỏ** — quy đổi không cứu được hằng đúng 100% |
+
+Chỉ số thứ ba là cái duy nhất vướng **cả hai** lý do. Hai nhóm trên chỉ vướng lý do đầu, nên giữ
+2012 (có quy đổi hoặc không cần) **tốt hơn** là bỏ — vì bỏ đi thì mất cohort đóng góp **37,1%**
+nền khách hiện tại (xem B4).
+
+**(ii) Nên viết *"loại 2012 vì là năm khai trương khuyết kỳ"* hay *"lấy 2013 làm năm đầy đủ đầu tiên"*?**
+
+**Cách đầu.** Cách sau nghe nhẹ hơn nhưng **giấu mất lý do định nghĩa ở ý 3** — nó chỉ nói về độ
+dài kỳ, không nói về việc một số chỉ số bị hằng-đúng ở năm khai trương. Người đọc sẽ tưởng chỉ cần
+quy đổi là dùng lại được 2012, mà điều đó **sai** với chỉ số % khách mới.
+
+**(iii) Loại 2012 khỏi phép so sánh có được phép loại nó khỏi phần dự báo không?**
+
+**Tuyệt đối không.** B4 cho thấy cohort 2012 đóng góp **8.522 khách = 37,1%** nền khách hoạt động
+2022 và **42,3%** doanh thu 2022. Loại nó khỏi phần dự báo là bỏ đi gần một nửa cơ sở dự báo.
+
+> *Loại một năm khỏi **phép so sánh** vì kỳ khuyết là hợp lệ. Loại nó khỏi **phần dự báo** là bỏ
+> mất 42,3% doanh thu hiện tại.* Hai việc hoàn toàn khác nhau.
+
+##### Đề xuất câu chữ cho Mục 3 "Phạm vi"
+
+> **Phạm vi.** `customers`, `orders`, `order_items`, `shipments`, `returns`, `reviews`,
+> `promotions` — dữ liệu đơn hàng phủ **2012-07-04 → 2022-12-31**.
+>
+> **Cửa sổ so sánh là 2013–2022.** Năm 2012 chỉ có 181/366 ngày (49,5%) nên tổng năm không so
+> sánh được; ngoài ra một số chỉ số bị *hằng đúng* ở năm khai trương — ví dụ tỷ trọng doanh thu
+> từ khách mua lần đầu bằng 100% theo định nghĩa. Quy đổi cả năm khắc phục được lý do thứ nhất
+> nhưng không khắc phục được lý do thứ hai.
+>
+> **2012 vẫn được dùng ở hai chỗ:** (a) chuỗi số tài khoản đăng ký, vì `signup_date` phủ 350/366
+> ngày (95,6%); (b) mọi phân tích cohort và dự báo, vì cohort 2012 chiếm 37,1% nền khách hoạt
+> động năm 2022.
+>
+> **Mốc cuối khác nhau theo chỉ số:** doanh thu tới **2022**, retention năm +1 tới cohort
+> **2021**, giá trị cohort 3 năm tới cohort **2020**.
+
+##### Mục 12.3 — chênh lệch "chưa giải thích được" đã có lời giải
+
+Dựng đủ chuỗi Me6 cho **từng** cohort dưới **một** định nghĩa (gross, `live`):
+
+| Cohort | 2012 | 2013 | 2014 | 2015 | 2016 | 2017 | 2018 | **2019** | 2020 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Giá trị 3 năm | 101.962 | 78.589 | 57.672 | 46.511 | 43.459 | 36.593 | 34.966 | **32.743** | **35.378** |
+
+> **Tìm ra rồi: 32.743 là giá trị của cohort 2019, không phải cohort 2020.**
+>
+> Nguyên nhân là **chọn cohort**, không phải **định nghĩa** — đúng như giả thuyết đề bài nêu.
+> Ba định nghĩa đã thử ở Mục 12.3 (gross/live, net/live, gross/ALL) đều giữ nguyên cohort 2020
+> nên không cái nào khớp được.
+
+**Và một phát hiện kèm theo: chuỗi Me6 KHÔNG đơn điệu.**
+
+Cohort 2020 (**35.378**) **cao hơn** cohort 2019 (**32.743**) — bật lên 8,0%.
+
+> **Hệ quả cho H3.** Mục 5 đang ghi **H3 = ✅ Đúng — "giảm liên tục, không có bước nhảy riêng ở
+> 2019"**. Phát biểu này **phải thu hẹp**: chuỗi giảm đơn điệu từ cohort **2012 đến 2019**, rồi
+> **bật lên ở cohort 2020**.
+>
+> **Đề xuất sửa:** Mục 5, H3 → *"✅ Đúng trong khoảng cohort 2012–2019 — giảm liên tục, không có
+> bước nhảy riêng ở 2019. Cohort 2020 bật lên 8,0% (32.743 → 35.378); chưa đủ dữ liệu để biết đó
+> là đảo chiều hay nhiễu, vì 2020 là cohort cuối cùng đo được đủ 3 năm."*
+
+---
+
 ### A8. Bảng ký hiệu thống nhất — và khối survival giải bằng một khách
 
 **Bối cảnh.** Tài liệu dùng rất nhiều ký hiệu nhưng **không có bảng tra**: `live` / `ALL` /
@@ -1390,6 +1567,67 @@ khoảng đã biết — chỗ nối giữa chúng cần nói rõ.
 **Trả lời xong khi:** xác định được `sales.csv` tương ứng bộ lọc nào, và đề xuất câu chữ cho
 Kiểm 4 nói đúng phạm vi nó chứng minh.
 
+#### Trả lời B3
+
+**Kết luận: `sales.csv` ứng với bộ lọc `ALL`, không phải `live`. Kiểm 4 đang xác nhận một định
+nghĩa mà phần còn lại của tài liệu KHÔNG dùng.**
+
+Script: [`scripts/phan_bien/b03_kiem4_bo_loc.py`](../../scripts/phan_bien/b03_kiem4_bo_loc.py)
+
+##### (1) Chạy lại cả hai bộ lọc
+
+Dựng doanh thu ngày từ `Σ(quantity × unit_price)` rồi ghép với `sales.csv` theo ngày —
+3.833 ngày, grain: mỗi ngày.
+
+| Bộ lọc | Tỷ lệ min | Tỷ lệ max | Sai số tuyệt đối lớn nhất | Tổng doanh thu |
+|---|---:|---:|---:|---:|
+| **`ALL`** | **1,000000** | **1,000000** | **0,00** | 16,43 tỷ |
+| `live` | 0,691447 | 1,000000 | 1.890.367,64 | 14,91 tỷ |
+
+Chênh lệch = **1,52 tỷ đvtt = 9,23% doanh thu** — đúng bằng phần đơn `cancelled`.
+
+##### (2) Hai chương đang dùng hai bộ lọc
+
+| Chỉ số | Bộ lọc | Căn cứ |
+|---|---|---|
+| M4 Doanh thu gross | `live` | Mục 6 khai rõ |
+| M8 Doanh thu trọn đời | `live` | Mục 6 khai rõ |
+| Me6 Giá trị cohort 3 năm | `live` | tính từ M4 |
+| Me7 Tỷ trọng doanh thu khách mới | `live` | tính từ M4 |
+| K5, K6 | `live` | tính từ Me6, Me7 |
+| Mục 9 `aov_first` | `live` | `btn4_survival.py` |
+| **`sales.csv`** — mục tiêu chương dự báo | **`ALL`** | đo ở bước 1 |
+
+> **Vấn đề thật.** Chương khách hàng đo bằng `live`; chương dự báo nhắm vào `sales.csv` tức `ALL`.
+> Hai chương lệch nhau **9,23% doanh thu** một cách có hệ thống. Ràng buộc mức mà D2 chuyển sang
+> chương mô hình (Mục 11, xem B18) vì thế **không quy đổi thẳng được** — phải cộng lại phần
+> `cancelled` trước.
+
+##### (3) Kiểm 4 thực ra chứng minh gì
+
+Nó chứng minh: *cách tính `Σ(quantity × unit_price)` trên **toàn bộ đơn** tái tạo đúng `sales.csv`*.
+
+Nó **không** chứng minh: *cách hiểu doanh thu của chương khách hàng (dùng `live`) khớp với bảng
+mục tiêu* — vì chương khách hàng dùng bộ lọc khác.
+
+##### Đề xuất câu chữ
+
+> **Kiểm 4 (sửa).** Dựng lại doanh thu ngày từ `Σ(quantity × unit_price)` trên **toàn bộ đơn
+> (`ALL`, gồm cả `cancelled`)` rồi so với `sales.csv`: tỷ lệ min = max = 1,000000 trên cả 3.833
+> ngày, sai số 0,00.
+>
+> Phép kiểm này xác nhận **công thức sinh biến mục tiêu** là đúng. Nó **không** xác nhận các chỉ
+> số doanh thu trong chương này — chúng dùng bộ lọc `live` và thấp hơn `sales.csv` **9,23%**.
+
+> **Thêm vào Mục 11 (nối sang chương mô hình):**
+>
+> *Lưu ý bộ lọc khi chuyển kết quả sang chương dự báo: mọi chỉ số của chương này tính trên `live`
+> (loại 59.462 đơn `cancelled` = 9,2% số đơn, 9,23% doanh thu), trong khi `sales.csv` — biến mục
+> tiêu của chương dự báo — tính trên `ALL`. Muốn quy đổi ràng buộc mức sang đơn vị doanh thu của
+> `sales.csv` phải chia cho 0,9077.*
+
+---
+
 ---
 
 ### B4. Nền khách "ổn định" 23.000 người gồm những ai?
@@ -1421,6 +1659,104 @@ một năm khỏi *phép so sánh* không có nghĩa là loại nó khỏi *ph�
 **Trả lời xong khi:** có bảng cohort × (số khách 2022, % doanh thu 2022), và một nhận định về
 việc ràng buộc mức nên giữ hay nên siết lại. Nếu làm được thì chạy thêm: chiếu tỷ lệ giữ chân
 theo thâm niên lên từng cohort để mô phỏng 2023–2024, thay vì ngoại suy tổng.
+
+#### Trả lời B4
+
+**Kết luận: là CHẾ ĐỘ ỔN ĐỊNH, không phải đuôi phân rã. Ràng buộc mức nên GIỮ.**
+
+Script: [`scripts/phan_bien/b04_nen_khach_on_dinh.py`](../../scripts/phan_bien/b04_nen_khach_on_dinh.py)
+
+##### (1) Bóc 22.999 khách hoạt động 2022 theo cohort
+
+Nguồn: `orders.csv` + `order_items.csv` · bộ lọc `live` · grain: mỗi khách.
+
+| Cohort | Số khách | % khách | Doanh thu 2022 *(triệu)* | % doanh thu | Thâm niên |
+|---:|---:|---:|---:|---:|---:|
+| **2012** | **8.522** | **37,1** | ~449 | **42,3** | 10 |
+| **2013** | 7.463 | 32,4 | ~330 | ~31 | 9 |
+| 2014 | 2.637 | 11,5 | | | 8 |
+| 2015 | 1.275 | 5,5 | | | 7 |
+| 2016–2021 | 1.774 | 7,7 | | | 1–6 |
+| 2022 | 1.328 | 5,8 | 44,8 | 4,2 | 0 |
+| **Tổng** | **22.999** | **100** | **1.061** | **100** | |
+
+| Nhóm | Số khách | % khách | % doanh thu 2022 |
+|---|---:|---:|---:|
+| Cohort 2012 | 8.522 | 37,1% | **42,3%** |
+| **Cohort ≤ 2015** | **19.897** | **86,5%** | **89,8%** |
+| Cohort ≥ 2019 | 1.665 | 7,2% | 5,2% |
+
+**Thâm niên:** trung vị **9 năm**, trung bình 8,29 năm. Phân vị: p25 = 8 · p50 = 9 · p75 = 10.
+
+##### (2) Chế độ ổn định hay đuôi phân rã?
+
+Đây là câu hỏi cốt lõi. Hai bằng chứng **cùng chỉ về "ổn định"**:
+
+**Bằng chứng 1 — cơ cấu đứng yên ba năm liền**
+
+| Năm | Tổng | Cohort ≤ 2015 | Cohort > 2015 |
+|---|---:|---:|---:|
+| 2020 | 22.738 | 19.626 (**86,3%**) | 3.112 (13,7%) |
+| 2021 | 22.438 | 19.407 (**86,5%**) | 3.031 (13,5%) |
+| 2022 | 22.999 | 19.897 (**86,5%**) | 3.102 (13,5%) |
+
+Nếu là **đuôi phân rã** thì tỷ trọng cohort cũ phải **giảm dần** khi họ rơi rụng. Thực tế nó
+**đứng yên tuyệt đối** ở 86,3–86,5% suốt ba năm.
+
+**Bằng chứng 2 — tỷ lệ sống sót theo tuổi cohort**
+
+| Tuổi | 0→1 | 1→2 | 2→3 | 3→4 | 4→5 | 5→6 | 6→7 | 7→8 | 8→9 | 9→10 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Sống sót | **0,242** | 0,947 | 0,910 | 0,937 | 0,897 | 0,923 | 0,910 | 0,978 | **1,013** | **1,015** |
+
+> **Đây là phát hiện quan trọng nhất của câu này.** Rơi rụng gần như **toàn bộ dồn vào năm đầu
+> tiên** (còn 24,2%). Từ tuổi 1 trở đi tỷ lệ sống sót là **0,90–1,02** — gần như không rơi nữa,
+> và ở tuổi 8–10 còn **vượt 1,0** (khách quay lại sau khi nghỉ một năm).
+>
+> Mà 86,5% nền khách hiện tại đang ở **tuổi 7–10** — đúng vùng không còn rơi. Nên đường đi ngang
+> **không phải** đuôi phân rã chưa rơi hết; nó là một nền đã **qua giai đoạn rơi**.
+
+##### (3) Mô phỏng 2023–2024
+
+Chiếu tỷ lệ sống sót theo tuổi lên từng cohort:
+
+| Năm | Dự báo khách hoạt động | So 2022 |
+|---|---:|---:|
+| 2022 *(thật)* | 22.999 | — |
+| 2023 | **22.083** | −4,0% |
+| 2024 | **23.244** | +1,1% |
+
+Chưa cộng cohort mới. Nếu thêm ~1.328 khách mới mỗi năm (mức 2022) thì:
+
+| Năm | Có cohort mới |
+|---|---:|
+| 2023 | ~23.400 |
+| 2024 | ~24.600 |
+
+##### (4) Nhận định về ràng buộc mức
+
+**Nên GIỮ, và có thể nói mạnh hơn tài liệu hiện tại.**
+
+Tài liệu tự nhận mức tin cậy "vừa phải" vì `n = 3`. Nhưng `n = 3` chỉ là số điểm của **chuỗi
+tổng**. Bảng cohort cung cấp bằng chứng **cấu trúc** độc lập với số điểm đó: cơ cấu đứng yên ba
+năm, và 86,5% nền khách nằm ở vùng tuổi mà tỷ lệ sống sót ≈ 1,0.
+
+> **Đề xuất sửa Mục 11:** thay *"chưa thấy dấu hiệu tiếp tục rơi (n = 3, mức tin cậy vừa phải)"*
+> bằng:
+>
+> *"Nền khách 2020–2022 là một chế độ ổn định, không phải đuôi phân rã. Hai bằng chứng: (a) cơ
+> cấu cohort đứng yên ở 86,5% cohort ≤ 2015 suốt ba năm; (b) 86,5% nền khách ở tuổi cohort 7–10,
+> vùng có tỷ lệ sống sót năm-sang-năm 0,91–1,02. Rơi rụng dồn vào năm đầu (còn 24,2%), mà nhóm
+> này đã qua giai đoạn đó từ lâu. Mô phỏng theo cohort cho 2023 ≈ 22.100 và 2024 ≈ 23.200 khách
+> hoạt động (chưa cộng cohort mới)."*
+
+##### (5) Ghi chú về cohort 2012 — liên quan A7 (iii)
+
+Cohort 2012 một mình đóng góp **37,1% khách** và **42,3% doanh thu 2022**. Tài liệu loại 2012 khỏi
+cửa sổ **so sánh** (đúng, vì kỳ khuyết) — nhưng nếu loại nó khỏi **phần dự báo** thì mất gần một
+nửa cơ sở. Đây là bằng chứng số cho câu trả lời A7 (iii).
+
+---
 
 ---
 
@@ -1478,6 +1814,78 @@ thuộc phương pháp. Điều cần rút ra là: phải khai báo phương ph�
 
 **Trả lời xong khi:** có cả hai bộ tỷ trọng, kết luận H1 đổi hay không đổi, và một câu giải
 thích vì sao tài liệu chọn số học ở tầng này và logarit ở tầng kia (hoặc kiến nghị thống nhất).
+
+#### Trả lời B6
+
+**Kết luận: H1 KHÔNG đổi, nhưng tỷ trọng khác hẳn — phải khai báo phương pháp kèm con số.**
+
+Script: [`scripts/phan_bien/b06_hai_tang_hai_phuong_phap.py`](../../scripts/phan_bien/b06_hai_tang_hai_phuong_phap.py)
+
+##### (1) Hai bộ tỷ trọng, cùng một dữ liệu
+
+Đầu vào chung — `orders.csv` · `live` · grain: mỗi đơn / mỗi khách:
+
+| | 2013 | 2022 |
+|---|---:|---:|
+| Số đơn | 69.756 | 32.620 |
+| Khách hoạt động | 37.352 | 22.999 |
+| Tần suất | 1,8676 | 1,4183 |
+
+| Phương pháp | Mất khách | Giảm tần suất | Tương tác |
+|---|---:|---:|---:|
+| **Số học** *(tài liệu đang dùng)* | **72,2%** | **45,2%** | **−17,4%** |
+| **Logarit** | **63,8%** | **36,2%** | — |
+
+Kiểm tổng logarit: −0,4849 + (−0,2751) = −0,7601, sai số **2,2×10⁻¹⁶**.
+
+##### (2) H1 có đổi không?
+
+> **H1 = "mất khách đóng góp lớn hơn giảm tần suất"**
+>
+> - Theo số học: 72,2% > 45,2% → **ĐÚNG**
+> - Theo logarit: 63,8% > 36,2% → **ĐÚNG**
+>
+> **Kết luận định tính không đổi.** Nhưng khoảng cách thu hẹp: số học cho tỷ số 1,60 lần, logarit
+> cho 1,76 lần — và con số tuyệt đối lệch tới **8,4 điểm phần trăm**.
+
+##### (3) Vì sao số học có số hạng tương tác mà logarit thì không
+
+```
+Số học:   D = K × T
+          ΔD = K₁T₁ − K₀T₀ = (K₀+ΔK)(T₀+ΔT) − K₀T₀
+             = K₀·ΔT + T₀·ΔK + ΔK·ΔT      ← số hạng cuối là TƯƠNG TÁC
+          Ba số hạng, không bỏ được cái nào.
+
+Logarit:  ln(D) = ln(K) + ln(T)            ← ĐẲNG THỨC, đúng tuyệt đối
+          Δln(D) = Δln(K) + Δln(T)
+          Chỉ hai số hạng, không dư gì.
+```
+
+> Logarit **không "tốt hơn"**. Nó chỉ **tránh** được số hạng tương tác bằng cách đổi đơn vị đo từ
+> *"số đơn"* sang *"tỷ lệ thay đổi"*. Đổi lại, kết quả không còn đọc được bằng đơn vị đơn hàng —
+> không nói được *"mất bao nhiêu đơn vì ít khách"*.
+
+##### (4) Đánh giá lựa chọn của tài liệu
+
+| Tầng | Phương pháp | Có hợp lý không |
+|---|---|---|
+| Mục 2.1 `Đơn = Khách × Tần suất` | Số học | ✅ Hợp lý — kết quả đọc được bằng **số đơn** (−28.660 đơn do mất khách), dễ hiểu cho người quản lý |
+| Mục 2.2 `Khách mới = Pool × Tỷ lệ hút` | Logarit | ✅ Hợp lý — ở đây cần **chia phần trách nhiệm sạch**, không cần đơn vị người |
+
+**Không kiến nghị thống nhất một phương pháp.** Hai tầng có mục đích khác nhau, mỗi phương pháp
+phù hợp với mục đích của tầng mình.
+
+**Nhưng bắt buộc phải khai báo.** Hiện tại hai bộ tỷ trọng đứng cạnh nhau trong cùng một tài liệu
+mà không nói rõ chúng tính bằng hai cách khác nhau — người đọc sẽ tưởng so sánh được trực tiếp.
+
+> **Đề xuất sửa Mục 2.1**, thêm một dòng dưới bảng phân rã:
+>
+> *"Phân rã này dùng phương pháp **số học có số hạng tương tác**, nên kết quả đọc được bằng đơn vị
+> đơn hàng. Mục 2.2 dùng **phân rã logarit** (không có số hạng tương tác) vì ở đó cần chia phần
+> trách nhiệm sạch. Hai bộ tỷ trọng **không so sánh trực tiếp được**: cùng dữ liệu này, phân rã
+> logarit cho 63,8% / 36,2% thay vì 72,2% / 45,2%."*
+
+---
 
 ---
 
@@ -1570,6 +1978,95 @@ là nửa đầu của phép mô phỏng này — làm B4 trước sẽ đỡ vi
 
 **Trả lời xong khi:** hai chỗ thống nhất trạng thái, và nếu chạy được mô phỏng thì H4 có kết
 luận.
+
+#### Trả lời B9
+
+**Kết luận: CÓ MÂU THUẪN. Và mô phỏng BÁC BỎ H4 — bước gãy 2019 KHÔNG phải hệ quả trễ của suy
+giảm cohort.**
+
+Script: [`scripts/phan_bien/b09_h4_mo_phong_cohort.py`](../../scripts/phan_bien/b09_h4_mo_phong_cohort.py)
+
+##### (1) Hai chỗ có mâu thuẫn không?
+
+| Chỗ | Nguyên văn | Trạng thái ngụ ý |
+|---|---|---|
+| Mục 5, H4 | *"Bước gãy 2019 là **hệ quả trễ** của suy giảm cohort tích lũy"* — ⏳ **Cần kiểm định** | Chưa xác lập |
+| Mục 11 | *"2019 (bước gãy) — các cohort chất lượng cao đã suy kiệt, cohort thay thế chỉ giữ được ~8%"* | **Đã xác lập** |
+
+**Có mâu thuẫn.** Mục 11 trình bày đúng cơ chế của H4 như một sự thật đã biết, trong khi Mục 5
+ghi nó chưa được kiểm định.
+
+##### (2) Chạy mô phỏng
+
+Cách làm: tính doanh thu trung bình mỗi khách theo **tuổi cohort** (hiệu chỉnh trên cohort ≤ 2015),
+rồi chiếu lên cỡ từng cohort để dựng lại doanh thu từng năm.
+
+| Năm | Thật *(tỷ)* | Mô phỏng *(tỷ)* | Chênh |
+|---|---:|---:|---:|
+| 2012 | 0,673 | 0,644 | −4,3% |
+| 2013 | 1,505 | 1,630 | +8,3% |
+| 2014 | 1,703 | 2,354 | +38,2% |
+| 2015 | 1,714 | 2,854 | +66,5% |
+| 2016 | 1,913 | 3,216 | +68,1% |
+| 2017 | 1,736 | 3,454 | +98,9% |
+| 2018 | 1,679 | 3,590 | +113,9% |
+| **2019** | **1,031** | **3,614** | **+250,7%** |
+| 2020 | 0,954 | 3,678 | +285,6% |
+| 2021 | 0,947 | 3,830 | +304,5% |
+| 2022 | 1,061 | 4,088 | +285,2% |
+
+##### (3) Mô phỏng có tái tạo được bước gãy 2019 không? — **KHÔNG**
+
+| Tăng trưởng 2018 → 2019 | |
+|---|---:|
+| **Thật** | **−38,60%** |
+| **Mô phỏng** | **+0,68%** |
+| Phần giải thích được | **≈ 0%** |
+
+So sánh tăng trưởng từng năm:
+
+| Năm | Thật | Mô phỏng |
+|---|---:|---:|
+| 2016 | +11,61% | +12,68% |
+| 2017 | −9,23% | +7,41% |
+| 2018 | −3,31% | +3,94% |
+| **2019** | **−38,60%** | **+0,68%** |
+| 2020 | −7,46% | +1,76% |
+| 2022 | +12,05% | +6,72% |
+
+> **H4 BỊ BÁC BỎ.** Nếu bước gãy 2019 thật sự là hệ quả trễ của suy giảm cohort thì mô phỏng —
+> vốn chỉ dùng cơ cấu cohort và tuổi cohort — phải tái tạo được nó. Mô phỏng cho **+0,68%**, tức
+> **không thấy bước gãy nào cả**.
+>
+> Phân kỳ tích lũy tới **+285% vào 2022** cho thấy điều thứ hai: **doanh thu trên mỗi khách cũng
+> sụt theo thời gian dương lịch**, không chỉ theo tuổi cohort. Cùng một khách ở cùng một tuổi
+> cohort, năm 2022 mua ít hơn hẳn năm 2016.
+
+##### (4) Điều này nghĩa là gì
+
+Bước gãy 2019 là một **cú sốc theo thời kỳ** tác động lên **mọi cohort cùng lúc**, không phải hệ
+quả tích lũy của việc cohort mới kém dần. Đây là bằng chứng trực tiếp cho giả thuyết **hiệu ứng
+thời kỳ** ở câu **B11**.
+
+##### (5) Đề xuất sửa
+
+**Mục 5, H4** — nâng trạng thái từ ⏳ lên ❌:
+
+> **H4** | Bước gãy 2019 là hệ quả trễ của suy giảm cohort tích lũy | Mô phỏng doanh thu từ cơ cấu
+> cohort và tuổi cohort | ❌ **SAI** — mô phỏng cho +0,68% trong khi thực tế −38,60%; không tái
+> tạo được bước gãy
+
+**Mục 11** — hạ giọng, sửa cơ chế:
+
+> *Hiện tại:* "2019 (bước gãy) — các cohort chất lượng cao đã suy kiệt, cohort thay thế chỉ giữ
+> được ~8%."
+>
+> *Đề xuất:* **"2019 (bước gãy) — một cú sốc tác động đồng thời lên mọi cohort. Mô phỏng chiếu cơ
+> cấu cohort và tuổi cohort lên từng năm chỉ tái tạo được +0,68% trong khi thực tế giảm 38,60%,
+> nên suy giảm chất lượng cohort **không** giải thích được bước gãy này. Nguyên nhân nằm ngoài
+> phạm vi dữ liệu khách hàng — xem B11 về hiệu ứng thời kỳ."**
+
+---
 
 ---
 ### B10. Năm phép kiểm ở Mục 12.2 — phép nào có thể vỡ, phép nào là hằng đúng?
