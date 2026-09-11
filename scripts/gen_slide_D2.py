@@ -8,6 +8,7 @@ Moi con so trong file nay lay tu docs/tong-hop-D2.md va
 docs/phan-bien/cau-hoi-phan-bien-can-kiem.md — khong go tay so moi.
 """
 import os
+import sys
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
@@ -790,6 +791,23 @@ tb(s, 1.25, 4.7, 11, 1.3, [
     'Demo 39 ô đã chạy  ·  D2-Demo.ipynb',
 ], size=13.5, color=RGBColor(0x9E, 0xBE, 0xDC), space=5, font=MONO)
 _n[0] = 23
+
+# ── Ghi chu nguoi trinh bay (Presenter View) ─────────────────────────────────
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from kich_ban_D2 import KICH_BAN                                    # noqa: E402
+
+_ds = list(prs.slides)
+for so, ten, giay, loi, thao_tac in KICH_BAN:
+    if so > len(_ds):
+        continue
+    dong = [f'[{giay} giây]  {ten}', '']
+    dong += loi
+    if thao_tac:
+        dong += ['', '— Thao tác —'] + [f'· {t}' for t in thao_tac]
+    tf = _ds[so - 1].notes_slide.notes_text_frame
+    tf.text = dong[0]
+    for ln in dong[1:]:
+        tf.add_paragraph().text = ln
 
 # ── Ghi ra ────────────────────────────────────────────────────────────────────
 OUT = 'D2-Slides.pptx'
