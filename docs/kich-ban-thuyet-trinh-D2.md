@@ -1,7 +1,7 @@
 # Kịch bản thuyết trình — Bài toán D2
 
 > Dùng kèm [`D2-Slides.pptx`](../D2-Slides.pptx) (23 slide).
-> Tổng thời lượng khi nói đủ: **18 phút 30 giây**.
+> Tổng thời lượng khi nói đủ: **23 phút 40 giây**.
 >
 > Phần *Lời nói* là văn nói, đọc trôi được. Phần *Thao tác* là ghi chú cho người trình bày, không đọc lên.
 
@@ -11,31 +11,37 @@
 ## Mục lục
 
 - [Cách dùng](#cách-dùng)
-- [Bản rút gọn 15 phút](#bản-rút-gọn-15-phút)
+- [Bản rút gọn](#bản-rút-gọn)
 - [Kịch bản từng slide](#kịch-bản-từng-slide)
   - [Slide 1 · Bìa](#slide-1--bìa)
   - [Slide 2 · Nội dung — bốn phần](#slide-2--nội-dung--bốn-phần)
-  - [Slide 3 · Bài toán lớn](#slide-3--bài-toán-lớn)
-  - [Slide 4 · Trục phân rã ba tầng](#slide-4--trục-phân-rã-ba-tầng)
-  - [Slide 5 · Cây sáu bài toán nhỏ](#slide-5--cây-sáu-bài-toán-nhỏ)
-  - [Slide 6 · BTN1 — trạng thái tập khách](#slide-6--btn1--trạng-thái-tập-khách)
-  - [Slide 7 · BTN2 — mất khách hay mua thưa](#slide-7--btn2--mất-khách-hay-mua-thưa)
-  - [Slide 8 · BTN3 — rổ cạn hay kích hoạt hỏng](#slide-8--btn3--rổ-cạn-hay-kích-hoạt-hỏng)
-  - [Slide 9 · BTN4 — mô hình Cox](#slide-9--btn4--mô-hình-cox)
-  - [Slide 10 · Đường Kaplan–Meier](#slide-10--đường-kaplanmeier)
-  - [Slide 11 · Phát hiện chính](#slide-11--phát-hiện-chính)
-  - [Slide 12 · Chín giả thuyết](#slide-12--chín-giả-thuyết)
-  - [Slide 13 · Bộ chỉ số](#slide-13--bộ-chỉ-số)
-  - [Slide 14 · Kiểm chứng số liệu](#slide-14--kiểm-chứng-số-liệu)
-  - [Slide 15 · Tự phản biện — tổng quan](#slide-15--tự-phản-biện--tổng-quan)
-  - [Slide 16 · Tám chỗ lệch](#slide-16--tám-chỗ-lệch)
-  - [Slide 17 · B21 — dữ liệu mô phỏng](#slide-17--b21--dữ-liệu-mô-phỏng)
-  - [Slide 18 · B11 — cohort hay thời kỳ](#slide-18--b11--cohort-hay-thời-kỳ)
-  - [Slide 19 · B17 — cỡ hiệu ứng](#slide-19--b17--cỡ-hiệu-ứng)
-  - [Slide 20 · Kết luận nào còn đứng](#slide-20--kết-luận-nào-còn-đứng)
-  - [Slide 21 · Việc chưa xong](#slide-21--việc-chưa-xong)
-  - [Slide 22 · Nối sang chương mô hình](#slide-22--nối-sang-chương-mô-hình)
-  - [Slide 23 · Kết](#slide-23--kết)
+  - [Slide 3 · Bài toán lớn của khóa luận](#slide-3--bài-toán-lớn-của-khóa-luận)
+  - [Slide 4 · Bài toán D2](#slide-4--bài-toán-d2)
+  - [Slide 5 · Trục phân rã ba tầng](#slide-5--trục-phân-rã-ba-tầng)
+  - [Slide 6 · Đẳng thức chứng minh được gì](#slide-6--đẳng-thức-chứng-minh-được-gì)
+  - [Slide 7 · Cây sáu bài toán nhỏ](#slide-7--cây-sáu-bài-toán-nhỏ)
+  - [Slide 8 · BTN1 — trạng thái tập khách](#slide-8--btn1--trạng-thái-tập-khách)
+  - [Slide 9 · BTN2 — mất khách hay mua thưa](#slide-9--btn2--mất-khách-hay-mua-thưa)
+  - [Slide 10 · BTN3 — rổ cạn hay kích hoạt hỏng](#slide-10--btn3--rổ-cạn-hay-kích-hoạt-hỏng)
+  - [Slide 11 · BTN4 — mô hình Cox](#slide-11--btn4--mô-hình-cox)
+  - [Slide 12 · Đường Kaplan–Meier](#slide-12--đường-kaplanmeier)
+  - [Slide 13 · Phát hiện chính](#slide-13--phát-hiện-chính)
+  - [Slide 14 · Chín giả thuyết](#slide-14--chín-giả-thuyết)
+  - [Slide 15 · Measure — 13 độ đo thô](#slide-15--measure--13-độ-đo-thô)
+  - [Slide 16 · Metric — 13 chỉ số dẫn xuất](#slide-16--metric--13-chỉ-số-dẫn-xuất)
+  - [Slide 17 · KPI — 7 chỉ số có ngưỡng](#slide-17--kpi--7-chỉ-số-có-ngưỡng)
+  - [Slide 18 · Ma trận truy vết](#slide-18--ma-trận-truy-vết)
+  - [Slide 19 · Ba chỗ đã sửa, ba chỗ còn hỏng](#slide-19--ba-chỗ-đã-sửa-ba-chỗ-còn-hỏng)
+  - [Slide 20 · Kiểm chứng số liệu](#slide-20--kiểm-chứng-số-liệu)
+  - [Slide 21 · Tự phản biện — tổng quan](#slide-21--tự-phản-biện--tổng-quan)
+  - [Slide 22 · Tám chỗ lệch](#slide-22--tám-chỗ-lệch)
+  - [Slide 23 · B21 — dữ liệu mô phỏng](#slide-23--b21--dữ-liệu-mô-phỏng)
+  - [Slide 24 · B11 — cohort hay thời kỳ](#slide-24--b11--cohort-hay-thời-kỳ)
+  - [Slide 25 · B17 — cỡ hiệu ứng](#slide-25--b17--cỡ-hiệu-ứng)
+  - [Slide 26 · Kết luận nào còn đứng](#slide-26--kết-luận-nào-còn-đứng)
+  - [Slide 27 · Việc chưa xong](#slide-27--việc-chưa-xong)
+  - [Slide 28 · Nối sang chương mô hình](#slide-28--nối-sang-chương-mô-hình)
+  - [Slide 29 · Kết](#slide-29--kết)
 - [Câu hỏi dự kiến và cách trả lời](#câu-hỏi-dự-kiến-và-cách-trả-lời)
 - [Bốn điều cần nhớ](#bốn-điều-cần-nhớ)
 
@@ -46,20 +52,37 @@
 
 Kịch bản này đã được nhúng sẵn vào phần **ghi chú người trình bày** của từng slide trong `D2-Slides.pptx`. Khi trình chiếu, bật **Presenter View** (PowerPoint: `Slide Show` → tick `Use Presenter View`, hoặc `Alt + F5`) là thấy ngay lời nói của slide đang chiếu.
 
-Không học thuộc. Đọc kỹ hai lần, nhớ **ý** và **con số**, còn câu chữ cứ để tự nhiên. Riêng bốn chỗ nên nói gần đúng nguyên văn vì chúng được cân nhắc từng chữ: slide 3 (chỗ lệch mốc), slide 11 (đổi khuyến nghị), slide 17 (bằng không) và slide 23 (câu kết).
+Không học thuộc. Đọc kỹ hai lần, nhớ **ý** và **con số**, còn câu chữ cứ để tự nhiên. Riêng bốn chỗ nên nói gần đúng nguyên văn vì chúng được cân nhắc từng chữ: slide 4 (chỗ lệch mốc), slide 13 (đổi khuyến nghị), slide 23 (bằng không) và slide 29 (câu kết).
 
-## Bản rút gọn 15 phút
+## Bản rút gọn
 
-Nếu thời gian chỉ có 15 phút, bỏ bốn slide sau — chúng bổ trợ chứ không mang kết luận riêng:
+Nói đủ 29 slide mất **23 phút 40 giây**. Hai bản rút gọn dưới đây bỏ đi slide bổ trợ trước, slide mang kết luận riêng sau cùng.
+
+### Bỏ bốn slide bổ trợ — còn **20 phút 50 giây**
 
 | Bỏ slide | Vì sao bỏ được |
 |---|---|
-| 4 · Trục phân rã ba tầng | Slide 5 đã thể hiện cùng ý qua cây bài toán |
-| 10 · Kaplan–Meier | Hình minh hoạ; slide 11 và 19 mới mang kết luận |
-| 16 · Tám chỗ lệch | Slide 15 đã nêu con số 8; B1, B15 đã nói tại chỗ |
-| 20 · Kết luận nào còn đứng | Giữ lại làm **câu trả lời dự phòng** khi bị hỏi |
+| 12 · Đường Kaplan–Meier | Hình minh hoạ; slide 13 và 25 mới mang kết luận |
+| 18 · Ma trận truy vết | Slide 15–17 đã đủ bộ chỉ số; bảng này để dành trả lời câu hỏi |
+| 22 · Tám chỗ lệch | Slide 21 đã nêu con số 8; B1, B15 đã nói ngay tại chỗ |
+| 26 · Kết luận nào còn đứng | Giữ lại làm **câu trả lời dự phòng** cho câu "dữ liệu giả thì còn gì" |
 
-Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừng.
+### Bỏ tám slide — còn **17 phút 40 giây**
+
+| Bỏ slide | Vì sao bỏ được |
+|---|---|
+| 6 · Đẳng thức chứng minh được gì | Nội dung A9 chuyển thành câu trả lời khi bị hỏi |
+| 12 · Đường Kaplan–Meier | Hình minh hoạ |
+| 15 · Measure — 13 độ đo thô | Gộp vào slide 16 — nói "13 measure, 13 metric" rồi đi tiếp |
+| 18 · Ma trận truy vết | Để dành trả lời câu hỏi |
+| 19 · Ba chỗ đã sửa, ba chỗ còn hỏng | Chuyển vào phần tự phản biện ở slide 21 |
+| 22 · Tám chỗ lệch | Slide 21 đã nêu con số 8 |
+| 26 · Kết luận nào còn đứng | Để dành trả lời câu hỏi |
+| 27 · Việc chưa xong | Ba điều thành thật chuyển sang nói lúc trả lời câu hỏi |
+
+**Dưới 17 phút thì không cắt thêm được nữa** nếu vẫn muốn giữ đủ lập luận — 21 slide còn lại đều mang một kết luận riêng. Nếu hội đồng chỉ cho 15 phút, cách đúng là **nói nhanh hơn trên cùng bộ slide**, không phải bỏ thêm slide.
+
+> Thứ tự ưu tiên khi phải cắt gấp: **giữ bằng mọi giá** slide 4, 13, 17, 21, 23, 29. Sáu slide này mang toàn bộ lập luận của bài.
 
 ---
 
@@ -97,7 +120,28 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 3 · Bài toán lớn
+### Slide 3 · Bài toán lớn của khóa luận
+
+`50 giây`
+
+> Trước khi vào D2, em xin đặt nó vào bối cảnh của cả khóa luận.
+
+> Đề tài của em là dự báo doanh thu và giá vốn hàng bán theo ngày. Chuỗi mục tiêu dài 3.833 ngày, từ tháng 7 năm 2012 đến hết năm 2022, dựng trên 7 bảng dữ liệu với gần 647.000 đơn.
+
+> Nhưng đây không thuần túy là bài toán chuỗi thời gian. Chuỗi doanh thu ngày có ba chế độ rõ rệt và một điểm gãy vào năm 2019. Nếu chỉ ngoại suy xu hướng, mô hình sẽ dự đoán 2023–2024 tiếp tục rơi.
+
+> Muốn biết nên tin vào chế độ nào, phải hiểu cơ chế sinh ra chuỗi — và cơ chế đó nằm ở nền khách hàng. Đó chính là bài toán D2.
+
+> Nhìn sơ đồ phía dưới: D2 đứng giữa khâu dữ liệu và khâu mô hình. Nó không dự báo, nó **ràng buộc** mô hình dự báo. Slide gần cuối em sẽ quay lại ràng buộc cụ thể đó.
+
+**Thao tác:**
+
+- Chỉ tay theo sơ đồ Bronze → Silver → D2 → Chương mô hình khi nói đoạn cuối.
+- Slide này trả lời trước câu "bài toán này nằm ở đâu trong khóa luận".
+
+---
+
+### Slide 4 · Bài toán D2
 
 `60 giây`
 
@@ -116,23 +160,45 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 4 · Trục phân rã ba tầng
+### Slide 5 · Trục phân rã ba tầng
 
 `55 giây`
 
 > Để tìm chỗ hỏng, em phân rã doanh thu thành một tích. Doanh thu bằng số đơn nhân AOV. Số đơn bằng khách hoạt động nhân tần suất. Khách hoạt động bằng khách mới cộng khách giữ lại.
 
-> Sáu bài toán nhỏ của em bám đúng từng thành phần trong phép nhân này, chứ không gom theo chủ đề — nên chúng chia hết không gian nguyên nhân theo định nghĩa.
+> Bảng dưới là số liệu thật cho từng thành phần, bộ lọc live, mốc 2013 so với 2022.
 
-> Nhưng em phải nói rõ một chỗ. Bản đầu em viết là "phủ kín nguyên nhân". Khi tự kiểm ở mục A9 thì thấy nói vậy là quá lời: AOV không bài toán nhỏ nào phụ trách, và nhánh "giành lại khách cũ" — chiếm 52,9% khách hoạt động năm 2022 — bị gộp chìm vào "khách giữ lại". Đúng ra phải nói là phủ kín theo số học, chưa phủ kín theo trách nhiệm phân tích.
+> Đọc theo cột cuối: doanh thu giảm 29,5%, số đơn giảm 53,2%, khách hoạt động giảm 38,4%, tần suất giảm 24,1%. Riêng khách mới giảm 94,6% — gần như tắt hẳn. Và AOV là thành phần **duy nhất tăng**, cộng 50,8%.
+
+> Dòng dưới cùng là phép kiểm số: lấy 1.328 cộng 21.671, nhân tần suất 1,4183, nhân AOV 32.527,96 — ra đúng 1.061.061.965, khớp với doanh thu 2022. Phần dư "khách giữ lại" 21.671 cũng khớp khi em đếm trực tiếp bằng một đường độc lập.
 
 **Thao tác:**
 
-- Đọc khối công thức bằng cách chỉ tay theo từng dòng, đừng đọc từng ký tự.
+- Chỉ tay vào cột "Thay đổi", đặc biệt hai dòng AOV (+50,8%) và Khách mới (−94,6%).
+- Đừng đọc hết bảng. Nêu bốn con số rồi chuyển sang phép kiểm.
 
 ---
 
-### Slide 5 · Cây sáu bài toán nhỏ
+### Slide 6 · Đẳng thức chứng minh được gì
+
+`55 giây`
+
+> Ở đây em xin dừng một nhịp, vì mục A9 trong phần tự phản biện đặt đúng câu hỏi này: đẳng thức vừa rồi chứng minh được gì?
+
+> Câu trả lời là **không chứng minh gì cả**. Tần suất được định nghĩa là đơn chia khách, AOV được định nghĩa là doanh thu chia đơn. Thay vào thì mẫu số triệt tiêu — đẳng thức đúng với mọi bộ dữ liệu, kể cả dữ liệu bịa. Nó là **khung để chia việc**, không phải bằng chứng.
+
+> Và khi bóc riêng 22.999 khách hoạt động năm 2022 thì lộ ra một nhóm mà đẳng thức che mất. Khách mới chỉ 1.328 người. Giữ lại thật 9.495. Nhưng nhóm **giành lại** — người đã nghỉ ít nhất một năm rồi quay lại mua — có 12.176 người, chiếm 52,9%. Nhiều hơn cả nhóm giữ lại thật.
+
+> Vậy có hai chỗ hổng: AOV tăng 50,8% mà không bài toán nhỏ nào phụ trách, và nhóm giành lại bị gộp chìm. Em đề xuất đổi dòng ba của đẳng thức thành ba số hạng chứ không phải hai.
+
+**Thao tác:**
+
+- Slide này chứng tỏ em hiểu sự khác nhau giữa MỘT ĐỊNH NGHĨA và MỘT PHÁT HIỆN.
+- Nếu hội đồng hỏi "tại sao quan trọng" → vì BTN1 và BTN6 nói tới BA can thiệp, mà đẳng thức chỉ có HAI số hạng.
+
+---
+
+### Slide 7 · Cây sáu bài toán nhỏ
 
 `50 giây`
 
@@ -150,7 +216,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 6 · BTN1 — trạng thái tập khách
+### Slide 8 · BTN1 — trạng thái tập khách
 
 `45 giây`
 
@@ -166,7 +232,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 7 · BTN2 — mất khách hay mua thưa
+### Slide 9 · BTN2 — mất khách hay mua thưa
 
 `45 giây`
 
@@ -178,7 +244,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 8 · BTN3 — rổ cạn hay kích hoạt hỏng
+### Slide 10 · BTN3 — rổ cạn hay kích hoạt hỏng
 
 `60 giây`
 
@@ -196,7 +262,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 9 · BTN4 — mô hình Cox
+### Slide 11 · BTN4 — mô hình Cox
 
 `60 giây`
 
@@ -212,7 +278,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 10 · Đường Kaplan–Meier
+### Slide 12 · Đường Kaplan–Meier
 
 `40 giây`
 
@@ -228,7 +294,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 11 · Phát hiện chính
+### Slide 13 · Phát hiện chính
 
 `80 giây`
 
@@ -249,7 +315,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 12 · Chín giả thuyết
+### Slide 14 · Chín giả thuyết
 
 `50 giây`
 
@@ -257,7 +323,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 > H1 đến H3 được ủng hộ. H4 bị bác bỏ — em sẽ nói ở phần sau. H5 và H6 chỉ ủng hộ yếu. H7 đúng nhưng nhỏ hơn em tưởng rất nhiều.
 
-> H8 và H9 ban đầu em ghi là "sai" — tức giao hàng và trả hàng không ảnh hưởng đến giữ chân. Sau khi tự phản biện em phải đổi thành "kết quả rỗng, không diễn giải được". Lý do em xin trình bày ở slide 17.
+> H8 và H9 ban đầu em ghi là "sai" — tức giao hàng và trả hàng không ảnh hưởng đến giữ chân. Sau khi tự phản biện em phải đổi thành "kết quả rỗng, không diễn giải được". Lý do em xin trình bày ở slide 23.
 
 **Thao tác:**
 
@@ -265,19 +331,97 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 13 · Bộ chỉ số
+### Slide 15 · Measure — 13 độ đo thô
 
-`45 giây`
+`50 giây`
 
-> Bộ chỉ số gồm 13 measure, 13 metric và 7 KPI, nối với nhau bằng ma trận truy vết — để mỗi bài toán nhỏ đều truy xuống được một KPI có ngưỡng và có hành động.
+> Sang phần ba, bộ chỉ số. Em thiết kế theo ba tầng: measure, rồi metric, rồi KPI.
 
-> Ba chỗ em đã sửa so với bản đầu: Me8 bị lỗi grain, tử số trộn hai nhóm khách khác nhau. K2 đặt mục tiêu tăng trưởng trên một rổ chỉ có thể co lại — bất khả thi về mặt cấu trúc. Và K7 em thêm vào làm guardrail để chặn chi phí.
+> Tầng một là **measure** — một phép tổng hợp trực tiếp trên một cột, chưa mang ngữ cảnh so sánh. Em có 13 measure, lấy từ 7 bảng.
 
-> Nhưng B8 và B19 cho thấy vẫn còn ba chỗ hỏng. K7 vi phạm ngưỡng của chính nó ngay ngày ban hành — thực tế đang ở 30,57% trong khi ngưỡng đặt là dưới 30%. K1 đòi tăng 2,86 lần. Và K5 phải 36 tháng mới đo được, quá trễ để lái.
+> Mỗi dòng em ghi rõ công thức, bảng nguồn, grain và bộ lọc. Đây là điều em rút ra sau khi tự phản biện: một con số không kèm bộ lọc và grain thì **không kiểm lại được**.
+
+> Bốn measure mới là M9 đến M12, phục vụ mô hình Cox. Độ phủ lần lượt 96,5%, 6,14%, 19,4% và 30,57%.
+
+> Em xin lưu ý M11 — điểm đánh giá — độ phủ chỉ 19,4%. Em **đã loại nó khỏi mô hình Cox**, vì lọc theo nó sẽ tạo thiên lệch chọn mẫu: người chịu đánh giá vốn đã khác người không đánh giá.
+
+**Thao tác:**
+
+- Đừng đọc hết 13 dòng. Nêu định nghĩa tầng, chỉ vào cột "Grain" và "Lọc", rồi nói về M11.
 
 ---
 
-### Slide 14 · Kiểm chứng số liệu
+### Slide 16 · Metric — 13 chỉ số dẫn xuất
+
+`55 giây`
+
+> Tầng hai là **metric**. Cái phân biệt metric với measure không phải số lượng measure dùng, mà là **ngữ cảnh** — mẫu số, cửa sổ thời gian, bộ lọc. "Doanh thu quý 4" chỉ dùng một measure nhưng vẫn là metric.
+
+> Mỗi metric em ghi giá trị đo được thật. Vài con số đáng chú ý: tần suất mua giảm từ 1,87 xuống 1,42. Giữ chân năm +1 từ 49,5% xuống 7,0%. Tỷ lệ hút từ pool từ 20,02% xuống 2,38%.
+
+> Cột cuối là "phục vụ" — mỗi metric gắn với câu hỏi nghiên cứu và giả thuyết nào. Không có metric nào không phục vụ gì cả.
+
+> Me8 là chỗ em đã phải sửa. Công thức cũ trộn khách chưa từng mua vào tử số, mà khách chưa mua thì **không có recency** — đó là lỗi grain. Hệ quả nặng hơn tên gọi: K3 và K4 cũ chồng lấn tử số, hai KPI cùng một phần tử số nhưng hai hành động khác nhau, nên không giám sát được. Em tách đôi thành Me8a và Me8b.
+
+**Thao tác:**
+
+- Nếu bị hỏi "measure và metric khác nhau chỗ nào" → trả lời bằng đúng ví dụ "doanh thu quý 4".
+
+---
+
+### Slide 17 · KPI — 7 chỉ số có ngưỡng
+
+`55 giây`
+
+> Tầng ba là **KPI**. Em định nghĩa chặt: KPI là metric được chọn ra vì gắn mục tiêu, **có ngưỡng**, và **có hành động** khi lệch ngưỡng. Thiếu một trong ba thì nó chỉ là metric.
+
+> Cột "loại" phân biệt dẫn báo, trễ và guardrail — vì K5 và K6 phải chờ nhiều tháng mới đo được, không thể lái bằng chúng.
+
+> K7 là chỗ em muốn nhấn. Sáu KPI đầu **đều một hướng**: nhiều khách hơn, giữ chân tốt hơn. Không cái nào chặn chi phí. Mà cách rẻ nhất để đẩy K1 và K3 lên chính là giảm giá — trong khi dữ liệu cho thấy khách kéo về bằng khuyến mãi chỉ mua 4,60 đơn trọn đời so với 7,58.
+
+> Nên K7 là guardrail: tỷ lệ đơn đầu có khuyến mãi không được vượt 30%. Nó trả lời thẳng câu phản biện "nếu em giành lại khách bằng giảm giá sâu thì K1 tăng nhưng lợi nhuận sập — có gì chặn không".
+
+**Thao tác:**
+
+- Nói rõ ngưỡng 30% đặt bằng đúng mức hiện tại, tức "không được xấu thêm" — không phải chuẩn ngành.
+
+---
+
+### Slide 18 · Ma trận truy vết
+
+`45 giây`
+
+> Bảng này nối cả chuỗi lại. Đọc theo hàng ngang: mỗi bài toán nhỏ đi qua câu hỏi nghiên cứu, giả thuyết, measure, metric, rồi xuống tới một KPI có hành động.
+
+> Bảng cho thấy hai điều. Thứ nhất, **không có measure thừa** — 12 trong 13 measure được dùng ít nhất một lần, M11 bị loại có chủ đích như em vừa nói.
+
+> Thứ hai, **không có bài toán cụt** — mỗi BTN đều dẫn tới một KPI, trừ nhánh RQ5. Mà RQ5 cho kết quả rỗng nên đúng ra không được đẻ ra KPI nào. Nó về đúng vai của nó: là **đầu vào loại trừ** cho BTN6 — kết quả p bằng 0,533 loại bỏ phương án phân bổ ngân sách theo kênh. Đó vẫn là một đóng góp thật.
+
+**Thao tác:**
+
+- Đây là slide trả lời câu "thiết kế của em có chặt không" — chỉ tay theo một hàng ngang từ trái sang phải.
+
+---
+
+### Slide 19 · Ba chỗ đã sửa, ba chỗ còn hỏng
+
+`45 giây`
+
+> Cuối phần ba, em nói về chất lượng của chính bộ chỉ số.
+
+> Ba chỗ em đã sửa: Me8 lỗi grain như vừa trình bày. K2 cũ đặt mục tiêu tăng trưởng trên một rổ chỉ có thể co lại — bất khả thi về cấu trúc, đội ngũ không bao giờ đạt được dù làm tốt đến đâu. Và K7 em thêm vào làm guardrail.
+
+> Nhưng khi tự phản biện ở B8 và B19 thì vẫn còn ba chỗ hỏng. K7 vi phạm ngưỡng của chính nó ngay ngày ban hành — thực tế 30,57% trong khi ngưỡng đặt là dưới 30%. K1 đòi tăng 2,86 lần, mốc 20% cách hiện tại sáu năm. Và K5 phải 36 tháng mới đo được, quá trễ để lái.
+
+> Em đã đề xuất hai chỉ số dẫn báo thay thế cho K5.
+
+**Thao tác:**
+
+- Nếu hội đồng hỏi "sao không sửa luôn K7 cho khỏi vi phạm" → vì hạ ngưỡng xuống cho vừa thực tế thì guardrail mất tác dụng; vấn đề là mức 30,57% chứ không phải con số ngưỡng.
+
+---
+
+### Slide 20 · Kiểm chứng số liệu
 
 `50 giây`
 
@@ -295,7 +439,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 15 · Tự phản biện — tổng quan
+### Slide 21 · Tự phản biện — tổng quan
 
 `45 giây`
 
@@ -309,7 +453,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 16 · Tám chỗ lệch
+### Slide 22 · Tám chỗ lệch
 
 `45 giây`
 
@@ -325,7 +469,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 17 · B21 — dữ liệu mô phỏng
+### Slide 23 · B21 — dữ liệu mô phỏng
 
 `70 giây`
 
@@ -346,11 +490,11 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 **Thao tác:**
 
 - Dừng hẳn một nhịp sau chữ "Bằng không." Đây là khoảnh khắc mạnh nhất của bài.
-- Nếu bị hỏi "vậy cả luận văn còn giá trị gì" → chuyển ngay sang slide 20.
+- Nếu bị hỏi "vậy cả luận văn còn giá trị gì" → chuyển ngay sang slide 26.
 
 ---
 
-### Slide 18 · B11 — cohort hay thời kỳ
+### Slide 24 · B11 — cohort hay thời kỳ
 
 `55 giây`
 
@@ -366,7 +510,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 19 · B17 — cỡ hiệu ứng
+### Slide 25 · B17 — cỡ hiệu ứng
 
 `50 giây`
 
@@ -384,7 +528,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 20 · Kết luận nào còn đứng
+### Slide 26 · Kết luận nào còn đứng
 
 `40 giây`
 
@@ -402,7 +546,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 21 · Việc chưa xong
+### Slide 27 · Việc chưa xong
 
 `40 giây`
 
@@ -420,7 +564,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 22 · Nối sang chương mô hình
+### Slide 28 · Nối sang chương mô hình
 
 `45 giây`
 
@@ -438,7 +582,7 @@ Còn lại **15 phút 30 giây** — vừa đủ 15 phút kể cả nhịp dừn
 
 ---
 
-### Slide 23 · Kết
+### Slide 29 · Kết
 
 `25 giây`
 
@@ -478,7 +622,7 @@ Trả lời **ngắn trước, giải thích sau**. Câu đầu tiên phải là
 
 **5. Dữ liệu là mô phỏng thì phân tích còn ý nghĩa gì?**
 
-> Em chia kết luận làm hai nhóm (slide 20). Nhóm dựa trên **cấu trúc thời gian và đếm đơn, đếm khách** thì bộ sinh phải có quy luật mới tạo ra được — nhóm này đứng vững. Nhóm dựa trên một trường có thể gán ngẫu nhiên thì em **đã loại khỏi khuyến nghị**. Chính vì câu hỏi này mà em làm mục B21.
+> Em chia kết luận làm hai nhóm (slide 26). Nhóm dựa trên **cấu trúc thời gian và đếm đơn, đếm khách** thì bộ sinh phải có quy luật mới tạo ra được — nhóm này đứng vững. Nhóm dựa trên một trường có thể gán ngẫu nhiên thì em **đã loại khỏi khuyến nghị**. Chính vì câu hỏi này mà em làm mục B21.
 
 **6. Vậy khuyến nghị cuối cùng có phải là cắt khuyến mãi không?**
 

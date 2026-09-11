@@ -27,7 +27,21 @@ KICH_BAN = [
  'và tìm ra tám chỗ sai.',
 ], ['Câu cuối nói chậm lại. Đây là câu định hình cả buổi.']),
 
-(3, 'Bài toán lớn', 60, [
+(0, 'Bài toán lớn của khóa luận', 50, [
+ 'Trước khi vào D2, em xin đặt nó vào bối cảnh của cả khóa luận.',
+ 'Đề tài của em là dự báo doanh thu và giá vốn hàng bán theo ngày. Chuỗi mục tiêu dài 3.833 '
+ 'ngày, từ tháng 7 năm 2012 đến hết năm 2022, dựng trên 7 bảng dữ liệu với gần 647.000 đơn.',
+ 'Nhưng đây không thuần túy là bài toán chuỗi thời gian. Chuỗi doanh thu ngày có ba chế độ rõ '
+ 'rệt và một điểm gãy vào năm 2019. Nếu chỉ ngoại suy xu hướng, mô hình sẽ dự đoán 2023–2024 '
+ 'tiếp tục rơi.',
+ 'Muốn biết nên tin vào chế độ nào, phải hiểu cơ chế sinh ra chuỗi — và cơ chế đó nằm ở nền '
+ 'khách hàng. Đó chính là bài toán D2.',
+ 'Nhìn sơ đồ phía dưới: D2 đứng giữa khâu dữ liệu và khâu mô hình. Nó không dự báo, nó **ràng '
+ 'buộc** mô hình dự báo. Slide gần cuối em sẽ quay lại ràng buộc cụ thể đó.',
+], ['Chỉ tay theo sơ đồ Bronze → Silver → D2 → Chương mô hình khi nói đoạn cuối.',
+    'Slide này trả lời trước câu "bài toán này nằm ở đâu trong khóa luận".']),
+
+(0, 'Bài toán D2', 60, [
  'Xuất phát điểm là một quan sát đơn giản. So với đỉnh năm 2016, doanh thu năm 2022 mất 44,4%.',
  'Nhưng khi tách ra thì thấy giá trị mỗi đơn không hề giảm — AOV còn tăng 27%. Cái mất là '
  'số đơn, giảm 56,2%.',
@@ -41,18 +55,35 @@ KICH_BAN = [
 ], ['Chỉ tay vào khối cam khi nói đoạn cuối.',
     'Chủ động nhận lỗi ngay slide đầu tiên — nó đặt tông cho cả phần sau.']),
 
-(4, 'Trục phân rã ba tầng', 55, [
+(0, 'Trục phân rã ba tầng', 55, [
  'Để tìm chỗ hỏng, em phân rã doanh thu thành một tích. Doanh thu bằng số đơn nhân AOV. '
  'Số đơn bằng khách hoạt động nhân tần suất. Khách hoạt động bằng khách mới cộng khách giữ lại.',
- 'Sáu bài toán nhỏ của em bám đúng từng thành phần trong phép nhân này, chứ không gom theo '
- 'chủ đề — nên chúng chia hết không gian nguyên nhân theo định nghĩa.',
- 'Nhưng em phải nói rõ một chỗ. Bản đầu em viết là "phủ kín nguyên nhân". Khi tự kiểm ở mục A9 '
- 'thì thấy nói vậy là quá lời: AOV không bài toán nhỏ nào phụ trách, và nhánh "giành lại khách '
- 'cũ" — chiếm 52,9% khách hoạt động năm 2022 — bị gộp chìm vào "khách giữ lại". Đúng ra phải '
- 'nói là phủ kín theo số học, chưa phủ kín theo trách nhiệm phân tích.',
-], ['Đọc khối công thức bằng cách chỉ tay theo từng dòng, đừng đọc từng ký tự.']),
+ 'Bảng dưới là số liệu thật cho từng thành phần, bộ lọc live, mốc 2013 so với 2022.',
+ 'Đọc theo cột cuối: doanh thu giảm 29,5%, số đơn giảm 53,2%, khách hoạt động giảm 38,4%, '
+ 'tần suất giảm 24,1%. Riêng khách mới giảm 94,6% — gần như tắt hẳn. Và AOV là thành phần '
+ '**duy nhất tăng**, cộng 50,8%.',
+ 'Dòng dưới cùng là phép kiểm số: lấy 1.328 cộng 21.671, nhân tần suất 1,4183, nhân AOV '
+ '32.527,96 — ra đúng 1.061.061.965, khớp với doanh thu 2022. Phần dư "khách giữ lại" 21.671 '
+ 'cũng khớp khi em đếm trực tiếp bằng một đường độc lập.',
+], ['Chỉ tay vào cột "Thay đổi", đặc biệt hai dòng AOV (+50,8%) và Khách mới (−94,6%).',
+    'Đừng đọc hết bảng. Nêu bốn con số rồi chuyển sang phép kiểm.']),
 
-(5, 'Cây sáu bài toán nhỏ', 50, [
+(0, 'Đẳng thức chứng minh được gì', 55, [
+ 'Ở đây em xin dừng một nhịp, vì mục A9 trong phần tự phản biện đặt đúng câu hỏi này: đẳng '
+ 'thức vừa rồi chứng minh được gì?',
+ 'Câu trả lời là **không chứng minh gì cả**. Tần suất được định nghĩa là đơn chia khách, AOV '
+ 'được định nghĩa là doanh thu chia đơn. Thay vào thì mẫu số triệt tiêu — đẳng thức đúng với '
+ 'mọi bộ dữ liệu, kể cả dữ liệu bịa. Nó là **khung để chia việc**, không phải bằng chứng.',
+ 'Và khi bóc riêng 22.999 khách hoạt động năm 2022 thì lộ ra một nhóm mà đẳng thức che mất. '
+ 'Khách mới chỉ 1.328 người. Giữ lại thật 9.495. Nhưng nhóm **giành lại** — người đã nghỉ ít '
+ 'nhất một năm rồi quay lại mua — có 12.176 người, chiếm 52,9%. Nhiều hơn cả nhóm giữ lại thật.',
+ 'Vậy có hai chỗ hổng: AOV tăng 50,8% mà không bài toán nhỏ nào phụ trách, và nhóm giành lại '
+ 'bị gộp chìm. Em đề xuất đổi dòng ba của đẳng thức thành ba số hạng chứ không phải hai.',
+], ['Slide này chứng tỏ em hiểu sự khác nhau giữa MỘT ĐỊNH NGHĨA và MỘT PHÁT HIỆN.',
+    'Nếu hội đồng hỏi "tại sao quan trọng" → vì BTN1 và BTN6 nói tới BA can thiệp, mà đẳng '
+    'thức chỉ có HAI số hạng.']),
+
+(0, 'Cây sáu bài toán nhỏ', 50, [
  'Đây là sáu bài toán nhỏ và tiến độ. Bốn bài đã có kết quả, em sẽ đi qua ngay sau đây.',
  'Hai bài còn treo, và em xin nhấn mạnh: treo vì hai lý do hoàn toàn khác nhau.',
  'BTN5 treo vì em chưa làm — công cụ có sẵn, kiểm định điểm gãy bằng Chow test là làm được '
@@ -137,19 +168,72 @@ KICH_BAN = [
  'H7 đúng nhưng nhỏ hơn em tưởng rất nhiều.',
  'H8 và H9 ban đầu em ghi là "sai" — tức giao hàng và trả hàng không ảnh hưởng đến giữ chân. '
  'Sau khi tự phản biện em phải đổi thành "kết quả rỗng, không diễn giải được". Lý do em xin '
- 'trình bày ở slide 17.',
+ 'trình bày ở slide 23.',
 ], ['Đừng đọc hết chín dòng. Chỉ nêu nhóm và dừng lại ở H8, H9.']),
 
-(13, 'Bộ chỉ số', 45, [
- 'Bộ chỉ số gồm 13 measure, 13 metric và 7 KPI, nối với nhau bằng ma trận truy vết — để mỗi '
- 'bài toán nhỏ đều truy xuống được một KPI có ngưỡng và có hành động.',
- 'Ba chỗ em đã sửa so với bản đầu: Me8 bị lỗi grain, tử số trộn hai nhóm khách khác nhau. '
- 'K2 đặt mục tiêu tăng trưởng trên một rổ chỉ có thể co lại — bất khả thi về mặt cấu trúc. '
- 'Và K7 em thêm vào làm guardrail để chặn chi phí.',
- 'Nhưng B8 và B19 cho thấy vẫn còn ba chỗ hỏng. K7 vi phạm ngưỡng của chính nó ngay ngày ban '
- 'hành — thực tế đang ở 30,57% trong khi ngưỡng đặt là dưới 30%. K1 đòi tăng 2,86 lần. '
- 'Và K5 phải 36 tháng mới đo được, quá trễ để lái.',
-], []),
+(0, 'Measure — 13 độ đo thô', 50, [
+ 'Sang phần ba, bộ chỉ số. Em thiết kế theo ba tầng: measure, rồi metric, rồi KPI.',
+ 'Tầng một là **measure** — một phép tổng hợp trực tiếp trên một cột, chưa mang ngữ cảnh so '
+ 'sánh. Em có 13 measure, lấy từ 7 bảng.',
+ 'Mỗi dòng em ghi rõ công thức, bảng nguồn, grain và bộ lọc. Đây là điều em rút ra sau khi tự '
+ 'phản biện: một con số không kèm bộ lọc và grain thì **không kiểm lại được**.',
+ 'Bốn measure mới là M9 đến M12, phục vụ mô hình Cox. Độ phủ lần lượt 96,5%, 6,14%, 19,4% '
+ 'và 30,57%.',
+ 'Em xin lưu ý M11 — điểm đánh giá — độ phủ chỉ 19,4%. Em **đã loại nó khỏi mô hình Cox**, vì '
+ 'lọc theo nó sẽ tạo thiên lệch chọn mẫu: người chịu đánh giá vốn đã khác người không đánh giá.',
+], ['Đừng đọc hết 13 dòng. Nêu định nghĩa tầng, chỉ vào cột "Grain" và "Lọc", rồi nói về M11.']),
+
+(0, 'Metric — 13 chỉ số dẫn xuất', 55, [
+ 'Tầng hai là **metric**. Cái phân biệt metric với measure không phải số lượng measure dùng, '
+ 'mà là **ngữ cảnh** — mẫu số, cửa sổ thời gian, bộ lọc. "Doanh thu quý 4" chỉ dùng một measure '
+ 'nhưng vẫn là metric.',
+ 'Mỗi metric em ghi giá trị đo được thật. Vài con số đáng chú ý: tần suất mua giảm từ 1,87 '
+ 'xuống 1,42. Giữ chân năm +1 từ 49,5% xuống 7,0%. Tỷ lệ hút từ pool từ 20,02% xuống 2,38%.',
+ 'Cột cuối là "phục vụ" — mỗi metric gắn với câu hỏi nghiên cứu và giả thuyết nào. Không có '
+ 'metric nào không phục vụ gì cả.',
+ 'Me8 là chỗ em đã phải sửa. Công thức cũ trộn khách chưa từng mua vào tử số, mà khách chưa mua '
+ 'thì **không có recency** — đó là lỗi grain. Hệ quả nặng hơn tên gọi: K3 và K4 cũ chồng lấn tử '
+ 'số, hai KPI cùng một phần tử số nhưng hai hành động khác nhau, nên không giám sát được. '
+ 'Em tách đôi thành Me8a và Me8b.',
+], ['Nếu bị hỏi "measure và metric khác nhau chỗ nào" → trả lời bằng đúng ví dụ "doanh thu quý 4".']),
+
+(0, 'KPI — 7 chỉ số có ngưỡng', 55, [
+ 'Tầng ba là **KPI**. Em định nghĩa chặt: KPI là metric được chọn ra vì gắn mục tiêu, **có '
+ 'ngưỡng**, và **có hành động** khi lệch ngưỡng. Thiếu một trong ba thì nó chỉ là metric.',
+ 'Cột "loại" phân biệt dẫn báo, trễ và guardrail — vì K5 và K6 phải chờ nhiều tháng mới đo '
+ 'được, không thể lái bằng chúng.',
+ 'K7 là chỗ em muốn nhấn. Sáu KPI đầu **đều một hướng**: nhiều khách hơn, giữ chân tốt hơn. '
+ 'Không cái nào chặn chi phí. Mà cách rẻ nhất để đẩy K1 và K3 lên chính là giảm giá — trong khi '
+ 'dữ liệu cho thấy khách kéo về bằng khuyến mãi chỉ mua 4,60 đơn trọn đời so với 7,58.',
+ 'Nên K7 là guardrail: tỷ lệ đơn đầu có khuyến mãi không được vượt 30%. Nó trả lời thẳng câu '
+ 'phản biện "nếu em giành lại khách bằng giảm giá sâu thì K1 tăng nhưng lợi nhuận sập — có gì '
+ 'chặn không".',
+], ['Nói rõ ngưỡng 30% đặt bằng đúng mức hiện tại, tức "không được xấu thêm" — không phải '
+    'chuẩn ngành.']),
+
+(0, 'Ma trận truy vết', 45, [
+ 'Bảng này nối cả chuỗi lại. Đọc theo hàng ngang: mỗi bài toán nhỏ đi qua câu hỏi nghiên cứu, '
+ 'giả thuyết, measure, metric, rồi xuống tới một KPI có hành động.',
+ 'Bảng cho thấy hai điều. Thứ nhất, **không có measure thừa** — 12 trong 13 measure được dùng '
+ 'ít nhất một lần, M11 bị loại có chủ đích như em vừa nói.',
+ 'Thứ hai, **không có bài toán cụt** — mỗi BTN đều dẫn tới một KPI, trừ nhánh RQ5. Mà RQ5 cho '
+ 'kết quả rỗng nên đúng ra không được đẻ ra KPI nào. Nó về đúng vai của nó: là **đầu vào loại '
+ 'trừ** cho BTN6 — kết quả p bằng 0,533 loại bỏ phương án phân bổ ngân sách theo kênh. '
+ 'Đó vẫn là một đóng góp thật.',
+], ['Đây là slide trả lời câu "thiết kế của em có chặt không" — chỉ tay theo một hàng ngang '
+    'từ trái sang phải.']),
+
+(0, 'Ba chỗ đã sửa, ba chỗ còn hỏng', 45, [
+ 'Cuối phần ba, em nói về chất lượng của chính bộ chỉ số.',
+ 'Ba chỗ em đã sửa: Me8 lỗi grain như vừa trình bày. K2 cũ đặt mục tiêu tăng trưởng trên một rổ '
+ 'chỉ có thể co lại — bất khả thi về cấu trúc, đội ngũ không bao giờ đạt được dù làm tốt đến '
+ 'đâu. Và K7 em thêm vào làm guardrail.',
+ 'Nhưng khi tự phản biện ở B8 và B19 thì vẫn còn ba chỗ hỏng. K7 vi phạm ngưỡng của chính nó '
+ 'ngay ngày ban hành — thực tế 30,57% trong khi ngưỡng đặt là dưới 30%. K1 đòi tăng 2,86 lần, '
+ 'mốc 20% cách hiện tại sáu năm. Và K5 phải 36 tháng mới đo được, quá trễ để lái.',
+ 'Em đã đề xuất hai chỉ số dẫn báo thay thế cho K5.',
+], ['Nếu hội đồng hỏi "sao không sửa luôn K7 cho khỏi vi phạm" → vì hạ ngưỡng xuống cho vừa '
+    'thực tế thì guardrail mất tác dụng; vấn đề là mức 30,57% chứ không phải con số ngưỡng.']),
 
 (14, 'Kiểm chứng số liệu', 50, [
  'Về kiểm chứng, nguyên tắc của em là phải đi bằng đường khác. Chạy lại cùng một script không '
@@ -200,7 +284,7 @@ KICH_BAN = [
  'Vì vậy H8 và H9 phải đổi cách diễn giải: kết quả rỗng ở đây nói về bộ sinh dữ liệu, không nói '
  'về doanh nghiệp, và em không rút ra khuyến nghị nào từ đó.',
 ], ['Dừng hẳn một nhịp sau chữ "Bằng không." Đây là khoảnh khắc mạnh nhất của bài.',
-    'Nếu bị hỏi "vậy cả luận văn còn giá trị gì" → chuyển ngay sang slide 20.']),
+    'Nếu bị hỏi "vậy cả luận văn còn giá trị gì" → chuyển ngay sang slide 26.']),
 
 (18, 'B11 — cohort hay thời kỳ', 55, [
  'Mục B11 đánh thẳng vào kết luận trọng tâm của em. HR của cohort_year là 0,7478 — nhưng đó là '
@@ -269,6 +353,10 @@ KICH_BAN = [
 ], ['Nói câu cuối rồi dừng hẳn. Đừng nói thêm gì.']),
 ]
 
+# So slide lay theo VI TRI trong danh sach, khong lay theo so viet tay —
+# chen hoac bo mot muc thi moi thu tu danh so lai.
+KICH_BAN = [(i + 1,) + t[1:] for i, t in enumerate(KICH_BAN)]
+
 
 # ── Cau hoi du kien ───────────────────────────────────────────────────────────
 HOI_DAP = [
@@ -294,7 +382,7 @@ HOI_DAP = [
   'dữ liệu. Em ghi rõ đây là tương quan đã kiểm soát.'),
 
  ('Dữ liệu là mô phỏng thì phân tích còn ý nghĩa gì?',
-  'Em chia kết luận làm hai nhóm (slide 20). Nhóm dựa trên **cấu trúc thời gian và đếm đơn, '
+  'Em chia kết luận làm hai nhóm (slide 26). Nhóm dựa trên **cấu trúc thời gian và đếm đơn, '
   'đếm khách** thì bộ sinh phải có quy luật mới tạo ra được — nhóm này đứng vững. Nhóm dựa trên '
   'một trường có thể gán ngẫu nhiên thì em **đã loại khỏi khuyến nghị**. Chính vì câu hỏi này '
   'mà em làm mục B21.'),
@@ -348,7 +436,7 @@ def viet_markdown(duong_dan='docs/kich-ban-thuyet-trinh-D2.md'):
     d.append('<!-- muc-luc -->')
     d.append('## Mục lục\n')
     d.append('- [Cách dùng](#cách-dùng)')
-    d.append('- [Bản rút gọn 15 phút](#bản-rút-gọn-15-phút)')
+    d.append('- [Bản rút gọn](#bản-rút-gọn)')
     d.append('- [Kịch bản từng slide](#kịch-bản-từng-slide)')
     for so, ten, _, _, _ in KICH_BAN:
         d.append(f'  - [Slide {so} · {ten}](#{_neo(f"Slide {so} · {ten}")})')
@@ -363,21 +451,43 @@ def viet_markdown(duong_dan='docs/kich-ban-thuyet-trinh-D2.md'):
              'ngay lời nói của slide đang chiếu.\n')
     d.append('Không học thuộc. Đọc kỹ hai lần, nhớ **ý** và **con số**, còn câu chữ cứ để tự '
              'nhiên. Riêng bốn chỗ nên nói gần đúng nguyên văn vì chúng được cân nhắc từng chữ: '
-             'slide 3 (chỗ lệch mốc), slide 11 (đổi khuyến nghị), slide 17 (bằng không) và '
-             'slide 23 (câu kết).\n')
+             'slide 4 (chỗ lệch mốc), slide 13 (đổi khuyến nghị), slide 23 (bằng không) và '
+             'slide 29 (câu kết).\n')
 
-    d.append('## Bản rút gọn 15 phút\n')
-    d.append('Nếu thời gian chỉ có 15 phút, bỏ bốn slide sau — chúng bổ trợ chứ không mang '
-             'kết luận riêng:\n')
-    d.append('| Bỏ slide | Vì sao bỏ được |')
-    d.append('|---|---|')
-    d.append('| 4 · Trục phân rã ba tầng | Slide 5 đã thể hiện cùng ý qua cây bài toán |')
-    d.append('| 10 · Kaplan–Meier | Hình minh hoạ; slide 11 và 19 mới mang kết luận |')
-    d.append('| 16 · Tám chỗ lệch | Slide 15 đã nêu con số 8; B1, B15 đã nói tại chỗ |')
-    d.append('| 20 · Kết luận nào còn đứng | Giữ lại làm **câu trả lời dự phòng** khi bị hỏi |')
-    cat = sum(s[2] for s in KICH_BAN if s[0] in (4, 10, 16, 20))
-    con = tong - cat
-    d.append(f'\nCòn lại **{con//60} phút {con%60} giây** — vừa đủ 15 phút kể cả nhịp dừng.\n')
+    ten = {s[0]: s[1] for s in KICH_BAN}
+    giay = {s[0]: s[2] for s in KICH_BAN}
+
+    def khoi(bo, nhan):
+        con = tong - sum(giay[b] for b in bo)
+        d.append(f'### {nhan} — còn **{con//60} phút {con%60} giây**\n')
+        d.append('| Bỏ slide | Vì sao bỏ được |')
+        d.append('|---|---|')
+        for b, ly_do in bo.items():
+            d.append(f'| {b} · {ten[b]} | {ly_do} |')
+        d.append('')
+
+    d.append('## Bản rút gọn\n')
+    d.append(f'Nói đủ 29 slide mất **{tong//60} phút {tong%60} giây**. Hai bản rút gọn dưới đây '
+             'bỏ đi slide bổ trợ trước, slide mang kết luận riêng sau cùng.\n')
+    khoi({12: 'Hình minh hoạ; slide 13 và 25 mới mang kết luận',
+          18: 'Slide 15–17 đã đủ bộ chỉ số; bảng này để dành trả lời câu hỏi',
+          22: 'Slide 21 đã nêu con số 8; B1, B15 đã nói ngay tại chỗ',
+          26: 'Giữ lại làm **câu trả lời dự phòng** cho câu "dữ liệu giả thì còn gì"'},
+         'Bỏ bốn slide bổ trợ')
+    khoi({6:  'Nội dung A9 chuyển thành câu trả lời khi bị hỏi',
+          12: 'Hình minh hoạ',
+          15: 'Gộp vào slide 16 — nói "13 measure, 13 metric" rồi đi tiếp',
+          18: 'Để dành trả lời câu hỏi',
+          19: 'Chuyển vào phần tự phản biện ở slide 21',
+          22: 'Slide 21 đã nêu con số 8',
+          26: 'Để dành trả lời câu hỏi',
+          27: 'Ba điều thành thật chuyển sang nói lúc trả lời câu hỏi'},
+         'Bỏ tám slide')
+    d.append('**Dưới 17 phút thì không cắt thêm được nữa** nếu vẫn muốn giữ đủ lập luận — '
+             '21 slide còn lại đều mang một kết luận riêng. Nếu hội đồng chỉ cho 15 phút, '
+             'cách đúng là **nói nhanh hơn trên cùng bộ slide**, không phải bỏ thêm slide.\n')
+    d.append('> Thứ tự ưu tiên khi phải cắt gấp: **giữ bằng mọi giá** slide 4, 13, 17, 21, 23, 29. '
+             'Sáu slide này mang toàn bộ lập luận của bài.\n')
 
     d.append('---\n')
     d.append('## Kịch bản từng slide\n')

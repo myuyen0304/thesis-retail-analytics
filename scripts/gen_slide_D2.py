@@ -240,13 +240,13 @@ y = head(s, 'Nội dung trình bày', 'Bốn phần',
          'Từ bài toán → kết quả số → bộ chỉ số → tự phản biện')
 parts = [
     ('I',   'Bài toán và cách phân rã',
-     'Doanh thu mất 44,4% từ đỉnh. Phân rã ba tầng để tìm chỗ hỏng.', 'Slide 3–5'),
+     'Đề tài khóa luận, vì sao cần D2, và phân rã ba tầng có số liệu.', 'Slide 3–7'),
     ('II',  'Kết quả demo — sáu bài toán nhỏ',
-     'Số liệu chạy trực tiếp trên dữ liệu gốc: BTN1 → BTN4, chín giả thuyết.', 'Slide 6–12'),
-    ('III', 'Bộ chỉ số và kiểm chứng',
-     '13 Measure → 13 Metric → 7 KPI. Sáu phép kiểm chéo.', 'Slide 13–14'),
+     'Số liệu chạy trực tiếp trên dữ liệu gốc: BTN1 → BTN4, chín giả thuyết.', 'Slide 8–14'),
+    ('III', 'Bộ chỉ số — Measure → Metric → KPI',
+     'Đủ bảng M1–M13, Me1–Me13, K1–K7, ma trận truy vết và kiểm chứng.', 'Slide 15–20'),
     ('IV',  'Tự phản biện 31 mục',
-     'Tám lỗi tìm được trong chính tài liệu của mình, và cách sửa.', 'Slide 15–23'),
+     'Tám lỗi tìm được trong chính tài liệu của mình, và cách sửa.', 'Slide 21–29'),
 ]
 yy = y + 0.05
 for num, title, desc, rng in parts:
@@ -260,10 +260,49 @@ for num, title, desc, rng in parts:
     yy += 1.08
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 3 · BÀI TOÁN LỚN
+# 3 · BÀI TOÁN LỚN CỦA KHÓA LUẬN
 # ═══════════════════════════════════════════════════════════════════════════════
 s = new()
-y = head(s, 'Phần I · Bài toán', 'Doanh thu giảm — nhưng giảm ở đâu?',
+y = head(s, 'Phần I · Đặt vấn đề', 'Bài toán lớn của khóa luận',
+         'Dự báo doanh thu và giá vốn hàng bán (COGS) theo ngày')
+stats(s, y + 0.02, [
+    ('3.833', 'NGÀY trong chuỗi mục tiêu\n04/07/2012 → 31/12/2022', ACC),
+    ('646.945', 'ĐƠN HÀNG\ntrên 7 bảng dữ liệu', ACC),
+    ('121.930', 'KHÁCH HÀNG\ndanh sách đóng', ACC),
+], h=1.34)
+tb(s, 0.75, y + 1.48, 11.83, 1.2, [
+    'Đây **không** thuần túy là bài toán chuỗi thời gian. Chuỗi doanh thu ngày có **ba chế độ** '
+    'và **một điểm gãy năm 2019** — ngoại suy xu hướng đơn thuần sẽ dự đoán 2023–2024 tiếp tục rơi.',
+    'Muốn biết mô hình nên tin vào chế độ nào, phải hiểu **cơ chế sinh ra chuỗi**. '
+    'Cơ chế đó nằm ở nền khách hàng — và đó chính là **bài toán D2**.',
+], size=14, hl=DEEP, space=7)
+# so do luong
+bx, bw2, by = 0.75, 2.72, y + 2.84
+khoi = [('Bronze', 'Dữ liệu thô\n7 bảng · 646.945 đơn', PANEL, MUTED),
+        ('Silver', 'Làm sạch, chuẩn hóa\n84 cột', PANEL, MUTED),
+        ('★ D2', 'Phân tích nền khách hàng\nCơ chế xói mòn', PANEL2, ACC),
+        ('Chương mô hình', 'Dự báo Revenue / COGS\ntheo ngày', PANEL, MUTED)]
+for i, (ten, mo, nen, mau) in enumerate(khoi):
+    x = bx + i * (bw2 + 0.31)
+    rect(s, x, by, bw2, 1.1, nen, rounded=True, adj=0.08)
+    if mau == ACC:
+        rect(s, x, by, bw2, 0.06, ACC)
+    tb(s, x + 0.18, by + 0.18, bw2 - 0.36, 0.3, ten, size=13.5, color=mau, bold=True,
+       align=PP_ALIGN.CENTER, space=0)
+    tb(s, x + 0.14, by + 0.54, bw2 - 0.28, 0.5, mo, size=10.5, color=MUTED,
+       align=PP_ALIGN.CENTER, space=0, spacing=1.15)
+    if i < 3:
+        tb(s, x + bw2 + 0.02, by + 0.38, 0.27, 0.3, '→', size=17, color=MUTED,
+           align=PP_ALIGN.CENTER, space=0)
+tb(s, 0.75, y + 4.04, 11.83, 0.3,
+   'D2 đứng **giữa** dữ liệu và mô hình: nó không dự báo, nó **ràng buộc** mô hình dự báo.',
+   size=13, color=MUTED, hl=DEEP, align=PP_ALIGN.CENTER, space=0)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4 · BÀI TOÁN D2
+# ═══════════════════════════════════════════════════════════════════════════════
+s = new()
+y = head(s, 'Phần I · Bài toán D2', 'Doanh thu giảm — nhưng giảm ở đâu?',
          'Đỉnh 2016 → 2022, bộ lọc ALL, tất cả cùng một mốc')
 stats(s, y + 0.02, [
     ('−44,4%', 'DOANH THU', BAD),
@@ -285,25 +324,63 @@ callout(s, 0.75, y + 3.46, 11.83, 0.98,
         color=WARN, bg=RGBColor(0xFD, 0xF3, 0xE7), size=13)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 4 · TRỤC PHÂN RÃ BA TẦNG
+# 5 · TRỤC PHÂN RÃ BA TẦNG — CÓ SỐ LIỆU
 # ═══════════════════════════════════════════════════════════════════════════════
 s = new()
 y = head(s, 'Phần I · Phương pháp', 'Trục phân rã ba tầng',
-         'Sáu bài toán nhỏ ứng đúng các thành phần trong phân rã')
-mono(s, 0.75, y + 0.02, 11.83, 1.72,
-     'Doanh thu\n'
-     '  = Số đơn                       ×  AOV\n'
-     '  = (Khách hoạt động × Tần suất)  ×  AOV\n'
-     '  = ((Khách mới + Khách giữ lại) × Tần suất)  ×  AOV', size=15)
-tb(s, 0.75, y + 1.94, 11.83, 0.5,
-   'Vì các bài toán nhỏ bám vào **thành phần của phép nhân** chứ không gom theo chủ đề, '
-   'chúng chia hết không gian nguyên nhân theo **định nghĩa**.', size=15, hl=DEEP, space=0)
-callout(s, 0.75, y + 2.64, 11.83, 1.46,
-        '⚠  Tự phản biện A9 — nói "phủ kín nguyên nhân" là **quá lời**.\n'
-        'Đẳng thức đúng vì định nghĩa, nhưng **AOV không bài toán nhỏ nào phụ trách**, và nhánh '
-        '**"giành lại" = 52,9%** khách hoạt động 2022 bị gộp chìm vào "khách giữ lại". '
-        'Phải nói: phủ kín **theo số học**, chưa phủ kín **theo trách nhiệm phân tích**.',
-        color=WARN, bg=RGBColor(0xFD, 0xF3, 0xE7), size=14)
+         'Số liệu thật cho từng thành phần · bộ lọc `live` · mốc 2013 → 2022')
+mono(s, 0.75, y + 0.02, 11.83, 1.0,
+     'Doanh thu = Số đơn × AOV = (Khách hoạt động × Tần suất) × AOV\n'
+     '          = ((Khách mới + Khách giữ lại) × Tần suất) × AOV', size=13.5)
+table(s, 0.75, y + 1.14, 11.83,
+      ['Thành phần', 'Đếm gì', '2013', '2022', 'Thay đổi'],
+      [['Doanh thu', 'Σ(quantity × unit_price)', '1.504.550.974', '1.061.061.965', '−29,5%'],
+       ['Số đơn', 'COUNT(order_id)', '69.756', '32.620', '−53,2%'],
+       ['Khách hoạt động', 'COUNTD(customer_id)', '37.352', '22.999', '−38,4%'],
+       ['Tần suất', 'đơn / khách', '1,8675', '1,4183', '−24,1%'],
+       ['AOV', 'doanh thu / đơn', '21.569', '32.528', '+50,8%'],
+       ['Khách mới', 'cohort = năm đó', '24.407', '1.328', '−94,6%'],
+       ['Khách giữ lại', 'hoạt động − mới', '12.945', '21.671', '+67,4%']],
+      colw=[2.3, 3.2, 2.3, 2.3, 1.73], fs=12, rh=0.285,
+      align=[PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.RIGHT, PP_ALIGN.RIGHT, PP_ALIGN.RIGHT],
+      rowcol=[BAD, BAD, BAD, BAD, GOOD, BAD, GOOD])
+callout(s, 0.75, y + 3.62, 11.83, 0.86,
+        'Kiểm số dòng ba, năm 2022:  **(1.328 + 21.671) × 1,4183 × 32.527,96 = 1.061.061.965** ✔\n'
+        'Phần dư "khách giữ lại" 21.671 cũng khớp khi **đếm trực tiếp** bằng đường độc lập.',
+        color=ACC, size=13.5)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6 · ĐẲNG THỨC NÀY CHỨNG MINH ĐƯỢC GÌ
+# ═══════════════════════════════════════════════════════════════════════════════
+s = new()
+y = head(s, 'Phần I · Tự phản biện A9', 'Đẳng thức này chứng minh được gì?',
+         'Một câu hỏi nhỏ làm lộ ra hai chỗ hổng trong khung phân tích')
+tb(s, 0.75, y + 0.02, 5.75, 0.32, 'NÓ LÀ ĐỒNG NHẤT THỨC', size=12, color=WARN,
+   bold=True, space=0)
+rect(s, 0.75, y + 0.38, 5.75, 2.12, RGBColor(0xFD, 0xF3, 0xE7), rounded=True, adj=0.05)
+tb(s, 1.0, y + 0.58, 5.25, 1.8, [
+    'Tần suất **được định nghĩa** là đơn/khách. AOV **được định nghĩa** là doanh thu/đơn.',
+    'Thay vào thì các mẫu số triệt tiêu — đẳng thức **đúng với mọi bộ dữ liệu**, kể cả dữ liệu bịa.',
+    '→ Nó là **khung để chia việc**, không phải **bằng chứng** cho bất cứ điều gì.',
+], size=13, color=INK, hl=WARN, space=8, spacing=1.2)
+tb(s, 6.83, y + 0.02, 5.75, 0.32, 'BÓC 22.999 KHÁCH HOẠT ĐỘNG 2022', size=12, color=BAD,
+   bold=True, space=0)
+table(s, 6.83, y + 0.38, 5.75,
+      ['Nhóm', 'Số khách', '%'],
+      [['Khách mới (cohort 2022)', '1.328', '5,8%'],
+       ['Giữ lại thật (có đơn 2021)', '9.495', '41,3%'],
+       ['**GIÀNH LẠI** (nghỉ ≥ 1 năm)', '**12.176**', '**52,9%**'],
+       ['Tổng', '22.999', '100%']],
+      colw=[3.3, 1.4, 1.05], fs=11.5, hfs=11, rh=0.42, hrh=0.34, hl=BAD,
+      align=[PP_ALIGN.LEFT, PP_ALIGN.RIGHT, PP_ALIGN.RIGHT])
+callout(s, 0.75, y + 2.68, 11.83, 1.42,
+        'Hai chỗ hổng: **AOV tăng +50,8%** — thành phần duy nhất tăng — nhưng **không bài toán nhỏ '
+        'nào phụ trách** nó.\n'
+        'Và nhóm **"giành lại" chiếm 52,9%**, nhiều hơn cả nhóm giữ lại thật (41,3%), nhưng bị gộp '
+        'chìm vào "khách giữ lại".\n'
+        'Đề xuất: đổi dòng ba thành **ba** số hạng — Khách hoạt động = Khách mới + Khách giữ lại '
+        '+ **Khách giành lại**.',
+        color=BAD, bg=RGBColor(0xFD, 0xEC, 0xEC), size=13)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 5 · CÂY BÀI TOÁN
@@ -454,7 +531,7 @@ tb(s, 7.5, y + 0.52, 5.08, 2.4, [
 ], size=13.5, hl=DEEP, space=9, bullet=True)
 callout(s, 7.5, y + 2.86, 5.08, 1.06,
         'Nhưng khoảng cách thô này **gồm cả hiệu ứng cohort**. Sau khi kiểm soát, '
-        'HR chỉ còn **0,948** — xem slide 19.', color=WARN,
+        'HR chỉ còn **0,948** — xem slide 25.', color=WARN,
         bg=RGBColor(0xFD, 0xF3, 0xE7), size=13)
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -510,16 +587,137 @@ table(s, 0.75, y + 0.02, 11.83,
       align=[PP_ALIGN.CENTER, PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.LEFT],
       rowcol=[GOOD, WARN, GOOD, BAD, GOOD, ACC, WARN, WARN, WARN])
 callout(s, 0.75, y + 3.62, 11.83, 0.86,
-        'H8 và H9 **không còn** đọc là "giao hàng không ảnh hưởng giữ chân" — xem slide 17: '
+        'H8 và H9 **không còn** đọc là "giao hàng không ảnh hưởng giữ chân" — xem slide 23: '
         'hai trường dữ liệu đó có dấu hiệu **gán ngẫu nhiên**.',
         color=WARN, bg=RGBColor(0xFD, 0xF3, 0xE7), size=14)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 13 · BỘ CHỈ SỐ
+# 15 · MEASURE
 # ═══════════════════════════════════════════════════════════════════════════════
 s = new()
-y = head(s, 'Phần III · Bộ chỉ số', '13 Measure → 13 Metric → 7 KPI',
-         'Mỗi bài toán nhỏ truy được xuống một KPI có ngưỡng và có hành động')
+y = head(s, 'Phần III · Tầng 1', 'Measure — 13 độ đo thô',
+         'Một phép tổng hợp trực tiếp trên một cột, chưa mang ngữ cảnh so sánh')
+table(s, 0.75, y + 0.02, 11.83,
+      ['#', 'Measure', 'Công thức', 'Nguồn', 'Grain', 'Lọc'],
+      [['M1', 'Số khách đăng ký', 'COUNT(customer_id)', 'customers', 'Toàn tập', '—'],
+       ['M2', 'Số khách có giao dịch', 'COUNTD(customer_id)', 'orders', 'Toàn tập / năm', 'live'],
+       ['M3', 'Số đơn hàng', 'COUNT(order_id)', 'orders', 'Ngày / năm', 'live'],
+       ['M4', 'Doanh thu gross', 'SUM(quantity × unit_price)', 'order_items', 'Dòng hàng', 'live'],
+       ['M5', 'Ngày mua đầu tiên', 'MIN(order_date) theo khách', 'orders', 'Mỗi khách', 'live'],
+       ['M6', 'Ngày mua gần nhất', 'MAX(order_date) theo khách', 'orders', 'Mỗi khách', 'ALL'],
+       ['M7', 'Số đơn trọn đời', 'COUNT(order_id) theo khách', 'orders', 'Mỗi khách', 'live'],
+       ['M8', 'Doanh thu trọn đời', 'SUM(M4) theo khách', 'orders ⋈ items', 'Mỗi khách', 'live'],
+       ['M9', 'Số ngày giao đơn đầu', 'delivery_date − ship_date', 'shipments', 'Mỗi khách', 'live'],
+       ['M10', 'Cờ trả hàng đơn đầu', 'order_id ∈ returns', 'returns', 'Mỗi khách', 'live'],
+       ['M11', 'Điểm đánh giá đơn đầu', 'AVG(rating) theo order_id', 'reviews', 'Mỗi khách', 'live'],
+       ['M12', 'Cờ khuyến mãi đơn đầu', 'ANY(promo_id NOT NULL)', 'order_items', 'Mỗi khách', 'live'],
+       ['M13', 'Pool chưa mua đầu năm', 'M1 − Σ khách mới năm trước', 'customers+orders', 'Mỗi năm', 'live']],
+      colw=[0.6, 2.9, 3.9, 2.0, 1.75, 0.68], fs=10.5, hfs=10.5, rh=0.265, hrh=0.3,
+      align=[PP_ALIGN.CENTER, PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.LEFT,
+             PP_ALIGN.LEFT, PP_ALIGN.CENTER])
+tb(s, 0.75, y + 3.82, 11.83, 0.62, [
+    'Độ phủ bốn measure mới: M9 **96,5%** · M10 **6,14%** · M11 **19,4%** · M12 **30,57%**. '
+    'M13 giảm đơn điệu 121.930 → 55.738, đúng như kỳ vọng với một rổ đóng.',
+    '**M11 đã bị loại khỏi mô hình Cox** — độ phủ chỉ 19,4%, lọc theo nó sẽ tạo thiên lệch '
+    'chọn mẫu nghiêm trọng.',
+], size=11.5, hl=DEEP, space=5)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 16 · METRIC
+# ═══════════════════════════════════════════════════════════════════════════════
+s = new()
+y = head(s, 'Phần III · Tầng 2', 'Metric — 13 chỉ số dẫn xuất',
+         'Cái phân biệt metric với measure là NGỮ CẢNH — mẫu số, cửa sổ thời gian, bộ lọc')
+table(s, 0.75, y + 0.02, 11.83,
+      ['#', 'Metric', 'Công thức', 'Giá trị đo được', 'Phục vụ'],
+      [['Me1', 'Tỷ lệ kích hoạt tích lũy', 'M2 / M1', '72,3%', 'RQ1'],
+       ['Me2', 'Tỷ lệ mua lại', '#(M7 ≥ 2) / M2', '74,3%', 'RQ1'],
+       ['Me3', 'Tần suất mua / năm', 'M3(năm) / M2(năm)', '1,87 → 1,42', 'RQ3, H1'],
+       ['Me4', 'Khách mua lần đầu mỗi năm', '#(year(M5) = Y)', '24.407 → 1.328', 'RQ2, H2'],
+       ['Me5', 'Giữ chân năm +N', 'cohort C mua ở C+N / cỡ C', '49,5% → 7,0%', 'RQ2, H3'],
+       ['Me6', 'Giá trị cohort 3 năm', 'Σ rev 3 năm đầu / cỡ cohort', '78.589 → 35.378', 'RQ4, H3'],
+       ['Me7', 'Tỷ trọng doanh thu khách mới', 'rev khách mới / tổng rev', '55,4% → 4,2%', 'RQ6'],
+       ['Me8a', 'Tỷ lệ chưa kích hoạt', '(M1 − M2) / M1', '26,0%', 'K4, BTN1'],
+       ['Me8b', 'Tỷ lệ ngủ đông', '#(recency > 365) / M2', '72,6%', 'K3′, BTN1'],
+       ['Me9', 'LTV theo kênh', 'AVG(M8) nhóm theo kênh', 'chênh 2,45%', 'RQ5, H5'],
+       ['Me10', 'Đóng góp khách vs tần suất', 'ΔKhách×TS₀ và Khách₀×ΔTS', '72,2% / 45,2%', 'RQ3, H1'],
+       ['Me11', 'Tỷ lệ hút từ pool', 'Me4(Y) / M13(Y)', '20,02% → 2,38%', 'K2′, BTN3'],
+       ['Me12', 'Trung vị ngày tới đơn 2', 'median(M5₂ − M5₁)', '308 ngày', 'BTN4'],
+       ['Me13', 'Hazard ratio biến đơn đầu', 'exp(β) từ Cox PH', 'xem slide 11', 'BTN4']],
+      colw=[0.72, 3.3, 3.9, 2.35, 1.56], fs=10.5, hfs=10.5, rh=0.245, hrh=0.3,
+      align=[PP_ALIGN.CENTER, PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.LEFT])
+callout(s, 0.75, y + 3.82, 11.83, 0.72,
+        '**Me8 cũ đã bị tách đôi.** Công thức cũ trộn khách chưa từng mua (không có recency) vào '
+        'tử số — lỗi grain. Hệ quả nặng hơn tên gọi: **K3 và K4 cũ chồng lấn tử số**, hai KPI '
+        'cùng một phần tử số nhưng hai hành động khác nhau.', color=WARN,
+        bg=RGBColor(0xFD, 0xF3, 0xE7), size=12)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 17 · KPI
+# ═══════════════════════════════════════════════════════════════════════════════
+s = new()
+y = head(s, 'Phần III · Tầng 3', 'KPI — 7 chỉ số có ngưỡng và hành động',
+         'KPI là Metric được chọn ra vì gắn mục tiêu, CÓ ngưỡng và CÓ hành động khi lệch ngưỡng')
+table(s, 0.75, y + 0.02, 11.83,
+      ['#', 'KPI', 'Nguồn', 'Hiện tại', 'Ngưỡng', 'Loại', 'Hành động khi lệch'],
+      [['K1', 'Giữ chân năm +1', 'Me5 (N=1)', '7,0%', '≥ 20%', 'dẫn báo',
+        'Chuỗi nuôi dưỡng sau đơn đầu'],
+       ['K2′', 'Tỷ lệ hút từ pool', 'Me11', '2,38%', 'không giảm YoY', 'dẫn báo',
+        'Xem lại chương trình kích hoạt'],
+       ['K3′', 'Tỷ lệ ngủ đông', 'Me8b', '72,6%', '≤ 60%', 'dẫn báo',
+        'Giành lại nhóm recency 1–2 năm'],
+       ['K4', 'Tỷ lệ kích hoạt tích lũy', 'Me1', '72,3%', 'bỏ ngưỡng', 'theo dõi',
+        '— đã hạ cấp'],
+       ['K5', 'Giá trị cohort 3 năm', 'Me6', '35.378', 'không giảm YoY', 'TRỄ',
+        'Kiểm chất lượng nguồn kích hoạt'],
+       ['K6', 'Độ phụ thuộc khách cũ', '1 − Me7', '95,8%', '≤ 85%', 'TRỄ',
+        'Rủi ro tập trung vào nền khách già'],
+       ['K7', 'Đơn đầu có khuyến mãi', 'mean(M12)', '30,6%', '≤ 30%', 'GUARDRAIL',
+        'Vượt trần → dừng mở rộng khuyến mãi']],
+      colw=[0.6, 2.45, 1.15, 1.0, 1.7, 1.15, 3.78], fs=11, hfs=10.5, rh=0.42, hrh=0.32,
+      align=[PP_ALIGN.CENTER, PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.RIGHT,
+             PP_ALIGN.RIGHT, PP_ALIGN.CENTER, PP_ALIGN.LEFT])
+callout(s, 0.75, y + 3.5, 11.83, 0.6,
+        'Sáu KPI đầu **đều một hướng** — nhiều khách hơn, giữ chân tốt hơn. **K7 là guardrail duy '
+        'nhất**, nó tồn tại để chặn việc mua tăng trưởng bằng giảm giá.',
+        color=ACC, size=13)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 18 · MA TRẬN TRUY VẾT
+# ═══════════════════════════════════════════════════════════════════════════════
+s = new()
+y = head(s, 'Phần III · Nối chuỗi', 'Ma trận truy vết — chuỗi thiết kế nối liền',
+         'Đọc theo hàng ngang: mỗi bài toán nhỏ truy được xuống tới một KPI có hành động')
+table(s, 0.75, y + 0.02, 11.83,
+      ['BTN', 'Câu hỏi nghiên cứu', 'Giả thuyết', 'Measure', 'Metric', 'KPI'],
+      [['BTN1', 'RQ1 · Cấu trúc tập khách', '—', 'M1, M2, M6',
+        'Me1, Me2, Me8a, Me8b', 'K3′, K4'],
+       ['BTN3', 'RQ2 · Kích hoạt & giữ chân', 'H2', 'M2, M5, M13',
+        'Me4, Me5, Me11', 'K1, K2′'],
+       ['BTN2', 'RQ3 · Mất khách hay giảm tần suất', 'H1', 'M2, M3',
+        'Me3, Me10', 'K1, K2′'],
+       ['BTN4', 'RQ4 · Cơ chế khách không quay lại', 'H3, H4, H7–H9', 'M4, M5, M7, M9, M10, M12',
+        'Me6, Me12, Me13', 'K5, K7'],
+       ['BTN6', 'RQ5 · Kênh có phân hóa giá trị', 'H5', 'M8', 'Me9', '— (rỗng)'],
+       ['BTN5', 'RQ6 · Nền khách đỡ nổi 2023–24', 'H6', 'M2, M4', 'Me7', 'K6'],
+       ['BTN6', 'RQ7 · Ưu tiên ngân sách', 'H1, H2, H5', 'M1, M6, M8',
+        'Me1, Me8a, Me8b, Me9', 'K3′, K7']],
+      colw=[0.8, 3.35, 1.55, 2.85, 2.25, 1.03], fs=10.5, hfs=10.5, rh=0.36, hrh=0.32,
+      align=[PP_ALIGN.CENTER, PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.LEFT,
+             PP_ALIGN.LEFT, PP_ALIGN.LEFT])
+tb(s, 0.75, y + 3.12, 11.83, 0.98, [
+    '**Không có Measure thừa** — 12 trong 13 measure được dùng ít nhất một lần. '
+    'M11 bị loại có chủ đích vì độ phủ 19,4%.',
+    '**Không có bài toán cụt** — mỗi BTN đều dẫn tới một KPI, trừ nhánh RQ5 vốn cho kết quả rỗng '
+    'nên đúng ra không được đẻ ra KPI nào. RQ5 về đúng vai: nó là **đầu vào loại trừ** cho BTN6.',
+], size=12.5, hl=DEEP, space=7, bullet=True)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 19 · BỘ CHỈ SỐ — ĐÃ SỬA VÀ CÒN HỎNG
+# ═══════════════════════════════════════════════════════════════════════════════
+s = new()
+y = head(s, 'Phần III · Chất lượng bộ chỉ số', 'Ba chỗ đã sửa, ba chỗ còn hỏng',
+         'Một bộ chỉ số cũng phải chịu kiểm như số liệu — và nó đã trượt vài chỗ')
 table(s, 0.75, y + 0.02, 11.83,
       ['', 'Vấn đề phát hiện được', 'Đã sửa thành'],
       [['Me8', 'Lỗi grain — tử số trộn khách chưa mua (không có recency) với khách ngủ đông',
@@ -790,7 +988,7 @@ tb(s, 1.25, 4.7, 11, 1.3, [
     'Phản biện 31 mục  ·  docs/phan-bien/cau-hoi-phan-bien-can-kiem.md',
     'Demo 39 ô đã chạy  ·  D2-Demo.ipynb',
 ], size=13.5, color=RGBColor(0x9E, 0xBE, 0xDC), space=5, font=MONO)
-_n[0] = 23
+_n[0] = 29
 
 # ── Ghi chu nguoi trinh bay (Presenter View) ─────────────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
