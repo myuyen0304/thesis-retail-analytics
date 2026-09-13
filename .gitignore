@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ============================================================
+# Riêng của project này
+# ============================================================
+
+# Data nguồn — KHÔNG commit (126MB). Tải từ Google Drive, xem README.md
+data/
+
+# Silver 3NF — dữ liệu dẫn xuất do scripts/build_silver.py sinh ra, KHÔNG commit
+silver/
+
+# File output/tạm sinh ra khi chạy notebook
+.baseline_dump.txt

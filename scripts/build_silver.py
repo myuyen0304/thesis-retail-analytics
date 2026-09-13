@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 DATA = 'data'
-OUT = f'{DATA}/silver'
+OUT = 'silver'  # root repo; đã gitignore như data/
 R = lambda f, **k: pd.read_csv(f'{DATA}/{f}', dtype=str, low_memory=False, **k)
 
 num = lambda s: pd.to_numeric(s)
