@@ -1,0 +1,63 @@
+version: 2
+
+# Tầng phục vụ 5 problem statement (deck docs/presentations/revenue_performance_problem_statement_updated.pptx).
+# Quy ước: R = Σ(quantity × unit_price − discount_amount), chỉ đơn delivered; G = mọi đơn, chưa trừ chiết khấu (= sales.csv).
+# Test nghiệp vụ (đối soát, tính cộng tính của phân rã) ở tests/assert_rpt_*.sql.
+
+models:
+  - name: int_reporting_order_items
+    description: "Grain = dòng hàng. fact_order_item gắn lịch, trạng thái đơn, category/region/acquisition_channel."
+    columns:
+      - name: order_item_sk
+        data_tests: [unique, not_null]
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['cancelled', 'created', 'delivered', 'paid', 'returned', 'shipped']}
+      - name: category
+        data_tests: [not_null]
+      - name: region
+        data_tests: [not_null]
+      - name: acquisition_channel
+        data_tests: [not_null]
+
+  - name: rpt_revenue_monthly
+    description: "PS1/PS2/PS3 theo tháng: G, R, tách G−R, N/Q/C/U/P/F/AOV, YoY cùng kỳ, R 12 tháng, chỉ số tháng, tỷ trọng cuối tháng."
+    columns:
+      - name: month_start_date
+        data_tests: [unique, not_null]
+      - name: r
+        data_tests: [not_null]
+      - name: r_12m
+        description: "NULL trước 07/2013 (chưa đủ 12 tháng trọn vẹn)."
+      - name: month_index
+        description: "R tháng / TB 12 tháng cùng năm; NULL cho 2012 (nửa năm)."
+
+  - name: rpt_revenue_yearly
+    description: "PS1/PS2/PS4 + C/F của PS5 theo năm. Tăng trưởng và phân rã chỉ từ 2014."
+    columns:
+      - name: year
+        data_tests: [unique, not_null]
+      - name: contrib_n
+        description: "(N₁ − N₀) × U₀ × P₀"
+      - name: contrib_u
+        description: "N₁ × (U₁ − U₀) × P₀"
+      - name: contrib_p
+        description: "N₁ × U₁ × (P₁ − P₀). contrib_n + contrib_u + contrib_p = delta_r"
+      - name: contrib_c
+        description: "(C₁ − C₀) × F₀"
+      - name: contrib_f
+        description: "C₁ × (F₁ − F₀). contrib_c + contrib_f = delta_n"
+
+  - name: rpt_revenue_segment_yearly
+    description: "PS5: R theo category / region / acquisition_channel × năm (lưới đầy đủ). Không cộng các chiều với nhau."
+    columns:
+      - name: dimension_name
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['category', 'region', 'acquisition_channel']}
+      - name: dimension_value
+        data_tests: [not_null]
+
+  - name: rpt_august_parity
+    description: "PS3: chênh chỉ số tháng 8 năm lẻ / năm chẵn, 2013–2022."

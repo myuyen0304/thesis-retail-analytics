@@ -1,0 +1,140 @@
+version: 2
+
+# Star schema — thiết kế: docs/star_schema.md (§4 grain, §5 quyết định, §7 DDL), sơ đồ: docs/design/star_schema.mmd.
+# Test PK/FK ở đây; test nghiệp vụ (đối soát nguồn) ở tests/*.sql.
+
+models:
+  # ================= DIMENSIONS
+  - name: dim_date
+    description: "Dải ngày 2012-01-01 → 2024-07-01, phủ cả vùng dự báo. Có cờ nghiệp vụ is_urban_blowout."
+    columns:
+      - name: date_sk
+        description: "YYYYMMDD"
+        data_tests: [unique, not_null]
+      - name: full_date
+        data_tests: [unique, not_null]
+
+  - name: dim_geography
+    description: "Grain = zip. city và district cắt chéo nhau (không lồng) → phẳng, không snowflake."
+    columns:
+      - name: geography_sk
+        data_tests: [unique, not_null]
+      - name: zip
+        data_tests: [unique, not_null]
+
+  - name: dim_customer
+    description: "SCD Type 1. Outrigger tới dim_geography."
+    columns:
+      - name: customer_sk
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: geography_sk
+        data_tests:
+          - not_null
+          - relationships: {arguments: {to: ref('dim_geography'), field: geography_sk}}
+      - name: signup_date
+        description: "KHÔNG đáng tin: 73,8% đơn phát sinh trước ngày signup."
+
+  - name: dim_product
+    description: "SCD Type 1; current_price/current_cogs là giá hiện tại, không phải giá lịch sử."
+    columns:
+      - name: product_sk
+        data_tests: [unique, not_null]
+      - name: product_id
+        data_tests: [unique, not_null]
+      - name: price_anomaly
+        description: "current_price < 100 — cờ chất lượng dữ liệu, KHÔNG dùng để GROUP BY."
+
+  - name: dim_promotion
+    columns:
+      - name: promotion_sk
+        data_tests: [unique, not_null]
+      - name: promo_id
+        data_tests: [unique, not_null]
+
+  - name: dim_order_junk
+    description: "Junk dim 540 dòng = tích 4 thuộc tính cardinality thấp."
+    columns:
+      - name: order_junk_sk
+        data_tests: [unique, not_null]
+
+  # ================= FACTS
+  - name: fact_order_item
+    description: "Transaction fact, grain = 1 dòng hàng. order_id là degenerate dimension."
+    columns:
+      - name: order_item_sk
+        data_tests: [unique, not_null]
+      - name: date_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_date'), field: date_sk}}]
+      - name: customer_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_customer'), field: customer_sk}}]
+      - name: product_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_product'), field: product_sk}}]
+      - name: order_junk_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_order_junk'), field: order_junk_sk}}]
+      - name: gross_amount
+        description: "quantity × unit_price — định nghĩa Revenue của sales.csv (không trừ discount)."
+
+  - name: fact_order
+    description: "Accumulating snapshot, grain = 1 đơn; dim_date đóng 3 vai trò (đặt/gửi/giao)."
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: order_date_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_date'), field: date_sk}}]
+      - name: ship_date_sk
+        data_tests: [relationships: {arguments: {to: ref('dim_date'), field: date_sk}}]
+      - name: delivery_date_sk
+        data_tests: [relationships: {arguments: {to: ref('dim_date'), field: date_sk}}]
+      - name: customer_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_customer'), field: customer_sk}}]
+      - name: order_junk_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_order_junk'), field: order_junk_sk}}]
+
+  - name: fact_daily_sales
+    description: "Aggregate fact theo ngày: 3.833 dòng thực tế (tính từ fact_order_item) + 548 dòng vùng dự báo."
+    columns:
+      - name: date_sk
+        data_tests: [unique, not_null, relationships: {arguments: {to: ref('dim_date'), field: date_sk}}]
+
+  - name: fact_inventory_snapshot
+    description: "Periodic snapshot cuối tháng × sản phẩm. BÁN CỘNG TÍNH: không SUM stock_on_hand qua nhiều mốc."
+    columns:
+      - name: date_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_date'), field: date_sk}}]
+      - name: product_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_product'), field: product_sk}}]
+
+  - name: fact_return
+    columns:
+      - name: return_id
+        data_tests: [unique, not_null]
+      - name: order_item_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('fact_order_item'), field: order_item_sk}}]
+      - name: date_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_date'), field: date_sk}}]
+
+  - name: fact_review
+    columns:
+      - name: review_id
+        data_tests: [unique, not_null]
+      - name: order_item_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('fact_order_item'), field: order_item_sk}}]
+      - name: date_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_date'), field: date_sk}}]
+      - name: rating
+        data_tests: [not_null, accepted_values: {arguments: {values: [1, 2, 3, 4, 5], quote: false}}]
+
+  - name: bridge_item_promo
+    description: "Bridge M:N dòng hàng × khuyến mãi."
+    columns:
+      - name: order_item_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('fact_order_item'), field: order_item_sk}}]
+      - name: promotion_sk
+        data_tests: [not_null, relationships: {arguments: {to: ref('dim_promotion'), field: promotion_sk}}]
+
+  - name: fact_web_traffic
+    columns:
+      - name: date_sk
+        data_tests: [unique, not_null, relationships: {arguments: {to: ref('dim_date'), field: date_sk}}]

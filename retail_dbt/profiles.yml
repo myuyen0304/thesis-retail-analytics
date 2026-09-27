@@ -1,0 +1,27 @@
+# Không chứa bí mật: thông tin Snowflake đọc từ biến môi trường (máy cá nhân hoặc GitHub Actions secrets).
+retail_dbt:
+  target: postgres
+  outputs:
+    postgres:          # dev chính: PostgreSQL local (docker-compose.yml ở root, cổng 5433)
+      type: postgres
+      host: "{{ env_var('PG_HOST', 'localhost') }}"
+      port: "{{ env_var('PG_PORT', '5433') | as_number }}"
+      dbname: "{{ env_var('PG_DATABASE', 'retail') }}"
+      user: "{{ env_var('PG_USER', 'retail') }}"
+      password: "{{ env_var('PG_PASSWORD', 'retail') }}"
+      schema: public
+      threads: 4
+    duckdb:            # dev nhẹ: 1 file, không cần server/Docker
+      type: duckdb
+      path: warehouse/dbt.duckdb   # tương đối từ root repo, đã gitignore
+      threads: 4
+    snowflake:         # production
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', '') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD', '') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'TRANSFORMER') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'TRANSFORM_WH') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'RETAIL') }}"
+      schema: dbt
+      threads: 4

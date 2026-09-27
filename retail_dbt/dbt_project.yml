@@ -1,0 +1,34 @@
+# dbt project: 14 CSV nguồn -> staging -> intermediate -> marts (star schema, docs/star_schema.md §7)
+# Cùng một bộ model chạy trên 2 target: duckdb (dev, máy cá nhân) và snowflake (production).
+# Chạy từ ROOT repo:
+#   .venv/Scripts/dbt.exe build --project-dir retail_dbt --profiles-dir retail_dbt --target duckdb
+name: retail_dbt
+version: '1.0.0'
+profile: retail_dbt
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  retail_dbt:
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+    marts:
+      +materialized: table
+      +schema: marts
+    # Tầng phục vụ 5 PS (deck docs/presentations/revenue_performance_problem_statement_updated.pptx):
+    # KPI tính sẵn theo quy ước R, đọc từ marts. Power BI đọc schema này.
+    reporting:
+      +materialized: table
+      +schema: reporting
+
+tests:
+  retail_dbt:
+    +severity: error   # mọi test FAIL đều chặn build — như quality gate của scripts/build/build_gold.py

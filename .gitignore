@@ -229,3 +229,15 @@ silver/
 
 # File output/tạm sinh ra khi chạy notebook
 .baseline_dump.txt
+
+# Bản nén của silver/ — dữ liệu dẫn xuất, KHÔNG commit
+silver.zip
+
+# Data Warehouse local (DuckDB) — sinh ra khi chạy, KHÔNG commit
+warehouse/
+
+# dbt — artifact sinh ra khi chạy, KHÔNG commit
+retail_dbt/target/
+retail_dbt/logs/
+retail_dbt/dbt_packages/
+retail_dbt/.user.yml

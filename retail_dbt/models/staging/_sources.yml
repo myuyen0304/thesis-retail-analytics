@@ -1,0 +1,29 @@
+version: 2
+
+# 14 CSV nguồn (CLAUDE.md §2). Tầng RAW giữ MỌI cột dạng chuỗi, thêm _src_row = số thứ tự dòng trong file:
+# line_number của dòng hàng phải theo THỨ TỰ NGUỒN (star_schema.md §5.1), SQL không tự có thứ tự.
+# - target duckdb   : đọc thẳng data/*.csv qua external_location (chạy dbt từ root repo)
+# - target snowflake: bảng RETAIL.RAW.<tên>, nạp bằng COPY INTO kèm METADATA$FILE_ROW_NUMBER
+sources:
+  - name: raw
+    schema: raw
+    config:
+      meta:
+        external_location: >-
+          (select *, row_number() over () as _src_row
+           from read_csv('data/{name}.csv', header = true, all_varchar = true))
+    tables:
+      - name: customers
+      - name: geography
+      - name: products
+      - name: promotions
+      - name: orders
+      - name: order_items
+      - name: payments
+      - name: shipments
+      - name: returns
+      - name: reviews
+      - name: inventory
+      - name: web_traffic
+      - name: sales
+      - name: sample_submission
