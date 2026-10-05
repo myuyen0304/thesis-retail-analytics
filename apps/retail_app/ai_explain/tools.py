@@ -15,6 +15,7 @@ Lựa chọn trạng thái (ghi lại để eval chấm nhất quán):
 - nhóm không tồn tại trong chiều → `no_data`.
 """
 import datetime as dt
+import functools
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -582,6 +583,23 @@ def run(call: ToolCall | dict, backend: str, *, timeout_s: float = DEFAULT_TIMEO
         return ToolResult('query_error', f'{e}; không cắt bớt để xếp hạng trên tập thiếu.')
     except Exception as e:
         return ToolResult('query_error', f'Truy vấn lỗi: {type(e).__name__}. Không trả số.')
+    finally:
+        sess.close()
+
+
+@functools.lru_cache(maxsize=4)
+def known_groups(backend: str) -> frozenset:
+    """Tên mọi nhóm của 3 chiều PS5 (Streetwear, East, organic_search...), để bộ điều phối biết câu hỏi có lọc nhóm hay
+    không. Đọc qua phiên chỉ-đọc như mọi tool; lỗi kết nối → tập rỗng (khi đó tool cũng không trả số)."""
+    try:
+        sess = open_session(backend, ALLOWED_RELATIONS)
+    except Exception:       # noqa: BLE001
+        return frozenset()
+    try:
+        rows = sess.fetch(Statement('select distinct dimension_value from reporting.rpt_revenue_segment_yearly')).records()
+        return frozenset(r['dimension_value'] for r in rows if isinstance(r['dimension_value'], str))
+    except Exception:       # noqa: BLE001
+        return frozenset()
     finally:
         sess.close()
 

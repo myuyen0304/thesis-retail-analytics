@@ -17,10 +17,10 @@ from dataclasses import dataclass, field
 from ai_explain import metric_catalog as cat
 from ai_explain import tools
 from ai_explain.contracts import ToolCall, ToolResult
-from ai_explain.evidence import Checked, allowed_years, check_digits, question_numbers, validate
+from ai_explain.evidence import DATE_RE, Checked, allowed_years, check_digits, question_numbers, validate
 from ai_explain.provider import ProviderError, openai_tools, parse_arguments
 
-PROMPT_VERSION = 'ai3-2026-10-05a'
+PROMPT_VERSION = 'ai3-2026-10-05b'
 MAX_TOOL_CALLS = 4
 MAX_LLM_CALLS = 6
 SESSION_TOKEN_LIMIT = 200_000
@@ -120,6 +120,8 @@ QUY TẮC BẮT BUỘC
 12. Một tháng cụ thể ("R tháng 8/2019"): get_revenue_monthly. So cùng tháng năm trước dùng yoy_rate (có sign) và
    r_same_month_prior_year; month_index là chỉ số tháng (1 = tháng bình thường). Nhiều tháng, quý, khoảng ngày:
    chưa hỗ trợ. "Tháng nào cao/thấp nhất trong năm" là nhịp mùa vụ: get_calendar_pattern mua_vu.
+   Số theo tháng chỉ có cho TOÀN CÔNG TY: hỏi một nhóm (ngành hàng, khu vực, kênh) theo tháng / quý / ngày thì status
+   "unsupported"; số toàn công ty hay số cả năm của nhóm chỉ được nêu thêm khi ghi rõ không phải số được hỏi.
 13. PS2 — xu hướng, giai đoạn, đổi hướng: get_revenue_trend (phases hoặc turning_points). "Giảm/tăng mạnh nhất" phải
    nói rõ tiêu chí: theo mức đổi R bằng tiền (derived.largest_decrease.phases) hay theo CAGR
    (derived.largest_decrease_cagr.phases); người hỏi không nói thì nêu cả hai. Chọn giai đoạn bằng rows[A]...rows[D],
@@ -207,7 +209,23 @@ def _safe_validate(answer, claims, results, extra) -> Checked:
         return Checked(False, [f'không kiểm được câu trả lời ({type(e).__name__}); trỏ claim vào một ô số hoặc chữ'])
 
 
-def _check_final(d: dict | None, results: dict, question: str) -> tuple[str | None, list[str], object]:
+def _group_filter_errors(status: str, chk, question: str, groups: frozenset) -> list[str]:
+    """Câu hỏi nêu tên nhóm (ngành / vùng / kênh) là một bộ lọc. Trả lời 'ok' thì phải có số của CHÍNH nhóm đó;
+    nhóm × tháng / quý / ngày chưa có tool nên không được trả 'ok' (live AI3 A08: model trả R toàn công ty tháng
+    5/2019 cho câu hỏi Streetwear tháng 5/2019, tức bỏ ngầm bộ lọc)."""
+    named = sorted(g for g in groups if re.search(rf'(?<!\w){re.escape(g)}(?!\w)', question or '', re.I))
+    if status != 'ok' or not named:
+        return []
+    if DATE_RE.search(question):
+        return [f'câu hỏi lọc nhóm {named} theo tháng / quý / ngày: chưa có số theo nhóm × kỳ đó, trả status '
+                '"unsupported" (có thể nêu số thay thế nhưng phải ghi rõ đó không phải số được hỏi)']
+    missing = [g for g in named if chk is None or g not in chk.groups]
+    return [f'câu hỏi nêu nhóm {missing} nhưng câu trả lời không có số nào của nhóm đó: không được bỏ bộ lọc nhóm; '
+            'gọi tool có nhóm đó hoặc trả status "unsupported"'] if missing else []
+
+
+def _check_final(d: dict | None, results: dict, question: str,
+                 groups: frozenset = frozenset()) -> tuple[str | None, list[str], object]:
     """(status, lỗi, Checked|None). status None nếu JSON hỏng."""
     extra = frozenset(question_numbers(question))
     if d is None:
@@ -220,7 +238,7 @@ def _check_final(d: dict | None, results: dict, question: str) -> tuple[str | No
         if not any(r.ok for r in results.values()):
             return status, ['status ok nhưng lượt này không có kết quả tool ok nào'], None
         chk = _safe_validate(answer, claims, results, extra)
-        return status, chk.errors, chk
+        return status, chk.errors + (_group_filter_errors(status, chk, question, groups) if chk.ok else []), chk
     # câu hỏi lại / từ chối: được dẫn số đã kiểm nếu có, nhưng không được tự viết số
     if claims:
         chk = _safe_validate(answer, claims, results, extra)
@@ -285,7 +303,7 @@ def run_turn(question: str, history: list[dict], backend: str, provider, *, sess
             continue
 
         turn.raw_final = reply.content
-        status, errors, chk = _check_final(parse_final(reply.content), turn.results, question)
+        status, errors, chk = _check_final(parse_final(reply.content), turn.results, question, tools.known_groups(backend))
         if not errors:
             msg = '' if chk is not None else (parse_final(reply.content) or {}).get('answer', '')
             if status != 'ok' and chk is None:

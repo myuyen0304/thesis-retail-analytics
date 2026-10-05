@@ -209,8 +209,9 @@ ACCEPT_AI3 = [
     C('A02b', 'Tháng 5/2017 R tăng hay giảm so với cùng kỳ năm trước?', {'ok'},
       [(MON, {'metric': 'R', 'year': 2017, 'month': 5}), (MON, {'metric': 'R_and_G', 'year': 2017, 'month': 5})],
       [({MON}, '.yoy_rate')], ['1,0']),
-    C('A02c', 'Tháng 1 năm 2013 so với tháng 1 năm 2012 thì sao?', {'ok', 'no_data', 'unsupported'},
-      banned=['tăng', 'giảm %']),
+    # sửa rubric 2026-10-05 sau lần chạy đầu: cấm chữ "tăng" bắt nhầm câu đúng "không kết luận được tăng hay giảm";
+    # số % so cùng kỳ (NULL trước 08/2013) đã bị bộ kiểm chặn nên không cần cấm chữ
+    C('A02c', 'Tháng 1 năm 2013 so với tháng 1 năm 2012 thì sao?', {'ok', 'no_data', 'unsupported'}),
     C('A03', 'Giai đoạn tăng trưởng kéo dài từ năm nào đến năm nào, CAGR bao nhiêu?', {'ok'}, [(TRD, {'view': 'phases'})],
       [({TRD}, ('rows[A].cagr', '.derived.largest_increase_cagr.cagr'))], ['8,8']),
     C('A03b', 'Xu hướng doanh thu 10 năm qua tăng bình quân bao nhiêu mỗi năm?', {'ok', 'needs_clarification', 'unsupported'},

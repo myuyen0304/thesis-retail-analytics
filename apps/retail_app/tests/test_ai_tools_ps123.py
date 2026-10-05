@@ -409,3 +409,20 @@ def test_chenh_mua_giua_thang_cao_nhat_va_thap_nhat():
     assert ok.ok, ok.errors
     bad = evidence.validate('Tháng cao nhất có chỉ số {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].loo_min_ratio'}], res)
     assert not bad.ok
+
+
+def test_khong_bo_ngam_bo_loc_nhom():
+    """Live AI3 2026-10-05 (A08): hỏi Streetwear tháng 5/2019, model trả R toàn công ty tháng 5/2019 với status ok."""
+    from ai_explain import service
+    groups = tools.known_groups('duckdb')
+    assert {'Streetwear', 'East', 'organic_search'} <= groups
+    month = {'T1': _run('get_revenue_monthly', metric='R', year=2019, month=5)}
+    chk = evidence.validate('R tháng 5/2019 là {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].r'}], month,
+                            frozenset(evidence.question_numbers('Doanh thu Streetwear tháng 5/2019?')))
+    assert chk.ok
+    assert service._group_filter_errors('ok', chk, 'Doanh thu Streetwear tháng 5/2019?', groups)      # nhóm × tháng
+    assert service._group_filter_errors('ok', chk, 'R của Streetwear năm 2019?', groups)               # bỏ nhóm
+    assert not service._group_filter_errors('unsupported', chk, 'Doanh thu Streetwear tháng 5/2019?', groups)
+    seg = {'T1': _run('get_segment_contribution', metric='R', dimension='category', year=2019)}
+    chk = evidence.validate('R của Streetwear năm 2019 là {c1}.', [{'id': 'c1', 'path': 'T1.rows[Streetwear].r'}], seg)
+    assert chk.ok and not service._group_filter_errors('ok', chk, 'R của Streetwear năm 2019?', groups)

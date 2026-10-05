@@ -116,7 +116,7 @@ _PATH = re.compile(r'^(T\d+)\.(rows\[([^\]]+)\]\.(\w+)|derived\.(\w+)(?:\.(\w+))
 _NUMBER = re.compile(r'(?<![^\W\d])\d[\d.,]*')     # không tính chữ số dính sau chữ cái (AI1, PS3, c1)
 _SENTENCE = re.compile(r'[.;!?\n]')
 # mốc ngày/tháng người dùng có thể gõ: 15/3, 10/6/2019, tháng 8, ngày 15, quý 3
-_DATE = re.compile(r'(?<!\d)\d{1,2}/\d{1,2}(?:/\d{4})?(?![\d/])|(?:ngày|tháng|quý)\s+\d{1,2}(?!\d)', re.I)
+DATE_RE = _DATE = re.compile(r'(?<!\d)\d{1,2}/\d{1,2}(?:/\d{4})?(?![\d/])|(?:ngày|tháng|quý)\s+\d{1,2}(?!\d)', re.I)
 # số đứng trước đơn vị tiền/tỷ lệ: không bao giờ được viết tay
 _UNIT_AFTER = re.compile(r'(?<![^\W\d])\d(?:[\d.,]*\d)?\s*(?:tỷ|tỉ|triệu|nghìn|ngàn|vnd|đồng|usd|\$|%)(?!\w)', re.I)
 _DRIVER_WORD = {'N': re.compile(r'số đơn|(?<!\w)N(?!\w)'),
@@ -138,6 +138,7 @@ class Checked:
     errors: list[str]
     answer_md: str | None = None                       # câu trả lời đã thay số thật (chỉ khi ok)
     values: dict = field(default_factory=dict)          # claim id → (path, giá trị gốc, chuỗi hiển thị)
+    groups: set = field(default_factory=set)            # tên nhóm (ngành/vùng/kênh) gắn với claim đã dùng
 
 
 def _resolve(path: str, results: dict):
@@ -484,4 +485,4 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
     rendered.append(answer[last:])
     if errors:
         return Checked(False, errors)
-    return Checked(True, [], ''.join(rendered), values)
+    return Checked(True, [], ''.join(rendered), values, bound)
