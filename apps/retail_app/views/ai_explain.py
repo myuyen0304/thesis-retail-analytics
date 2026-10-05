@@ -12,7 +12,7 @@ import streamlit as st
 from ai_explain import metric_catalog as cat
 from ai_explain import provider, service, tools
 from ui.common import BACKEND_LABEL, backend, notes, page_header
-from ui.fmt import num
+from ui.fmt import arrow_safe, num
 
 page_header('Hỏi dữ liệu (AI)', 'Hỏi bằng tiếng Việt về doanh thu PS1–PS5; mọi con số lấy từ kho và có bằng chứng.')
 
@@ -39,8 +39,13 @@ def _md(s: str) -> str:
 
 
 def _rows_df(rows: list[dict]) -> pd.DataFrame:
-    return pd.DataFrame([{k: tools.as_plain(v) if not isinstance(v, (int, float, str, type(None))) else v
-                          for k, v in r.items()} for r in rows])
+    return arrow_safe(pd.DataFrame([{k: tools.as_plain(v) if not isinstance(v, (int, float, str, type(None))) else v
+                                     for k, v in r.items()} for r in rows]))
+
+
+def _values_df(values: dict) -> pd.DataFrame:
+    return arrow_safe(pd.DataFrame([{'Chỗ': k, 'Tham chiếu': p, 'Giá trị trong kho': tools.as_plain(v), 'Hiển thị': s}
+                                     for k, (p, v, s) in values.items()]))
 
 
 def _evidence(ref: str, tool: str, args, res) -> None:
@@ -84,8 +89,7 @@ def _turn(t: service.TurnResult) -> None:
             st.caption('Phần góp N → U → P là phân rã số học, cho biết ΔR "nằm ở đâu", không chứng minh nguyên nhân.')
         if t.values:
             with st.expander('Các con số trong câu trả lời lấy từ đâu'):
-                st.dataframe(pd.DataFrame([{'Chỗ': k, 'Tham chiếu': p, 'Giá trị trong kho': tools.as_plain(v),
-                                            'Hiển thị': s} for k, (p, v, s) in t.values.items()]), hide_index=True)
+                st.dataframe(_values_df(t.values), hide_index=True)
         for ref, tool, args in t.calls:
             _evidence(ref, tool, args, t.results[ref])
         if t.validation_errors:

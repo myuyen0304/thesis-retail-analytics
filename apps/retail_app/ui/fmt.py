@@ -47,3 +47,12 @@ def trieu(x, decimals: int = 1, signed: bool = False) -> str:
 AXIS_TY = "replace(format(datum.value / 1e9, '.1f'), '.', ',') + ' tỷ'"
 AXIS_TRIEU = "format(datum.value / 1e6, '.0f') + ' triệu'"       # số theo tháng (vài trăm triệu): 1 chữ số thập phân tỷ sẽ lặp nhãn
 AXIS_PCT1 = "replace(format(datum.value * 100, '.1f'), '.', ',') + '%'"   # tỷ lệ dao động hẹp (tỷ lệ hủy 9,0–9,6%)
+
+
+def arrow_safe(df: pd.DataFrame) -> pd.DataFrame:
+    """Cột trộn chuỗi và số (vd Decimal đã thành chuỗi cạnh float) làm st.dataframe lỗi Arrow → đưa cả cột về chuỗi."""
+    for c in df.columns:
+        is_str = df[c].dropna().map(lambda v: isinstance(v, str))
+        if df[c].dtype == object and is_str.any() and not is_str.all():
+            df[c] = df[c].map(lambda v: v if _missing(v) or isinstance(v, str) else str(v))
+    return df

@@ -444,6 +444,20 @@ def test_dinh_dang_theo_loai_cot():
     assert '33.259' in chk.answer_md and '4,87' in chk.answer_md
 
 
+def test_bang_gia_tri_tron_chuoi_va_so_van_ra_arrow():
+    """Lỗi 2026-10-05: cột 'Giá trị trong kho' có Decimal (→ chuỗi) cạnh float → ArrowTypeError khi st.dataframe."""
+    import pandas as pd
+    import pyarrow as pa
+    from decimal import Decimal
+    from ui.fmt import arrow_safe
+    df = pd.DataFrame({'v': [tools.as_plain(Decimal('1136801442.50')), tools.as_plain(-0.391), None], 'n': [1, 2, 3]})
+    with pytest.raises(pa.ArrowTypeError):
+        pa.Table.from_pandas(df.copy())
+    out = arrow_safe(df)
+    pa.Table.from_pandas(out)
+    assert list(out['v'][:2]) == ['1136801442.50', '-0.391'] and pd.isna(out['v'][2]) and out['n'].dtype == 'int64'
+
+
 # --- trang chat (AppTest), vẫn mô hình giả ---
 
 def _app(monkeypatch, fake, backend='duckdb'):
