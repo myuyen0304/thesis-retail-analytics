@@ -241,7 +241,35 @@ ACCEPT_AI3 = [
       [(TRD, {'view': 'phases'})], [({TRD}, ('.derived.largest_increase.phases', '.derived.largest_increase_cagr.phases'))],
       banned=['đúng là do giá', 'nguyên nhân là giá']),
 ]
-SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3}
+# Bộ nghiệm thu AI3 lần 2 (B*), soạn 2026-10-05 sau khi sửa lỗi bỏ bộ lọc nhóm (A08) với prompt ai3-2026-10-05b;
+# A* đã dùng để sửa nên không còn khách quan. KHÔNG dùng B* để chỉnh. Tập trung bẫy bộ lọc nhóm + PS1–PS3 năm/tháng khác.
+ACCEPT_AI3B = [
+    C('B01', 'R của Outdoor năm 2018 là bao nhiêu?', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2018}),
+       (SEG, {'metric': 'R', 'dimension': 'category', 'year': 2018, 'group': 'Outdoor'})],
+      [({SEG}, 'rows[Outdoor].r')], ['155.752.060']),
+    C('B02', 'Doanh thu kênh referral quý 3/2020?', {'unsupported', 'needs_clarification'}),
+    C('B03', 'Vùng West tháng 12 năm 2021 thu được bao nhiêu?', {'unsupported', 'needs_clarification'}),
+    C('B04', 'G năm 2014 hụt sang R chủ yếu vì khoản nào?', {'ok'}, [(GAP, {'period': 'year', 'year': 2014})],
+      [({GAP}, '.derived.largest_decrease.components')], ['đơn hủy']),
+    C('B05', 'Tỷ lệ R trên G tháng 6/2016?', {'ok'}, [(MON, {'metric': 'R_and_G', 'year': 2016, 'month': 6})],
+      [({MON}, '.capture_rate')], ['77,4']),
+    C('B06', 'Giai đoạn chững lại có CAGR bao nhiêu?', {'ok'}, [(TRD, {'view': 'phases'})],
+      [({TRD}, 'rows[B].cagr')], ['6,4']),
+    C('B07', 'Cú đổi hướng cuối 2019 được ghi chú thế nào?', {'ok'}, [(TRD, {'view': 'turning_points'})],
+      must=['đổi nhịp']),
+    C('B08', 'Trong năm, tháng mấy doanh thu cao nhất và cao gấp mấy lần tháng thấp nhất?', {'ok'},
+      [(CAL, {'pattern': 'mua_vu'})], [({CAL}, ('.derived.peak_months', '.peak_month')),
+                                       ({CAL}, '.season_peak_trough_ratio')], ['3,39']),
+    C('B09', 'Ngành GenZ năm 2022 tăng hay giảm R?', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2022}),
+       (SEG, {'metric': 'R', 'dimension': 'category', 'year': 2022, 'group': 'GenZ'})],
+      [({SEG}, 'rows[GenZ].delta_r')], ['1.685.666']),
+    C('B10', 'Tháng 8 năm 2021 R so cùng kỳ thế nào?', {'ok'},
+      [(MON, {'metric': 'R', 'year': 2021, 'month': 8}), (MON, {'metric': 'R_and_G', 'year': 2021, 'month': 8})],
+      [({MON}, '.yoy_rate')], ['45,7']),
+]
+SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B}
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -309,6 +337,8 @@ def check_rubric(cases, backend: str) -> int:
                 if not vals:
                     errs.append(f'{name} {args}: không có ô {suffix}')
                 shown += vals
+            # chữ tool trả (tên giai đoạn, ghi chú đổi hướng...) được viết thẳng, không qua chỗ đặt
+            shown += [v for r in res.rows for v in r.values() if isinstance(v, str)]
         if not all(m in ' | '.join(shown) for m in case['must']):
             errs.append(f"chuỗi phải có {case['must']} không nằm trong {shown}")
         bad += bool(errs)
@@ -332,13 +362,13 @@ def main() -> int:
     ap.add_argument('--runs', type=int, default=1)
     ap.add_argument('--cases', nargs='*')
     ap.add_argument('--set', default='chuan', choices=[*SETS, 'tat_ca'],
-                    help='chuan = E* (đã dùng chỉnh prompt); moi = H* (nghiệm thu AI2→AI3); ai3 = A* (nghiệm thu AI3)')
+                    help='chuan = E* (đã dùng chỉnh prompt); moi = H* (nghiệm thu AI2→AI3); ai3 = A*, ai3b = B* (nghiệm thu AI3)')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
     a = ap.parse_args()
-    pool = CASES + HOLDOUT + ACCEPT_AI3 if a.set == 'tat_ca' else SETS[a.set]
+    pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
-    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3}
+    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B}
     if a.kiem_rubric:
         return check_rubric(cases, a.backend)
     p = provider.from_config()
