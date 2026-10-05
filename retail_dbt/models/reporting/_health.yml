@@ -1,0 +1,48 @@
+version: 2
+
+# Trang Sức khỏe dữ liệu của app (docs/gd2_app_plan.md M5). Kiểm ở tests/assert_rpt_health.sql.
+sources:
+  - name: ops
+    schema: ops
+    description: "Nhật ký chạy dbt trên chính kho này, do hook on-run-start/on-run-end ghi (macros/health_log.sql)."
+    tables:
+      - name: dbt_invocation
+        description: "1 dòng / lần chạy build, run, test, seed, snapshot."
+      - name: dbt_node_result
+        description: "1 dòng / model, seed, test của mỗi lần chạy: trạng thái, số dòng lệch, mô tả test."
+  - name: raw_log
+    schema: raw
+    description: "Có trên Postgres, Snowflake, Databricks (scripts/ingest/ingest_raw.py / ingest_snowflake.py / ingest_databricks.py). Target DuckDB đọc thẳng CSV, không có bảng này."
+    tables:
+      - name: _ingest_log
+
+models:
+  - name: rpt_health_run
+    description: "M5: 1 dòng / lần chạy dbt trên kho này (view trên ops): lệnh, target, lúc chạy, số test đạt / lỗi, số model lỗi."
+    columns:
+      - name: invocation_id
+        data_tests: [unique, not_null]
+      - name: n_tests_in_project
+        description: "Số test của dự án lúc chạy lệnh đó. n_tests_run nhỏ hơn = chỉ chạy một phần (vd. dbt test -s ...)."
+
+  - name: rpt_health_test
+    description: "M5: từng test của lần chạy gần nhất có chạy test. test_group nghiep_vu = tests/assert_*.sql; rang_buoc = test YAML."
+    columns:
+      - name: test_name
+        data_tests: [unique, not_null]
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['pass', 'fail', 'error', 'warn', 'skipped']}
+
+  - name: rpt_health_ingest
+    description: "M5: lần nạp nguồn gần nhất (Postgres), 1 dòng / file CSV. Rỗng trên DuckDB."
+
+  - name: rpt_health_summary
+    description: "M5: 1 dòng trạng thái chung. status_code: chua_kiem, loi_test, loi_build, kiem_cu, kiem_thieu, nguon_moi_hon, tot."
+    columns:
+      - name: status_code
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments: {values: ['chua_kiem', 'loi_test', 'loi_build', 'kiem_cu', 'kiem_thieu', 'nguon_moi_hon', 'tot']}

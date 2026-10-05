@@ -1,0 +1,32 @@
+version: 2
+
+seeds:
+  - name: ps2_phases
+    description: "4 giai đoạn doanh thu PS2 do PM/BA chốt ngày 2026-09-27 (docs/dwh_huong_dan_pm_ba.md §4). Đổi mốc = sửa file này + sửa test assert_rpt_phase."
+    columns:
+      - name: phase_code
+        data_tests: [unique, not_null]
+      - name: start_year
+        data_tests: [unique, not_null]
+      - name: end_year
+        data_tests: [unique, not_null]
+      - name: trend
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['tang', 'giam', 'giam_manh', 'di_ngang']}
+      - name: end_turn_note
+        description: "Ghi chú BA cho điểm đổi hướng ở cuối giai đoạn này; để trống nếu không có. BA 2026-09-27: cuối 2019 là \"đổi nhịp\" (vẫn giảm nhưng chậm hẳn), không gọi là đảo chiều. PM 2026-09-28: cuối 2018 ghi \"giảm tăng tốc\"."
+
+  - name: ps2_direction_rule
+    description: "Quy tắc tìm tháng đổi hướng của đường R 12 tháng (PS2, deck slide 6 yêu cầu 4; cách làm theo ghi chú slide 7). Hướng tại tháng t = so r_12m(t) với r_12m(t − window_months). Hướng mới phải giữ ít nhất min_run_months tháng liền. is_main_window = khoảng so chính; các khoảng còn lại để thử độ nhạy. Đổi quy tắc = sửa file này + sửa số khóa trong assert_rpt_direction."
+    columns:
+      - name: window_months
+        data_tests: [unique, not_null]
+      - name: min_run_months
+        data_tests: [not_null]
+
+  - name: driver_rule
+    description: "PS4/PS5 (ghi chú deck slide 11 và 13: khi ΔR gần 0, % đóng góp không ổn định, ưu tiên số tiền). Kỳ có |ΔR| < min_abs_delta_rate × R đầu kỳ thì cờ delta_r_is_small = true: app vẫn hiện % đóng góp nhưng ghi \"không ổn định\". Ngưỡng 1% do dev đề xuất 2026-09-29, chờ BA chốt. Đổi ngưỡng = sửa file này + sửa số khóa trong assert_rpt_driver."
+    columns:
+      - name: min_abs_delta_rate
+        data_tests: [not_null]

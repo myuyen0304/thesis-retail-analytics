@@ -1,0 +1,49 @@
+version: 2
+
+# Mô tả 1 dòng cho các test SQL tự viết. Hook macros/health_log.sql ghi mô tả này vào ops.dbt_node_result,
+# trang Sức khỏe dữ liệu của app hiện ra cho PM/BA. Thêm test mới thì thêm mô tả ở đây.
+data_tests:
+  - name: assert_composite_keys_unique
+    description: "Khóa tổ hợp của các bảng star không bị trùng."
+  - name: assert_daily_sales_matches_source
+    description: "Doanh thu và giá vốn theo ngày dựng lại từ giao dịch khớp chính xác sales.csv, đủ 3.833 ngày."
+  - name: assert_dropped_columns_are_copies
+    description: "Cột nguồn chỉ bị bỏ khi đã chứng minh nó là bản sao hoặc hằng số."
+  - name: assert_every_source_row_lands
+    description: "Không phép nối nào làm rơi dòng: mỗi dòng nguồn sang đúng 1 dòng của bảng star."
+  - name: assert_functional_dependencies
+    description: "Các phụ thuộc hàm dùng để thiết kế dimension đúng trên toàn bộ dữ liệu."
+  - name: assert_inventory_derived_matches_source
+    description: "5 cột tồn kho tính lại theo công thức khớp inventory.csv trên cả 60.247 dòng."
+  - name: assert_measures_conserved
+    description: "Tổng số lượng và tiền không đổi khi đi từ staging sang fact_order_item."
+  - name: assert_order_invariants
+    description: "Ràng buộc trên đơn và dòng hàng: trả không quá số đã mua, số ngày giao không âm, số lượng > 0, chiết khấu không âm."
+  - name: assert_order_junk_all_used
+    description: "Cả 540 tổ hợp thuộc tính đơn (dim_order_junk) đều có đơn dùng."
+  - name: assert_payment_value_matches_payments
+    description: "Tiền thanh toán của mỗi đơn = Σ(số lượng × đơn giá − chiết khấu)."
+  - name: assert_row_counts
+    description: "Số dòng 14 bảng star đúng như thiết kế."
+  - name: assert_urban_blowout_matches_promotions
+    description: "Cờ Urban Blowout tính theo lịch trùng đúng các ngày khuyến mãi 2012–2022."
+  - name: assert_rpt_total
+    description: "PS1: toàn kỳ = cộng các năm; số khách đếm phân biệt đúng; thác G → R; số khóa deck slide 4."
+  - name: assert_rpt_reconciles
+    description: "PS1/PS4: số tầng reporting đối soát từng tháng, từng năm với nguồn độc lập (đơn, thanh toán, doanh thu ngày)."
+  - name: assert_rpt_deck_numbers
+    description: "Các con số ghi trong deck problem statement khớp kho."
+  - name: assert_rpt_calendar
+    description: "PS2/PS3: lịch tháng liên tục; YoY, R 12 tháng, chỉ số tháng, tỷ trọng cuối tháng tính lại khớp."
+  - name: assert_rpt_phase
+    description: "PS2: 4 giai đoạn phủ liền 2013–2022; R đầu/cuối, CAGR và điểm đổi hướng khớp."
+  - name: assert_rpt_direction
+    description: "PS2: hướng R 12 tháng và tháng đổi hướng tính lại khớp; số khóa."
+  - name: assert_rpt_calendar_phase
+    description: "PS3: so sánh giai đoạn và độ ổn định 3 nhịp tính lại khớp; mỗi năm thuộc đúng 1 giai đoạn."
+  - name: assert_rpt_decomposition_additive
+    description: "PS4/PS5: từng phần N/U/P, C/F đúng công thức deck và cộng về tổng."
+  - name: assert_rpt_driver
+    description: "PS4/PS5: phần góp theo năm và giai đoạn khớp, cộng về mức đổi R; kéo lên/xuống; hạng nhóm."
+  - name: assert_rpt_health
+    description: "Sức khỏe dữ liệu: số đếm test, trạng thái chung và log nạp nguồn khớp nhật ký và bảng raw."

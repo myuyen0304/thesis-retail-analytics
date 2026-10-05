@@ -1,0 +1,5 @@
+phase_code,phase_name,start_year,end_year,trend,end_turn_note
+A,Tăng trưởng,2013,2016,tang,
+B,"Chững, giảm nhẹ",2016,2018,giam,giảm tăng tốc
+C,Sập,2018,2019,giam_manh,đổi nhịp
+D,Đi ngang mức thấp,2019,2022,di_ngang,

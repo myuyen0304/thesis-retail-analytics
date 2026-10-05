@@ -1,0 +1,207 @@
+version: 2
+
+# Tầng phục vụ 5 problem statement (deck docs/presentations/revenue_performance_problem_statement_updated.pptx).
+# Quy ước: R = Σ(quantity × unit_price − discount_amount), chỉ đơn delivered; G = mọi đơn, chưa trừ chiết khấu (= sales.csv).
+# Test nghiệp vụ (đối soát, tính cộng tính của phân rã) ở tests/assert_rpt_*.sql.
+
+models:
+  - name: int_reporting_order_items
+    description: "Grain = dòng hàng. fact_order_item gắn lịch, trạng thái đơn, category/region/acquisition_channel."
+    columns:
+      - name: order_item_sk
+        data_tests: [unique, not_null]
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['cancelled', 'created', 'delivered', 'paid', 'returned', 'shipped']}
+      - name: category
+        data_tests: [not_null]
+      - name: region
+        data_tests: [not_null]
+      - name: acquisition_channel
+        data_tests: [not_null]
+
+  - name: rpt_revenue_monthly
+    description: "PS1/PS2/PS3 theo tháng: G, R, tách G−R, N/Q/C/U/P/F/AOV, YoY cùng kỳ, R 12 tháng, chỉ số tháng, tỷ trọng cuối tháng."
+    columns:
+      - name: month_start_date
+        data_tests: [unique, not_null]
+      - name: r
+        data_tests: [not_null]
+      - name: r_12m
+        description: "NULL trước 07/2013 (chưa đủ 12 tháng trọn vẹn)."
+      - name: month_index
+        description: "R tháng / TB 12 tháng cùng năm; NULL cho 2012 (nửa năm)."
+
+  - name: rpt_revenue_yearly
+    description: "PS1/PS2/PS4 + C/F của PS5 theo năm. Tăng trưởng và phân rã chỉ từ 2014."
+    columns:
+      - name: year
+        data_tests: [unique, not_null]
+      - name: ps2_phase_codes
+        description: "Giai đoạn PS2 của năm (seed ps2_phases), vd. 'A', năm ranh giới 'A/B'. NULL cho 2012 (ngoài các giai đoạn)."
+      - name: contrib_n
+        description: "(N₁ − N₀) × U₀ × P₀"
+      - name: contrib_u
+        description: "N₁ × (U₁ − U₀) × P₀"
+      - name: contrib_p
+        description: "N₁ × U₁ × (P₁ − P₀). contrib_n + contrib_u + contrib_p = delta_r"
+      - name: contrib_c
+        description: "(C₁ − C₀) × F₀"
+      - name: contrib_f
+        description: "C₁ × (F₁ − F₀). contrib_c + contrib_f = delta_n"
+
+  - name: rpt_revenue_segment_yearly
+    description: "PS5: R theo category / region / acquisition_channel × năm (lưới đầy đủ). Không cộng các chiều với nhau."
+    columns:
+      - name: dimension_name
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['category', 'region', 'acquisition_channel']}
+      - name: dimension_value
+        data_tests: [not_null]
+      - name: delta_r_rank
+        description: "M4: hạng theo số tiền đổi trong cùng chiều × năm, 1 = tăng nhiều nhất (hoặc giảm ít nhất); hòa thì theo tên nhóm. NULL trước 2014."
+      - name: delta_r_is_small
+        description: "M4: |ΔR tổng| < ngưỡng seed driver_rule × R tổng năm trước. True thì % đóng góp không ổn định, đọc số tiền."
+      - name: n_groups_down
+        description: "M4: số nhóm của chiều có R giảm trong năm (n_groups_up: tăng; n_groups: tổng số nhóm). NULL trước 2014."
+
+  - name: rpt_driver_period
+    description: "PS4 + phần C/F của PS5: 1 dòng = 1 năm (2014–2022) hoặc 1 giai đoạn PS2. ΔR = contrib_n + contrib_u + contrib_p; ΔN = contrib_c + contrib_f. Giai đoạn = cộng các năm start_year < Y <= end_year (khớp rpt_revenue_phase.delta_r). Kiểm ở tests/assert_rpt_driver.sql."
+    columns:
+      - name: period_code
+        data_tests: [unique, not_null]
+      - name: period_type
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['year', 'phase']}
+      - name: top_up_driver
+        description: "Phần góp dương lớn nhất trong n / u / p; NULL nếu không phần nào dương."
+      - name: top_down_driver
+        description: "Phần góp âm lớn nhất trong n / u / p; NULL nếu không phần nào âm."
+      - name: n_change_rate
+        description: "% đổi của số đơn, năm cuối so thẳng năm đầu kỳ (r_/u_/p_change_rate tương tự; u_start … p_end là giá trị đầu/cuối). Dòng phụ dưới thẻ PS4. % đổi của N, U, P cộng lại KHÔNG bằng % đổi R; chỉ phần góp (tiền) cộng được."
+
+  - name: rpt_driver_bridge
+    description: "PS4 / PS5: thác dạng dài. r_nup: R đầu → N → U → P → R cuối (5 cột); n_cf: N đầu → C → F → N cuối (4 cột). App chỉ vẽ bar_start → bar_end."
+    columns:
+      - name: bridge_code
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['r_nup', 'n_cf']}
+      - name: step_code
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['r_start', 'n', 'u', 'p', 'r_end', 'n_start', 'c', 'f', 'n_end']}
+
+  - name: rpt_august_parity
+    description: "PS3: chênh chỉ số tháng 8 năm lẻ / năm chẵn, 2013–2022."
+
+  - name: rpt_calendar_phase_month
+    description: "PS3 so sánh giai đoạn: chỉ số tháng gộp của từng giai đoạn PS2 (4 × 12). Năm ranh giới tính cho giai đoạn kết thúc ở năm đó (2016 → A, 2018 → B, 2019 → C), 2013 → A. Kiểm ở tests/assert_rpt_calendar_phase.sql."
+    columns:
+      - name: phase_code
+        data_tests: [not_null]
+      - name: month_index
+        description: "Σ R tháng m các năm của giai đoạn ÷ (Σ R cả giai đoạn ÷ 12); tổng 12 tháng = 12."
+        data_tests: [not_null]
+
+  - name: rpt_calendar_phase
+    description: "PS3 so sánh giai đoạn: 1 dòng mỗi giai đoạn. Tháng cao/thấp nhất, chênh mùa, mức dồn cuối tháng, tháng 8 lẻ/chẵn (NULL nếu giai đoạn thiếu một phía), thứ hạng giữa các giai đoạn."
+    columns:
+      - name: phase_code
+        data_tests: [unique, not_null]
+      - name: season_peak_trough_ratio
+        data_tests: [not_null]
+      - name: eom_excess
+        data_tests: [not_null]
+
+  - name: rpt_calendar_stability
+    description: "PS3 độ ổn định 3 nhịp 2013–2022: giá trị cả kỳ, khoảng khi bỏ lần lượt từng năm (loo_min … loo_max), số năm tự có nhịp."
+    columns:
+      - name: rhythm_code
+        data_tests:
+          - unique
+          - accepted_values:
+              arguments: {values: ['mua_vu', 'cuoi_thang', 'thang_8']}
+
+  - name: rpt_revenue_phase
+    description: "PS2: 1 dòng mỗi giai đoạn (seed ps2_phases). R đầu/cuối, tổng thay đổi, CAGR."
+    columns:
+      - name: phase_code
+        data_tests: [unique, not_null]
+      - name: cagr
+        description: "(r_end / r_start)^(1/n_years) − 1"
+        data_tests: [not_null]
+      - name: band_start_date
+        description: "Tháng 12 của start_year. App tô nền giai đoạn trên đường r_12m từ band_start_date tới band_end_date."
+        data_tests: [not_null]
+      - name: band_end_date
+        description: "Tháng 12 của end_year (r_12m tại đây = r_end, kiểm ở assert_rpt_phase)."
+        data_tests: [not_null]
+
+  - name: rpt_revenue_turning_point
+    description: "PS2: 1 dòng mỗi ranh giới giữa hai giai đoạn liền nhau. Độ lớn = R năm sau / R năm ranh giới − 1."
+    columns:
+      - name: turning_year
+        data_tests: [unique, not_null]
+      - name: magnitude
+        data_tests: [not_null]
+      - name: turning_month_date
+        description: "Tháng 12 của năm ranh giới: vị trí điểm đổi hướng trên đường r_12m."
+        data_tests: [not_null]
+      - name: data_extreme_month_date
+        description: "Đối chiếu: đỉnh/đáy r_12m của lần đổi hướng dữ liệu tự tìm (khoảng so chính) nằm trong năm ranh giới; NULL = không thấy."
+      - name: data_change_month_date
+        description: "Tháng phát hiện của lần đổi hướng đó (rpt_revenue_direction_change.change_month_date)."
+      - name: turn_note
+        description: "Ghi chú BA lấy từ seed ps2_phases.end_turn_note (vd. \"đổi nhịp\" cho cuối 2019); NULL nếu không có."
+
+  - name: rpt_revenue_direction
+    description: "PS2 (slide 6 yêu cầu 4): hướng đường r_12m từng tháng × khoảng so (seed ps2_direction_rule). direction = 'len' / 'xuong' so với k tháng trước; run_* = đoạn cùng hướng liền nhau; is_persistent_run = đoạn dài ≥ min_run_months."
+    columns:
+      - name: direction
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['len', 'xuong', 'ngang']}
+      - name: r_12m_window_ago
+        data_tests: [not_null]
+
+  - name: rpt_revenue_direction_change
+    description: "PS2: tháng đường r_12m đổi hướng (lên ↔ xuống, hướng mới bền ≥ min_run_months), theo từng khoảng so. Không bắt đổi tốc độ (vd. giảm nhẹ → sập). Kiểm ở tests/assert_rpt_direction.sql."
+    columns:
+      - name: change_month_date
+        description: "Tháng phát hiện: đoạn hướng mới bắt đầu. Đỉnh/đáy thật ở extreme_month_date, sớm hơn vì so với k tháng trước."
+        data_tests: [not_null]
+      - name: extreme_month_date
+        description: "Đỉnh r_12m (chuyển sang xuống) / đáy (chuyển sang lên), tìm từ đầu khối hướng cũ tới tháng phát hiện."
+        data_tests: [not_null]
+      - name: months_held
+        description: "Số tháng hướng mới giữ, tới lần đổi hướng kế tiếp; held_to_end_of_data = true nếu còn giữ tới hết dữ liệu (12/2022)."
+
+  - name: rpt_revenue_total
+    description: "PS1 toàn kỳ: 1 dòng mỗi kỳ gộp (2012-2022 của deck slide 4; 2013-2022 kỳ phân tích). N, C đếm phân biệt trên cả kỳ."
+    columns:
+      - name: period_code
+        data_tests: [unique, not_null]
+      - name: g
+        data_tests: [not_null]
+      - name: r
+        data_tests: [not_null]
+
+  - name: rpt_revenue_bridge
+    description: "PS1: thác G → R dạng dài, 6 bước mỗi kỳ (G, hủy, trả, chưa giao, chiết khấu, R). App chỉ vẽ bar_start → bar_end. Khóa (period_code, step_order) kiểm ở tests/assert_rpt_total.sql."
+    columns:
+      - name: step_code
+        data_tests:
+          - accepted_values:
+              arguments: {values: ['g', 'cancelled', 'returned', 'undelivered', 'discount', 'r']}
+      - name: amount
+        data_tests: [not_null]
+
+  - name: rpt_build_info
+    description: "1 dòng cho dải thông tin chung của app: lúc build (UTC), ngày đơn đầu/cuối, kỳ phân tích."
+    columns:
+      - name: built_at_utc
+        data_tests: [not_null]
