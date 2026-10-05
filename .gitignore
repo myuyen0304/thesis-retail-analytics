@@ -153,6 +153,8 @@ activemq-data/
 # Thông tin kết nối Databricks cá nhân, lưu lại trên máy để dùng qua nhiều phiên.
 /.env.databricks.local
 /.env.snowflake.local
+# Khóa API LLM của AI Explain (apps/retail_app/ai_explain/provider.py)
+/.env.ai.local
 .venv
 env/
 venv/

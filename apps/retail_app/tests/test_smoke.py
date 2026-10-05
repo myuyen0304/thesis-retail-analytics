@@ -9,7 +9,7 @@ from ui.fmt import num, pct
 
 APP = Path(__file__).resolve().parents[1] / 'app.py'
 PAGES = ['views/tong_quan.py', 'views/ps1_do_dung.py', 'views/ps2_xu_huong.py', 'views/ps3_nhip_lich.py',
-         'views/ps4_don_mon_gia.py', 'views/ps5_nhom.py', 'views/suc_khoe_du_lieu.py']
+         'views/ps4_don_mon_gia.py', 'views/ps5_nhom.py', 'views/suc_khoe_du_lieu.py', 'views/ai_explain.py']
 
 
 @pytest.mark.parametrize('backend', ['postgres', 'duckdb'])

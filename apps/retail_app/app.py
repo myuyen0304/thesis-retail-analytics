@@ -18,6 +18,7 @@ pages = [
     st.Page('views/ps4_don_mon_gia.py', title='PS4: Số đơn, số món, giá'),
     st.Page('views/ps5_nhom.py', title='PS5: Nhóm kéo lên/xuống'),
     st.Page('views/suc_khoe_du_lieu.py', title='Sức khỏe dữ liệu'),
+    st.Page('views/ai_explain.py', title='Hỏi dữ liệu (AI)'),
 ]
 nav = st.navigation(pages)
 sidebar()

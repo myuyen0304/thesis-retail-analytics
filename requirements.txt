@@ -15,4 +15,5 @@ psycopg[binary]==3.3.6  # scripts/ingest/ingest_raw.py
 streamlit==1.64.0       # app phân tích GĐ 2: apps/retail_app/ (docs/gd2_app_plan.md)
 databricks-sql-connector==4.4.0  # app đọc DWH Databricks lab (backend 'databricks'), đăng nhập OAuth
 databricks-sdk==0.117.0           # lấy token từ profile Databricks CLI cho app + scripts/parity
-pytest==9.1.1           # test của app: .venv/Scripts/python.exe -m pytest apps/retail_app
+openai==3.24.0          # AI Explain: client chuẩn OpenAI, dev gọi DeepSeek (apps/retail_app/ai_explain/provider.py)
+pytest==9.1.1          # test của app: .venv/Scripts/python.exe -m pytest apps/retail_app
