@@ -260,6 +260,16 @@ def test_don_vi_tien_la_vnd():
             assert unit not in t
 
 
+def test_dinh_nghia_chi_tieu_lay_tu_catalog():
+    res = _run('get_metric_definition', metric='R')
+    assert res.ok and res.evidence.grain == 'định nghĩa'
+    row = res.rows[0]
+    assert row['metric_id'] == 'R' and 'delivered' in row['formula'] and row['decision_status'] == 'chot'
+    assert row['unit'] == 'VND' and not res.derived
+    assert _run('get_metric_definition', metric='X').status == 'unsupported'
+    assert _run('get_metric_definition', metric='R', year=2019).status == 'unsupported'   # không có tham số năm
+
+
 def test_tool_schema_chat():
     for s in tools.tool_schemas():
         assert s['input_schema']['additionalProperties'] is False

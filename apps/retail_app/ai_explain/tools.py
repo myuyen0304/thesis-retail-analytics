@@ -262,6 +262,19 @@ def _segment(turn: _Turn, a: dict) -> ToolResult:
                           read_at=read_at))
 
 
+_DEF_COLS = ('metric_id', 'label_vi', 'aliases_vi', 'formula', 'unit', 'additivity', 'decision_status', 'note')
+
+
+def _definition(turn: _Turn, a: dict) -> ToolResult:
+    """Định nghĩa một chỉ tiêu, lấy từ metric_catalog (cùng nguồn với phần Bằng chứng của mọi tool). Không có số."""
+    m = cat.METRICS[a['metric']]
+    row = {k: (', '.join(m[k]) if isinstance(m[k], list) else m[k]) for k in _DEF_COLS}
+    return ToolResult('ok', f'Định nghĩa {m["label_vi"]} theo catalog {cat.CATALOG_VERSION} '
+                      f'(trạng thái: {"đã chốt" if m["decision_status"] == "chot" else "đề xuất, chờ PM/BA chốt"}).',
+                      rows=[row], evidence=turn.evidence(filters={'metric': a['metric']}, grain='định nghĩa',
+                                                         metrics=cat.metric_defs(a['metric']), read_at=_now()))
+
+
 _YEAR = Param('int', 'năm theo ngày đặt hàng, vd. 2019')
 _METRIC_RG = Param('enum', 'R (đơn delivered, sau chiết khấu) hay G (mọi đơn, chưa trừ chiết khấu)', ('R', 'G'))
 
@@ -282,6 +295,10 @@ TOOLS = {s.name: s for s in [
         'year': _YEAR,
         'group': Param('str', 'tên một nhóm của chiều (tùy chọn)', required=False),
     }, _segment),
+    ToolSpec('get_metric_definition', 'Định nghĩa một chỉ tiêu (R, G, N, U, P, ΔR...): công thức, đơn vị, cách cộng, '
+             'trạng thái chốt. Dùng cho câu hỏi "X là gì", "R khác G thế nào". Không trả số liệu.', {
+        'metric': Param('enum', 'mã chỉ tiêu trong catalog', tuple(cat.METRICS)),
+    }, _definition),
 ]}
 
 

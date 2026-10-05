@@ -394,6 +394,19 @@ def test_live_tu_so_sanh_hai_so_thi_chan():
     assert turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), dung)).status == 'ok'
 
 
+def test_cau_hoi_dinh_nghia_tra_loi_bang_tool_dinh_nghia():
+    # PM hỏi trên app 2026-10-05: "R là gì" → model hỏi lại năm; "what is R stand for" → trả lời không dựa tool, bị chặn
+    ok = final(answer='R là doanh thu thực nhận: {c1}. Trạng thái định nghĩa: {c2}.',
+               claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}, {'id': 'c2', 'path': 'T1.rows[0].decision_status'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='R'), ok), 'what is R stand for')
+    assert t.status == 'ok', t.validation_errors
+    assert 'delivered' in t.answer_md and t.results['T1'].evidence.metrics[0]['metric_id'] == 'R'
+    # không gọi tool mà vẫn "ok" thì vẫn chặn; câu báo không còn nhắc "bảng số bên dưới" khi không có bảng
+    prose = final(answer='R là doanh thu thực nhận.')
+    t = turn(FakeProvider(prose, prose), 'R là gì')
+    assert t.status == 'answer_validation_failed' and 'chưa đọc được dữ liệu' in t.message
+
+
 # --- evidence.validate trên kết quả dựng tay ---
 
 def _res(rows, derived=None):

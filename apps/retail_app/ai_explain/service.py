@@ -20,7 +20,7 @@ from ai_explain.contracts import ToolCall, ToolResult
 from ai_explain.evidence import Checked, allowed_years, check_digits, question_numbers, validate
 from ai_explain.provider import ProviderError, openai_tools, parse_arguments
 
-PROMPT_VERSION = 'ai2-2026-10-05e'
+PROMPT_VERSION = 'ai2-2026-10-05f'
 MAX_TOOL_CALLS = 4
 MAX_LLM_CALLS = 6
 SESSION_TOKEN_LIMIT = 200_000
@@ -108,6 +108,8 @@ QUY TẮC BẮT BUỘC
    vị khác, không tự đổi sang nghìn/triệu/tỷ.
 9. Câu hỏi tiếp nối ("còn theo khu vực?", "còn năm 2020?") giữ metric/năm/chiều của lượt trước trong NGỮ CẢNH,
    chỉ đổi phần người dùng nêu, rồi GỌI TOOL LẠI để lấy số mới.
+10. Câu hỏi định nghĩa ("R là gì", "G khác R thế nào", hỏi bằng tiếng Anh cũng vậy): gọi get_metric_definition cho
+   từng chỉ tiêu được hỏi, status "ok", giải thích bằng lời theo kết quả tool. Không hỏi lại năm, không cần số.
 
 ĐỊNH NGHĨA (catalog {cat.CATALOG_VERSION})
 {_metric_lines()}
@@ -269,8 +271,10 @@ def run_turn(question: str, history: list[dict], backend: str, provider, *, sess
                 status = blocking[0]
             return finish(status, chk=chk)
         if repaired:
+            tail = ('Bảng số bên dưới lấy thẳng từ kho.' if any(r.ok for r in turn.results.values())
+                    else 'Lượt này chưa đọc được dữ liệu nào từ kho; hãy hỏi lại cụ thể hơn (chỉ tiêu, năm).')
             return finish('answer_validation_failed', 'Câu diễn giải của mô hình không qua bước kiểm số, nên không hiện. '
-                          'Bảng số bên dưới lấy thẳng từ kho.', errors=errors)
+                          + tail, errors=errors)
         repaired = True
         turn.repair_errors = list(errors)
         messages.append({'role': 'user', 'content': 'Câu trả lời chưa qua bước kiểm của app: ' + '; '.join(errors)

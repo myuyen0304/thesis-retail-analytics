@@ -136,6 +136,11 @@ CAPABILITIES = [
 ]
 
 
+# Định nghĩa chỉ tiêu ("R là gì"): đọc từ catalog này, không đọc số; vẫn qua cổng chất lượng của kho như mọi tool.
+CAPABILITIES += [('get_metric_definition', m, 'không kỳ', 'định nghĩa', None, 'open', 'định nghĩa từ catalog, không có số')
+                 for m in METRICS]
+
+
 def open_capabilities() -> list[tuple]:
     return [c for c in CAPABILITIES if c[5] == 'open']
 
@@ -147,11 +152,11 @@ def capability_blockers(tool: str, arguments: dict) -> list[str]:
     Schema và dispatcher dùng chung hàm này, không coi từng enum hợp lệ là đủ để mở một tổ hợp.
     """
     grain = {'get_revenue_summary': 'năm', 'get_revenue_drivers': 'năm',
-             'get_segment_contribution': 'chiều × nhóm × năm'}.get(tool)
+             'get_segment_contribution': 'chiều × nhóm × năm', 'get_metric_definition': 'định nghĩa'}.get(tool)
     if grain is None:
         return ['tool chưa có ánh xạ grain trong catalog']
     metrics = ('R', 'G') if arguments.get('metric') == 'R_and_G' else (arguments.get('metric'),)
-    periods = [arguments.get('period_type', 'year')]
+    periods = ['không kỳ'] if tool == 'get_metric_definition' else [arguments.get('period_type', 'year')]
     if tool == 'get_revenue_summary' and arguments.get('compare_prior_year', False):
         periods.append('year_vs_prior')
     if tool == 'get_revenue_drivers' and periods == ['phase']:
