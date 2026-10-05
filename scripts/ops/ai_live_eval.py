@@ -20,6 +20,7 @@ Kết quả của script này là live-model eval; KHÔNG trộn với test mock
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import subprocess
 import sys
@@ -378,7 +379,7 @@ def main() -> int:
     rev = _git_rev()
     OUT.mkdir(parents=True, exist_ok=True)
     stamp = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    log = OUT / f'live_{stamp}.jsonl'
+    log = OUT / f'live_{stamp}_{a.set}_{os.getpid()}.jsonl'      # hai lượt chạy cùng giây không ghi chung một file
     rows, tokens_in, tokens_out = [], 0, 0
     with log.open('w', encoding='utf-8') as f:
         for run in range(1, a.runs + 1):
