@@ -390,3 +390,22 @@ def test_kiem_cau_tra_loi_ps123(case):
     res = {'T1': tools.run({'tool': call[0], 'arguments': call[1]}, 'duckdb')}
     chk = evidence.validate(answer, claims, res, frozenset(evidence.question_numbers(q)))
     assert chk.ok is expect, chk.errors
+
+
+def test_tu_choi_duoc_nhac_thang_bat_dau_du_lieu():
+    """Live 2026-10-05 (E31b): thông báo no_data ghi 2012-07-04, model viết "tháng 7/2012" → không được chặn."""
+    res = {'T1': _run('get_revenue_monthly', metric='R', year=2012, month=3)}
+    assert res['T1'].status == 'no_data'
+    allowed = evidence.allowed_years(res) | evidence.question_numbers('Tháng 3/2012 doanh thu thực nhận là bao nhiêu?')
+    assert evidence.check_digits('Dữ liệu chỉ bắt đầu từ tháng 7/2012, nên tháng 3/2012 không có số.', allowed) == []
+    assert evidence.check_digits('Tháng 3/2012 khoảng 9 tỷ.', allowed)          # số kèm đơn vị vẫn bị chặn
+
+
+def test_chenh_mua_giua_thang_cao_nhat_va_thap_nhat():
+    """Live 2026-10-05 (E35): câu mô tả chính tỷ số cao nhất ÷ thấp nhất không bị coi là xếp hạng thiếu chỗ đặt."""
+    res = {'T1': _run('get_calendar_pattern', pattern='mua_vu')}
+    ok = evidence.validate('Chênh mùa cả kỳ giữa tháng cao nhất và tháng thấp nhất là {c1} lần.',
+                           [{'id': 'c1', 'path': 'T1.rows[0].season_peak_trough_ratio'}], res)
+    assert ok.ok, ok.errors
+    bad = evidence.validate('Tháng cao nhất có chỉ số {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].loo_min_ratio'}], res)
+    assert not bad.ok

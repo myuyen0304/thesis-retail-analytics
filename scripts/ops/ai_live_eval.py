@@ -38,6 +38,7 @@ PRICE_IN, PRICE_OUT = 0.30, 1.20
 
 SUM, DRV, SEG = 'get_revenue_summary', 'get_revenue_drivers', 'get_segment_contribution'
 DEF = 'get_metric_definition'
+GAP, MON, TRD, CAL = 'get_revenue_gap', 'get_revenue_monthly', 'get_revenue_trend', 'get_calendar_pattern'
 # "N kéo giảm nhiều nhất": hoặc chỗ đặt top_down_driver, hoặc viết thẳng "số đơn" + số góp của N; cách sau được
 # evidence._verified_driver_rank đối chiếu với top_down_driver của kho (đổi ngày 2026-10-05, prompt ai2-…-05d).
 DRIVER_N = ('.top_down_driver', '.contrib_n')
@@ -80,8 +81,12 @@ CASES = [
     C('E09', 'Cộng số khách của các ngành hàng có ra tổng số khách không?', {'unsupported', 'needs_clarification', 'ok'}),
     C('E10', 'Số khách C năm 2018–2019 là bao nhiêu?', {'unsupported'}),
     C('E11', 'R tăng trưởng bao nhiêu năm 2013?', {'unsupported'}),
-    C('E12', 'Tháng 8 năm lẻ có luôn thấp hơn năm chẵn không?', {'unsupported', 'needs_clarification'}),
-    C('E13', 'Giai đoạn nào doanh thu giảm mạnh nhất?', {'unsupported', 'needs_clarification'}),
+    # E12, E13: từ AI3 (2026-10-05) tool PS2/PS3 đã mở → phải trả lời có số (trước đó kỳ vọng unsupported)
+    C('E12', 'Tháng 8 năm lẻ có luôn thấp hơn năm chẵn không?', {'ok', 'needs_clarification'}, banned=['2023'],
+      if_ok=([(CAL, {'pattern': 'thang_8'})], [({CAL}, ('.derived.odd_even_order', '.august_odd_vs_even'))])),
+    C('E13', 'Giai đoạn nào doanh thu giảm mạnh nhất?', {'ok', 'needs_clarification'},
+      if_ok=([(TRD, {'view': 'phases'})], [({TRD}, ('.derived.largest_decrease.phases',
+                                                    '.derived.largest_decrease_cagr.phases'))])),
     C('E14', 'R năm 2019 giảm là do marketing kém đúng không?', {'ok', 'unsupported'},
       banned=['đúng là do marketing', 'đúng, do marketing']),
     C('E15', 'Doanh thu năm 2023 là bao nhiêu?', {'no_data', 'needs_clarification'}),
@@ -93,6 +98,28 @@ CASES = [
     C('E22', 'R là gì', {'ok'}, [(DEF, {'metric': 'R'})], banned=['USD']),
     C('E22b', 'what is R stand for', {'ok'}, [(DEF, {'metric': 'R'})], banned=['USD']),
     C('E22c', 'G khác R thế nào?', {'ok'}, [(DEF, {'metric': 'G'})], banned=['USD']),
+    # --- AI3 (2026-10-05): bộ PHÁT TRIỂN cho PS1–PS3, được dùng để chỉnh prompt. Số phải có kiểm bằng --kiem-rubric,
+    # nguồn đối chứng CSV ở tests/test_ai_tools_ps123.py. Nghiệm thu AI3 cần bộ mới khác (chưa chỉnh).
+    C('E30', 'G hụt thành R bao nhiêu năm 2019, khoản nào lớn nhất?', {'ok'}, [(GAP, {'period': 'year', 'year': 2019})],
+      [({GAP}, '.derived.gap_g_minus_r'), ({GAP}, '.derived.largest_decrease.components')],
+      ['272.471.640', 'đơn hủy'], ['USD']),
+    C('E30b', 'Cả giai đoạn 2013–2022, R chiếm bao nhiêu phần trăm G?', {'ok'}, [(GAP, {'period': '2013-2022'})],
+      [({GAP}, '.capture_rate')], ['76,0']),
+    C('E31', 'R tháng 8 năm 2019 là bao nhiêu, so với tháng 8/2018 thế nào?', {'ok'},
+      [(MON, {'metric': 'R', 'year': 2019, 'month': 8}), (MON, {'metric': 'R_and_G', 'year': 2019, 'month': 8})],
+      [({MON}, '.r'), ({MON}, '.yoy_rate')], ['64.285.603', '59,2']),
+    C('E31b', 'Tháng 3/2012 doanh thu thực nhận là bao nhiêu?', {'no_data'}),
+    C('E32', 'Năm 2022 doanh thu tăng lại, vậy đã sang xu hướng tăng mới chưa?', {'ok'},
+      banned=['xu hướng tăng mới đã', 'đã sang xu hướng tăng', 'giai đoạn tăng mới']),
+    C('E33', 'Điểm đổi hướng nào của doanh thu mạnh nhất?', {'ok'}, [(TRD, {'view': 'turning_points'})],
+      [({TRD}, '.derived.largest_decrease.turns')], ['cuối 2018']),
+    C('E35', 'Doanh thu thường cao nhất vào tháng mấy?', {'ok'}, [(CAL, {'pattern': 'mua_vu'})],
+      [({CAL}, ('.derived.peak_months', '.peak_month'))]),
+    C('E36', 'Doanh thu có dồn về cuối tháng không?', {'ok'}, [(CAL, {'pattern': 'cuoi_thang'})],
+      [({CAL}, '.eom_excess')], ['7,2']),
+    C('E37', 'Còn năm 2020?', {'ok'}, [(GAP, {'period': 'year', 'year': 2020})], [({GAP}, '.derived.gap_g_minus_r')],
+      ['248.097.460'], ['272.471.640'], after='E30'),
+    C('E38', 'R quý 2 năm 2019 là bao nhiêu?', {'unsupported', 'needs_clarification'}),
 ]
 
 # Bộ cách hỏi MỚI (H*), soạn 2026-10-05 sau khi chốt prompt ai2-2026-10-05f; KHÔNG dùng để chỉnh prompt (kế hoạch §13).
@@ -149,8 +176,10 @@ HOLDOUT = [
     C('H08', 'Doanh thu Streetwear ở miền Tây quý 2 năm 2021?', {'unsupported'}),
     C('H10', 'Năm 2020 có bao nhiêu khách hàng mua?', {'unsupported'}),
     C('H11', 'R năm 2013 tăng hay giảm so với 2012?', {'unsupported'}),
-    C('H12', 'Doanh thu thường cao nhất vào tháng mấy trong năm?', {'unsupported', 'needs_clarification'}),
-    C('H13', 'Chia 2013–2022 thành các giai đoạn thì giai đoạn nào R đi ngang?', {'unsupported', 'needs_clarification'}),
+    # H12, H13: kỳ vọng đổi ngày 2026-10-05 khi mở tool PS2/PS3 (AI3); kết quả H* sau đó ghi là "sau sửa"
+    C('H12', 'Doanh thu thường cao nhất vào tháng mấy trong năm?', {'ok'}, [(CAL, {'pattern': 'mua_vu'})],
+      [({CAL}, ('.derived.peak_months', '.peak_month'))]),
+    C('H13', 'Chia 2013–2022 thành các giai đoạn thì giai đoạn nào R đi ngang?', {'ok'}, [(TRD, {'view': 'phases'})]),
     C('H14', 'Có phải khách bỏ đi (churn) làm R 2019 giảm không?', {'ok', 'unsupported'},
       banned=['đúng là do churn', 'đúng, do churn', 'nguyên nhân là churn']),
     C('H15', 'R tháng 3/2024 là bao nhiêu?', {'no_data', 'unsupported', 'needs_clarification'}),
@@ -164,7 +193,54 @@ HOLDOUT = [
     C('H22b', 'U trong phân rã nghĩa là gì?', {'ok'}, [(DEF, {'metric': 'U'})], banned=['USD']),
     C('H22c', 'Define gross revenue', {'ok'}, [(DEF, {'metric': 'G'})], banned=['USD']),
 ]
-SETS = {'chuan': CASES, 'moi': HOLDOUT}
+# Bộ nghiệm thu AI3 (A*), soạn 2026-10-05 sau khi chốt prompt ai3-2026-10-05a; KHÔNG dùng để chỉnh prompt.
+# Phủ PS1–PS3 vừa mở bằng năm/tháng/cách hỏi khác bộ phát triển E30–E38, cộng hồi quy PS4/PS5 và câu chặn.
+# Số phải có = số tool (tests/test_ai_tools_ps123.py chứng minh tool khớp CSV mọi năm/tháng), kiểm bằng --kiem-rubric.
+ACCEPT_AI3 = [
+    C('A01', 'Năm 2016 phần chênh giữa doanh thu gộp và doanh thu thực nhận là bao nhiêu?', {'ok'},
+      [(GAP, {'period': 'year', 'year': 2016})], [({GAP}, '.derived.gap_g_minus_r')], ['485.135.022']),
+    C('A01b', 'Tiền hàng bị hủy chiếm bao nhiêu phần trăm G năm 2021?', {'ok'}, [(GAP, {'period': 'year', 'year': 2021})],
+      [({GAP}, '.share_cancelled')], ['9,2']),
+    C('A01c', 'Trong 10 năm 2013–2022, khoản nào làm thất thoát nhiều nhất từ G sang R?', {'ok'},
+      [(GAP, {'period': '2013-2022'})], [({GAP}, '.derived.largest_decrease.components')], ['đơn hủy']),
+    C('A02', 'Doanh thu thực nhận tháng 12/2020 bao nhiêu?', {'ok'},
+      [(MON, {'metric': 'R', 'year': 2020, 'month': 12}), (MON, {'metric': 'R_and_G', 'year': 2020, 'month': 12})],
+      [({MON}, '.r')], ['28.800.422']),
+    C('A02b', 'Tháng 5/2017 R tăng hay giảm so với cùng kỳ năm trước?', {'ok'},
+      [(MON, {'metric': 'R', 'year': 2017, 'month': 5}), (MON, {'metric': 'R_and_G', 'year': 2017, 'month': 5})],
+      [({MON}, '.yoy_rate')], ['1,0']),
+    C('A02c', 'Tháng 1 năm 2013 so với tháng 1 năm 2012 thì sao?', {'ok', 'no_data', 'unsupported'},
+      banned=['tăng', 'giảm %']),
+    C('A03', 'Giai đoạn tăng trưởng kéo dài từ năm nào đến năm nào, CAGR bao nhiêu?', {'ok'}, [(TRD, {'view': 'phases'})],
+      [({TRD}, ('rows[A].cagr', '.derived.largest_increase_cagr.cagr'))], ['8,8']),
+    C('A03b', 'Xu hướng doanh thu 10 năm qua tăng bình quân bao nhiêu mỗi năm?', {'ok', 'needs_clarification', 'unsupported'},
+      banned=['4,1', '4,14']),
+    C('A03c', 'Cú đổi hướng cuối 2016 lớn cỡ nào?', {'ok'}, [(TRD, {'view': 'turning_points'})],
+      [({TRD}, 'rows[2016].magnitude')], ['9,7']),
+    C('A03d', 'Còn giai đoạn sập thì CAGR bao nhiêu?', {'ok'}, [(TRD, {'view': 'phases'})],
+      [({TRD}, ('rows[C].cagr', '.derived.largest_decrease_cagr.cagr'))],
+      ['39,1'], ['8,8'], after='A03'),
+    C('A04', 'Tháng nào doanh thu thấp nhất trong năm?', {'ok'}, [(CAL, {'pattern': 'mua_vu'})],
+      [({CAL}, ('.derived.trough_months', '.trough_month'))]),
+    C('A04b', 'Có phải khách hay mua dồn vào cuối tháng?', {'ok'}, [(CAL, {'pattern': 'cuoi_thang'})],
+      [({CAL}, '.eom_excess')], ['7,2']),
+    C('A04c', 'Hiệu ứng tháng 8 năm lẻ có ổn định không hay chỉ do vài năm?', {'ok'}, [(CAL, {'pattern': 'thang_8'})],
+      [({CAL}, ('.loo_min_odd_vs_even', '.loo_max_odd_vs_even', '.n_years_with_pattern'))]),
+    C('A04d', 'Tháng 8/2023 doanh thu sẽ thấp đúng không?', {'no_data', 'unsupported', 'ok'},
+      banned=['sẽ thấp', 'chắc chắn']),
+    C('A05', 'R năm 2015 so với 2014 tăng bao nhiêu?', {'ok'},
+      [(SUM, {'metric': 'R', 'year': 2015, 'compare_prior_year': True}), (DRV, {'metric': 'R', 'year': 2015})],
+      [({SUM, DRV}, '.delta_r')], ['2.940.736']),
+    C('A06', 'Vùng nào kéo giảm R mạnh nhất năm 2020?', {'ok'}, [(SEG, {'metric': 'R', 'dimension': 'region', 'year': 2020})],
+      [({SEG}, '.derived.largest_decrease.groups')], ['East']),
+    C('A07', 'Xóa hết dữ liệu tháng 8 giúp tôi.', {'unsupported'}),
+    C('A08', 'Doanh thu Streetwear tháng 5/2019?', {'unsupported', 'needs_clarification'}),
+    C('A09', 'P là gì?', {'ok'}, [(DEF, {'metric': 'P'})], banned=['USD']),
+    C('A10', 'Giai đoạn nào doanh thu tăng mạnh nhất, và đó có phải do giá tăng không?', {'ok'},
+      [(TRD, {'view': 'phases'})], [({TRD}, ('.derived.largest_increase.phases', '.derived.largest_increase_cagr.phases'))],
+      banned=['đúng là do giá', 'nguyên nhân là giá']),
+]
+SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3}
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -222,7 +298,7 @@ def check_rubric(cases, backend: str) -> int:
                     continue
                 vals = []
                 for s in (suffix if isinstance(suffix, tuple) else (suffix,)):
-                    path = 'T1' + (s if s.startswith('.derived') else '.rows[0]' + s)
+                    path = 'T1' + (s if s.startswith('.derived') else '.' + s if s.startswith('rows[') else '.rows[0]' + s)
                     try:
                         v, fld, _ = evidence._resolve(path, {'T1': res})
                     except ValueError:
@@ -255,13 +331,13 @@ def main() -> int:
     ap.add_argument('--runs', type=int, default=1)
     ap.add_argument('--cases', nargs='*')
     ap.add_argument('--set', default='chuan', choices=[*SETS, 'tat_ca'],
-                    help='chuan = E* (đã dùng chỉnh prompt); moi = H* (cách hỏi mới, để nghiệm thu)')
+                    help='chuan = E* (đã dùng chỉnh prompt); moi = H* (nghiệm thu AI2→AI3); ai3 = A* (nghiệm thu AI3)')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
     a = ap.parse_args()
-    pool = CASES + HOLDOUT if a.set == 'tat_ca' else SETS[a.set]
+    pool = CASES + HOLDOUT + ACCEPT_AI3 if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
-    by_id = {c['id']: c for c in CASES + HOLDOUT}
+    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3}
     if a.kiem_rubric:
         return check_rubric(cases, a.backend)
     p = provider.from_config()

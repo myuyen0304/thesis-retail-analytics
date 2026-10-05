@@ -60,7 +60,12 @@ SIGNED = {'delta_r', 'contrib_n', 'contrib_u', 'contrib_p', 'yoy_rate', 'share_s
 COMPARED = SIGNED | {'gap_g_minus_r', 'odd_even_order'}
 # Ô xếp hạng mức (tháng cao nhất, chỉ số tháng 8 cao nhất của năm lẻ...): +1 = phía cao, −1 = phía thấp
 LEVEL_RANK = {'peak_month': 1, 'peak_index': 1, 'peak_months': 1, 'max_index_odd': 1,
-              'trough_month': -1, 'trough_index': -1, 'trough_months': -1, 'min_index_even': -1}
+              'trough_month': -1, 'trough_index': -1, 'trough_months': -1, 'min_index_even': -1,
+              'loo_min_ratio': -1, 'loo_min_odd_vs_even': -1, 'loo_min_eom_excess': -1,
+              'loo_max_ratio': 1, 'loo_max_odd_vs_even': 1, 'loo_max_eom_excess': 1}
+# Số tự nó đã là phép xếp hạng hai đầu trên đủ tập (tháng cao nhất ÷ thấp nhất): câu "giữa tháng cao nhất và thấp nhất
+# là {c}" hợp lệ khi dẫn ô này
+RANK_BOTH = {'season_peak_trough_ratio'}
 HIGH_WORDS, LOW_WORDS = ('cao nhất', 'lớn nhất', 'nhiều nhất', 'đứng đầu'), ('thấp nhất', 'nhỏ nhất', 'ít nhất')
 DRIVER_LABEL = {'n': 'số đơn (N)', 'u': 'số món mỗi đơn (U)', 'p': 'giá mỗi món (P)'}
 # Nhãn chỉ tiêu của từng cột, để renderer tự ghi số đó là gì (không tin nhãn model tự viết).
@@ -209,7 +214,8 @@ def allowed_years(results: dict) -> set[str]:
     thông báo do app viết (vd. phạm vi dữ liệu 2012-07-04 → 2022-12-31 khi tool trả no_data)."""
     years = set()
     for res in results.values():
-        years |= _numbers(res.message)          # thông báo do app viết, không phải do model
+        msg = _numbers(res.message)             # thông báo do app viết, không phải do model
+        years |= msg | {str(int(t)) for t in msg if t.isdigit()}      # "2012-07-04" → model viết "tháng 7/2012"
         for r in res.rows:
             for k in ('year', 'start_year', 'end_year', 'period_code', 'month', 'turning_year', 'first_year', 'last_year'):
                 if r.get(k) is not None:
@@ -390,6 +396,8 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
         ranks = [_rank_direction(by_id[cid][0]['path']) for cid in _PLACEHOLDER.findall(sent) if cid in by_id]
         ranks = [r for r in ranks if r]
         if not ranks and _verified_driver_rank(sent, results):
+            continue
+        if not ranks and any(by_id[cid][2] in RANK_BOTH for cid in _PLACEHOLDER.findall(sent) if cid in by_id):
             continue
         if not ranks:
             errors.append(f'câu "{sent.strip()[:80]}" có ý xếp hạng ("nhiều nhất", "chủ yếu"...) nhưng trong câu '
