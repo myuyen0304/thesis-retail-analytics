@@ -16,12 +16,13 @@ from ui.fmt import arrow_safe, num
 
 page_header('Hỏi dữ liệu (AI)', 'Hỏi bằng tiếng Việt về doanh thu PS1–PS5; mọi con số lấy từ kho và có bằng chứng.')
 
-GOI_Y = {
-    'R năm 2019 giảm bao nhiêu so với 2018?': 'R năm 2019 giảm bao nhiêu so với 2018?',
-    'Vì sao R năm 2019 giảm?': 'Vì sao R năm 2019 giảm?',
-    'Ngành hàng nào kéo giảm R nhiều nhất năm 2019?': 'Ngành hàng nào kéo giảm R nhiều nhất năm 2019?',
-    'R và G năm 2022?': 'R và G năm 2022?',
-}
+GOI_Y = {q: q for q in [
+    'G hụt thành R bao nhiêu năm 2019, khoản nào lớn nhất?',          # PS1
+    'Doanh thu chia mấy giai đoạn, giai đoạn nào giảm mạnh nhất?',    # PS2
+    'Tháng 8 năm lẻ có luôn thấp hơn năm chẵn không?',               # PS3
+    'Vì sao R năm 2019 giảm?',                                         # PS4
+    'Ngành hàng nào kéo giảm R nhiều nhất năm 2019?',                  # PS5
+]}
 TRANG_THAI = {
     'needs_clarification': ('info', 'Cần làm rõ'), 'unsupported': ('info', 'Chưa hỗ trợ'),
     'no_data': ('info', 'Không có dữ liệu'), 'quality_blocked': ('warning', 'Kho chưa qua kiểm'),
@@ -140,12 +141,15 @@ notes(
         'kết quả truy vấn của chính câu đó, app tra giá trị thật rồi mới hiện. Mở **Bằng chứng** để xem bảng, câu SQL, '
         'bộ lọc, định nghĩa và bản kho đã đọc.',
         'Câu hỏi tiếp nối ("còn theo khu vực?") giữ năm/chỉ tiêu của câu trước và đọc kho lại; không dùng lại số cũ.',
-        f'Đang mở: R/G theo năm; R so năm trước và phân rã N → U → P (từ 2014); R theo một chiều '
-        f'({", ".join(cat.DIMENSIONS)}) × năm.',
+        'Đang mở: PS1 G → R theo năm hoặc cả kỳ 2013–2022, R/G một tháng; PS2 bốn giai đoạn và ba điểm đổi hướng; '
+        'PS3 mùa vụ, dồn cuối tháng, tháng 8 năm lẻ/chẵn; PS4 R so năm trước và phân rã N → U → P (từ 2014); '
+        f'PS5 R theo một chiều ({", ".join(cat.DIMENSIONS)}) × năm.',
     ],
     gioi_han=[
-        'Chưa mở: PS1 cầu nối G → R, PS2 giai đoạn, PS3 nhịp lịch, số khách C theo nhóm, lọc nhiều chiều, khoảng ngày '
-        'tùy ý, G so năm trước. Hỏi những câu này thì trợ lý báo chưa hỗ trợ.',
+        'Chưa mở: số khách C theo nhóm, lọc nhiều chiều, nhiều tháng / quý / khoảng ngày tùy ý, G so năm trước, phân rã '
+        'N/U/P theo giai đoạn, tháng đổi hướng do dữ liệu tự tìm. Hỏi những câu này thì trợ lý báo chưa hỗ trợ.',
+        'Số PS3 theo giai đoạn dùng cách gom năm ranh giới đề xuất (chờ BA chốt); số cả kỳ 2013–2022 không phụ thuộc '
+        'quy ước này.',
         'Phân rã là số học, không phải nguyên nhân (marketing, churn, tồn kho... không có trong dữ liệu).',
         'Câu diễn giải không qua bước kiểm số thì không hiện; khi đó chỉ hiện bảng số lấy thẳng từ kho.',
         'Tiền ghi VND: dữ liệu nguồn không ghi đơn vị tiền tệ, PM chốt dùng VND ngày 2026-10-05.',

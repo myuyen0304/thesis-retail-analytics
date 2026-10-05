@@ -30,16 +30,38 @@ from numbers import Number
 from ui.fmt import num, pct
 
 MONEY = {'r', 'g', 'r_prior_year', 'delta_r', 'r_start', 'r_end', 'contrib_n', 'contrib_u', 'contrib_p', 'r_total',
-         'additive_check'}
+         'additive_check',
+         # AI3: PS1 G → R, tháng; PS2 điểm đổi hướng
+         'cancelled_gross', 'returned_gross', 'undelivered_gross', 'delivered_discount', 'gap_g_minus_r', 'amount',
+         'r_same_month_prior_year', 'r_12m_before', 'r_12m_after'}
 PRICE = {'p_start', 'p_end'}
-RATE = {'yoy_rate', 'share', 'contribution_to_delta', 'r_change_rate', 'n_change_rate', 'u_change_rate', 'p_change_rate'}
+RATE = {'yoy_rate', 'share', 'contribution_to_delta', 'r_change_rate', 'n_change_rate', 'u_change_rate', 'p_change_rate',
+        'capture_rate', 'share_cancelled', 'share_returned', 'share_undelivered', 'share_discount',
+        'total_change_rate', 'cagr', 'magnitude', 'august_odd_vs_even', 'loo_min_odd_vs_even', 'loo_max_odd_vs_even',
+        'eom_share', 'eom_expected_share'}
 PP = {'share_shift_pp'}
-COUNT = {'n_start', 'n_end', 'n_groups', 'n_groups_up', 'n_groups_down'}
+PP_FRAC = {'eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess'}     # hiệu hai tỷ lệ (0,0718) → "7,2 điểm %"
+COUNT = {'n_start', 'n_end', 'n_groups', 'n_groups_up', 'n_groups_down',
+         'n_years', 'n_years_with_pattern', 'n_odd_years', 'n_even_years', 'n_phases', 'n_phases_eom_positive'}
 UNITS = {'u_start', 'u_end'}
+INDEX = {'month_index', 'august_index_odd', 'august_index_even', 'max_index_odd', 'min_index_even', 'peak_index',
+         'trough_index', 'season_peak_trough_ratio', 'loo_min_ratio', 'loo_max_ratio'}
+MONTHS = {'month', 'peak_month', 'trough_month', 'peak_months', 'trough_months'}
+YEARS = {'year', 'start_year', 'end_year', 'turning_year', 'first_year', 'last_year'}
+# khóa chọn dòng theo tên trong path rows[<tên>]: nhóm PS5, giai đoạn A–D, năm của điểm đổi hướng
+ROW_KEYS = ('dimension_value', 'phase_code', 'turning_year')
 # Số THAY ĐỔI: dương = tăng, âm = giảm. contribution_to_delta / share là TỶ LỆ, không thuộc nhóm này:
 # contribution_to_delta dương = cùng chiều ΔR toàn công ty (Streetwear 2019: +83,6% của mức GIẢM).
 SIGNED = {'delta_r', 'contrib_n', 'contrib_u', 'contrib_p', 'yoy_rate', 'share_shift_pp', 'r_change_rate',
-          'n_change_rate', 'u_change_rate', 'p_change_rate'}
+          'n_change_rate', 'u_change_rate', 'p_change_rate',
+          'total_change_rate', 'cagr', 'magnitude', 'august_odd_vs_even', 'loo_min_odd_vs_even', 'loo_max_odd_vs_even',
+          'eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess'}
+# Câu so sánh ("thấp hơn"...) được nói khi dẫn một cột chênh lệch / kết luận so sánh do tool tính
+COMPARED = SIGNED | {'gap_g_minus_r', 'odd_even_order'}
+# Ô xếp hạng mức (tháng cao nhất, chỉ số tháng 8 cao nhất của năm lẻ...): +1 = phía cao, −1 = phía thấp
+LEVEL_RANK = {'peak_month': 1, 'peak_index': 1, 'peak_months': 1, 'max_index_odd': 1,
+              'trough_month': -1, 'trough_index': -1, 'trough_months': -1, 'min_index_even': -1}
+HIGH_WORDS, LOW_WORDS = ('cao nhất', 'lớn nhất', 'nhiều nhất', 'đứng đầu'), ('thấp nhất', 'nhỏ nhất', 'ít nhất')
 DRIVER_LABEL = {'n': 'số đơn (N)', 'u': 'số món mỗi đơn (U)', 'p': 'giá mỗi món (P)'}
 # Nhãn chỉ tiêu của từng cột, để renderer tự ghi số đó là gì (không tin nhãn model tự viết).
 FIELD_LABEL = {'r': 'R', 'g': 'G', 'r_prior_year': 'R', 'r_start': 'R', 'r_end': 'R', 'r_total': 'R toàn công ty',
@@ -47,10 +69,28 @@ FIELD_LABEL = {'r': 'R', 'g': 'G', 'r_prior_year': 'R', 'r_start': 'R', 'r_end':
                'yoy_rate': '% đổi R', 'r_change_rate': '% đổi R', 'n_change_rate': '% đổi N', 'u_change_rate': '% đổi U',
                'p_change_rate': '% đổi P', 'share': 'tỷ trọng R', 'share_shift_pp': 'đổi tỷ trọng R',
                'contribution_to_delta': '% đóng góp vào ΔR', 'n_start': 'số đơn', 'n_end': 'số đơn',
-               'u_start': 'món mỗi đơn', 'u_end': 'món mỗi đơn', 'p_start': 'giá mỗi món', 'p_end': 'giá mỗi món'}
+               'u_start': 'món mỗi đơn', 'u_end': 'món mỗi đơn', 'p_start': 'giá mỗi món', 'p_end': 'giá mỗi món',
+               # AI3
+               'cancelled_gross': 'tiền hàng đơn hủy', 'returned_gross': 'tiền hàng đơn trả',
+               'undelivered_gross': 'tiền hàng đơn chưa giao', 'delivered_discount': 'chiết khấu đơn đã giao',
+               'gap_g_minus_r': 'G − R', 'capture_rate': 'R/G', 'share_cancelled': 'đơn hủy / G',
+               'share_returned': 'đơn trả / G', 'share_undelivered': 'đơn chưa giao / G',
+               'share_discount': 'chiết khấu / G', 'r_same_month_prior_year': 'R', 'month_index': 'chỉ số tháng',
+               'total_change_rate': '% đổi R cả giai đoạn', 'cagr': 'CAGR', 'r_12m_before': 'R 12 tháng trước điểm',
+               'r_12m_after': 'R 12 tháng sau điểm', 'magnitude': 'độ lớn đổi hướng',
+               'august_odd_vs_even': 'chênh tháng 8 năm lẻ / năm chẵn', 'august_index_odd': 'chỉ số tháng 8 TB năm lẻ',
+               'august_index_even': 'chỉ số tháng 8 TB năm chẵn', 'max_index_odd': 'chỉ số tháng 8 cao nhất của năm lẻ',
+               'min_index_even': 'chỉ số tháng 8 thấp nhất của năm chẵn', 'loo_min_odd_vs_even': 'thấp nhất khi bỏ từng năm',
+               'loo_max_odd_vs_even': 'cao nhất khi bỏ từng năm', 'loo_min_ratio': 'thấp nhất khi bỏ từng năm',
+               'loo_max_ratio': 'cao nhất khi bỏ từng năm', 'loo_min_eom_excess': 'thấp nhất khi bỏ từng năm',
+               'loo_max_eom_excess': 'cao nhất khi bỏ từng năm', 'season_peak_trough_ratio': 'chênh mùa cao/thấp',
+               'peak_index': 'chỉ số tháng cao nhất', 'trough_index': 'chỉ số tháng thấp nhất',
+               'eom_share': 'tỷ trọng R từ ngày 26', 'eom_expected_share': 'tỷ trọng nếu rải đều',
+               'eom_excess': 'mức dồn cuối tháng', 'n_years_with_pattern': 'số năm có nhịp'}
 METRIC_FAMILY = {f: 'R' for f in ('r', 'r_prior_year', 'r_start', 'r_end', 'r_total', 'delta_r', 'contrib_n', 'contrib_u',
                                   'contrib_p', 'yoy_rate', 'r_change_rate', 'share', 'share_shift_pp',
-                                  'contribution_to_delta')} | {'g': 'G'}
+                                  'contribution_to_delta', 'r_same_month_prior_year', 'r_12m_before', 'r_12m_after',
+                                  'total_change_rate', 'cagr', 'magnitude')} | {'g': 'G'}
 _START_FIELDS = {'r_start', 'n_start', 'u_start', 'p_start'}
 DRIVER_FAMILY = {f'{k}{x}': k.upper() for k in 'nup' for x in ('_start', '_end', '_change_rate')} | {
     'contrib_n': 'N', 'contrib_u': 'U', 'contrib_p': 'P'}
@@ -79,6 +119,7 @@ _DRIVER_WORD = {'N': re.compile(r'số đơn|(?<!\w)N(?!\w)'),
                 'P': re.compile(r'giá(?! trị)|(?<!\w)P(?!\w)')}
 _DUP_MONEY = re.compile(r'\s*(?:VND|VNĐ|đồng)(?!\w)', re.I)
 _DUP_PCT = re.compile(r'\s*%')
+_DUP_PP = re.compile(r'\s*điểm\s*(?:%|phần trăm)', re.I)
 _METRIC_WORD = re.compile(r'ΔR|(?<![\w])[RG](?![\w])|doanh thu thực nhận|tiền thực nhận|tiền hàng|doanh thu gộp')
 
 
@@ -107,15 +148,15 @@ def _resolve(path: str, results: dict):
         raise ValueError(f'{ref} có trạng thái {res.status}, không có số')
     if m.group(2).startswith('rows'):
         sel, fld = m.group(3), m.group(4)
-        if sel.isdigit():
+        if sel.isdigit() and not (len(sel) == 4 and 'turning_year' in (res.rows[0] if res.rows else {})):
             i = int(sel)
             if i >= len(res.rows):
                 raise ValueError(f'{ref} không có dòng {i}')
             row = res.rows[i]
         else:
-            hit = [r for r in res.rows if r.get('dimension_value') == sel]
+            hit = [r for r in res.rows if any(r.get(k) is not None and str(r[k]) == sel for k in ROW_KEYS)]
             if len(hit) != 1:
-                raise ValueError(f'{ref} không có nhóm {sel!r}')
+                raise ValueError(f'{ref} không có nhóm / giai đoạn / điểm {sel!r}')
             row = hit[0]
         if fld not in row:
             raise ValueError(f'{ref} không có trường {fld}')
@@ -152,10 +193,12 @@ def _fmt(v, fld: str, absolute: bool) -> str:
         return pct(x, 1, signed)
     if fld in PP:
         return num(x, 1, signed) + ' điểm %'
-    if fld in UNITS:
+    if fld in PP_FRAC:
+        return num(x * 100, 1, signed) + ' điểm %'
+    if fld in UNITS or fld in INDEX:
         return num(x, 2)
-    if fld in ('year', 'start_year', 'end_year'):
-        return str(int(x))                 # năm không có dấu nghìn ("2019", không phải "2.019")
+    if fld in YEARS or fld in MONTHS:
+        return str(int(x))                 # năm/tháng không có dấu nghìn ("2019", không phải "2.019")
     if fld in COUNT:
         return num(x)
     return num(x, 2, signed)
@@ -168,15 +211,15 @@ def allowed_years(results: dict) -> set[str]:
     for res in results.values():
         years |= _numbers(res.message)          # thông báo do app viết, không phải do model
         for r in res.rows:
-            for k in ('year', 'start_year', 'end_year', 'period_code'):
+            for k in ('year', 'start_year', 'end_year', 'period_code', 'month', 'turning_year', 'first_year', 'last_year'):
                 if r.get(k) is not None:
                     years.add(str(r[k]))
         if res.evidence:
-            for k in ('year', 'period_code'):
+            for k in ('year', 'period_code', 'month'):
                 v = res.evidence.filters_applied.get(k)
                 if v is not None:
                     years.add(str(v))
-                    if str(v).isdigit():
+                    if k != 'month' and str(v).isdigit():
                         years.add(str(int(v) - 1))
     return years
 
@@ -223,7 +266,7 @@ def _rank_direction(path: str) -> int:
         return -1
     if '.derived.largest_increase' in path or path.endswith('top_up_driver'):
         return 1
-    return 0
+    return LEVEL_RANK.get(path.rsplit('.', 1)[-1], 0)
 
 
 def _said_metric(seg: str) -> str | None:
@@ -256,10 +299,23 @@ def _verified_driver_rank(sent: str, results: dict) -> bool:
 def _year_of(fld: str, row: dict | None):
     if not row:
         return None
+    if 'period' in row:                                   # kỳ gộp 2013–2022
+        return row['period']
+    if row.get('month') is not None and row.get('year') is not None:
+        y = int(row['year']) - (1 if fld == 'r_same_month_prior_year' else 0)
+        return f"{row['month']}/{y}"
+    if row.get('turning_year') is not None:
+        t = int(row['turning_year'])
+        return {'r_12m_before': t, 'r_12m_after': t + 1}.get(fld, f'cuối {t}')
+    if row.get('first_year') is not None:                 # giai đoạn PS3 (năm lịch gom theo giai đoạn)
+        a, b = row['first_year'], row.get('last_year')
+        return str(a) if a == b else f'{a}–{b}'
     if fld == 'r_prior_year' and row.get('year') is not None:
         return int(row['year']) - 1
     if fld in _START_FIELDS:
         return row.get('start_year')
+    if row.get('phase_code') is not None and fld != 'r_end':      # giai đoạn PS2: cả khoảng năm
+        return f"{row['start_year']}→{row['end_year']}"
     return row.get('year', row.get('end_year'))
 
 
@@ -269,7 +325,9 @@ def _label(fld: str, row: dict | None, clause: str) -> str:
     name = FIELD_LABEL.get(fld)
     if name is None:
         return ''
-    year, group = _year_of(fld, row), (row or {}).get('dimension_value')
+    row_ = row or {}
+    year = _year_of(fld, row)
+    group = row_.get('dimension_value') or (f"giai đoạn {row_['phase_code']}" if row_.get('phase_code') else None)
     parts = [name] + [str(x) for x in (group, year) if x is not None]
     said = (fld in ('r', 'g', 'r_prior_year', 'delta_r', 'r_start', 'r_end')
             and _said_metric(clause) == METRIC_FAMILY.get(fld)
@@ -337,6 +395,13 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             errors.append(f'câu "{sent.strip()[:80]}" có ý xếp hạng ("nhiều nhất", "chủ yếu"...) nhưng trong câu '
                           'không có chỗ đặt trỏ vào derived.largest_* hoặc top_*_driver (xếp hạng trên đủ tập)')
             continue
+        level = [_rank_direction(by_id[cid][0]['path']) for cid in _PLACEHOLDER.findall(sent)
+                 if cid in by_id and by_id[cid][0]['path'].rsplit('.', 1)[-1] in LEVEL_RANK]
+        hi, lo = any(w in sent.lower() for w in HIGH_WORDS), any(w in sent.lower() for w in LOW_WORDS)
+        if level and hi != lo and all(r != (1 if hi else -1) for r in level):
+            errors.append(f'câu "{sent.strip()[:80]}" nói "{"cao" if hi else "thấp"} nhất" nhưng chỗ đặt trỏ vào phía '
+                          f'{"thấp" if hi else "cao"} (peak/trough, max/min)')
+            continue
         d = _direction(_PLACEHOLDER.sub(' ', sent))
         if d and all(r != d for r in ranks):
             errors.append(f'câu "{sent.strip()[:80]}" nói "{"tăng" if d > 0 else "giảm"}" nhưng claim xếp hạng là '
@@ -346,7 +411,7 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
     # (câu không có chỗ đặt nào, vd. nhắc lại câu hỏi "tháng 8 năm lẻ có thấp hơn..." khi từ chối, thì không xét)
     for sent in _SENTENCE.split(answer):
         cids = [cid for cid in _PLACEHOLDER.findall(sent) if cid in by_id]
-        if cids and any(w in sent.lower() for w in COMPARE_WORDS) and not any(by_id[c][2] in SIGNED for c in cids):
+        if cids and any(w in sent.lower() for w in COMPARE_WORDS) and not any(by_id[c][2] in COMPARED for c in cids):
             errors.append(f'câu "{sent.strip()[:80]}" tự so sánh các số (cao hơn / thấp hơn...) mà không dẫn cột thay đổi '
                           'do tool tính; app không kiểm được phép so sánh này')
 
@@ -389,6 +454,8 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
         said_drv = _said_driver(seg) or prev_driver
         if drv and said_drv and said_drv != drv:
             errors.append(f'{cid}: vế câu nói về {said_drv} nhưng {c["path"]} là số của {drv}')
+        if fld in ('top_up_driver', 'top_down_driver') and re.search(r'(mức|góp|bằng)\W*$', seg.strip(), re.I):
+            errors.append(f'{cid}: chỗ đặt sau "{seg.strip()[-20:]}" phải là một số (contrib_*), không phải tên thành phần')
         prev_driver = str(v).upper() if fld in ('top_up_driver', 'top_down_driver') else None
         absolute = False
         if fld in SIGNED and _is_num(v) and v != 0:
@@ -401,7 +468,8 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
         values[cid] = (c['path'], v, s + lbl)
         rendered.append(f'**{s}**{lbl}')
         # model hay viết lại đơn vị sau chỗ đặt ("{c1} VND"): app đã ghi đơn vị, bỏ bản lặp
-        unit = (_DUP_MONEY if fld in MONEY | PRICE else _DUP_PCT if fld in RATE else None)
+        unit = (_DUP_MONEY if fld in MONEY | PRICE else _DUP_PCT if fld in RATE
+                else _DUP_PP if fld in PP | PP_FRAC else None)
         dup = unit.match(answer, last) if unit else None
         if dup:
             last = prev = dup.end()

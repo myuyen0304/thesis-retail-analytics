@@ -476,7 +476,14 @@ _PG_CALLS = ([('get_revenue_summary', {'metric': 'R_and_G', 'year': y}) for y in
              + [('get_revenue_summary', {'metric': 'R', 'year': y, 'compare_prior_year': True}) for y in GROWTH]
              + [('get_revenue_drivers', {'metric': 'R', 'year': y}) for y in GROWTH]
              + [('get_segment_contribution', {'metric': 'R', 'dimension': d, 'year': y})
-                for d in metric_catalog.DIMENSIONS for y in GROWTH])
+                for d in metric_catalog.DIMENSIONS for y in GROWTH]
+             # AI3: PS1–PS3 (DuckDB == CSV ở tests/test_ai_tools_ps123.py)
+             + [('get_revenue_gap', {'period': 'year', 'year': y}) for y in YEARS]
+             + [('get_revenue_gap', {'period': '2013-2022'})]
+             + [('get_revenue_monthly', {'metric': 'R_and_G', 'year': y, 'month': m}) for y in (2012, 2013, 2019)
+                for m in (7, 8, 12)]
+             + [('get_revenue_trend', {'view': v}) for v in ('phases', 'turning_points')]
+             + [('get_calendar_pattern', {'pattern': p}) for p in ('mua_vu', 'cuoi_thang', 'thang_8')])
 
 
 @pytest.mark.parametrize('tool,args', _PG_CALLS, ids=lambda x: x if isinstance(x, str) else '-'.join(map(str, x.values())))

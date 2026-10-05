@@ -26,10 +26,14 @@ from dwh.connection import describe
 from dwh.guarded import (DEFAULT_MAX_ROWS, DEFAULT_TIMEOUT_S, GuardError, QueryTimeout, RowLimitExceeded, Statement,
                          open_session)
 
-TOOL_VERSION = 'v1.1'
+TOOL_VERSION = 'v1.2'
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
     'reporting.rpt_driver_period', 'reporting.rpt_revenue_segment_yearly', 'reporting.driver_rule',
+    # AI3: PS1–PS3
+    'reporting.rpt_revenue_total', 'reporting.rpt_revenue_bridge', 'reporting.rpt_revenue_monthly',
+    'reporting.rpt_revenue_phase', 'reporting.rpt_revenue_turning_point', 'reporting.rpt_august_parity',
+    'reporting.rpt_calendar_phase', 'reporting.rpt_calendar_stability',
 })
 
 
@@ -275,6 +279,230 @@ def _definition(turn: _Turn, a: dict) -> ToolResult:
                                                          metrics=cat.metric_defs(a['metric']), read_at=_now()))
 
 
+# --- AI3: PS1 (G → R, tháng), PS2 (giai đoạn), PS3 (nhịp lịch) ---
+
+# cột tiền của rpt_revenue_yearly / rpt_revenue_total → bước của rpt_revenue_bridge, nhãn nghiệp vụ
+GAP_PARTS = {
+    'cancelled_gross': ('cancelled', 'tiền hàng đơn hủy'),
+    'returned_gross': ('returned', 'tiền hàng đơn trả'),
+    'undelivered_gross': ('undelivered', 'tiền hàng đơn chưa giao'),
+    'delivered_discount': ('discount', 'chiết khấu đơn đã giao'),
+}
+ANALYSIS_WINDOW = '2013-2022'
+
+
+def _gap(turn: _Turn, a: dict) -> ToolResult:
+    if a['period'] == 'year':
+        if 'year' not in a:
+            return ToolResult('needs_clarification', 'Cần làm rõ: year — năm nào, hoặc chọn cả kỳ 2013–2022.',
+                              missing=['year'])
+        year = a['year']
+        if (r := _check_year(turn, year, needs_prior=False)):
+            return r
+        src, head, where, params = ('reporting.rpt_revenue_yearly', 'year, is_analysis_period', 'year = {p}', (year,))
+        ptype, code = 'year', str(year)
+    else:
+        if 'year' in a:
+            return ToolResult('unsupported', 'Cả kỳ 2013–2022 không đi kèm một năm; hỏi một năm thì chọn period = year.',
+                              rejected={'year': 'không dùng cùng period 2013-2022'})
+        src, head, where, params = ('reporting.rpt_revenue_total', 'period_code, start_year, end_year, is_analysis_period',
+                                    'period_code = {p}', (ANALYSIS_WINDOW,))
+        ptype, code = 'total', ANALYSIS_WINDOW
+    rows = turn.fetch(src, f"select {head}, g, r, {', '.join(GAP_PARTS)}, capture_rate from {src} where {where}",
+                      params).records()
+    steps = turn.fetch('reporting.rpt_revenue_bridge',
+                       'select step_code, amount, share_of_g from reporting.rpt_revenue_bridge '
+                       'where period_type = {p} and period_code = {p} order by step_order', (ptype, code)).records()
+    read_at = _now()
+    if not rows:
+        return ToolResult('no_data', f'Không có dòng kỳ {code} trong {src}.')
+    by = {s['step_code']: s for s in steps}
+    if len(rows) != 1 or len(steps) != 6 or set(by) != {'g', 'r', *(st for st, _ in GAP_PARTS.values())}:
+        return ToolResult('query_error', f'Kỳ {code}: {len(rows)} dòng kỳ / {len(steps)} bước thác, cần 1 / 6.')
+    row = dict(rows[0])
+    # hai bảng đọc trong cùng phiên phải khớp: G, R là bước đầu/cuối; mỗi khoản chênh = −(bước trừ) của thác
+    if (by['g']['amount'] != row['g'] or by['r']['amount'] != row['r']
+            or any(by[st]['amount'] != -row[c] for c, (st, _) in GAP_PARTS.items())):
+        return ToolResult('query_error', f'Thác G → R kỳ {code} không khớp bảng kỳ trong cùng phiên; không trả số.')
+    for c, (st, _) in GAP_PARTS.items():
+        row[f'share_{st}'] = by[st]['share_of_g']
+    if ptype == 'total':
+        row['period'] = '2013–2022'
+    parts = {lbl: row[c] for c, (_, lbl) in GAP_PARTS.items()}
+    gap, best = row['g'] - row['r'], max(parts.values())
+    if sum(parts.values()) != gap:
+        return ToolResult('query_error', f'Bốn khoản chênh kỳ {code} không cộng đúng G − R; không trả số.')
+    biggest = [k for k, v in parts.items() if v == best]
+    note = '' if row['is_analysis_period'] else ' Năm 2012 thiếu nửa đầu năm: không so ngang năm đủ.'
+    return ToolResult('ok', f'G → R kỳ {code}: G trừ tiền hàng đơn hủy, đơn trả, đơn chưa giao và chiết khấu đơn đã giao '
+                      f'thì ra R. Tỷ trọng mỗi khoản tính trên G cùng kỳ.{note}', rows=[row], derived={
+                          'gap_g_minus_r': gap,
+                          'largest_decrease': {'components': biggest, 'amount': best, 'tie': len(biggest) > 1}},
+                      evidence=turn.evidence(
+                          filters={'period_type': ptype, 'period_code': code}, grain='kỳ (ngày đặt hàng)',
+                          metrics=cat.metric_defs('G', 'R', 'gap_components', 'capture_rate'),
+                          method='Thác G → R (docs/star_schema.md §3, đối soát PS1); khoản lớn nhất xét trên đủ bốn khoản',
+                          read_at=read_at))
+
+
+def _monthly(turn: _Turn, a: dict) -> ToolResult:
+    metric, year, month = a['metric'], a['year'], a['month']
+    if not 1 <= month <= 12:
+        return ToolResult('unsupported', 'Tháng phải từ 1 đến 12.', rejected={'month': f'nhận {month}'})
+    if (r := _check_year(turn, year, needs_prior=False)):
+        return r
+    cols = ['year', 'month', 'is_analysis_period'] + {'R': ['r'], 'G': ['g'], 'R_and_G': ['r', 'g', 'capture_rate']}[metric]
+    if metric != 'G':
+        cols += ['r_same_month_prior_year', 'yoy_rate', 'month_index']
+    rows = turn.fetch('reporting.rpt_revenue_monthly', f"select {', '.join(cols)} from reporting.rpt_revenue_monthly "
+                      'where year = {p} and month = {p}', (year, month)).records()
+    read_at = _now()
+    if not rows:
+        return ToolResult('no_data', f'Không có tháng {month}/{year} trong dữ liệu thực tế ({turn.build["data_start_date"]} '
+                          f'→ {turn.build["data_end_date"]}, theo ngày đặt hàng).')
+    notes = []
+    if metric != 'G' and rows[0]['yoy_rate'] is None:
+        notes.append('So cùng tháng năm trước chỉ có từ 08/2013.')
+    if metric != 'G' and rows[0]['month_index'] is None:
+        notes.append('Chỉ số tháng chỉ tính cho năm đủ 2013–2022.')
+    mids = {'R': ['R'], 'G': ['G'], 'R_and_G': ['R', 'G', 'capture_rate']}[metric]
+    mids += ['yoy_month', 'month_index'] if metric != 'G' else []
+    return ToolResult('ok', ' '.join([f'{metric} tháng {month}/{year}, chỉ đọc từ rpt_revenue_monthly.'] + notes),
+                      rows=rows, evidence=turn.evidence(filters={'year': year, 'month': month},
+                                                        grain='tháng (ngày đặt hàng)', metrics=cat.metric_defs(*mids),
+                                                        read_at=read_at))
+
+
+_PHASE_COLS = ['phase_code', 'phase_name', 'trend', 'start_year', 'end_year', 'n_years', 'r_start', 'r_end', 'delta_r',
+               'total_change_rate', 'cagr']
+_TURN_COLS = ['turning_year', 'from_phase_code', 'to_phase_code', 'from_phase_name', 'to_phase_name', 'r_12m_before',
+              'r_12m_after', 'delta_r', 'magnitude', 'turn_note']
+
+
+def _extreme_by(rows: list[dict], key: str, sign: int, label, out: str) -> dict | None:
+    """Dòng có `key` âm nhất (sign=-1) / dương nhất (+1) trên ĐỦ tập dòng; đồng hạng giữ tất cả."""
+    cand = [r for r in rows if r[key] is not None and sign * r[key] > 0]
+    if not cand:
+        return None
+    best = max(sign * r[key] for r in cand)
+    hit = [label(r) for r in cand if sign * r[key] == best]
+    return {out: hit, key: sign * best, 'tie': len(hit) > 1}
+
+
+def _phase_label(r: dict) -> str:
+    return f"{r['phase_code']} — {r['phase_name']} ({r['start_year']}→{r['end_year']})"
+
+
+def _trend(turn: _Turn, a: dict) -> ToolResult:
+    if a['view'] == 'phases':
+        rows = turn.fetch('reporting.rpt_revenue_phase', f"select {', '.join(_PHASE_COLS)} from reporting.rpt_revenue_phase "
+                          'order by start_year').records()
+        read_at = _now()
+        if len(rows) != 4:
+            return ToolResult('query_error', f'rpt_revenue_phase có {len(rows)} giai đoạn, hợp đồng PS2 là 4.')
+        derived = {'n_phases': len(rows)}
+        for key in ('delta_r', 'cagr'):
+            sfx = '' if key == 'delta_r' else '_cagr'
+            derived[f'largest_decrease{sfx}'] = _extreme_by(rows, key, -1, _phase_label, 'phases')
+            derived[f'largest_increase{sfx}'] = _extreme_by(rows, key, +1, _phase_label, 'phases')
+        return ToolResult('ok', 'Bốn giai đoạn R do PM/BA chốt ngày 2026-09-27; hai giai đoạn liền nhau dùng chung năm '
+                          'ranh giới. "Giảm/tăng mạnh nhất" có hai tiêu chí: theo ΔR (tiền) hoặc theo CAGR (%/năm). '
+                          'Giai đoạn chỉ mô tả R lên hay xuống, không phải nguyên nhân. Năm 2022 tăng lại chưa tách '
+                          'thành giai đoạn mới.', rows=rows, derived=derived, evidence=turn.evidence(
+                              filters={'view': 'phases'}, grain='giai đoạn PS2', read_at=read_at,
+                              metrics=cat.metric_defs('phase', 'R', 'delta_r', 'cagr'),
+                              method='CAGR = (R năm cuối ÷ R năm đầu)^(1/n) − 1; xếp hạng trên đủ 4 giai đoạn, '
+                                     'theo ΔR (largest_*) hoặc CAGR (largest_*_cagr)'))
+    rows = turn.fetch('reporting.rpt_revenue_turning_point', f"select {', '.join(_TURN_COLS)} "
+                      'from reporting.rpt_revenue_turning_point order by turning_year').records()
+    read_at = _now()
+    if len(rows) != 3:
+        return ToolResult('query_error', f'rpt_revenue_turning_point có {len(rows)} điểm, hợp đồng PS2 là 3.')
+
+    def label(r):
+        return f"cuối {r['turning_year']} ({r['from_phase_code']} → {r['to_phase_code']})"
+    return ToolResult('ok', 'Ba điểm đổi hướng ở ranh giới các giai đoạn PS2. Độ lớn = R 12 tháng sau điểm ÷ R 12 '
+                      'tháng trước điểm − 1; điểm đặt ở ranh giới năm nên 12 tháng trước là cả năm của điểm, 12 tháng '
+                      'sau là cả năm kế tiếp. Ghi chú đổi hướng là nhận định BA, PM chốt.', rows=rows,
+                      derived={'largest_decrease': _extreme_by(rows, 'magnitude', -1, label, 'turns'),
+                               'largest_increase': _extreme_by(rows, 'magnitude', +1, label, 'turns')},
+                      evidence=turn.evidence(filters={'view': 'turning_points'}, grain='điểm đổi hướng PS2',
+                                             metrics=cat.metric_defs('phase', 'R', 'turn_magnitude'), read_at=read_at,
+                                             method='Xếp theo độ lớn (%) trên đủ 3 điểm'))
+
+
+_STAB_NAMES = {   # rpt_calendar_stability → tên cột theo nhịp, để app định dạng đúng loại số
+    'mua_vu': ('season_peak_trough_ratio', 'loo_min_ratio', 'loo_max_ratio'),
+    'cuoi_thang': ('eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess'),
+    'thang_8': ('august_odd_vs_even', 'loo_min_odd_vs_even', 'loo_max_odd_vs_even'),
+}
+_CAL_PHASE_COLS = {
+    'mua_vu': ['peak_month', 'peak_index', 'trough_month', 'trough_index', 'season_peak_trough_ratio'],
+    'cuoi_thang': ['eom_share', 'eom_expected_share', 'eom_excess'],
+}
+_AUG_COLS = ['n_odd_years', 'n_even_years', 'august_index_odd', 'august_index_even', 'august_odd_vs_even',
+             'max_index_odd', 'min_index_even']
+
+
+def _calendar(turn: _Turn, a: dict) -> ToolResult:
+    pat = a['pattern']
+    st = turn.fetch('reporting.rpt_calendar_stability', 'select metric_value, loo_min, loo_max, n_years_with_pattern, '
+                    'n_years from reporting.rpt_calendar_stability where rhythm_code = {p}', (pat,)).records()
+    if len(st) != 1:
+        return ToolResult('query_error', f'rpt_calendar_stability có {len(st)} dòng cho nhịp {pat}, cần 1.')
+    value, lo, hi = _STAB_NAMES[pat]
+    s = st[0]
+    head = {'period_code': ANALYSIS_WINDOW, 'period': '2013–2022', value: s['metric_value'], lo: s['loo_min'],
+            hi: s['loo_max'], 'n_years_with_pattern': s['n_years_with_pattern'], 'n_years': s['n_years']}
+    derived, phases, mids, decision = {}, [], ['month_index'], None
+    if pat == 'thang_8':
+        ap = turn.fetch('reporting.rpt_august_parity', f"select {', '.join(_AUG_COLS)} "
+                        'from reporting.rpt_august_parity').records()
+        if len(ap) != 1 or ap[0]['august_odd_vs_even'] != s['metric_value']:
+            return ToolResult('query_error', 'rpt_august_parity không khớp rpt_calendar_stability trong cùng phiên.')
+        head.update(ap[0])
+        below = ap[0]['max_index_odd'] < ap[0]['min_index_even']
+        derived['all_odd_below_all_even'] = below
+        derived['odd_even_order'] = ('năm lẻ nào cũng có tháng 8 thấp hơn mọi năm chẵn' if below
+                                     else 'có năm lẻ có tháng 8 không thấp hơn mọi năm chẵn')
+        mids.append('august_odd_vs_even')
+        note = ('So chỉ số tháng 8 (R tháng 8 ÷ R trung bình tháng của chính năm đó), không so R tuyệt đối. '
+                'odd_even_order là kết luận so sánh do app tính: chỉ số tháng 8 cao nhất của năm lẻ có thấp hơn chỉ số '
+                'thấp nhất của năm chẵn không. Mô tả lịch sử, không phải dự báo năm sau 2022.')
+    else:
+        cols = _CAL_PHASE_COLS[pat]
+        if pat == 'cuoi_thang':
+            tot = turn.fetch('reporting.rpt_revenue_total', 'select eom_share, eom_expected_share, eom_excess '
+                             'from reporting.rpt_revenue_total where period_code = {p}', (ANALYSIS_WINDOW,)).records()
+            if len(tot) != 1 or abs(tot[0]['eom_excess'] - s['metric_value']) > 1e-12:
+                return ToolResult('query_error', 'rpt_revenue_total không khớp rpt_calendar_stability trong cùng phiên.')
+            head.update(eom_share=tot[0]['eom_share'], eom_expected_share=tot[0]['eom_expected_share'])
+        phases = turn.fetch('reporting.rpt_calendar_phase', 'select phase_code, phase_name, first_year, last_year, '
+                            f"n_years, {', '.join(cols)} from reporting.rpt_calendar_phase order by first_year").records()
+        if len(phases) != 4:
+            return ToolResult('query_error', f'rpt_calendar_phase có {len(phases)} giai đoạn, cần 4.')
+        derived['n_phases'] = len(phases)
+        if pat == 'mua_vu':
+            derived['peak_months'] = sorted({p['peak_month'] for p in phases})
+            derived['trough_months'] = sorted({p['trough_month'] for p in phases})
+            mids.append('season_ratio')
+            note = ('Chênh mùa cả kỳ = R các tháng cùng tên cộng qua 2013–2022, tháng cao nhất ÷ thấp nhất. '
+                    'peak_months / trough_months là tháng cao / thấp nhất của từng giai đoạn, xét trên đủ 4 giai đoạn.')
+        else:
+            derived['n_phases_eom_positive'] = sum(p['eom_excess'] > 0 for p in phases)
+            mids.append('eom_excess')
+            note = 'Mức dồn cuối tháng > 0: R từ ngày 26 trở đi nhiều hơn mức rải đều theo số ngày.'
+        decision = cat.DECISIONS['ps3_boundary_year']
+        derived['phase_year_rule'] = decision
+    read_at = _now()
+    return ToolResult('ok', f'Nhịp {pat} kỳ 2013–2022 (rows[0]); loo_min/loo_max là khoảng dao động khi bỏ lần lượt '
+                      f'từng năm; n_years_with_pattern là số năm tự có nhịp. {note}', rows=[head] + phases,
+                      derived=derived, evidence=turn.evidence(
+                          filters={'pattern': pat, 'period_code': ANALYSIS_WINDOW}, grain='nhịp lịch (rows[0] cả kỳ, '
+                          'các dòng sau theo giai đoạn PS3)' if phases else 'nhịp lịch cả kỳ', read_at=read_at,
+                          metrics=cat.metric_defs(*mids), method=decision['text'] if decision else None))
+
+
 _YEAR = Param('int', 'năm theo ngày đặt hàng, vd. 2019')
 _METRIC_RG = Param('enum', 'R (đơn delivered, sau chiết khấu) hay G (mọi đơn, chưa trừ chiết khấu)', ('R', 'G'))
 
@@ -299,6 +527,25 @@ TOOLS = {s.name: s for s in [
              'trạng thái chốt. Dùng cho câu hỏi "X là gì", "R khác G thế nào". Không trả số liệu.', {
         'metric': Param('enum', 'mã chỉ tiêu trong catalog', tuple(cat.METRICS)),
     }, _definition),
+    ToolSpec('get_revenue_gap', 'PS1: G hụt thành R bao nhiêu và vì khoản nào (tiền hàng đơn hủy, đơn trả, đơn chưa '
+             'giao, chiết khấu đơn đã giao), kèm R/G; một năm hoặc cả kỳ 2013–2022.', {
+        'period': Param('enum', 'year (một năm) hoặc 2013-2022 (cả kỳ phân tích)', ('year', ANALYSIS_WINDOW)),
+        'year': Param('int', 'năm, chỉ dùng khi period = year', required=False),
+    }, _gap),
+    ToolSpec('get_revenue_monthly', 'PS1/PS3: R hoặc G của MỘT tháng; với R kèm R cùng tháng năm trước, % đổi và chỉ số '
+             'tháng (R tháng ÷ TB tháng của năm).', {
+        'metric': Param('enum', 'R, G hay cả hai (R_and_G, kèm R/G)', ('R', 'G', 'R_and_G')),
+        'year': _YEAR,
+        'month': Param('int', 'tháng 1–12'),
+    }, _monthly),
+    ToolSpec('get_revenue_trend', 'PS2: các giai đoạn R do PM/BA chốt (R đầu/cuối, ΔR, CAGR, xếp hạng) hoặc các điểm '
+             'đổi hướng (độ lớn, ghi chú). Mô tả xu hướng, không phải nguyên nhân.', {
+        'view': Param('enum', 'phases (giai đoạn) hoặc turning_points (điểm đổi hướng)', ('phases', 'turning_points')),
+    }, _trend),
+    ToolSpec('get_calendar_pattern', 'PS3: nhịp lịch 2013–2022 và độ ổn định: mua_vu (tháng cao/thấp, chênh mùa), '
+             'cuoi_thang (dồn về cuối tháng), thang_8 (tháng 8 năm lẻ so năm chẵn).', {
+        'pattern': Param('enum', 'mua_vu / cuoi_thang / thang_8', ('mua_vu', 'cuoi_thang', 'thang_8')),
+    }, _calendar),
 ]}
 
 

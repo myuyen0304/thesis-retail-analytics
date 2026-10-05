@@ -12,7 +12,7 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG_VERSION = 'ai1-2026-10-05'
+CATALOG_VERSION = 'ai3-2026-10-05'
 MONEY_UNIT = 'VND'
 
 # SQL quyết định định nghĩa các metric đang mở. Hash = nội dung các file này trong CHECKOUT hiện tại.
@@ -23,6 +23,17 @@ DEFINITION_FILES = (
     'retail_dbt/models/reporting/rpt_driver_period.sql',
     'retail_dbt/models/reporting/rpt_revenue_segment_yearly.sql',
     'retail_dbt/seeds/driver_rule.csv',
+    # AI3: PS1–PS3
+    'retail_dbt/models/reporting/rpt_revenue_total.sql',
+    'retail_dbt/models/reporting/rpt_revenue_bridge.sql',
+    'retail_dbt/models/reporting/rpt_revenue_monthly.sql',
+    'retail_dbt/models/reporting/rpt_revenue_phase.sql',
+    'retail_dbt/models/reporting/rpt_revenue_turning_point.sql',
+    'retail_dbt/seeds/ps2_phases.csv',
+    'retail_dbt/models/reporting/rpt_august_parity.sql',
+    'retail_dbt/models/reporting/rpt_calendar_phase_month.sql',
+    'retail_dbt/models/reporting/rpt_calendar_phase.sql',
+    'retail_dbt/models/reporting/rpt_calendar_stability.sql',
 )
 
 
@@ -44,6 +55,14 @@ def _m(metric_id, label, aliases, unit, formula, additivity, decision_status='ch
 _Y = 'reporting.rpt_revenue_yearly'
 _D = 'reporting.rpt_driver_period'
 _S = 'reporting.rpt_revenue_segment_yearly'
+_T = 'reporting.rpt_revenue_total'
+_B = 'reporting.rpt_revenue_bridge'
+_M = 'reporting.rpt_revenue_monthly'
+_PH = 'reporting.rpt_revenue_phase'
+_TP = 'reporting.rpt_revenue_turning_point'
+_AP = 'reporting.rpt_august_parity'
+_CP = 'reporting.rpt_calendar_phase'
+_CS = 'reporting.rpt_calendar_stability'
 
 METRICS = {m['metric_id']: m for m in [
     _m('G', 'G — doanh thu gộp', ['doanh thu gộp', 'tiền hàng mọi đơn'], MONEY_UNIT,
@@ -77,6 +96,36 @@ METRICS = {m['metric_id']: m for m in [
     _m('contribution_to_delta', '% đóng góp vào ΔR toàn công ty', ['đóng góp vào mức giảm'], 'tỷ lệ',
        'ΔR_nhóm / ΔR_toàn công ty', 'các nhóm của MỘT chiều cộng = 1',
        note='Có thể âm hoặc > 100%; không clip. Mẫu số luôn là ΔR toàn công ty.', sources=[_S]),
+    # --- AI3: PS1 (G → R, tháng), PS2 (giai đoạn), PS3 (nhịp lịch) ---
+    _m('gap_components', 'Khoản chênh G − R', ['G hụt sang R', 'thất thoát', 'đơn hủy', 'đơn trả', 'chiết khấu'],
+       MONEY_UNIT, 'G − R = tiền hàng đơn hủy + tiền hàng đơn trả + tiền hàng đơn chưa giao (created/paid/shipped) '
+       '+ chiết khấu của đơn đã giao', 'bốn khoản cộng đúng bằng G − R',
+       note='Đơn trả đã bị loại khỏi R, không trừ refund thêm. Tỷ trọng mỗi khoản tính trên G cùng kỳ.',
+       sources=[_Y, _T, _B]),
+    _m('capture_rate', 'R/G — tỷ lệ thực nhận', ['tỷ lệ thực nhận', 'R trên G'], 'tỷ lệ', 'R / G cùng kỳ',
+       'không cộng; tính lại từ tử/mẫu', sources=[_Y, _T, _M]),
+    _m('month_index', 'Chỉ số tháng', ['chỉ số mùa vụ', 'month index'], 'lần (1 = tháng bình thường)',
+       'R tháng ÷ (R cả năm ÷ 12)', 'không cộng', note='Chỉ năm đủ 2013–2022.', sources=[_M]),
+    _m('yoy_month', '% đổi R so cùng tháng năm trước', ['cùng kỳ tháng'], 'tỷ lệ', 'R tháng / R cùng tháng năm trước − 1',
+       'không cộng', note='Từ tháng 08/2013 (07/2012 thiếu ba ngày đầu).', sources=[_M]),
+    _m('phase', 'Giai đoạn doanh thu PS2', ['giai đoạn'], 'giai đoạn',
+       'mốc năm đủ do PM/BA chốt 2026-09-27 (seed ps2_phases); hai giai đoạn liền nhau dùng chung năm ranh giới',
+       'không cộng ΔR các giai đoạn thành cả kỳ',
+       note='Giai đoạn chỉ mô tả R lên hay xuống, không phải nguyên nhân. Năm 2022 tăng lại chưa tách thành giai đoạn '
+            'mới (mới một năm). Không trình bày một CAGR cả 10 năm như một xu hướng.', sources=[_PH]),
+    _m('cagr', 'CAGR giai đoạn', ['tăng trưởng kép', 'tăng trưởng bình quân năm'], 'tỷ lệ mỗi năm',
+       '(R năm cuối ÷ R năm đầu)^(1/n) − 1, n = năm cuối − năm đầu', 'không cộng', sources=[_PH]),
+    _m('turn_magnitude', 'Độ lớn cú đổi hướng', ['điểm đổi hướng', 'điểm gãy'], 'tỷ lệ',
+       'R 12 tháng sau điểm ÷ R 12 tháng trước điểm − 1 (điểm đặt ở ranh giới năm)', 'không cộng',
+       note='Ghi chú "giảm tăng tốc", "đổi nhịp" là nhận định BA, PM chốt 2026-09-28.', sources=[_TP]),
+    _m('season_ratio', 'Chênh mùa cao/thấp', ['mùa vụ', 'tháng cao điểm'], 'lần',
+       'chỉ số tháng cao nhất ÷ thấp nhất (R các tháng cùng tên cộng qua các năm)', 'không cộng', sources=[_CP, _CS]),
+    _m('eom_excess', 'Mức dồn cuối tháng', ['cuối tháng', 'ngày 26 trở đi'], 'điểm %',
+       'tỷ trọng R từ ngày 26 − tỷ trọng kỳ vọng nếu rải đều (D − 25)/D, gia quyền theo R tháng', 'không cộng',
+       note='> 0 là dồn về cuối tháng.', sources=[_T, _CP, _CS]),
+    _m('august_odd_vs_even', 'Chênh tháng 8 năm lẻ / năm chẵn', ['tháng 8 năm lẻ', 'Urban Blowout'], 'tỷ lệ',
+       'TB chỉ số tháng 8 các năm lẻ ÷ TB các năm chẵn − 1 (2013–2022)', 'không cộng',
+       note='Mô tả lịch sử 2013–2022, không phải dự báo cho năm sau 2022.', sources=[_AP, _CS]),
 ]}
 
 # Quy ước còn chờ PM/BA chốt mà kết quả tool có thể chạm tới
@@ -94,7 +143,8 @@ DECISIONS = {
     },
     'ps3_boundary_year': {
         'decision_status': 'de_xuat',
-        'text': 'PS3: năm ranh giới thuộc giai đoạn kết thúc ở năm đó. Tool PS3 chưa mở trong v1.',
+        'text': 'PS3 gom năm lịch theo giai đoạn: năm ranh giới tính cho giai đoạn KẾT THÚC ở năm đó (A 2013–2016, '
+                'B 2017–2018, C 2019, D 2020–2022), khác cách PS2 dùng chung năm ranh giới. Quy ước dev, chờ BA chốt.',
         'source': 'retail_dbt/models/reporting/rpt_calendar_phase.sql',
     },
     'currency_vnd': {
@@ -130,8 +180,9 @@ CAPABILITIES = [
     ('*', '*', 'khoảng ngày tùy ý', '*', '*', 'closed', 'cần query detail M6 đã nghiệm thu'),
     ('*', 'C', 'nhiều năm gộp', '*', '*', 'closed', 'C không cộng qua năm; chưa có query C cho kỳ gộp'),
     ('get_order_drivers', 'N', 'year', 'năm', None, 'closed', 'C/F có trong rpt_driver_period; tool chưa mở ở AI1'),
-    ('get_revenue_trend / get_calendar_pattern / get_revenue_gap', '*', '*', '*', '*', 'closed',
-     'PS1 bridge, PS2, PS3: chưa mở ở lát cắt AI1'),
+    ('get_revenue_trend', 'R', 'direction_changes', 'giai đoạn PS2', None, 'closed',
+     'tháng đổi hướng do dữ liệu tự tìm (R 12 tháng): tiêu chí thăm dò, chưa mở cho chat'),
+    ('*', '*', 'nhiều tháng / quý / khoảng ngày', '*', '*', 'closed', 'chỉ có từng tháng hoặc từng năm; chưa gộp kỳ tùy ý'),
     ('*', '*', 'sau 2022-12-31', '*', '*', 'closed', 'ngoài coverage; sample_submission không phải dự báo'),
 ]
 
@@ -139,6 +190,49 @@ CAPABILITIES = [
 # Định nghĩa chỉ tiêu ("R là gì"): đọc từ catalog này, không đọc số; vẫn qua cổng chất lượng của kho như mọi tool.
 CAPABILITIES += [('get_metric_definition', m, 'không kỳ', 'định nghĩa', None, 'open', 'định nghĩa từ catalog, không có số')
                  for m in METRICS]
+
+# AI3 (2026-10-05): PS1–PS3, chỉ đọc bảng reporting đã có test dbt; số đối chứng CSV ở tests/test_ai_tools.py.
+CAPABILITIES += [
+    ('get_revenue_gap', 'G_to_R', 'year', 'kỳ', None, 'open', 'thác G → R một năm (2012 thiếu nửa năm)'),
+    ('get_revenue_gap', 'G_to_R', '2013-2022', 'kỳ', None, 'open', 'thác G → R cả kỳ phân tích 2013–2022'),
+    ('get_revenue_monthly', 'R', 'month', 'tháng', None, 'open',
+     'R một tháng; so cùng tháng năm trước từ 08/2013; chỉ số tháng cho năm đủ'),
+    ('get_revenue_monthly', 'G', 'month', 'tháng', None, 'open', 'G một tháng (chưa có G so cùng kỳ)'),
+    ('get_revenue_trend', 'R', 'phases', 'giai đoạn PS2', None, 'open', '4 giai đoạn PM/BA chốt 2026-09-27'),
+    ('get_revenue_trend', 'R', 'turning_points', 'giai đoạn PS2', None, 'open', '3 điểm đổi hướng giữa các giai đoạn'),
+    ('get_calendar_pattern', 'R', 'mua_vu', 'nhịp lịch', None, 'open',
+     'chênh mùa 2013–2022 + tháng cao/thấp nhất từng giai đoạn (năm ranh giới PS3: đề xuất)'),
+    ('get_calendar_pattern', 'R', 'cuoi_thang', 'nhịp lịch', None, 'open', 'dồn cuối tháng 2013–2022 + từng giai đoạn'),
+    ('get_calendar_pattern', 'R', 'thang_8', 'nhịp lịch', None, 'open', 'tháng 8 năm lẻ / năm chẵn 2013–2022'),
+]
+
+
+def _capability_key(tool: str, arguments: dict) -> tuple[str | None, tuple, list]:
+    """(grain, các metric, các kỳ) của một lời gọi, để tra CAPABILITIES. grain None = tool chưa có trong catalog."""
+    a = arguments
+    if tool == 'get_revenue_summary':
+        periods = ['year'] + (['year_vs_prior'] if a.get('compare_prior_year', False) else [])
+        return 'năm', _metrics(a.get('metric')), periods
+    if tool == 'get_revenue_drivers':
+        phase = a.get('period_type', 'year') == 'phase'
+        return ('giai đoạn PS2' if phase else 'năm'), _metrics(a.get('metric')), [a.get('period_type', 'year')]
+    if tool == 'get_segment_contribution':
+        return 'chiều × nhóm × năm', _metrics(a.get('metric')), [a.get('period_type', 'year')]
+    if tool == 'get_metric_definition':
+        return 'định nghĩa', (a.get('metric'),), ['không kỳ']
+    if tool == 'get_revenue_gap':
+        return 'kỳ', ('G_to_R',), [a.get('period')]
+    if tool == 'get_revenue_monthly':
+        return 'tháng', _metrics(a.get('metric')), ['month']
+    if tool == 'get_revenue_trend':
+        return 'giai đoạn PS2', ('R',), [a.get('view')]
+    if tool == 'get_calendar_pattern':
+        return 'nhịp lịch', ('R',), [a.get('pattern')]
+    return None, (), []
+
+
+def _metrics(metric) -> tuple:
+    return ('R', 'G') if metric == 'R_and_G' else (metric,)
 
 
 def open_capabilities() -> list[tuple]:
@@ -151,16 +245,9 @@ def capability_blockers(tool: str, arguments: dict) -> list[str]:
     So năm trước cần cả quyền đọc mức năm lẫn quyền so sánh. Coverage thực tế vẫn do tool kiểm sau khi đọc build.
     Schema và dispatcher dùng chung hàm này, không coi từng enum hợp lệ là đủ để mở một tổ hợp.
     """
-    grain = {'get_revenue_summary': 'năm', 'get_revenue_drivers': 'năm',
-             'get_segment_contribution': 'chiều × nhóm × năm', 'get_metric_definition': 'định nghĩa'}.get(tool)
+    grain, metrics, periods = _capability_key(tool, arguments)
     if grain is None:
         return ['tool chưa có ánh xạ grain trong catalog']
-    metrics = ('R', 'G') if arguments.get('metric') == 'R_and_G' else (arguments.get('metric'),)
-    periods = ['không kỳ'] if tool == 'get_metric_definition' else [arguments.get('period_type', 'year')]
-    if tool == 'get_revenue_summary' and arguments.get('compare_prior_year', False):
-        periods.append('year_vs_prior')
-    if tool == 'get_revenue_drivers' and periods == ['phase']:
-        grain = 'giai đoạn PS2'
     blockers = []
     for metric in metrics:
         for period in periods:
