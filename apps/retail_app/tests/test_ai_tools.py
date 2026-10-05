@@ -557,3 +557,18 @@ def test_pg_timeout_ngat_truy_van(monkeypatch):
     finally:
         sess.close()
     assert time.monotonic() - t0 < 3
+
+
+def test_dbt_cap_lai_quyen_ai_dung_danh_sach_tool():
+    """Hook on-run-end của dbt (macros/ai_readonly_grants.sql) cấp SELECT theo var ai_readonly_relations: danh sách đó
+    phải trùng ALLOWED_RELATIONS, không thừa (role AI đọc bảng ngoài phạm vi) cũng không thiếu (tool lỗi quyền)."""
+    import re
+
+    import yaml
+    from dwh.connection import ROOT
+    proj = yaml.safe_load((ROOT / 'retail_dbt' / 'dbt_project.yml').read_text(encoding='utf-8'))
+    assert set(proj['vars']['ai_readonly_relations']) == set(tools.ALLOWED_RELATIONS)
+    assert '{{ ai_readonly_grants() }}' in proj['on-run-end']
+    macro = re.sub(r'\{#.*?#\}', '', (ROOT / 'retail_dbt' / 'macros' / 'ai_readonly_grants.sql').read_text(
+        encoding='utf-8'), flags=re.S)                                   # bỏ phần chú thích, chỉ xét SQL
+    assert "target.type == 'postgres'" in macro and 'pg_roles' in macro and 'default privileges' not in macro.lower()

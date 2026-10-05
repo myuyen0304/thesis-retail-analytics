@@ -15,7 +15,26 @@ clean-targets: ["target", "dbt_packages"]
 
 # Nhật ký chạy dbt ghi vào chính kho (schema ops) cho trang Sức khỏe dữ liệu của app. Xem macros/health_log.sql.
 on-run-start: ["{{ health_log_setup() }}"]
-on-run-end: ["{{ health_log_results(results) }}"]
+on-run-end: ["{{ health_log_results(results) }}", "{{ ai_readonly_grants() }}"]
+
+# Bảng/view role chỉ-đọc của chat AI được SELECT trên PostgreSQL (macros/ai_readonly_grants.sql cấp lại sau mỗi build).
+# PHẢI trùng apps/retail_app/ai_explain/tools.py ALLOWED_RELATIONS: test_ai_tools.py kiểm hai danh sách bằng nhau.
+vars:
+  ai_readonly_relations:
+    - reporting.driver_rule
+    - reporting.rpt_august_parity
+    - reporting.rpt_build_info
+    - reporting.rpt_calendar_phase
+    - reporting.rpt_calendar_stability
+    - reporting.rpt_driver_period
+    - reporting.rpt_health_summary
+    - reporting.rpt_revenue_bridge
+    - reporting.rpt_revenue_monthly
+    - reporting.rpt_revenue_phase
+    - reporting.rpt_revenue_segment_yearly
+    - reporting.rpt_revenue_total
+    - reporting.rpt_revenue_turning_point
+    - reporting.rpt_revenue_yearly
 
 models:
   retail_dbt:
