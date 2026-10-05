@@ -45,13 +45,30 @@ GAP, MON, TRD, CAL = 'get_revenue_gap', 'get_revenue_monthly', 'get_revenue_tren
 DRIVER_N = ('.top_down_driver', '.contrib_n')
 
 
-def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None, if_ok=None):
+def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None, if_ok=None, must_neg=()):
     """tools: các lời gọi chấp nhận [(tên, tham số con)] (rỗng = không bắt buộc gọi tool);
     paths: mỗi phần tử (tập tên tool, hậu tố path hoặc tuple hậu tố thay thế) phải khớp ít nhất một claim đã hiện, và claim đó phải trỏ vào
     kết quả của CHÍNH lời gọi khớp `tools` (đúng tool + tham số), không chỉ cùng tên tool;
-    if_ok: (tools, paths) bổ sung chỉ áp khi lượt trả `ok` (vd. E02 trả lời luôn thì phải nêu cả R và G)."""
+    if_ok: (tools, paths) bổ sung chỉ áp khi lượt trả `ok` (vd. E02 trả lời luôn thì phải nêu cả R và G);
+    must_neg: số ÂM phải có trong câu và MỌI lần xuất hiện phải đọc ra được là âm: có dấu "−" ngay trước, hoặc chữ
+    giảm/sụt/âm đứng sát trước (≤ 3 chữ). "must" chỉ kiểm chuỗi nên "6,4%" và "−6,4%" đều qua (lỗi B06 lọt rubric)."""
     return {'id': cid, 'q': q, 'status': set(status), 'tools': list(tools), 'paths': list(paths), 'must': list(must),
-            'banned': list(banned), 'after': after, 'if_ok': if_ok}
+            'banned': list(banned), 'after': after, 'if_ok': if_ok, 'must_neg': list(must_neg)}
+
+
+_NEG_BEFORE = re.compile(r'(?:giảm|sụt|kéo xuống|âm)\s+(?:[^\s,;:.()\[\]—–→]+\s+){0,3}$')   # không qua dấu câu
+
+
+def neg_shown(text: str, number: str) -> bool:
+    """Viết độc lập với evidence.py (không dùng code đang kiểm để chấm chính nó)."""
+    hits = [m.start() for m in re.finditer(re.escape(number), text)]
+    if not hits:
+        return False
+    for i in hits:
+        before = text[:i].replace('**', '')
+        if not (before.endswith('−') or _NEG_BEFORE.search(before.lower())):
+            return False
+    return True
 
 
 CASES = [
@@ -270,7 +287,33 @@ ACCEPT_AI3B = [
       [(MON, {'metric': 'R', 'year': 2021, 'month': 8}), (MON, {'metric': 'R_and_G', 'year': 2021, 'month': 8})],
       [({MON}, '.yoy_rate')], ['45,7']),
 ]
-SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B}
+# Bộ nghiệm thu lần 3 (C*), soạn 2026-10-05 SAU khi sửa: số âm mất dấu, tháng cao/thấp cả kỳ + số giai đoạn cùng tháng,
+# nhãn năm ngoài dữ liệu (prompt ai3-…c), trần token cứng. Chưa dùng để chỉnh; chốt và commit TRƯỚC lượt gọi model đầu.
+# Chấm dấu: must_neg (số âm phải đọc ra là âm). C07/C08 chặt hơn E15/E15b: số thực tế năm ngoài dữ liệu chỉ nhận
+# no_data, dự báo chỉ nhận unsupported (đúng quy tắc 6 mới).
+ACCEPT_AI3C = [
+    C('C01', 'CAGR của giai đoạn 2016→2018 là bao nhiêu?', {'ok'}, [(TRD, {'view': 'phases'})],
+      [({TRD}, 'rows[B].cagr')], must_neg=['6,4']),
+    C('C02', 'Giai đoạn sập 2018–2019, R bình quân mỗi năm đổi bao nhiêu phần trăm?', {'ok'}, [(TRD, {'view': 'phases'})],
+      [({TRD}, ('rows[C].cagr', '.derived.largest_decrease_cagr.cagr'))], must_neg=['39,1']),
+    C('C03', 'Điểm đổi hướng năm 2016 có độ lớn bao nhiêu?', {'ok'}, [(TRD, {'view': 'turning_points'})],
+      [({TRD}, 'rows[2016].magnitude')], must_neg=['9,7']),
+    C('C04', 'Giai đoạn đi ngang 2019–2022 có CAGR âm hay dương?', {'ok'}, [(TRD, {'view': 'phases'})],
+      [({TRD}, 'rows[D].cagr')], must_neg=['0,1']),
+    C('C05', 'Xét cả 10 năm, tháng nào bán ít nhất?', {'ok'}, [(CAL, {'pattern': 'mua_vu'})],
+      [({CAL}, ('.trough_month', '.derived.trough_months'))], ['12']),
+    C('C06', 'Tháng cao điểm có giống nhau ở mọi giai đoạn không?', {'ok'}, [(CAL, {'pattern': 'mua_vu'})],
+      [({CAL}, ('.derived.n_phases_same_peak', '.derived.peak_months'))], ['5']),
+    C('C07', 'Doanh thu thực nhận năm 2024 là bao nhiêu?', {'no_data'}),
+    C('C08', 'Dự đoán giúp R năm 2023 sẽ là bao nhiêu?', {'unsupported'}),
+    C('C09', 'R năm 2020 giảm bao nhiêu so với 2019?', {'ok'},
+      [(SUM, {'metric': 'R', 'year': 2020, 'compare_prior_year': True}), (DRV, {'metric': 'R', 'year': 2020})],
+      [({SUM, DRV}, '.delta_r')], must_neg=['57.915.103']),
+    C('C10', 'Tháng 4/2020 R thay đổi bao nhiêu % so với tháng 4/2019?', {'ok'},
+      [(MON, {'metric': 'R', 'year': 2020, 'month': 4}), (MON, {'metric': 'R_and_G', 'year': 2020, 'month': 4})],
+      [({MON}, '.yoy_rate')], ['2,8'], ['−2,8', 'giảm 2,8']),
+]
+SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C}
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -301,7 +344,7 @@ def grade(case, t: service.TurnResult) -> dict:
         'status': t.status in case['status'],
         'tool': _tool_ok(t, tools_),
         'claim_dung_o': _paths_ok(t, paths, tools_),
-        'must_contain': all(m in text for m in case['must']),
+        'must_contain': all(m in text for m in case['must']) and all(neg_shown(text, m) for m in case['must_neg']),
         'not_banned': not any(b.lower() in text.lower() for b in case['banned'])
                       and not re.search(r'(?<![\d.])[12]\.\d{3}(?![\d.,]| VND)', text),   # năm có dấu nghìn ("2.019")
     }
@@ -342,6 +385,8 @@ def check_rubric(cases, backend: str) -> int:
             shown += [v for r in res.rows for v in r.values() if isinstance(v, str)]
         if not all(m in ' | '.join(shown) for m in case['must']):
             errs.append(f"chuỗi phải có {case['must']} không nằm trong {shown}")
+        if not all('−' + m in ' | '.join(shown) for m in case['must_neg']):     # số thật phải đúng là số âm
+            errs.append(f"số âm {case['must_neg']} không nằm trong {shown}")
         bad += bool(errs)
         print(f"[{'LỖI' if errs else 'OK '}] {case['id']:5} {'; '.join(errs) or ' | '.join(shown)}")
     print(f'\nRubric: {len(cases) - bad}/{len(cases)} case không lỗi (case không có tool kỳ vọng chỉ chấm trạng thái).')
@@ -363,13 +408,14 @@ def main() -> int:
     ap.add_argument('--runs', type=int, default=1)
     ap.add_argument('--cases', nargs='*')
     ap.add_argument('--set', default='chuan', choices=[*SETS, 'tat_ca'],
-                    help='chuan = E* (đã dùng chỉnh prompt); moi = H* (nghiệm thu AI2→AI3); ai3 = A*, ai3b = B* (nghiệm thu AI3)')
+                    help='chuan = E* (đã dùng chỉnh prompt); moi = H* (nghiệm thu AI2→AI3); ai3 = A*, ai3b = B*, '
+                         'ai3c = C* (nghiệm thu AI3)')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
     a = ap.parse_args()
-    pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B if a.set == 'tat_ca' else SETS[a.set]
+    pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
-    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B}
+    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C}
     if a.kiem_rubric:
         return check_rubric(cases, a.backend)
     p = provider.from_config()
@@ -380,7 +426,7 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     stamp = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     log = OUT / f'live_{stamp}_{a.set}_{os.getpid()}.jsonl'      # hai lượt chạy cùng giây không ghi chung một file
-    rows, tokens_in, tokens_out = [], 0, 0
+    rows, tokens_in, tokens_out, bounds = [], 0, 0, []
     with log.open('w', encoding='utf-8') as f:
         for run in range(1, a.runs + 1):
             for case in cases:
@@ -388,11 +434,13 @@ def main() -> int:
                 if case['after']:            # follow-up: chạy lượt trước thật, lấy ngữ cảnh có cấu trúc
                     prev = service.run_turn(by_id[case['after']]['q'], [], a.backend, p)
                     tokens_in, tokens_out = tokens_in + prev.prompt_tokens, tokens_out + prev.completion_tokens
+                    bounds += prev.prompt_bounds
                     history = [prev.context()]
                 t0 = time.monotonic()
                 t = service.run_turn(case['q'], history, a.backend, p)
                 g = grade(case, t)
                 tokens_in, tokens_out = tokens_in + t.prompt_tokens, tokens_out + t.completion_tokens
+                bounds += t.prompt_bounds
                 rec = {**g, 'run': run, 'question': case['q'], 'status': t.status, 'calls': [
                     {'ref': r, 'tool': tool, 'arguments': args, 'status': t.results[r].status} for r, tool, args in t.calls],
                     'answer_md': t.answer_md, 'claims': {k: {'path': pth, 'value': str(v), 'shown': s}
@@ -402,7 +450,7 @@ def main() -> int:
                     'prompt_tokens': t.prompt_tokens, 'completion_tokens': t.completion_tokens,
                     'llm_calls': t.llm_calls, 'latency_s': round(time.monotonic() - t0, 2), 'model': t.model,
                     'prompt_version': t.prompt_version, 'backend': a.backend, 'set': a.set, 'git_rev': rev,
-                    'history': history}
+                    'history': history, 'prompt_bounds': t.prompt_bounds}
                 f.write(json.dumps(rec, ensure_ascii=False, default=str) + '\n')
                 f.flush()
                 rows.append(rec)
@@ -415,8 +463,13 @@ def main() -> int:
     print(f'\n{n_pass}/{len(rows)} lượt đạt chấm tự động · bộ {a.set} · model {p.label} · prompt {service.PROMPT_VERSION} '
           f'· code {rev}')
     print(f'token vào {tokens_in:,} / ra {tokens_out:,} · ước ~{cost:.4f} USD (giá cao điểm, chỉ ước) · log {log}')
+    # trần token cứng dựa trên cận trên prompt (service.prompt_bound): kiểm trên MỌI lần gọi thật
+    over = [(b, x) for b, x in bounds if x > b]
+    if bounds:
+        print(f'cận trên prompt: {len(bounds)} lần gọi, {len(over)} lần prompt_tokens thật VƯỢT cận trên; '
+              f'cận / thật nhỏ nhất {min(b / x for b, x in bounds if x):.2f}')
     print('Phần lời: đọc answer_md trong log (không vượt bằng chứng, không nói nguyên nhân).')
-    return 0 if n_pass == len(rows) else 1
+    return 0 if n_pass == len(rows) and not over else 1
 
 
 if __name__ == '__main__':

@@ -42,7 +42,8 @@ RATE = {'yoy_rate', 'share', 'contribution_to_delta', 'r_change_rate', 'n_change
 PP = {'share_shift_pp'}
 PP_FRAC = {'eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess'}     # hiệu hai tỷ lệ (0,0718) → "7,2 điểm %"
 COUNT = {'n_start', 'n_end', 'n_groups', 'n_groups_up', 'n_groups_down',
-         'n_years', 'n_years_with_pattern', 'n_odd_years', 'n_even_years', 'n_phases', 'n_phases_eom_positive'}
+         'n_years', 'n_years_with_pattern', 'n_odd_years', 'n_even_years', 'n_phases', 'n_phases_eom_positive',
+         'n_phases_same_peak', 'n_phases_same_trough'}
 UNITS = {'u_start', 'u_end'}
 INDEX = {'month_index', 'august_index_odd', 'august_index_even', 'max_index_odd', 'min_index_even', 'peak_index',
          'trough_index', 'season_peak_trough_ratio', 'loo_min_ratio', 'loo_max_ratio'}
@@ -59,8 +60,9 @@ SIGNED = {'delta_r', 'contrib_n', 'contrib_u', 'contrib_p', 'yoy_rate', 'share_s
 # Câu so sánh ("thấp hơn"...) được nói khi dẫn một cột chênh lệch / kết luận so sánh do tool tính
 COMPARED = SIGNED | {'gap_g_minus_r', 'odd_even_order'}
 # Ô xếp hạng mức (tháng cao nhất, chỉ số tháng 8 cao nhất của năm lẻ...): +1 = phía cao, −1 = phía thấp
-LEVEL_RANK = {'peak_month': 1, 'peak_index': 1, 'peak_months': 1, 'max_index_odd': 1,
+LEVEL_RANK = {'peak_month': 1, 'peak_index': 1, 'peak_months': 1, 'max_index_odd': 1, 'n_phases_same_peak': 1,
               'trough_month': -1, 'trough_index': -1, 'trough_months': -1, 'min_index_even': -1,
+              'n_phases_same_trough': -1,
               'loo_min_ratio': -1, 'loo_min_odd_vs_even': -1, 'loo_min_eom_excess': -1,
               'loo_max_ratio': 1, 'loo_max_odd_vs_even': 1, 'loo_max_eom_excess': 1}
 # Số tự nó đã là phép xếp hạng hai đầu trên đủ tập (tháng cao nhất ÷ thấp nhất): câu "giữa tháng cao nhất và thấp nhất
@@ -91,7 +93,9 @@ FIELD_LABEL = {'r': 'R', 'g': 'G', 'r_prior_year': 'R', 'r_start': 'R', 'r_end':
                'loo_max_eom_excess': 'cao nhất khi bỏ từng năm', 'season_peak_trough_ratio': 'chênh mùa cao/thấp',
                'peak_index': 'chỉ số tháng cao nhất', 'trough_index': 'chỉ số tháng thấp nhất',
                'eom_share': 'tỷ trọng R từ ngày 26', 'eom_expected_share': 'tỷ trọng nếu rải đều',
-               'eom_excess': 'mức dồn cuối tháng', 'n_years_with_pattern': 'số năm có nhịp'}
+               'eom_excess': 'mức dồn cuối tháng', 'n_years_with_pattern': 'số năm có nhịp',
+               'n_phases_same_peak': 'số giai đoạn cùng tháng cao nhất',
+               'n_phases_same_trough': 'số giai đoạn cùng tháng thấp nhất'}
 METRIC_FAMILY = {f: 'R' for f in ('r', 'r_prior_year', 'r_start', 'r_end', 'r_total', 'delta_r', 'contrib_n', 'contrib_u',
                                   'contrib_p', 'yoy_rate', 'r_change_rate', 'share', 'share_shift_pp',
                                   'contribution_to_delta', 'r_same_month_prior_year', 'r_12m_before', 'r_12m_after',
@@ -264,6 +268,25 @@ def _direction(window: str) -> int:
     w = window.lower().replace('tăng trưởng', '')      # "tăng trưởng âm 39%" là cách nói bình thường, không phải "tăng"
     neg, pos = any(x in w for x in NEG_WORDS), any(x in w for x in POS_WORDS)
     return -1 if neg and not pos else (1 if pos and not neg else 0)
+
+
+_DIR_WORD = re.compile(r'(?<!\w)(?:' + '|'.join(re.escape(x) for x in NEG_WORDS + POS_WORDS) + r')(?!\w)')
+# giữa chữ tăng/giảm và chỗ đặt chỉ được vài chữ, không có ngoặc / phẩy / gạch / mũi tên: "giảm {c}", "mức giảm R là {c}"
+_DIR_GAP_BREAK = re.compile(r'[()\[\],—–→:]')
+
+
+def _adjacent_direction(seg: str) -> int:
+    """Hướng của chữ tăng/giảm ĐI LIỀN trước chỗ đặt (tối đa 3 chữ ở giữa, không qua ngoặc/phẩy/gạch).
+    Chỉ khi đó số mới được in không dấu: "R giảm {c}" → "R giảm 5,8 triệu". Chữ "giảm" ở xa hoặc thuộc tên khác
+    ("giai đoạn B — Chững, giảm nhẹ (2016→2018), với CAGR {c}") thì giữ dấu thật, không thì người đọc hiểu thành tăng."""
+    w = seg.lower().replace('tăng trưởng', ' ' * len('tăng trưởng'))
+    hits = list(_DIR_WORD.finditer(w))
+    if not hits:
+        return 0
+    tail = w[hits[-1].end():]
+    if _DIR_GAP_BREAK.search(tail) or len(tail.split()) > 3:
+        return 0
+    return -1 if hits[-1].group(0) in NEG_WORDS else 1
 
 
 def _rank_direction(path: str) -> int:
@@ -468,10 +491,12 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
         prev_driver = str(v).upper() if fld in ('top_up_driver', 'top_down_driver') else None
         absolute = False
         if fld in SIGNED and _is_num(v) and v != 0:
-            d = _direction(seg[-40:])
-            if d and d != (1 if v > 0 else -1):
-                errors.append(f'{cid}: câu nói "{"tăng" if d > 0 else "giảm"}" nhưng {c["path"]} = {v}')
-            absolute = d != 0          # đã có chữ tăng/giảm đúng dấu → in giá trị tuyệt đối cho dễ đọc
+            d, near = _direction(seg[-40:]), _adjacent_direction(seg)
+            for x in {d, near} - {0}:
+                if x != (1 if v > 0 else -1):
+                    errors.append(f'{cid}: câu nói "{"tăng" if x > 0 else "giảm"}" nhưng {c["path"]} = {v}')
+            # chỉ bỏ dấu khi chữ tăng/giảm đúng dấu đi liền trước số; còn lại in dấu thật (−6,4%)
+            absolute = near != 0
         s = _fmt(v, fld, absolute)
         lbl = _label(fld, row, seg) if _is_num(v) else ''
         values[cid] = (c['path'], v, s + lbl)

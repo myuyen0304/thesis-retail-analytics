@@ -56,6 +56,7 @@ class Reply:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     latency_s: float = 0.0
+    finish_reason: str = ''             # 'length' = bị cắt ở max_tokens: câu trả lời / tham số tool không trọn vẹn
 
 
 @dataclass
@@ -69,7 +70,7 @@ class OpenAICompatProvider:
     def label(self) -> str:
         return f'{self.model} @ {self.base_url}'
 
-    def complete(self, messages: list[dict], tools: list[dict]) -> Reply:
+    def complete(self, messages: list[dict], tools: list[dict], max_tokens: int | None = None) -> Reply:
         import openai
         if self._client is None:
             self._client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=REQUEST_TIMEOUT_S,
@@ -78,7 +79,7 @@ class OpenAICompatProvider:
         t0 = time.monotonic()
         try:
             r = self._client.chat.completions.create(model=self.model, messages=messages, tools=tools or None,
-                                                     temperature=0, extra_body=extra)
+                                                     temperature=0, max_tokens=max_tokens, extra_body=extra)
         except openai.OpenAIError as e:
             raise ProviderError(f'{type(e).__name__}: {str(e)[:200]}') from e
         msg = r.choices[0].message
@@ -89,7 +90,7 @@ class OpenAICompatProvider:
                                   'function': {'name': c.name, 'arguments': c.arguments_json}} for c in calls]
         u = r.usage
         return Reply(msg.content, calls, out, getattr(u, 'prompt_tokens', 0) or 0,
-                     getattr(u, 'completion_tokens', 0) or 0, time.monotonic() - t0)
+                     getattr(u, 'completion_tokens', 0) or 0, time.monotonic() - t0, r.choices[0].finish_reason or '')
 
 
 def from_config() -> OpenAICompatProvider | None:

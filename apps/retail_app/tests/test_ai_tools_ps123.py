@@ -9,6 +9,7 @@ Mốc năm PS3 theo quy ước đề xuất (năm ranh giới thuộc giai đo�
 tỷ lệ/chỉ số là DOUBLE: sai số tương đối 1e-9.
 """
 import calendar
+import json
 from decimal import Decimal
 
 import numpy as np
@@ -249,6 +250,9 @@ def test_mua_vu(src):
     assert h['season_peak_trough_ratio'] == pytest.approx(p.max() / p.min(), rel=RTOL)
     assert h['loo_min_ratio'] == pytest.approx(min(s.max() / s.min() for s in loo), rel=RTOL)
     assert h['loo_max_ratio'] == pytest.approx(max(s.max() / s.min() for s in loo), rel=RTOL)
+    # tháng cao / thấp nhất CẢ KỲ (R cùng tên tháng cộng 2013–2022), duy nhất
+    assert (p == p.max()).sum() == 1 and (p == p.min()).sum() == 1
+    assert (h['peak_month'], h['trough_month']) == (p.idxmax(), p.idxmin())
     k = 0
     for y in FULL:
         s = mi.loc[y]
@@ -267,6 +271,10 @@ def test_mua_vu(src):
         assert x['season_peak_trough_ratio'] == pytest.approx(idx.max() / idx.min(), rel=RTOL)
     assert res.derived['peak_months'] == sorted({x['peak_month'] for x in phases}) == [5]
     assert res.derived['trough_months'] == [12]
+    # số giai đoạn có cùng tháng cao / thấp nhất với cả kỳ: tính từ CSV ở trên, không đọc lại từ tool
+    same_peak = sum(pooled(PS3[c]).idxmax() == p.idxmax() for c in PS3)
+    same_trough = sum(pooled(PS3[c]).idxmin() == p.idxmin() for c in PS3)
+    assert (res.derived['n_phases_same_peak'], res.derived['n_phases_same_trough']) == (same_peak, same_trough) == (4, 4)
     assert res.derived['phase_year_rule']['decision_status'] == 'de_xuat'       # quy ước PS3 chưa chốt
 
 
@@ -426,3 +434,106 @@ def test_khong_bo_ngam_bo_loc_nhom():
     seg = {'T1': _run('get_segment_contribution', metric='R', dimension='category', year=2019)}
     chk = evidence.validate('R của Streetwear năm 2019 là {c1}.', [{'id': 'c1', 'path': 'T1.rows[Streetwear].r'}], seg)
     assert chk.ok and not service._group_filter_errors('ok', chk, 'R của Streetwear năm 2019?', groups)
+
+
+
+# Nguyên văn raw_final của model thật (log warehouse/ai_eval/, 2026-10-05). Trước khi sửa, app in số âm KHÔNG dấu vì
+# trong câu có chữ "giảm" ở xa (tên giai đoạn "Chững, giảm nhẹ", "giảm mạnh nhất, CAGR {c}") → đọc thành tăng.
+SIGN_LIVE = [
+    ('B06 PG lần 1', ('get_revenue_trend', {'view': 'phases'}), 'Giai đoạn chững lại có CAGR bao nhiêu?',
+     '{"status": "ok", "answer": "Giai đoạn chững lại là giai đoạn B — Chững, giảm nhẹ (2016→2018), với CAGR {c1} mỗi '
+     'năm.", "claims": [{"id": "c1", "path": "T1.rows[B].cagr", "sign": "am"}]}',
+     ['**−6,4%**'], []),
+    ('B06 DuckDB', ('get_revenue_trend', {'view': 'phases'}), 'Giai đoạn chững lại có CAGR bao nhiêu?',
+     '{"status": "ok", "answer": "Giai đoạn chững lại là giai đoạn B — Chững, giảm nhẹ (2016→2018), với CAGR {c1} mỗi '
+     'năm (R giảm).", "claims": [{"id": "c1", "path": "T1.rows[B].cagr", "sign": "am"}]}',
+     ['**−6,4%**'], []),
+    ('E13 PG', ('get_revenue_trend', {'view': 'phases'}), 'Giai đoạn nào doanh thu giảm mạnh nhất?',
+     '{"status": "ok", "answer": "Theo mức đổi R bằng tiền, giai đoạn giảm mạnh nhất là {c1}, với ΔR {c2}. Theo CAGR, '
+     'cũng chính giai đoạn này giảm mạnh nhất, CAGR {c3}. Đây là mô tả xu hướng, không phải nguyên nhân; năm 2022 tăng '
+     'lại chỉ là tín hiệu hồi phục cuối giai đoạn D, chưa tách thành giai đoạn mới.", "claims": [{"id": "c1", "path": '
+     '"T1.derived.largest_decrease.phases"}, {"id": "c2", "path": "T1.derived.largest_decrease.delta_r", "sign": "am"}, '
+     '{"id": "c3", "path": "T1.derived.largest_decrease_cagr.cagr", "sign": "am"}]}',
+     ['**−554.945.327 VND**', '**−39,1%**'], []),
+    # câu này vừa có số xa chữ "giảm" (c1: phải giữ dấu) vừa có "tức R giảm {c2}" (c2: chữ giảm liền trước, bỏ dấu)
+    ('A03c PG', ('get_revenue_trend', {'view': 'turning_points'}), 'Cú đổi hướng cuối 2016 lớn cỡ nào?',
+     '{"status": "ok", "answer": "Cú đổi hướng cuối 2016 (từ giai đoạn Tăng trưởng sang Chững, giảm nhẹ) có độ lớn {c1}: '
+     'R mười hai tháng sau điểm so với mười hai tháng trước điểm, tức R giảm {c2}. Cú đổi hướng giảm mạnh nhất trong ba '
+     'điểm là {c3}.", "claims": [{"id": "c1", "path": "T1.rows[2016].magnitude", "sign": "am"}, {"id": "c2", "path": '
+     '"T1.rows[2016].delta_r", "sign": "am"}, {"id": "c3", "path": "T1.derived.largest_decrease.turns"}]}',
+     ['**−9,7%**', 'tức R giảm **157.529.357 VND**'], ['−157.529.357']),
+]
+
+
+@pytest.mark.parametrize('case', SIGN_LIVE, ids=lambda c: c[0])
+def test_so_am_khong_mat_dau_khi_chu_giam_o_xa(case):
+    name, call, q, raw, must, banned = case
+    d = json.loads(raw)
+    res = {'T1': tools.run({'tool': call[0], 'arguments': call[1]}, 'duckdb')}
+    chk = evidence.validate(d['answer'], d['claims'], res, frozenset(evidence.question_numbers(q)))
+    assert chk.ok, chk.errors
+    for x in must:
+        assert x in chk.answer_md, chk.answer_md
+    for x in banned:
+        assert x not in chk.answer_md, chk.answer_md
+
+
+@pytest.mark.parametrize('answer, shown', [
+    ('R năm 2019 giảm {c1}.', '**554.945.327 VND**'),                              # chữ giảm liền trước: bỏ dấu cho dễ đọc
+    ('Năm 2019, mức giảm R là {c1}.', '**554.945.327 VND**'),                      # 3 chữ ở giữa: còn bỏ dấu
+    ('Mức giảm R năm 2019 là {c1}.', '**−554.945.327 VND**'),                      # 4 chữ ở giữa: giữ dấu
+    ('R năm 2019 giảm so với năm 2018 một khoản {c1}.', '**−554.945.327 VND**'),   # xa hơn 3 chữ: giữ dấu
+    ('R năm 2019 (giảm) là {c1}.', '**−554.945.327 VND**'),                        # qua ngoặc: giữ dấu
+    ('Năm 2019 R đổi {c1}.', '**−554.945.327 VND**'),                              # không có chữ hướng: giữ dấu
+])
+def test_chi_bo_dau_khi_chu_huong_di_lien_truoc_so(answer, shown):
+    res = {'T1': _run('get_revenue_summary', metric='R', year=2019, compare_prior_year=True)}
+    chk = evidence.validate(answer, [{'id': 'c1', 'path': 'T1.rows[0].delta_r'}], res)
+    assert chk.ok, chk.errors
+    assert shown in chk.answer_md, chk.answer_md
+
+
+def test_chu_huong_lien_truoc_so_sai_dau_thi_chan():
+    """Câu có cả "tăng" lẫn "giảm" (cửa sổ rộng không kết luận được) nhưng chữ liền trước số ngược dấu → chặn,
+    không được in giá trị tuyệt đối của một số ngược với chữ đứng ngay trước nó."""
+    res = {'T1': _run('get_revenue_summary', metric='R', year=2022, compare_prior_year=True)}
+    assert res['T1'].rows[0]['delta_r'] > 0
+    bad = evidence.validate('R năm 2022 không tăng mà giảm {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].delta_r'}], res)
+    assert not bad.ok
+    trend = {'T1': _run('get_revenue_trend', view='phases')}
+    ok = evidence.validate('Giai đoạn C có tốc độ tăng trưởng {c1} mỗi năm.', [{'id': 'c1', 'path': 'T1.rows[C].cagr'}],
+                           trend)
+    assert ok.ok and '**−39,1%**' in ok.answer_md, (ok.errors, ok.answer_md)
+
+
+
+A04_RAW = ('{"status": "ok", "answer": "Theo nhịp mùa vụ của R giai đoạn 2013–2022, tháng thấp nhất là tháng {c1}, và '
+           'tháng cao nhất là tháng {c2}; chênh mùa cao/thấp cả kỳ là {c3}. Nhịp này có ở {c4} trên {c5} năm, và khi bỏ '
+           'lần lượt từng năm thì chênh mùa dao động trong khoảng {c6} đến {c7}. Tháng thấp nhất cũng lặp lại ở cả {c8} '
+           'giai đoạn. Lưu ý: số theo giai đoạn dùng cách gom năm đề xuất, đang chờ chốt.", "claims": [{"id": "c1", '
+           '"path": "T1.derived.trough_months"}, {"id": "c2", "path": "T1.derived.peak_months"}, {"id": "c3", "path": '
+           '"T1.rows[0].season_peak_trough_ratio"}, {"id": "c4", "path": "T1.rows[0].n_years_with_pattern"}, {"id": "c5", '
+           '"path": "T1.rows[0].n_years"}, {"id": "c6", "path": "T1.rows[0].loo_min_ratio"}, {"id": "c7", "path": '
+           '"T1.rows[0].loo_max_ratio"}, {"id": "c8", "path": "T1.derived.n_phases"}]}')
+
+
+def test_cung_thang_thap_nhat_moi_giai_doan_phai_co_cho_dat_rieng():
+    """Live PG 2026-10-05 (A04): "tháng thấp nhất lặp lại ở cả {c8} giai đoạn" với c8 = n_phases bị chặn (n_phases
+    chỉ là số giai đoạn, không chứng minh cùng tháng). Ô n_phases_same_trough chứng minh được thì câu qua."""
+    res = {'T1': _run('get_calendar_pattern', pattern='mua_vu')}
+    d = json.loads(A04_RAW)
+    q = frozenset(evidence.question_numbers('Tháng nào doanh thu thấp nhất trong năm?'))
+    assert not evidence.validate(d['answer'], d['claims'], res, q).ok
+    claims = [c if c['id'] != 'c8' else {'id': 'c8', 'path': 'T1.derived.n_phases_same_trough'} for c in d['claims']]
+    chk = evidence.validate(d['answer'], claims, res, q)
+    assert chk.ok, chk.errors
+    assert 'lặp lại ở cả **4**' in chk.answer_md
+    # tháng thấp nhất CẢ KỲ là ô riêng (E35 trước đây nói "cả kỳ" bằng tập tháng của từng giai đoạn)
+    chk = evidence.validate('Cả kỳ 2013–2022, tháng cao nhất là tháng {c1}, thấp nhất là tháng {c2}.',
+                            [{'id': 'c1', 'path': 'T1.rows[0].peak_month'}, {'id': 'c2', 'path': 'T1.rows[0].trough_month'}],
+                            res)
+    assert chk.ok and 'tháng **5**' in chk.answer_md and 'tháng **12**' in chk.answer_md, (chk.errors, chk.answer_md)
+    # đảo chiều: "cao nhất" mà trỏ số giai đoạn cùng tháng THẤP nhất → chặn
+    bad = evidence.validate('Tháng cao nhất lặp lại ở cả {c1} giai đoạn.',
+                            [{'id': 'c1', 'path': 'T1.derived.n_phases_same_trough'}], res)
+    assert not bad.ok

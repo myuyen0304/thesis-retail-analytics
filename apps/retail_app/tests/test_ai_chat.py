@@ -19,10 +19,11 @@ class FakeProvider:
     label = 'fake'
 
     def __init__(self, *steps):
-        self.steps, self.seen = list(steps), []
+        self.steps, self.seen, self.max_tokens = list(steps), [], []
 
-    def complete(self, messages, tools_):
+    def complete(self, messages, tools_, max_tokens=None):
         self.seen.append([dict(m) for m in messages])
+        self.max_tokens.append(max_tokens)
         step = self.steps.pop(0)
         if isinstance(step, Exception):
             raise step
@@ -163,6 +164,58 @@ def test_het_han_muc_token_thi_khong_goi_model():
     fake = FakeProvider()
     t = turn(fake, session_tokens_used=service.SESSION_TOKEN_LIMIT)
     assert t.status == 'budget_exceeded' and not fake.seen
+
+
+class WorstCaseProvider:
+    """Model giả xấu nhất cho hạn mức: prompt_tokens = ĐÚNG cận trên app tính, completion = ĐÚNG max_tokens.
+    Trả lời lần lượt: gọi tool rồi trả câu đúng (E04), lặp vô hạn."""
+    label = 'worst'
+
+    def __init__(self):
+        self.n, self.max_tokens = 0, []
+
+    def complete(self, messages, tools_, max_tokens=None):
+        self.max_tokens.append(max_tokens)
+        step = (call('get_revenue_drivers', metric='R', year=2019), E04_OK)[self.n % 2]
+        self.n += 1
+        return Reply(step.content, step.tool_calls, step.message, service.prompt_bound(messages, tools_), max_tokens)
+
+
+def test_tran_token_cung_ca_phien_khong_vuot_200k():
+    """Hạn mức 200k là trần cứng: kể cả khi mỗi lần gọi tốn đúng cận trên prompt và đủ max_tokens output,
+    tổng token cả phiên không vượt SESSION_TOKEN_LIMIT; app dừng TRƯỚC khi gọi chứ không sau khi đã vượt."""
+    p, used, statuses = WorstCaseProvider(), 0, []
+    for _ in range(100):
+        t = service.run_turn('Vì sao R năm 2019 giảm?', [], 'duckdb', p, session_tokens_used=used)
+        used += t.tokens
+        statuses.append(t.status)
+        assert used <= service.SESSION_TOKEN_LIMIT, (used, statuses)
+        if t.status == 'budget_exceeded':
+            break
+    assert statuses[-1] == 'budget_exceeded' and statuses.count('ok') >= 3, statuses
+    assert set(p.max_tokens) == {service.MAX_OUTPUT_TOKENS}            # mọi request đều mang trần output
+
+
+def test_cau_tra_loi_bi_cat_o_max_tokens_thi_khong_hien():
+    cut = Reply('{"status": "ok", "answer": "R năm 2019 giảm {c1', [], {'role': 'assistant', 'content': '...'}, 200,
+                service.MAX_OUTPUT_TOKENS, finish_reason='length')
+    t = turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), cut))
+    assert t.status == 'answer_validation_failed' and t.answer_md is None and 'bị cắt' in t.message
+
+
+def test_cau_tra_loi_bi_cat_khi_goi_tool_thi_khong_chay_tool():
+    c = ToolCallReq('x', 'get_revenue_drivers', '{"metric": "R", "ye')
+    cut = Reply(None, [c], {'role': 'assistant', 'content': ''}, 100, service.MAX_OUTPUT_TOKENS, finish_reason='length')
+    t = turn(FakeProvider(cut))
+    assert t.status == 'answer_validation_failed' and not t.calls
+
+
+def test_can_tren_prompt_ghi_lai_moi_lan_goi():
+    fake = FakeProvider(call('get_revenue_drivers', metric='R', year=2019), E04_OK)
+    t = turn(fake)
+    assert [b for b, _ in t.prompt_bounds] == [service.prompt_bound(m, provider.openai_tools(tools.tool_schemas()))
+                                               for m in fake.seen]
+    assert [a for _, a in t.prompt_bounds] == [100, 200]
 
 
 def test_loi_provider_khong_tra_so():
@@ -509,3 +562,23 @@ def test_trang_chat_chua_co_khoa_chi_bao_info(monkeypatch):
     assert not at.exception and not at.error
     assert any('.env.ai.local' in i.value for i in at.info)
     assert not at.chat_input
+
+
+@pytest.mark.parametrize('text, number, expect', [
+    ('CAGR **−6,4%** mỗi năm', '6,4', True),
+    ('CAGR **6,4%** mỗi năm (R giảm)', '6,4', False),                       # B06 live: chữ "giảm" ở sau, số không dấu
+    ('Chững, giảm nhẹ (2016→2018), với CAGR **6,4%**', '6,4', False),       # B06 live: chữ "giảm" thuộc tên giai đoạn
+    ('giảm mạnh nhất, CAGR **39,1%**', '39,1', False),                      # E13 live
+    ('R giảm **57.915.103 VND**', '57.915.103', True),
+    ('mức giảm R là **57.915.103 VND**', '57.915.103', True),
+    ('đã giảm **45,7%** (% đổi R, 8/2021)', '45,7', True),
+    ('−6,4% rồi lại 6,4%', '6,4', False),                                   # mọi lần xuất hiện đều phải đọc ra âm
+    ('không có số', '6,4', False),
+])
+def test_bo_cham_live_nhan_ra_so_am_mat_dau(text, number, expect):
+    """Bộ chấm live eval (must_neg) viết độc lập với evidence.py; kiểm nó trên các câu thật đã lọt rubric cũ."""
+    import sys
+    from dwh.connection import ROOT
+    sys.path.insert(0, str(ROOT / 'scripts' / 'ops'))
+    from ai_live_eval import neg_shown
+    assert neg_shown(text, number) is expect

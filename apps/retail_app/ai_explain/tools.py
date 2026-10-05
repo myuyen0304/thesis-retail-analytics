@@ -27,7 +27,7 @@ from dwh.connection import describe
 from dwh.guarded import (DEFAULT_MAX_ROWS, DEFAULT_TIMEOUT_S, GuardError, QueryTimeout, RowLimitExceeded, Statement,
                          open_session)
 
-TOOL_VERSION = 'v1.2'
+TOOL_VERSION = 'v1.3'
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
     'reporting.rpt_driver_period', 'reporting.rpt_revenue_segment_yearly', 'reporting.driver_rule',
@@ -472,6 +472,19 @@ def _calendar(turn: _Turn, a: dict) -> ToolResult:
                 'thấp nhất của năm chẵn không. Mô tả lịch sử, không phải dự báo năm sau 2022.')
     else:
         cols = _CAL_PHASE_COLS[pat]
+        if pat == 'mua_vu':
+            # tháng cao / thấp nhất CẢ KỲ: R các tháng cùng tên cộng qua 2013–2022 (đúng cách rpt_calendar_stability
+            # tính chênh mùa); kiểm lại tỷ số max ÷ min khớp metric_value đọc trong cùng phiên
+            pooled = turn.fetch('reporting.rpt_revenue_monthly', 'select month, sum(r) as r from '
+                                'reporting.rpt_revenue_monthly where is_analysis_period group by month').records()
+            hi = max(x['r'] for x in pooled)
+            lo = min(x['r'] for x in pooled)
+            if len(pooled) != 12 or abs(float(hi) / float(lo) - s['metric_value']) > 1e-9 * s['metric_value']:
+                return ToolResult('query_error', 'rpt_revenue_monthly không khớp rpt_calendar_stability trong cùng phiên.')
+            peaks = [x['month'] for x in pooled if x['r'] == hi]
+            troughs = [x['month'] for x in pooled if x['r'] == lo]
+            if len(peaks) == 1 and len(troughs) == 1:        # hòa thì không có "tháng cao nhất" duy nhất để nói
+                head.update(peak_month=peaks[0], trough_month=troughs[0])
         if pat == 'cuoi_thang':
             tot = turn.fetch('reporting.rpt_revenue_total', 'select eom_share, eom_expected_share, eom_excess '
                              'from reporting.rpt_revenue_total where period_code = {p}', (ANALYSIS_WINDOW,)).records()
@@ -486,9 +499,14 @@ def _calendar(turn: _Turn, a: dict) -> ToolResult:
         if pat == 'mua_vu':
             derived['peak_months'] = sorted({p['peak_month'] for p in phases})
             derived['trough_months'] = sorted({p['trough_month'] for p in phases})
+            if 'peak_month' in head:
+                derived['n_phases_same_peak'] = sum(p['peak_month'] == head['peak_month'] for p in phases)
+                derived['n_phases_same_trough'] = sum(p['trough_month'] == head['trough_month'] for p in phases)
             mids.append('season_ratio')
-            note = ('Chênh mùa cả kỳ = R các tháng cùng tên cộng qua 2013–2022, tháng cao nhất ÷ thấp nhất. '
-                    'peak_months / trough_months là tháng cao / thấp nhất của từng giai đoạn, xét trên đủ 4 giai đoạn.')
+            note = ('Chênh mùa cả kỳ = R các tháng cùng tên cộng qua 2013–2022, tháng cao nhất ÷ thấp nhất; '
+                    'rows[0].peak_month / trough_month là tháng cao / thấp nhất CẢ KỲ. peak_months / trough_months là '
+                    'tập tháng cao / thấp nhất của từng giai đoạn; n_phases_same_peak / n_phases_same_trough là số giai '
+                    'đoạn có cùng tháng cao / thấp nhất với cả kỳ.')
         else:
             derived['n_phases_eom_positive'] = sum(p['eom_excess'] > 0 for p in phases)
             mids.append('eom_excess')
