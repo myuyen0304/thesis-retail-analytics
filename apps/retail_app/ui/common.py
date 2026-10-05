@@ -132,6 +132,8 @@ def info_strip() -> None:
             '**R** = tiền thực nhận: chỉ đơn đã giao, đã trừ chiết khấu. '
             '**G** = tiền hàng của mọi đơn (kể cả hủy, trả, chưa giao), chưa trừ chiết khấu; G chính là `sales.csv`. '
             'Mọi số gom theo ngày đặt hàng.  \n'
+            '**Tiền:** VND (PM chốt ngày 05/10/2026; dữ liệu nguồn không ghi đơn vị). "tỷ" là tỷ đồng, '
+            '"triệu" là triệu đồng.  \n'
             f'**Trạng thái snapshot:** trạng thái đơn lúc trích dữ liệu (đơn cuối cùng ngày {_d(i["data_end_date"])}), '
             'không phải sổ kế toán từng thời điểm.  \n'
             f'**Refresh:** DWH dựng lại (`dbt build`) lúc {built.strftime("%H:%M %d/%m/%Y")}; '
@@ -200,7 +202,7 @@ def notes(cach_doc: list[str], gioi_han: list[str]) -> None:
 GIOI_HAN_CHUNG = [
     'Số theo trạng thái đơn lúc trích dữ liệu, không phải sổ sách kế toán từng thời điểm.',
     'Bỏ hẳn đơn returned khỏi R, kể cả đơn chỉ trả lại một phần hàng.',
-    'Chưa rõ đơn vị tiền tệ. Chỉ nói về doanh thu, chưa đánh giá lợi nhuận hay sức khỏe tài chính.',
+    'Chỉ nói về doanh thu, chưa đánh giá lợi nhuận hay sức khỏe tài chính.',
     'Chưa có chỉ tiêu kế hoạch nên chỉ so với năm trước. Các mối liên hệ chưa phải là nguyên nhân.',
 ]
 

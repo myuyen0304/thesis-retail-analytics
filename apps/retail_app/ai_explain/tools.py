@@ -18,6 +18,7 @@ import datetime as dt
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
+from itertools import product
 
 from ai_explain import metric_catalog as cat
 from ai_explain.contracts import Evidence, QueryRecord, ToolCall, ToolResult
@@ -25,7 +26,7 @@ from dwh.connection import describe
 from dwh.guarded import (DEFAULT_MAX_ROWS, DEFAULT_TIMEOUT_S, GuardError, QueryTimeout, RowLimitExceeded, Statement,
                          open_session)
 
-TOOL_VERSION = 'v1'
+TOOL_VERSION = 'v1.1'
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
     'reporting.rpt_driver_period', 'reporting.rpt_revenue_segment_yearly', 'reporting.driver_rule',
@@ -299,6 +300,9 @@ def run(call: ToolCall | dict, backend: str, *, timeout_s: float = DEFAULT_TIMEO
     args, err = _validate(spec, call.arguments)
     if err:
         return err
+    if blockers := cat.capability_blockers(spec.name, args):
+        return ToolResult('unsupported', 'Catalog chưa mở khả năng này: ' + '; '.join(blockers) + '.',
+                          rejected={'capability': '; '.join(blockers)})
     try:
         sess = open_session(backend, ALLOWED_RELATIONS, timeout_s=timeout_s, max_rows=max_rows)
     except GuardError as e:
@@ -319,15 +323,21 @@ def run(call: ToolCall | dict, backend: str, *, timeout_s: float = DEFAULT_TIMEO
 
 
 def tool_schemas() -> list[dict]:
-    """JSON Schema chặt (additionalProperties=false) để đưa provider ở AI2. Không chứa backend/credential."""
+    """Chỉ công bố tool/giá trị có tổ hợp mở. run vẫn kiểm lại tổ hợp, kể cả lời gọi cũ từ model."""
     out = []
     for s in TOOLS.values():
+        domains = {k: p.choices if p.kind == 'enum' else (False, True)
+                   for k, p in s.params.items() if p.kind in ('enum', 'bool')}
+        variants = [dict(zip(domains, values)) for values in product(*domains.values())]
+        opened = [a for a in variants if not cat.capability_blockers(s.name, a)]
+        if not opened:
+            continue
         props = {}
         for k, p in s.params.items():
             t = {'int': 'integer', 'bool': 'boolean', 'enum': 'string', 'str': 'string'}[p.kind]
             props[k] = {'type': t, 'description': p.description}
-            if p.kind == 'enum':
-                props[k]['enum'] = list(p.choices)
+            if k in domains:
+                props[k]['enum'] = [v for v in domains[k] if any(a[k] == v for a in opened)]
             if p.kind == 'str':
                 props[k]['maxLength'] = p.max_len
         out.append({'name': s.name, 'description': s.description, 'input_schema': {

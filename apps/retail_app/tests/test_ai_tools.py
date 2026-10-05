@@ -12,6 +12,7 @@ Postgres không chạy thì các test _pg_ FAIL, không skip (quy ước test_ba
 import os
 import shutil
 import time
+import uuid
 from decimal import Decimal
 from pathlib import Path
 
@@ -246,11 +247,16 @@ def test_e18_nhan_doc_hai_chi_la_tham_so():
     pd.testing.assert_frame_equal(queries.revenue_yearly('duckdb'), before)
 
 
-def test_khong_ghi_don_vi_tien_te():
+def test_don_vi_tien_la_vnd():
+    # PM chốt 2026-10-05: tiền là VND. Trước đó catalog cấm ghi đơn vị ("đơn vị tiền tệ chưa xác minh").
+    d = metric_catalog.DECISIONS['currency_vnd']
+    assert d['decision_status'] == 'chot' and 'VND' in d['text']
+    assert {metric_catalog.METRICS[m]['unit'] for m in ('R', 'G', 'delta_r', 'contrib_nup')} == {'VND'}
+    assert metric_catalog.METRICS['P']['unit'] == 'VND/món'
     texts = [str(metric_catalog.METRICS), str(metric_catalog.DECISIONS), str(tools.tool_schemas())]
     texts += [_run('get_revenue_drivers', metric='R', year=2019).message]
     for t in texts:
-        for unit in ('VND', 'USD', '$'):
+        for unit in ('USD', '$', 'chưa xác minh', 'đơn vị tiền tệ chưa'):
             assert unit not in t
 
 
@@ -258,6 +264,48 @@ def test_tool_schema_chat():
     for s in tools.tool_schemas():
         assert s['input_schema']['additionalProperties'] is False
         assert 'backend' not in s['input_schema']['properties']
+
+
+@pytest.mark.parametrize('mode', ['closed', 'missing'])
+def test_catalog_dong_hoac_thieu_thi_khong_mo_ket_noi(monkeypatch, mode):
+    catalog = ([(*c[:5], 'closed', c[6]) for c in metric_catalog.CAPABILITIES] if mode == 'closed' else [])
+    monkeypatch.setattr(metric_catalog, 'CAPABILITIES', catalog)
+    monkeypatch.setattr(tools, 'open_session', lambda *a, **kw: pytest.fail('Không được mở kết nối'))
+    for tool, args in [
+        ('get_revenue_summary', {'metric': 'R_and_G', 'year': 2019}),
+        ('get_revenue_summary', {'metric': 'R', 'year': 2019, 'compare_prior_year': True}),
+        ('get_revenue_drivers', {'metric': 'R', 'year': 2019}),
+        ('get_segment_contribution', {'metric': 'R', 'year': 2019, 'dimension': 'category'}),
+    ]:
+        res = _run(tool, **args)
+        assert res.status == 'unsupported' and 'capability' in res.rejected
+        assert not res.rows and res.evidence is None
+    assert tools.tool_schemas() == []
+
+
+@pytest.mark.parametrize('key,blocked,kept', [
+    (('get_revenue_summary', 'G', 'year'),
+     {'tool': 'get_revenue_summary', 'metric': 'R_and_G'},
+     {'tool': 'get_revenue_summary', 'metric': 'R'}),
+    (('get_revenue_summary', 'R', 'year_vs_prior'),
+     {'tool': 'get_revenue_summary', 'metric': 'R', 'compare_prior_year': True},
+     {'tool': 'get_revenue_summary', 'metric': 'R', 'compare_prior_year': False}),
+    (('get_segment_contribution', 'R', 'year', 'chiều × nhóm × năm', 'region'),
+     {'tool': 'get_segment_contribution', 'metric': 'R', 'dimension': 'region'},
+     {'tool': 'get_segment_contribution', 'metric': 'R', 'dimension': 'category'}),
+])
+def test_catalog_dong_tung_to_hop_schema_va_runtime_cung_doi(monkeypatch, key, blocked, kept):
+    monkeypatch.setattr(metric_catalog, 'CAPABILITIES', [
+        (*c[:5], 'closed', c[6]) if c[:len(key)] == key else c for c in metric_catalog.CAPABILITIES])
+    tool = blocked['tool']
+    args = {k: v for k, v in blocked.items() if k != 'tool'}
+    with monkeypatch.context() as m:
+        m.setattr(tools, 'open_session', lambda *a, **kw: pytest.fail('Không được mở kết nối'))
+        assert _run(tool, year=2019, **args).status == 'unsupported'
+    props = next(s for s in tools.tool_schemas() if s['name'] == tool)['input_schema']['properties']
+    changed = next(k for k in args if args[k] != kept[k])
+    assert args[changed] not in props[changed]['enum']
+    assert _run(kept['tool'], year=2019, **{k: v for k, v in kept.items() if k != 'tool'}).ok
 
 
 # --- bằng chứng ---
@@ -437,17 +485,47 @@ def test_pg_role_chi_doc_khong_ghi_duoc(monkeypatch):
     user, password = _pg_env(monkeypatch)
     conn = psycopg.connect(host=os.environ.get('PG_HOST', 'localhost'), port=int(os.environ.get('PG_PORT', '5433')),
                            dbname=os.environ.get('PG_DATABASE', 'retail'), user=user, password=password,
-                           connect_timeout=5, autocommit=True)
+                           connect_timeout=5, autocommit=False)
     try:
         denied = (psycopg.errors.InsufficientPrivilege, psycopg.errors.ReadOnlySqlTransaction)
-        for sql in ('update reporting.rpt_revenue_yearly set r = 0 where year = 2019',
-                    'create table reporting.ai_thu (x int)'):
-            with pytest.raises(denied):
-                conn.execute(sql)
-        with pytest.raises(psycopg.errors.InsufficientPrivilege):    # dòng hàng có customer_sk: ngoài danh sách cho phép
-            conn.execute('select count(*) from reporting.int_reporting_order_items')
+        # WHERE false không sửa dòng nào kể cả khi quyền sai. Mỗi phép thử luôn rollback,
+        # kể cả pytest.raises thất bại; DDL dùng tên riêng để không đụng bảng của lượt khác.
+        table = f'ai_permission_probe_{uuid.uuid4().hex}'
+        for sql in ('update reporting.rpt_revenue_yearly set r = r where false',
+                    f'create table reporting.{table} (x int)'):
+            _assert_pg_statement_denied(conn, sql, denied)
+        _assert_pg_statement_denied(conn, 'select count(*) from reporting.int_reporting_order_items',
+                                    psycopg.errors.InsufficientPrivilege)
     finally:
+        conn.rollback()
         conn.close()
+
+
+def _assert_pg_statement_denied(conn, sql, denied):
+    with conn.transaction(force_rollback=True):
+        with pytest.raises(denied):
+            conn.execute(sql)
+
+
+def test_pg_probe_rollback_ke_ca_quyen_viet_bi_cap_nham(monkeypatch):
+    """Thử nhánh nguy hiểm trên bảng tạm của phiên: assertion fail vẫn hoàn tác ghi/DDL."""
+    import psycopg
+    user, password = _pg_env(monkeypatch)
+    with psycopg.connect(host=os.environ.get('PG_HOST', 'localhost'), port=int(os.environ.get('PG_PORT', '5433')),
+                          dbname=os.environ.get('PG_DATABASE', 'retail'), user=user, password=password,
+                          connect_timeout=5, autocommit=False) as conn:
+        # Chỉ phiên kiểm thử được phép ghi để mô phỏng cấp nhầm quyền; role thật vẫn giữ nguyên.
+        # Các lệnh bên dưới chỉ tác động bảng TEMP của phiên, không sửa bảng reporting.
+        conn.read_only = False
+        conn.execute('create temp table ai_probe_existing (value int)')
+        conn.execute('insert into ai_probe_existing values (7)')
+        for sql in ('update ai_probe_existing set value = 0',
+                    'create temp table ai_probe_created (value int)'):
+            with pytest.raises(pytest.fail.Exception, match='DID NOT RAISE'):
+                _assert_pg_statement_denied(conn, sql, psycopg.errors.InsufficientPrivilege)
+        assert conn.execute('select value from ai_probe_existing').fetchone() == (7,)
+        assert conn.execute("select to_regclass('pg_temp.ai_probe_created')").fetchone() == (None,)
+        conn.rollback()
 
 
 def test_pg_timeout_ngat_truy_van(monkeypatch):

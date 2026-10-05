@@ -144,6 +144,6 @@ notes(
         'tùy ý, G so năm trước. Hỏi những câu này thì trợ lý báo chưa hỗ trợ.',
         'Phân rã là số học, không phải nguyên nhân (marketing, churn, tồn kho... không có trong dữ liệu).',
         'Câu diễn giải không qua bước kiểm số thì không hiện; khi đó chỉ hiện bảng số lấy thẳng từ kho.',
-        'Tiền ghi "đơn vị tiền": dữ liệu nguồn không ghi đơn vị tiền tệ.',
+        'Tiền ghi VND: dữ liệu nguồn không ghi đơn vị tiền tệ, PM chốt dùng VND ngày 2026-10-05.',
     ],
 )

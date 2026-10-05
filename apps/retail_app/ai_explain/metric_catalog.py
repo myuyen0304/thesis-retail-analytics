@@ -5,14 +5,15 @@
 - 'chot'    : định nghĩa trong hợp đồng KPI / PM-BA đã chốt;
 - 'de_xuat' : quy ước dev đề xuất, còn chờ PM/BA chốt (dwh_huong_dan_pm_ba.md §9 M3/M4). Bằng chứng phải mang nhãn này.
 
-Đơn vị tiền tệ CHƯA được xác minh: không ghi VND/USD.
+Đơn vị tiền: VND (PM chốt 2026-10-05, DECISIONS["currency_vnd"]). Nguồn không ghi đơn vị; đây là quy ước PM.
+Không ghi USD hay đơn vị khác.
 """
 import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG_VERSION = 'ai1-2026-10-03'
-MONEY_UNIT = 'tiền (đơn vị tiền tệ chưa xác minh)'
+CATALOG_VERSION = 'ai1-2026-10-05'
+MONEY_UNIT = 'VND'
 
 # SQL quyết định định nghĩa các metric đang mở. Hash = nội dung các file này trong CHECKOUT hiện tại.
 DEFINITION_FILES = (
@@ -96,6 +97,12 @@ DECISIONS = {
         'text': 'PS3: năm ranh giới thuộc giai đoạn kết thúc ở năm đó. Tool PS3 chưa mở trong v1.',
         'source': 'retail_dbt/models/reporting/rpt_calendar_phase.sql',
     },
+    'currency_vnd': {
+        'decision_status': 'chot',
+        'text': 'Mọi số tiền (R, G, ΔR, phần góp, P) ghi bằng VND (đồng). Dữ liệu nguồn không ghi đơn vị; PM chốt '
+                'ngày 2026-10-05. Không ghi hay quy đổi sang đơn vị tiền tệ khác.',
+        'source': 'docs/dwh_huong_dan_pm_ba.md §2, §9 (2026-10-05)',
+    },
 }
 
 DIMENSIONS = {
@@ -108,6 +115,7 @@ DIMENSIONS = {
 CAPABILITIES = [
     # tool, metric, period, grain, dimension, status, ghi chú / lý do
     ('get_revenue_summary', 'R', 'year', 'năm', None, 'open', 'mức R; so năm trước từ 2014'),
+    ('get_revenue_summary', 'R', 'year_vs_prior', 'năm', None, 'open', 'so năm trước từ 2014'),
     ('get_revenue_summary', 'G', 'year', 'năm', None, 'open', 'chỉ mức G; G so năm trước chưa có cột đã kiểm'),
     ('get_revenue_drivers', 'R', 'year', 'năm', None, 'open', 'phân rã N → U → P, từ 2014'),
     ('get_segment_contribution', 'R', 'year', 'chiều × nhóm × năm', 'category', 'open', 'ΔR, tỷ trọng, % đóng góp'),
@@ -130,6 +138,34 @@ CAPABILITIES = [
 
 def open_capabilities() -> list[tuple]:
     return [c for c in CAPABILITIES if c[5] == 'open']
+
+
+def capability_blockers(tool: str, arguments: dict) -> list[str]:
+    """Kiểm tổ hợp sau kiểm kiểu. Thiếu dòng catalog cũng là đóng; R_and_G cần cả R và G.
+
+    So năm trước cần cả quyền đọc mức năm lẫn quyền so sánh. Coverage thực tế vẫn do tool kiểm sau khi đọc build.
+    Schema và dispatcher dùng chung hàm này, không coi từng enum hợp lệ là đủ để mở một tổ hợp.
+    """
+    grain = {'get_revenue_summary': 'năm', 'get_revenue_drivers': 'năm',
+             'get_segment_contribution': 'chiều × nhóm × năm'}.get(tool)
+    if grain is None:
+        return ['tool chưa có ánh xạ grain trong catalog']
+    metrics = ('R', 'G') if arguments.get('metric') == 'R_and_G' else (arguments.get('metric'),)
+    periods = [arguments.get('period_type', 'year')]
+    if tool == 'get_revenue_summary' and arguments.get('compare_prior_year', False):
+        periods.append('year_vs_prior')
+    if tool == 'get_revenue_drivers' and periods == ['phase']:
+        grain = 'giai đoạn PS2'
+    blockers = []
+    for metric in metrics:
+        for period in periods:
+            key = (tool, metric, period, grain, arguments.get('dimension'))
+            matches = [c for c in CAPABILITIES if c[:5] == key]
+            # Không mở nếu catalog bị trùng hoặc có trạng thái chưa xác định.
+            if len(matches) != 1 or matches[0][5] != 'open':
+                reason = matches[0][6] if len(matches) == 1 else 'tổ hợp chưa được mở duy nhất trong catalog'
+                blockers.append(f'{tool} / {metric} / {period} / {arguments.get("dimension")}: {reason}')
+    return blockers
 
 
 def metric_defs(*metric_ids: str) -> list[dict]:

@@ -12,7 +12,7 @@ CASES = [
     {'case_id': 'E01', 'question': 'R và G năm 2019?', 'context': {}, 'layer': ['tool'],
      'tool_call': {'tool': 'get_revenue_summary', 'arguments': {'metric': 'R_and_G', 'year': 2019}},
      'expected_status': 'ok', 'expected': 'R = payments delivered 2019; G = sales.csv 2019 (tests/test_ai_tools.py)',
-     'must_not': ['gọi G là doanh thu thuần', 'ghi VND/USD']},
+     'must_not': ['gọi G là doanh thu thuần', 'ghi USD hoặc đơn vị khác VND']},
     {'case_id': 'E02', 'question': 'Doanh thu năm 2019?', 'context': {}, 'layer': ['tool', 'llm'],
      'tool_call': {'tool': 'get_revenue_summary', 'arguments': {'year': 2019}},
      'expected_status': 'needs_clarification',

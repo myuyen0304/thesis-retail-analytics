@@ -18,6 +18,7 @@ Kết quả của script này là live-model eval; KHÔNG trộn với test mock
 import argparse
 import datetime as dt
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -33,19 +34,25 @@ OUT = ROOT / 'warehouse' / 'ai_eval'
 PRICE_IN, PRICE_OUT = 0.30, 1.20
 
 SUM, DRV, SEG = 'get_revenue_summary', 'get_revenue_drivers', 'get_segment_contribution'
+# "N kéo giảm nhiều nhất": hoặc chỗ đặt top_down_driver, hoặc viết thẳng "số đơn" + số góp của N; cách sau được
+# evidence._verified_driver_rank đối chiếu với top_down_driver của kho (đổi ngày 2026-10-05, prompt ai2-…-05d).
+DRIVER_N = ('.top_down_driver', '.contrib_n')
 
 
-def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None):
+def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None, if_ok=None):
     """tools: các lời gọi chấp nhận [(tên, tham số con)] (rỗng = không bắt buộc gọi tool);
-    paths: mỗi phần tử (tập tên tool, hậu tố path) phải khớp ít nhất một claim đã hiện."""
+    paths: mỗi phần tử (tập tên tool, hậu tố path hoặc tuple hậu tố thay thế) phải khớp ít nhất một claim đã hiện, và claim đó phải trỏ vào
+    kết quả của CHÍNH lời gọi khớp `tools` (đúng tool + tham số), không chỉ cùng tên tool;
+    if_ok: (tools, paths) bổ sung chỉ áp khi lượt trả `ok` (vd. E02 trả lời luôn thì phải nêu cả R và G)."""
     return {'id': cid, 'q': q, 'status': set(status), 'tools': list(tools), 'paths': list(paths), 'must': list(must),
-            'banned': list(banned), 'after': after}
+            'banned': list(banned), 'after': after, 'if_ok': if_ok}
 
 
 CASES = [
     C('E01', 'R và G năm 2019?', {'ok'}, [(SUM, {'metric': 'R_and_G', 'year': 2019})],
-      [({SUM}, '.r'), ({SUM}, '.g')], ['864.329.802', '1.136.801.442'], ['VND', 'USD']),
-    C('E02', 'Doanh thu năm 2019?', {'needs_clarification', 'ok'}, banned=['VND']),
+      [({SUM}, '.r'), ({SUM}, '.g')], ['864.329.802', '1.136.801.442'], ['USD', 'đơn vị tiền']),
+    C('E02', 'Doanh thu năm 2019?', {'needs_clarification', 'ok'}, banned=['USD'],
+      if_ok=([(SUM, {'metric': 'R_and_G', 'year': 2019})], [({SUM}, '.r'), ({SUM}, '.g')])),
     C('E03', 'R năm 2019 giảm bao nhiêu so với 2018?', {'ok'},
       [(SUM, {'metric': 'R', 'year': 2019, 'compare_prior_year': True}), (DRV, {'metric': 'R', 'year': 2019})],
       [({SUM, DRV}, '.delta_r')], ['554.945.327']),
@@ -53,9 +60,9 @@ CASES = [
       [(SUM, {'metric': 'R', 'year': 2019, 'compare_prior_year': True}), (DRV, {'metric': 'R', 'year': 2019})],
       [({SUM, DRV}, '.delta_r')], ['554.945.327']),
     C('E04', 'Vì sao R năm 2019 giảm?', {'ok'}, [(DRV, {'metric': 'R', 'year': 2019})],
-      [({DRV}, '.top_down_driver')], ['số đơn'], ['nguyên nhân là', 'do marketing', 'do churn']),
+      [({DRV}, DRIVER_N)], ['số đơn'], ['nguyên nhân là', 'do marketing', 'do churn']),
     C('E04b', 'R năm 2019 giảm chủ yếu ở số đơn, số món hay giá?', {'ok'}, [(DRV, {'metric': 'R', 'year': 2019})],
-      [({DRV}, '.top_down_driver')], ['số đơn']),
+      [({DRV}, DRIVER_N)], ['số đơn']),
     C('E05', 'Ngành hàng nào kéo giảm R mạnh nhất năm 2019?', {'ok'},
       [(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2019})],
       [({SEG}, '.derived.largest_decrease.groups')], ['Streetwear']),
@@ -81,28 +88,37 @@ CASES = [
 ]
 
 
-def _tool_ok(t: service.TurnResult, alternatives) -> bool:
-    if not alternatives:
-        return True
+def _match(tool, a, alternatives) -> bool:
     return any(tool == name and isinstance(a, dict) and all(a.get(k) == v for k, v in sub.items())
-               for name, sub in alternatives for _, tool, a in t.calls)
+               for name, sub in alternatives)
 
 
-def _paths_ok(t: service.TurnResult, required) -> bool:
-    tool_of = {ref: tool for ref, tool, _ in t.calls}
+def _tool_ok(t: service.TurnResult, alternatives) -> bool:
+    return not alternatives or any(_match(tool, a, alternatives) for _, tool, a in t.calls)
+
+
+def _paths_ok(t: service.TurnResult, required, alternatives) -> bool:
+    call_of = {ref: (tool, a) for ref, tool, a in t.calls}
     shown = [p for p, _, _ in t.values.values()]
-    return all(any(p.endswith(suffix) and tool_of.get(p.split('.')[0]) in tools_ for p in shown)
-               for tools_, suffix in required)
+
+    def good(p, tools_):
+        tool, a = call_of.get(p.split('.')[0], (None, None))
+        return tool in tools_ and (not alternatives or _match(tool, a, alternatives))
+    return all(any(p.endswith(suffix) and good(p, tools_) for p in shown) for tools_, suffix in required)
 
 
 def grade(case, t: service.TurnResult) -> dict:
     text = t.answer_md or ''
+    tools_, paths = list(case['tools']), list(case['paths'])
+    if case['if_ok'] and t.status == 'ok':
+        tools_, paths = tools_ + case['if_ok'][0], paths + case['if_ok'][1]
     checks = {
         'status': t.status in case['status'],
-        'tool': _tool_ok(t, case['tools']),
-        'claim_dung_o': _paths_ok(t, case['paths']),
+        'tool': _tool_ok(t, tools_),
+        'claim_dung_o': _paths_ok(t, paths, tools_),
         'must_contain': all(m in text for m in case['must']),
-        'not_banned': not any(b.lower() in text.lower() for b in case['banned']),
+        'not_banned': not any(b.lower() in text.lower() for b in case['banned'])
+                      and not re.search(r'(?<![\d.])[12]\.\d{3}(?![\d.,]| VND)', text),   # năm có dấu nghìn ("2.019")
     }
     return {'case_id': case['id'], 'pass': all(checks.values()), 'checks': checks}
 
@@ -139,7 +155,8 @@ def main() -> int:
                     {'ref': r, 'tool': tool, 'arguments': args, 'status': t.results[r].status} for r, tool, args in t.calls],
                     'answer_md': t.answer_md, 'claims': {k: {'path': pth, 'value': str(v), 'shown': s}
                                                          for k, (pth, v, s) in t.values.items()},
-                    'message': t.message, 'validation_errors': t.validation_errors, 'raw_final': t.raw_final,
+                    'message': t.message, 'validation_errors': t.validation_errors, 'repair_errors': t.repair_errors,
+                    'raw_final': t.raw_final,
                     'prompt_tokens': t.prompt_tokens, 'completion_tokens': t.completion_tokens,
                     'llm_calls': t.llm_calls, 'latency_s': round(time.monotonic() - t0, 2), 'model': t.model,
                     'prompt_version': t.prompt_version, 'backend': a.backend, 'history': history}

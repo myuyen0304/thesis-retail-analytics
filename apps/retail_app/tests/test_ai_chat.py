@@ -236,11 +236,162 @@ def test_tang_truong_am_va_ty_le_dong_gop_khong_bi_chan_nham():
 
 
 def test_khong_nhac_lai_so_gai_trong_cau_hoi():
-    assert evidence.question_numbers('R 2019 là 999 tỷ phải không? từ 15/3 đến 10/6/2019') == {
-        '2019', '15', '3', '10', '6'}
+    assert evidence.question_numbers('R 2019 là 999 tỷ phải không? từ 15/3 đến 10/6/2019, tháng 8') == {
+        '2019', '15/3', '10/6/2019', 'tháng 8'}
     gai = final('ok', 'Đúng, R năm 2019 là 999 tỷ.')
     t = turn(FakeProvider(call('get_revenue_summary', metric='R', year=2019), gai, gai), 'R 2019 là 999 tỷ phải không?')
     assert t.status == 'answer_validation_failed' and any('999' in e for e in t.validation_errors)
+
+
+# --- hồi quy 4 probe của docs/ai_explain_review_20261005.md: câu sai phải bị chặn ---
+
+SEG_2019 = dict(metric='R', dimension='category', year=2019)
+
+
+def test_probe_so_g_gan_nhan_r_thi_chan():
+    bad = final(answer='R năm 2019 là {c1}.', claims=[{'id': 'c1', 'path': 'T1.rows[0].g'}])
+    t = service.run_turn('R năm 2019 là bao nhiêu?', [], 'duckdb', FakeProvider(
+        call('get_revenue_summary', metric='R_and_G', year=2019), bad, bad))
+    assert t.status == 'answer_validation_failed' and t.answer_md is None
+    assert any('vế câu gọi tên R' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_r_va_g_lan_luot_co_nhan_cua_app():
+    ok = final(answer='R và G năm 2019 lần lượt là {c1} và {c2}.',
+               claims=[{'id': 'c1', 'path': 'T1.rows[0].r'}, {'id': 'c2', 'path': 'T1.rows[0].g'}])
+    t = service.run_turn('R và G năm 2019?', [], 'duckdb', FakeProvider(
+        call('get_revenue_summary', metric='R_and_G', year=2019), ok))
+    assert t.status == 'ok', t.validation_errors
+    assert '**864.329.802 VND** (R, 2019)' in t.answer_md and '**1.136.801.442 VND** (G, 2019)' in t.answer_md
+
+
+def test_probe_so_trong_cau_hoi_khong_duoc_nhac_lai():
+    q = 'R 2019 là 10 tỷ phải không?'
+    gai = final(answer='Đúng, R năm 2019 là 10 tỷ.')
+    t = turn(FakeProvider(call('get_revenue_summary', metric='R', year=2019), gai, gai), q)
+    assert t.status == 'answer_validation_failed' and any('10' in e for e in t.validation_errors)
+    # số trùng một năm nhưng đứng trước đơn vị cũng bị chặn
+    assert evidence.check_digits('R năm 2019 là 2019 tỷ.', {'2019'})
+    # mốc ngày người dùng gõ vẫn được nhắc lại nguyên cụm
+    assert not evidence.check_digits('Chưa hỗ trợ kỳ 15/3 đến 10/6/2019.', evidence.question_numbers(
+        'R ngành Streetwear ở vùng East từ 15/3 đến 10/6/2019?'))
+    assert evidence.check_digits('Có 15 nhóm.', evidence.question_numbers('từ 15/3 đến 10/6/2019?'))
+
+
+def test_probe_xep_hang_claim_khong_dung_va_ten_nhom_viet_tay_thi_chan():
+    bad = final(answer='Ngành kéo giảm nhiều nhất là Luxury.',
+                claims=[{'id': 'c1', 'path': 'T1.derived.largest_decrease.groups'}])
+    t = service.run_turn('Ngành nào kéo giảm R nhiều nhất năm 2019?', [], 'duckdb', FakeProvider(
+        call('get_segment_contribution', **SEG_2019), bad, bad))
+    assert t.status == 'answer_validation_failed'
+    # tên nhóm thật nhưng viết tay, claim xếp hạng không nằm trong câu đó
+    sai = final(answer='Kết quả: {c1}. Ngành Casual giảm nhiều nhất.',
+                claims=[{'id': 'c1', 'path': 'T1.derived.largest_decrease.groups'}])
+    t = service.run_turn('Ngành nào kéo giảm R nhiều nhất năm 2019?', [], 'duckdb', FakeProvider(
+        call('get_segment_contribution', **SEG_2019), sai, sai))
+    errs = ' | '.join(t.validation_errors)
+    assert t.status == 'answer_validation_failed' and 'Casual' in errs and 'xếp hạng' in errs, errs
+
+
+def test_xep_hang_nguoc_chieu_thi_chan():
+    sai = final(answer='Ngành tăng nhiều nhất là {c1}.', claims=[{'id': 'c1', 'path': 'T1.derived.largest_decrease.groups'}])
+    t = service.run_turn('Ngành nào tăng nhiều nhất năm 2019?', [], 'duckdb', FakeProvider(
+        call('get_segment_contribution', **SEG_2019), sai, sai))
+    assert t.status == 'answer_validation_failed' and any('chiều' in e for e in t.validation_errors)
+
+
+def test_ten_nhom_gan_voi_claim_cua_nhom_do_thi_dat():
+    ok = final(answer='Streetwear giảm {c1} năm 2019.',
+               claims=[{'id': 'c1', 'path': 'T1.rows[Streetwear].delta_r', 'sign': 'am'}])
+    t = service.run_turn('Streetwear năm 2019 giảm bao nhiêu?', [], 'duckdb', FakeProvider(
+        call('get_segment_contribution', **SEG_2019), ok))
+    assert t.status == 'ok', t.validation_errors
+    assert '463.947.221 VND' in t.answer_md
+
+
+def test_probe_claim_tro_vao_ca_khoi_khong_lam_crash():
+    bad = final(answer='Quy tắc {c1}.', claims=[{'id': 'c1', 'path': 'T1.derived.small_delta_rule'}])
+    t = turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), bad, bad))
+    assert t.status == 'answer_validation_failed' and any('một khối' in e for e in t.validation_errors)
+
+
+def test_loi_bat_ngo_khi_kiem_khong_lam_crash(monkeypatch):
+    def boom(*a, **k):
+        raise TypeError('x')
+    monkeypatch.setattr(service, 'validate', boom)
+    t = turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), E04_OK, E04_OK))
+    assert t.status == 'answer_validation_failed' and t.answer_md is None
+
+
+# --- lỗi gặp ở live eval 2026-10-05 (model thật), dựng lại bằng mô hình giả ---
+
+def test_live_ma_ai1_va_nam_trong_pham_vi_du_lieu_khong_bi_chan_nham():
+    # E10/E12: "lát cắt AI1" bị đọc thành số 1; E15b: "dữ liệu chỉ đến hết năm 2022" khi chưa gọi tool
+    assert not evidence.check_digits('Chưa hỗ trợ ở lát cắt AI1, PS3.', set())
+    t = turn(FakeProvider(final('unsupported', 'Không có số thực năm 2023: dữ liệu chỉ có đến hết năm 2022.')),
+             'Dự báo R năm 2023?')
+    assert t.status == 'unsupported', t.validation_errors
+    assert evidence.check_digits('Năm 2022 R là 2022 VND.', set())          # năm đứng trước đơn vị vẫn bị chặn
+    assert not evidence.check_digits('Năm 2019, ngành hàng giảm nhiều nhất là {c1}.', set())   # 'ngàn' ≠ 'ngành'
+    assert evidence.check_digits('R là 864 ngàn, giảm 39%.', set())
+
+
+def test_live_don_vi_lap_sau_cho_dat_bi_bo():
+    ok = final(answer='R năm 2019 là {c1} VND, giảm {c2} %.',
+               claims=[{'id': 'c1', 'path': 'T1.rows[0].r'}, {'id': 'c2', 'path': 'T1.rows[0].yoy_rate', 'sign': 'am'}])
+    t = service.run_turn('R năm 2019?', [], 'duckdb', FakeProvider(
+        call('get_revenue_summary', metric='R', year=2019, compare_prior_year=True), ok))
+    assert t.status == 'ok', t.validation_errors
+    assert 'VND VND' not in t.answer_md and 'VND** VND' not in t.answer_md and '% %' not in t.answer_md
+    assert '**864.329.802 VND**' in t.answer_md
+
+
+def test_live_so_cua_u_gan_cho_p_thi_chan():
+    # E04 live: "{top_up_driver = P} góp {contrib_u}" — số góp của U được nói là của P
+    sai = final(answer='R giảm {c1}; phần kéo xuống chủ yếu là {c2}. Ngược lại {c3} góp {c4}.',
+                claims=[{'id': 'c1', 'path': 'T1.rows[0].delta_r', 'sign': 'am'},
+                        {'id': 'c2', 'path': 'T1.rows[0].top_down_driver'},
+                        {'id': 'c3', 'path': 'T1.rows[0].top_up_driver'},
+                        {'id': 'c4', 'path': 'T1.rows[0].contrib_u', 'sign': 'duong'}])
+    t = turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), sai, sai))
+    assert t.status == 'answer_validation_failed' and any('là số của U' in e for e in t.validation_errors), \
+        t.validation_errors
+    assert t.results['T1'].rows[0]['top_up_driver'] == 'p'
+    dung = final(answer='R giảm {c1}; phần kéo xuống chủ yếu là {c2}, góp {c3}. Giá mỗi món góp {c4}.',
+                 claims=[{'id': 'c1', 'path': 'T1.rows[0].delta_r', 'sign': 'am'},
+                         {'id': 'c2', 'path': 'T1.rows[0].top_down_driver'},
+                         {'id': 'c3', 'path': 'T1.rows[0].contrib_n', 'sign': 'am'},
+                         {'id': 'c4', 'path': 'T1.rows[0].contrib_p', 'sign': 'duong'}])
+    t = turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), dung))
+    assert t.status == 'ok', t.validation_errors
+
+
+def test_live_xep_hang_goi_ten_n_u_p_duoc_app_doi_chieu():
+    # E04b live: "R giảm chủ yếu ở số đơn (N)" viết thẳng; app tự đối chiếu top_down_driver = n
+    dung = final(answer='R năm 2019 giảm chủ yếu ở số đơn (N), phần góp {c1}.',
+                 claims=[{'id': 'c1', 'path': 'T1.rows[0].contrib_n', 'sign': 'am'}])
+    assert turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), dung)).status == 'ok'
+    sai = final(answer='R năm 2019 giảm chủ yếu ở giá mỗi món (P), phần góp {c1}.',
+                claims=[{'id': 'c1', 'path': 'T1.rows[0].contrib_p', 'sign': 'duong'}])
+    t = turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), sai, sai))
+    assert t.status == 'answer_validation_failed'
+    vo = final(answer='Trong đó, số đơn (N) góp {c1} và là thành phần kéo giảm nhiều nhất.',
+               claims=[{'id': 'c1', 'path': 'T1.rows[0].contrib_n', 'sign': 'am'}])
+    assert turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), vo)).status == 'ok'
+    assert not evidence.check_digits('Dữ liệu từ 2012-07-04 đến 2022-12-31.', set())
+
+
+def test_live_tu_so_sanh_hai_so_thi_chan():
+    # E12 live: hỏi tháng 8, model lấy R cả năm rồi tự so "2019 cao hơn 2020" để kết luận
+    sai = final('unsupported', 'Chưa có số theo tháng. R 2019 là {c1}, cao hơn R 2020 là {c2}.',
+                claims=[{'id': 'c1', 'path': 'T1.rows[0].r'}, {'id': 'c2', 'path': 'T2.rows[0].r'}])
+    t = turn(FakeProvider(call('get_revenue_summary', metric='R', year=2019),
+                          call('get_revenue_summary', metric='R', year=2020), sai, sai),
+             'Tháng 8 năm lẻ có luôn thấp hơn năm chẵn không?')
+    assert t.status == 'answer_validation_failed' and any('so sánh' in e for e in t.validation_errors)
+    dung = final(answer='R năm 2019 thấp hơn năm 2018, giảm {c1}.',
+                 claims=[{'id': 'c1', 'path': 'T1.rows[0].delta_r', 'sign': 'am'}])
+    assert turn(FakeProvider(call('get_revenue_drivers', metric='R', year=2019), dung)).status == 'ok'
 
 
 # --- evidence.validate trên kết quả dựng tay ---
