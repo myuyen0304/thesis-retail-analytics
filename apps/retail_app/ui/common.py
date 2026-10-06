@@ -6,11 +6,11 @@ import pandas as pd
 import streamlit as st
 
 from dwh import queries
-from dwh.connection import BACKENDS, default_backend, describe
+from dwh.connection import default_backend, describe, enabled_backends
 from ui.fmt import num, pct, ty
 
 BACKEND_LABEL = {'postgres': 'PostgreSQL (Docker)', 'duckdb': 'DuckDB (file, dự phòng)',
-                 'databricks': 'Databricks (cloud, lab)'}
+                 'databricks': 'Databricks (cloud, production)'}
 LOCAL_TZ = ZoneInfo('Asia/Ho_Chi_Minh')
 
 
@@ -24,7 +24,7 @@ def backend() -> str:
 def sidebar() -> None:
     backend()
     st.session_state._reads = {}          # bảng đã đọc trong lượt chạy này (report_reads liệt kê lại)
-    st.sidebar.radio('Nguồn dữ liệu', BACKENDS, key='backend', format_func=BACKEND_LABEL.get)
+    st.sidebar.radio('Nguồn dữ liệu', enabled_backends(), key='backend', format_func=BACKEND_LABEL.get)
     if st.sidebar.button('Đọc lại dữ liệu'):
         st.cache_data.clear()
         st.session_state.reloaded = True   # report_reads sẽ báo thành công sau khi trang đọc xong

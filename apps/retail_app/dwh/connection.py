@@ -52,7 +52,8 @@ def describe(backend: str) -> str:
                 f"/{os.environ.get('PG_DATABASE', 'retail')}")
     if backend == 'databricks':
         c = databricks_config()
-        return f"Databricks catalog {c.get('RETAIL_DATABRICKS_CATALOG', 'retail_lab')} (profile {c.get('DATABRICKS_CONFIG_PROFILE', '?')})"
+        who = f"profile {c['DATABRICKS_CONFIG_PROFILE']}" if c.get('DATABRICKS_CONFIG_PROFILE') else 'SP của app'
+        return f"Databricks catalog {c.get('RETAIL_DATABRICKS_CATALOG', 'retail_lab')} ({who})"
     p = duckdb_path()
     try:
         p = p.relative_to(ROOT)
@@ -61,10 +62,22 @@ def describe(backend: str) -> str:
     return f'DuckDB {p.as_posix()}'
 
 
+def enabled_backends() -> tuple[str, ...]:
+    """Backend hiện ở thanh bên. RETAIL_BACKENDS (vd. `databricks`) giới hạn danh sách: app deploy trên Databricks Apps
+    không có Postgres Docker hay file DuckDB."""
+    raw = os.environ.get('RETAIL_BACKENDS')
+    if not raw:
+        return BACKENDS
+    out = tuple(b.strip().lower() for b in raw.split(',') if b.strip())
+    if not out or set(out) - set(BACKENDS):
+        raise ValueError(f'RETAIL_BACKENDS chỉ nhận {BACKENDS}, nhận được {raw!r}')
+    return out
+
+
 def default_backend() -> str:
     b = os.environ.get('RETAIL_BACKEND', 'postgres').lower()
-    if b not in BACKENDS:
-        raise ValueError(f'RETAIL_BACKEND phải là một trong {BACKENDS}, nhận được {b!r}')
+    if b not in enabled_backends():
+        raise ValueError(f'RETAIL_BACKEND phải là một trong {enabled_backends()}, nhận được {b!r}')
     return b
 
 
@@ -97,16 +110,19 @@ _databricks_auth = None   # Config của databricks-sdk, giữ lại giữa các
 
 
 def _fetch_databricks(sql: str):
-    # Đăng nhập bằng profile OAuth của Databricks CLI (`databricks auth login --profile retail-dev`), không dùng PAT.
+    # Máy local: profile OAuth của Databricks CLI (`databricks auth login --profile retail-dev`), không dùng PAT.
+    # Trên Databricks Apps: không có profile; nền tảng đặt DATABRICKS_HOST/CLIENT_ID/CLIENT_SECRET của SP của app
+    # → Config() mặc định. Chat AI KHÔNG đi đường này (dwh/guarded.py dùng SP chỉ-đọc riêng).
     # Catalog mặc định của phiên = retail_lab nên câu `reporting.rpt_*` dùng y như Postgres/DuckDB.
     global _databricks_auth
     from databricks import sql as dbsql
     from databricks.sdk.core import Config
     c = databricks_config()
-    if not (c.get('DATABRICKS_CONFIG_PROFILE') and c.get('DATABRICKS_WAREHOUSE_ID')):
+    profile = c.get('DATABRICKS_CONFIG_PROFILE')
+    if not (c.get('DATABRICKS_WAREHOUSE_ID') and (profile or c.get('DATABRICKS_CLIENT_ID'))):
         raise RuntimeError('Thiếu DATABRICKS_CONFIG_PROFILE / DATABRICKS_WAREHOUSE_ID trong .env.databricks.local')
-    if _databricks_auth is None or _databricks_auth.profile != c['DATABRICKS_CONFIG_PROFILE']:
-        _databricks_auth = Config(profile=c['DATABRICKS_CONFIG_PROFILE'])
+    if _databricks_auth is None or _databricks_auth.profile != profile:
+        _databricks_auth = Config(profile=profile) if profile else Config()
     token = _databricks_auth.authenticate()['Authorization'].removeprefix('Bearer ')
     with dbsql.connect(server_hostname=_databricks_auth.host.removeprefix('https://').rstrip('/'),
                        http_path=f"/sql/1.0/warehouses/{c['DATABRICKS_WAREHOUSE_ID']}", access_token=token,

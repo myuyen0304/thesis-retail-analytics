@@ -1,0 +1,33 @@
+# Databricks Apps: app phân tích + chat AI (production, PM chốt 2026-10-05). Gói deploy do
+# scripts/databricks/build_app_bundle.py dựng ở build/databricks_app/ (giữ cấu trúc repo: apps/retail_app + file SQL
+# định nghĩa mà chat ghi phiên bản). Chỉ đọc Databricks; Postgres/DuckDB không có trên app.
+command:
+  - streamlit
+  - run
+  - apps/retail_app/app.py
+  - --server.port
+  - "${DATABRICKS_APP_PORT:-8000}"
+  - --server.address
+  - "0.0.0.0"
+env:
+  # Reverse proxy của Databricks Apps khác origin → phải tắt CORS/XSRF của Streamlit (tài liệu Databricks Apps)
+  - name: STREAMLIT_SERVER_ENABLE_CORS
+    value: "false"
+  - name: STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION
+    value: "false"
+  - name: RETAIL_BACKEND
+    value: databricks
+  - name: RETAIL_BACKENDS
+    value: databricks
+  - name: RETAIL_DATABRICKS_CATALOG
+    value: retail_lab
+  # Các trang đọc bằng SP của app (nền tảng tự đặt DATABRICKS_HOST/CLIENT_ID/CLIENT_SECRET).
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  # Chat AI: khóa DeepSeek + SP chỉ-đọc riêng (dwh/guarded.py), lấy từ secret scope retail-ai qua resource của app.
+  - name: RETAIL_AI_API_KEY
+    valueFrom: deepseek-api-key
+  - name: RETAIL_AI_DBX_CLIENT_ID
+    valueFrom: ai-sp-client-id
+  - name: RETAIL_AI_DBX_CLIENT_SECRET
+    valueFrom: ai-sp-client-secret

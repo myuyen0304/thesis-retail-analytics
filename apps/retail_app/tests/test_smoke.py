@@ -36,7 +36,22 @@ def test_trang_chay_khong_loi(monkeypatch, backend, page):
 
 def test_thanh_ben_co_chon_backend():
     at = AppTest.from_file(str(APP), default_timeout=30).run()
-    assert at.sidebar.radio[0].options == ['PostgreSQL (Docker)', 'DuckDB (file, dự phòng)', 'Databricks (cloud, lab)']
+    assert at.sidebar.radio[0].options == ['PostgreSQL (Docker)', 'DuckDB (file, dự phòng)', 'Databricks (cloud, production)']
+
+
+def test_retail_backends_gioi_han_thanh_ben(monkeypatch):
+    # App deploy trên Databricks Apps chỉ bật databricks (deploy/databricks_app/app.yaml); ở đây thử với duckdb
+    from dwh import connection
+    monkeypatch.setenv('RETAIL_BACKENDS', 'duckdb')
+    monkeypatch.setenv('RETAIL_BACKEND', 'duckdb')
+    at = AppTest.from_file(str(APP), default_timeout=30).run()
+    assert not at.exception and at.sidebar.radio[0].options == ['DuckDB (file, dự phòng)']
+    monkeypatch.setenv('RETAIL_BACKEND', 'postgres')           # backend mặc định phải nằm trong danh sách bật
+    with pytest.raises(ValueError):
+        connection.default_backend()
+    monkeypatch.setenv('RETAIL_BACKENDS', 'duckdb,snowflake')
+    with pytest.raises(ValueError):
+        connection.enabled_backends()
 
 
 def test_tong_quan_doc_du_11_nam():
