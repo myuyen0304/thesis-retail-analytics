@@ -8,7 +8,9 @@
    Databricks (2026-10-06): cấp cho service principal chỉ-đọc của AI (application id trong env RETAIL_AI_DBX_PRINCIPAL,
    scripts/databricks/run_dbt.py tự lấy từ .env.ai.local; không ghi cứng vì khác nhau theo workspace):
    USE CATALOG, USE SCHEMA reporting và SELECT đúng danh sách var. Hook Databricks chỉ chạy một câu, nên từng GRANT
-   chạy qua run_query; chưa đặt principal thì bỏ qua. Guard của app (dwh/guarded.py) vẫn kiểm quyền thật khi đọc. #}
+   chạy qua run_query; chưa đặt principal thì bỏ qua. Guard của app (dwh/guarded.py) vẫn kiểm quyền thật khi đọc.
+   Cùng cách đó cấp cho SP của app Databricks Apps (env RETAIL_APP_DBX_PRINCIPAL) đúng var app_read_relations
+   (= dwh.queries.SOURCE, các bảng mà trang đọc; test_ai_tools.py kiểm). SP của app không dùng cho chat AI. #}
 {% macro ai_readonly_grants() -%}
 {%- if target.type == 'postgres' -%}
 do $$
@@ -30,14 +32,27 @@ begin
     end loop;
 end $$
 {%- elif target.type == 'databricks' -%}
-{%- set principal = env_var('RETAIL_AI_DBX_PRINCIPAL', '') -%}
-{%- if execute and principal -%}
+{%- if execute -%}
+    {%- do _dbx_grant_read(env_var('RETAIL_AI_DBX_PRINCIPAL', ''), var('ai_readonly_relations'), 'RETAIL_AI_DBX_PRINCIPAL') -%}
+    {%- do _dbx_grant_read(env_var('RETAIL_APP_DBX_PRINCIPAL', ''), var('app_read_relations'), 'RETAIL_APP_DBX_PRINCIPAL') -%}
+{%- endif -%}
+select 1
+{%- else -%}
+select 1
+{%- endif -%}
+{%- endmacro %}
+
+
+{# Databricks: USE CATALOG + USE SCHEMA + SELECT TỪNG bảng trong danh sách cho một service principal (application id).
+   Không cấp SELECT cả schema/catalog (thừa kế xuống mọi bảng). Principal rỗng thì bỏ qua; bảng chưa có thì bỏ qua. #}
+{% macro _dbx_grant_read(principal, relations, env_name) -%}
+{%- if principal -%}
     {%- if not modules.re.fullmatch('[0-9a-fA-F-]{36}', principal) -%}
-        {{ exceptions.raise_compiler_error('RETAIL_AI_DBX_PRINCIPAL phải là application id (UUID) của service principal') }}
+        {{ exceptions.raise_compiler_error(env_name ~ ' phải là application id (UUID) của service principal') }}
     {%- endif -%}
     {%- do run_query('grant use catalog on catalog `' ~ target.database ~ '` to `' ~ principal ~ '`') -%}
     {%- set schemas = [] -%}
-    {%- for r in var('ai_readonly_relations') if r.split('.')[0] not in schemas -%}
+    {%- for r in relations if r.split('.')[0] not in schemas -%}
         {%- do schemas.append(r.split('.')[0]) -%}
     {%- endfor -%}
     {%- for schema in schemas -%}
@@ -47,16 +62,12 @@ end $$
             {%- do run_query('grant use schema on schema `' ~ target.database ~ '`.`' ~ schema ~ '` to `' ~ principal ~ '`') -%}
         {%- endif -%}
     {%- endfor -%}
-    {%- for r in var('ai_readonly_relations') -%}
+    {%- for r in relations -%}
         {%- set parts = r.split('.') -%}
         {%- if adapter.get_relation(database=target.database, schema=parts[0], identifier=parts[1]) is not none -%}
             {%- do run_query('grant select on table `' ~ target.database ~ '`.`' ~ parts[0] ~ '`.`' ~ parts[1]
                              ~ '` to `' ~ principal ~ '`') -%}
         {%- endif -%}
     {%- endfor -%}
-{%- endif -%}
-select 1
-{%- else -%}
-select 1
 {%- endif -%}
 {%- endmacro %}

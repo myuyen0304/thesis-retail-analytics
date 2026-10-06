@@ -51,6 +51,9 @@ env = {**os.environ, 'PYTHONUTF8': '1',
 principal = os.environ.get('RETAIL_AI_DBX_PRINCIPAL') or local_config('.env.ai.local').get('RETAIL_AI_DBX_CLIENT_ID')
 if principal:
     env['RETAIL_AI_DBX_PRINCIPAL'] = principal
+# SP của app Databricks Apps (đọc 21 bảng của các trang): application id ghi ở .env.databricks.local
+if c.get('RETAIL_APP_DBX_PRINCIPAL'):
+    env['RETAIL_APP_DBX_PRINCIPAL'] = c['RETAIL_APP_DBX_PRINCIPAL']
 dbt = os.path.join('.venv-databricks', 'Scripts', 'dbt.exe')
 sys.exit(subprocess.call([dbt, *dbt_args, '--project-dir', 'retail_dbt', '--profiles-dir', 'retail_dbt',
                           '--target', 'databricks', '--target-path', 'target_databricks'], env=env))

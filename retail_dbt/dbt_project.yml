@@ -35,6 +35,29 @@ vars:
     - reporting.rpt_revenue_total
     - reporting.rpt_revenue_turning_point
     - reporting.rpt_revenue_yearly
+  # Bảng các trang app đọc (= apps/retail_app/dwh/queries.SOURCE): hook cấp SELECT cho SP của app trên Databricks Apps
+  app_read_relations:
+    - reporting.driver_rule
+    - reporting.ps2_direction_rule
+    - reporting.rpt_august_parity
+    - reporting.rpt_build_info
+    - reporting.rpt_calendar_phase
+    - reporting.rpt_calendar_phase_month
+    - reporting.rpt_calendar_stability
+    - reporting.rpt_driver_bridge
+    - reporting.rpt_driver_period
+    - reporting.rpt_health_ingest
+    - reporting.rpt_health_run
+    - reporting.rpt_health_summary
+    - reporting.rpt_health_test
+    - reporting.rpt_revenue_bridge
+    - reporting.rpt_revenue_direction_change
+    - reporting.rpt_revenue_monthly
+    - reporting.rpt_revenue_phase
+    - reporting.rpt_revenue_segment_yearly
+    - reporting.rpt_revenue_total
+    - reporting.rpt_revenue_turning_point
+    - reporting.rpt_revenue_yearly
 
 models:
   retail_dbt:
