@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "skills": [
+    "retail-metric-design",
+    "retail-data-analysis",
+    "retail-analytics-engineering",
+    "retail-bi-product",
+    "retail-ai-explain",
+    "retail-platform-validation"
+  ],
+  "files": {
+    "retail-ai-explain/SKILL.md": "c542243e72f0ff143a28c1797298685c781d7f15d0afd23f846656aa74c523cb",
+    "retail-ai-explain/references/chat_evaluation.md": "5ec2b72fabfdcd4ed656dcc837f931d4bd0171bb0c3a4d055d6c9ce85868f657",
+    "retail-analytics-engineering/SKILL.md": "d3a8c74ae27bb272a881296c888f6c8b9e9a12a4ca80788b01a9f4103e68900d",
+    "retail-analytics-engineering/references/quality.md": "ef95744126158a8369ba25cf8c8b4b31c8803ece6a9421fb6dc33221d8fd0fef",
+    "retail-bi-product/SKILL.md": "0f495be4b38539e4852c9fc14a90060a3f395ade0a69ff5a467dde5d1bb783ff",
+    "retail-bi-product/references/acceptance.md": "87c4637eb360d8992fa4e0000d1cce3ca5eb47b28687aaf9415abfa44b7d41e6",
+    "retail-data-analysis/SKILL.md": "d6b4c3f821209869d32365a5e8ba7a906420b47b81e2e3cf66a663d1b0778250",
+    "retail-data-analysis/references/evidence.md": "4ea0d893058908fb62ca059b2f2fb670758590086356718ad4f7097bf4168f1f",
+    "retail-metric-design/SKILL.md": "ff7fbc59ab0a4d258721b37dfa82ac5834aacfc620a9eff069dc3e1d2b12491b",
+    "retail-metric-design/assets/metric_contract.md": "2ff6bf86147c2b9da62bfba4f9436bbceaff3212afc8024baf694a840c6b71c2",
+    "retail-platform-validation/SKILL.md": "157ddf15cadbed59674a6c0937129d4d02f42a32a2ce1b65a96324fbd2c99cff",
+    "retail-platform-validation/references/databricks-lab.md": "8f33d5a722e62de8c9529170da43ddeb4dc1fc047d6c7be883863cd7ea44616f",
+    "retail-platform-validation/references/de-extension.md": "e556a8026a0f950981ec5825f55c70a3a27672e196f339ba5d65bc5dc47d3beb",
+    "retail-platform-validation/references/snowflake-production.md": "ad4bd106111634e688e6614457c20610bae27472ccc29073736ce1d6a78fa6a6"
+  }
+}

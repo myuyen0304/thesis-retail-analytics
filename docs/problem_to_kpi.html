@@ -1,0 +1,897 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
+<title>Từ Problem đến KPI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --paper:#F2F4F6; --surface:#FFFFFF; --surface-2:#E9EDF0;
+  --ink:#151E27; --ink-2:#3D4C5A; --ink-3:#6B7B8A;
+  --rule:#D3DAE0; --rule-soft:#E3E8EC;
+  --teal:#0E5A57; --teal-soft:#DCEBE9;
+  --ochre:#A8571A; --ochre-soft:#F6E7D8;
+  --good:#2C6E49; --warn:#976A0B; --bad:#9B2C2C;
+  --good-bg:#E2EFE7; --warn-bg:#F7EDD5; --bad-bg:#F6E1E1;
+  --shadow:0 1px 2px rgba(21,30,39,.05), 0 8px 24px -16px rgba(21,30,39,.22);
+  --f-display:"Lora", Georgia, "Times New Roman", serif;
+  --f-body:"Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F151B; --surface:#161E26; --surface-2:#1E2831;
+    --ink:#E4EAEF; --ink-2:#B4C0CB; --ink-3:#8494A2;
+    --rule:#2C3841; --rule-soft:#232E37;
+    --teal:#5CB5AD; --teal-soft:#16302F;
+    --ochre:#D9954E; --ochre-soft:#332515;
+    --good:#7BC79A; --warn:#D9B455; --bad:#E08585;
+    --good-bg:#1A2C22; --warn-bg:#2E2718; --bad-bg:#2E1D1D;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 10px 28px -18px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F151B; --surface:#161E26; --surface-2:#1E2831;
+  --ink:#E4EAEF; --ink-2:#B4C0CB; --ink-3:#8494A2;
+  --rule:#2C3841; --rule-soft:#232E37;
+  --teal:#5CB5AD; --teal-soft:#16302F;
+  --ochre:#D9954E; --ochre-soft:#332515;
+  --good:#7BC79A; --warn:#D9B455; --bad:#E08585;
+  --good-bg:#1A2C22; --warn-bg:#2E2718; --bad-bg:#2E1D1D;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 10px 28px -18px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px 96px}
+.mast{border-bottom:1px solid var(--rule);padding:52px 0 30px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:end}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);font-weight:500;margin:0 0 14px}
+h1{font-family:var(--f-display);font-weight:600;font-size:clamp(34px,5vw,52px);line-height:1.08;letter-spacing:-.015em;margin:0;text-wrap:balance}
+.dek{color:var(--ink-2);font-size:16px;max-width:64ch;margin:16px 0 0}
+.mast-meta{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);line-height:1.9;text-align:right;white-space:nowrap}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+nav.toc{position:sticky;top:0;z-index:30;background:color-mix(in srgb, var(--paper) 92%, transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--rule-soft);margin-bottom:8px}
+.toc-inner{max-width:1180px;margin:0 auto;padding:10px 28px;display:flex;gap:6px;overflow-x:auto}
+.toc a{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);text-decoration:none;padding:5px 10px;border-radius:3px;white-space:nowrap}
+.toc a:hover{color:var(--teal);background:var(--teal-soft)}
+.toc a:focus-visible{outline:2px solid var(--teal);outline-offset:1px}
+section{padding-top:64px;scroll-margin-top:56px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.sec-num{font-family:var(--f-mono);font-size:12px;font-weight:500;color:var(--teal);letter-spacing:.08em}
+h2{font-family:var(--f-display);font-weight:600;font-size:clamp(24px,3vw,31px);line-height:1.2;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sec-sub{color:var(--ink-2);max-width:70ch;margin:0 0 30px}
+h3{font-family:var(--f-display);font-weight:600;font-size:19px;margin:36px 0 10px}
+p{margin:0 0 12px;max-width:74ch}
+.note{background:var(--ochre-soft);border-left:3px solid var(--ochre);padding:14px 18px;border-radius:0 4px 4px 0;font-size:14.5px;color:var(--ink-2);margin:0 0 8px;max-width:82ch}
+.note.ok{background:var(--good-bg);border-left-color:var(--good)}
+.note b{color:var(--ink)}
+code,.m{font-family:var(--f-mono);font-size:.88em;color:var(--ink)}
+.m{background:var(--surface-2);padding:1px 5px;border-radius:3px}
+/* status badges */
+.st{font-family:var(--f-mono);font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:3px;white-space:nowrap;display:inline-block;font-weight:500}
+.st.ok{background:var(--good-bg);color:var(--good)}
+.st.fix{background:var(--bad-bg);color:var(--bad)}
+.st.new{background:var(--teal-soft);color:var(--teal)}
+.st.todo{background:var(--surface-2);color:var(--ink-3)}
+/* ladder */
+.ladder{display:flex;flex-direction:column;margin:8px 0 4px}
+.rung{display:grid;grid-template-columns:78px minmax(0,1fr);gap:20px;padding:16px 0;border-top:1px solid var(--rule-soft)}
+.rung:first-child{border-top:1px solid var(--rule)}
+.rung-n{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;color:var(--teal);padding-top:3px;font-weight:500}
+.rung-t{font-weight:600;font-size:15.5px;margin:0 0 3px}
+.rung-d{color:var(--ink-2);font-size:14.5px;margin:0;max-width:76ch}
+.rung-gate{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);margin-top:6px;display:block}
+.rung-gate b{color:var(--ochre);font-weight:500}
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--rule);border-radius:5px;background:var(--surface);box-shadow:var(--shadow);margin:14px 0 6px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:640px}
+th{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:11px 14px;border-bottom:1px solid var(--rule);background:var(--surface-2);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top;color:var(--ink-2)}
+tbody tr:last-child td{border-bottom:0}
+td:first-child{color:var(--ink);font-weight:500}
+td.f{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);white-space:pre-wrap}
+.num{font-variant-numeric:tabular-nums}
+td.pos{color:var(--good);font-variant-numeric:tabular-nums}
+td.neg{color:var(--bad);font-variant-numeric:tabular-nums}
+.strike{text-decoration:line-through;color:var(--ink-3)}
+/* problem cards */
+.plist{display:flex;flex-direction:column;gap:18px;margin-top:10px}
+.root{background:var(--surface);border:1px solid var(--teal);border-left-width:4px;border-radius:6px;padding:22px 24px;box-shadow:var(--shadow);margin-top:10px}
+.root-q{font-family:var(--f-display);font-size:20.5px;font-weight:600;line-height:1.45;margin:0 0 12px;max-width:74ch}
+.tree{display:flex;flex-direction:column;gap:16px;margin:18px 0 0;padding-left:28px;border-left:2px solid var(--rule)}
+.tree>.pcard{position:relative}
+.tree>.pcard::before{content:"";position:absolute;left:-29px;top:32px;width:22px;height:2px;background:var(--rule)}
+.br-from{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);white-space:nowrap}
+.pcard{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:22px 24px;box-shadow:var(--shadow)}
+.pcard.lead{border-color:var(--teal);border-width:1px 1px 1px 4px}
+.pc-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px}
+.pc-id{font-family:var(--f-mono);font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--teal);background:var(--teal-soft);padding:3px 8px;border-radius:3px}
+.pc-title{font-family:var(--f-display);font-weight:600;font-size:19.5px;margin:0;flex:1 1 240px}
+.pc-pain{font-family:var(--f-mono);font-size:12px;color:var(--ochre);margin:0 0 12px}
+.pc-body{color:var(--ink-2);font-size:14.5px;margin:0 0 14px;max-width:80ch}
+.pc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin-top:14px;padding-top:16px;border-top:1px solid var(--rule-soft)}
+.pc-col h5{font-family:var(--f-mono);font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:0 0 7px}
+.pc-col ul{margin:0;padding-left:16px;font-size:13.5px;color:var(--ink-2);line-height:1.55}
+.pc-col li{margin-bottom:5px}
+.pc-col li::marker{color:var(--teal)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.tag{font-family:var(--f-mono);font-size:10.5px;padding:3px 8px;border-radius:3px;border:1px solid var(--rule);color:var(--ink-3)}
+.tag.hi{background:var(--good-bg);color:var(--good);border-color:transparent}
+.tag.md{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.tag.lo{background:var(--bad-bg);color:var(--bad);border-color:transparent}
+/* hypotheses */
+.hyp{border:1px solid var(--rule);border-radius:5px;background:var(--surface);padding:18px 20px;margin-bottom:12px;box-shadow:var(--shadow)}
+.hyp-h{display:flex;gap:10px;align-items:baseline;margin-bottom:8px;flex-wrap:wrap}
+.hyp-id{font-family:var(--f-mono);font-size:11.5px;font-weight:600;color:var(--ochre);letter-spacing:.06em}
+.hyp-n{font-weight:600;font-size:15.5px}
+.hyp-rows{display:grid;grid-template-columns:96px minmax(0,1fr);gap:4px 14px;font-size:13.5px}
+.hyp-k{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding-top:3px}
+.hyp-v{color:var(--ink-2)}
+.hyp-v.rule{color:var(--ink);border-top:1px dashed var(--rule);padding-top:7px;margin-top:3px}
+.hyp-v.found{color:var(--ink);background:var(--good-bg);border-radius:3px;padding:7px 10px;margin-top:3px}
+.crit{display:inline-block;font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;background:var(--ochre-soft);color:var(--ochre);padding:2px 7px;border-radius:3px;border:1px solid color-mix(in srgb, var(--ochre) 30%, transparent)}
+/* lookup */
+.filters{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:6px 0 14px}
+.fgroup{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.flabel{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-right:3px}
+.chip{font-family:var(--f-mono);font-size:11.5px;padding:5px 11px;border-radius:3px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.chip:hover{border-color:var(--teal);color:var(--teal)}
+.chip[aria-pressed="true"]{background:var(--teal);border-color:var(--teal);color:var(--paper)}
+.chip:focus-visible{outline:2px solid var(--ochre);outline-offset:2px}
+input[type="search"]{font-family:var(--f-body);font-size:13.5px;padding:6px 11px;border:1px solid var(--rule);border-radius:3px;background:var(--surface);color:var(--ink);min-width:200px}
+input[type="search"]:focus-visible{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal)}
+.count{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3)}
+.lay{font-family:var(--f-mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:3px;white-space:nowrap;display:inline-block}
+.lay.measure{background:var(--surface-2);color:var(--ink-3)}
+.lay.metric{background:var(--teal-soft);color:var(--teal)}
+.lay.kpi{background:var(--ochre-soft);color:var(--ochre)}
+.pid{font-family:var(--f-mono);font-size:11px;color:var(--teal);font-weight:500}
+tr.hidden{display:none}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}
+.trap{border-top:1px solid var(--rule-soft);padding:13px 0}
+.trap:first-child{border-top:1px solid var(--rule)}
+.trap-n{font-weight:600;font-size:14.5px;margin:0 0 3px}
+.trap-n span{font-family:var(--f-mono);font-size:11px;color:var(--bad);margin-right:8px}
+.trap-d{font-size:13.5px;color:var(--ink-2);margin:0;max-width:78ch}
+ol.steps{padding-left:20px;max-width:76ch}
+ol.steps li{margin-bottom:9px;color:var(--ink-2)}
+ol.steps li::marker{font-family:var(--f-mono);font-size:12px;color:var(--teal)}
+ol.steps b{color:var(--ink)}
+footer{margin-top:76px;padding-top:22px;border-top:1px solid var(--rule);font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:640px){
+  .mast{grid-template-columns:1fr}.mast-meta{text-align:left}
+  .rung{grid-template-columns:1fr;gap:4px}
+  .hyp-rows{grid-template-columns:1fr;gap:1px 0}.hyp-k{padding-top:8px}
+  .tree{padding-left:0;border-left:0}.tree>.pcard::before{display:none}
+}
+</style>
+
+<nav class="toc"><div class="toc-inner">
+  <a href="#doi-chieu">01 · Đối chiếu dữ liệu</a>
+  <a href="#bac-thang">02 · Bậc thang</a>
+  <a href="#co-so">03 · Cơ sở thiết kế</a>
+  <a href="#bai-toan">04 · Cây bài toán</a>
+  <a href="#p1">05 · Sáu giả thuyết N2</a>
+  <a href="#do-do">06 · Measure → KPI</a>
+  <a href="#tra-cuu">07 · Bảng tra cứu</a>
+  <a href="#bay">08 · Bẫy thiết kế</a>
+  <a href="#tiep">09 · Việc tiếp theo</a>
+</div></nav>
+
+<div class="wrap">
+
+<header class="mast">
+  <div>
+    <p class="eyebrow">Khóa luận · Retail Analytics on Modern Data Stack</p>
+    <h1>Từ Problem đến KPI</h1>
+    <p class="dek">Một bài toán nghiệp vụ gốc rã thành sáu nhánh con, rút từ bộ dữ liệu e-commerce 11 năm, kèm giả thuyết kiểm định được và chuỗi độ đo → chỉ số → KPI. Mọi con số đã đối chiếu lại với dữ liệu gốc và ghi rõ đã kiểm chứng hay chưa.</p>
+  </div>
+  <div class="mast-meta">
+    Dữ liệu <b>15 CSV · 126 MB</b><br>
+    Đơn hàng <b>646.945</b> · dòng <b>714.669</b><br>
+    Khách <b>121.930</b> · SKU <b>2.412</b><br>
+    Bản <b>v3 · 06/09/2026</b>
+  </div>
+</header>
+
+<section id="doi-chieu">
+  <div class="sec-head"><span class="sec-num">01</span><h2>Kết quả đối chiếu dữ liệu gốc</h2></div>
+  <p class="sec-sub">Bản v1 của trang này dựng hoàn toàn từ các con số tài liệu hướng dẫn báo cáo. Sau khi chạy trên dữ liệu thật, ba phát biểu nền tảng hóa ra sai — và một trong số đó tôi đã chép lại mà không kiểm tra. Mục này liệt kê đúng những gì thay đổi.</p>
+
+  <h3>Ba đính chính</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th style="width:180px">Phát biểu</th><th style="width:210px">Tài liệu / bản v1</th><th>Dữ liệu thật</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Biên lợi nhuận gộp</td>
+          <td class="strike">Co từ ~22% xuống ~14% trong 9 năm</td>
+          <td><b>Không suy giảm đơn điệu.</b> Dao động 9,8–16,6% theo chu kỳ năm chẵn/lẻ; 2022 (12,8%) <em>cao hơn</em> 2013 (11,5%). Con số 22% là artefact của năm 2012 chỉ có nửa năm và không chạy chiến dịch nào.</td>
+        </tr>
+        <tr>
+          <td>Độ sâu chiết khấu</td>
+          <td class="strike">Trung bình ~12,1%</td>
+          <td><b>31,6% (trung vị).</b> Chiết khấu được áp <em>hai lớp</em>: một lần vào <span class="m">unit_price</span>, một lần nữa vào <span class="m">discount_amount</span>. Tài liệu chỉ đọc một lớp.</td>
+        </tr>
+        <tr>
+          <td>Nguyên nhân doanh thu giảm</td>
+          <td class="strike">Traffic tăng, engagement không giảm — điều kiện lý tưởng để scale ngân sách</td>
+          <td><b>Ngược lại.</b> Số đơn trên 1.000 phiên rơi từ 11,30 xuống 3,25 (−71%). Traffic tăng 63% nhưng đang bị lãng phí với tốc độ tăng dần.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Cơ chế chiết khấu hai lớp <span class="st new">phát hiện mới</span></h3>
+  <p>Đây là phát hiện làm thay đổi công thức của bốn chỉ số. Với mọi chiến dịch trong <span class="m">promotions.csv</span>:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:200px">Chiến dịch</th><th style="width:110px">discount_value</th><th style="width:140px">unit_price / price</th><th style="width:150px">discount_amount / gross</th><th>Độ sâu thực tế</th></tr></thead>
+    <tbody>
+      <tr><td>Fall Launch</td><td class="num">10%</td><td class="num">0,90</td><td class="num">10,0%</td><td class="num">19,0%</td></tr>
+      <tr><td>Spring Sale</td><td class="num">12%</td><td class="num">0,88</td><td class="num">12,0%</td><td class="num">22,6%</td></tr>
+      <tr><td>Rural Special</td><td class="num">15%</td><td class="num">0,85</td><td class="num">15,0%</td><td class="num">27,8%</td></tr>
+      <tr><td>Mid-Year Sale</td><td class="num">18%</td><td class="num">0,82</td><td class="num">18,0%</td><td class="num">32,8%</td></tr>
+      <tr><td>Year-End Sale</td><td class="num">20%</td><td class="num">0,80</td><td class="num">20,0%</td><td class="num">36,0%</td></tr>
+      <tr><td>Urban Blowout <span class="st fix">fixed</span></td><td class="num">50 (tuyệt đối)</td><td class="num">0,50</td><td class="num">1,26%</td><td class="num">50,6%</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:12px">Công thức sinh dữ liệu: <span class="m">unit_price = price × (1 − d)</span> rồi <span class="m">discount_amount = d × quantity × unit_price</span>, cho độ sâu thực <span class="m">1 − (1−d)²</span>. <strong>Urban Blowout</strong> là loại <span class="m">fixed</span> nên <span class="m">discount_amount</span> chỉ ghi 1,26%, nhưng giá đơn vị bị cắt đôi — đây chính là nguyên nhân COGS/Revenue quý 3 năm lẻ đạt <strong>1,036</strong>. Tài liệu đúng về cơ chế nhưng bằng chứng nằm ở cột khác với cột họ nhìn.</p>
+
+  <h3>Năm định nghĩa doanh thu <span class="st ok">P6 được xác nhận</span></h3>
+  <div class="tw"><table>
+    <thead><tr><th>Cách tính doanh thu 2022</th><th style="width:180px">Giá trị</th><th style="width:150px">Lệch</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m">sales.csv</span> Revenue</td><td class="num">1.169.748.832</td><td class="num">—</td></tr>
+      <tr><td>Σ <span class="m">quantity × unit_price</span>, mọi trạng thái</td><td class="num">1.169.748.832</td><td class="num">0,000000%</td></tr>
+      <tr><td>Trừ chiết khấu (= Σ <span class="m">payment_value</span>)</td><td class="num">1.115.307.000</td><td class="neg">−4,7%</td></tr>
+      <tr><td>Trừ đơn cancelled</td><td class="num">1.061.061.965</td><td class="neg">−9,3%</td></tr>
+      <tr><td>Trừ cả hai</td><td class="num">~1.009.000.000</td><td class="neg">−13,7%</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note" style="margin-top:12px"><b>Hai hệ quả nghiêm trọng.</b> Thứ nhất, <span class="m">sales.csv</span> khớp tới từng đồng với Σ(quantity × unit_price) — nó không phải nguồn độc lập mà là bản roll-up của <span class="m">order_items</span>. Thứ hai, nó <em>bao gồm cả 59.462 đơn đã hủy</em> (9,2%): mục tiêu của bài forecasting đang dự báo cả doanh thu của những đơn không bao giờ phát sinh. Một mình phát hiện này đủ làm một mục trong khóa luận.</p>
+
+  <h3>Biên lợi nhuận theo năm — dao động chẵn/lẻ, không suy giảm</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:150px">Năm</th><th>2012*</th><th>2013</th><th>2014</th><th>2015</th><th>2016</th><th>2017</th><th>2018</th><th>2019</th><th>2020</th><th>2021</th><th>2022</th></tr></thead>
+    <tbody>
+      <tr><td>Margin gross %</td><td class="num">20,8</td><td class="num">11,5</td><td class="num">15,9</td><td class="num">11,9</td><td class="num">15,4</td><td class="num">11,3</td><td class="num">16,6</td><td class="num">11,6</td><td class="num">16,0</td><td class="num">9,8</td><td class="num">12,8</td></tr>
+      <tr><td>Margin net %</td><td class="num">20,8</td><td class="num">6,6</td><td class="num">11,8</td><td class="num">7,1</td><td class="num">11,5</td><td class="num">6,7</td><td class="num">12,9</td><td class="num">7,1</td><td class="num">11,9</td><td class="num">5,1</td><td class="num">8,5</td></tr>
+      <tr><td>% dòng có promo</td><td class="num">0</td><td class="num">46</td><td class="num">37</td><td class="num">46</td><td class="num">35</td><td class="num">44</td><td class="num">34</td><td class="num">45</td><td class="num">37</td><td class="num">45</td><td class="num">37</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:10px;font-size:13.5px;color:var(--ink-3)">*2012 chỉ có từ 04/07 và không có chiến dịch nào. Năm lẻ trung bình 11,2% · năm chẵn 15,3% — biến động bám sát cường độ khuyến mãi. CAGR doanh thu 2013→2022 = <strong>−3,80%</strong>, đúng như tài liệu.</p>
+
+  <h3>Những gì kiểm chứng lại thì đúng</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:280px">Phát biểu</th><th style="width:130px">Kết quả</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td>CAGR doanh thu âm ~3,8%/năm</td><td><span class="st ok">đúng</span></td><td>−3,80% chính xác (2013→2022, gross)</td></tr>
+      <tr><td>~38% đơn có khuyến mãi</td><td><span class="st ok">đúng</span></td><td>38,36% ở cấp đơn hàng</td></tr>
+      <tr><td>Q3 năm lẻ có COGS &gt; Revenue</td><td><span class="st ok">đúng</span></td><td>COGS/Rev = 1,036 (năm chẵn 0,846)</td></tr>
+      <tr><td>27,7% khách chưa từng mua</td><td><span class="st ok">đúng</span></td><td>88.123 / 121.930 từng mua</td></tr>
+      <tr><td>Stockout 67% snapshot, fill rate 0,96</td><td><span class="st ok">đúng, nhưng…</span></td><td>Cùng grain, cùng một dòng — lỗi nhị phân hóa, xem N4</td></tr>
+      <tr><td>AOV đơn promo thấp hơn ở mọi danh mục</td><td><span class="st fix">đúng nhưng gây hiểu sai</span></td><td>94% là hiệu ứng giá, không phải hành vi — xem N2</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="bac-thang">
+  <div class="sec-head"><span class="sec-num">02</span><h2>Bậc thang bảy tầng</h2></div>
+  <p class="sec-sub">Phần khó nhất của phân tích dữ liệu không phải là code, mà là đi từ một triệu chứng kinh doanh xuống tới một con số có người chịu trách nhiệm. Bảy tầng đi một chiều: mỗi tầng chỉ hợp lệ khi tầng trên đã qua cổng kiểm tra.</p>
+  <div class="ladder">
+    <div class="rung"><div class="rung-n">TẦNG 1</div><div>
+      <p class="rung-t">Triệu chứng</p>
+      <p class="rung-d">Một quan sát có số, chưa có diễn giải. Chưa phải vấn đề nghiên cứu — mới là chỗ đau.</p>
+      <span class="rung-gate"><b>Cổng:</b> có con số, có mốc thời gian, có nguồn bảng — và đã tự tính lại, không chép.</span></div></div>
+    <div class="rung"><div class="rung-n">TẦNG 2</div><div>
+      <p class="rung-t">Problem statement</p>
+      <p class="rung-d">Không mô tả triệu chứng mà nêu <em>khoảng trống quyết định</em>: doanh nghiệp phải quyết định gì mà không có căn cứ, và giá của quyết định sai. Công thức: <span class="m">Bối cảnh → Quan sát mâu thuẫn → Quyết định bị kẹt → Khoảng trống tri thức → Hệ quả</span>.</p>
+      <span class="rung-gate"><b>Cổng:</b> nếu một câu SQL trả lời được thì đó là câu hỏi, không phải problem.</span></div></div>
+    <div class="rung"><div class="rung-n">TẦNG 3</div><div>
+      <p class="rung-t">Research questions</p>
+      <p class="rung-d">Bẻ problem thành chuỗi leo bốn cấp: Descriptive → Diagnostic → Predictive → Prescriptive. Mỗi cấp dùng kết quả cấp trước làm đầu vào.</p>
+      <span class="rung-gate"><b>Cổng:</b> mỗi RQ chỉ ra được nó cần bảng nào, grain nào.</span></div></div>
+    <div class="rung"><div class="rung-n">TẦNG 4</div><div>
+      <p class="rung-t">Hypotheses</p>
+      <p class="rung-d">Năm phần bắt buộc: <span class="m">H₀</span> · <span class="m">H₁ có hướng</span> · <span class="m">phép kiểm định</span> · <span class="m">dữ liệu &amp; grain</span> · <span class="m">quy tắc quyết định</span>. Thiếu quy tắc quyết định thì đó là linh cảm.</p>
+      <span class="rung-gate"><b>Cổng:</b> phải tồn tại một kết quả dữ liệu khiến bạn phải bỏ giả thuyết.</span></div></div>
+    <div class="rung"><div class="rung-n">TẦNG 5</div><div>
+      <p class="rung-t">Measures — độ đo</p>
+      <p class="rung-d">Sự kiện thô, cộng được, sống ở đúng một grain. Không mẫu số, không cửa sổ, không phán xét tốt xấu.</p>
+      <span class="rung-gate"><b>Cổng:</b> khai báo được grain và tính cộng — và đã xác minh cột đó thực sự chứa cái mà tên nó nói.</span></div></div>
+    <div class="rung"><div class="rung-n">TẦNG 6</div><div>
+      <p class="rung-t">Metrics — chỉ số</p>
+      <p class="rung-d">Measure + logic nghiệp vụ + ngữ cảnh. Tầng bắt đầu trả lời “tốt hay xấu”. Metric không gắn RQ là metric mồ côi, xóa đi.</p>
+      <span class="rung-gate"><b>Cổng:</b> định nghĩa chỉ có một cách hiểu; hai người tính ra cùng một số.</span></div></div>
+    <div class="rung"><div class="rung-n">TẦNG 7</div><div>
+      <p class="rung-t">KPI</p>
+      <p class="rung-d">Metric + cam kết: mục tiêu, ngưỡng đỏ/vàng/xanh, người sở hữu, nhịp review, hành động bắt buộc khi vi phạm. Giữ 5–9 KPI.</p>
+      <span class="rung-gate"><b>Cổng:</b> ngưỡng phải suy từ dữ liệu hoặc từ cấu trúc chi phí — không được đặt bừa. Mỗi KPI tăng trưởng kèm một guardrail.</span></div></div>
+  </div>
+
+  <h3>Phân biệt ba tầng cuối — câu hay bị hỏi khi phỏng vấn</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Tiêu chí</th><th>Measure</th><th>Metric</th><th>KPI</th></tr></thead>
+    <tbody>
+      <tr><td>Bản chất</td><td>Sự kiện được đếm</td><td>Measure + logic nghiệp vụ</td><td>Metric + cam kết quản trị</td></tr>
+      <tr><td>Trả lời câu</td><td>“Bao nhiêu?”</td><td>“Tốt hay xấu?”</td><td>“Có đạt không, ai xử lý?”</td></tr>
+      <tr><td>Ngữ cảnh</td><td>Không có</td><td>Mẫu số · cửa sổ · chiều</td><td>Target · ngưỡng · owner · nhịp</td></tr>
+      <tr><td>Tính cộng</td><td>Additive</td><td>Thường non-additive</td><td>Non-additive</td></tr>
+      <tr><td>Nơi sống</td><td>Fact table / staging</td><td>Semantic layer</td><td>Scorecard · alert · OKR</td></tr>
+      <tr><td>Ví dụ đã kiểm chứng</td><td class="f">discount_amount</td><td class="f">Độ sâu thực tế =
+1 − net / list = 31,6%</td><td class="f">Below-Cost Order Rate
+đỏ &gt; 65,3% (p90 tháng)</td></tr>
+      <tr><td>Số lượng hợp lý</td><td class="num">Hàng trăm</td><td class="num">30–60</td><td class="num">5–9</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note"><b>Quy tắc một chiều.</b> Mọi KPI dựng từ metric, mọi metric dựng từ measure. Bắt đầu bằng “team muốn KPI gì” là con đường ngắn nhất tới một dashboard đẹp mà không ai dùng.</p>
+</section>
+
+<section id="co-so">
+  <div class="sec-head"><span class="sec-num">03</span><h2>Cơ sở thiết kế</h2></div>
+  <p class="sec-sub">Bộ chỉ số trong trang này đến từ bốn nguồn có độ tin cậy rất khác nhau. Biết mỗi con số thuộc nguồn nào là thứ bảo vệ bạn khi hội đồng hỏi “dựa vào đâu”.</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:56px">Nguồn</th><th style="width:190px">Loại</th><th>Nội dung &amp; mức tin cậy</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Tính lại từ dữ liệu gốc</td><td><span class="st ok">cao nhất</span> Mọi con số có nhãn “đã kiểm chứng” trong trang này. Đã chạy trên 714.669 dòng <span class="m">order_items</span>, đối chiếu chéo với <span class="m">payments</span> và <span class="m">sales.csv</span>. Có thể tái lập bằng script.</td></tr>
+      <tr><td>2</td><td>Cột có sẵn trong schema</td><td><span class="st ok">cao</span> Chỉ số suy trực tiếp từ cột thật: <span class="m">refund_amount</span>, <span class="m">quantity</span>, <span class="m">acquisition_channel</span>, <span class="m">stockout_days</span>. Tính được ngay, không cần mô hình.</td></tr>
+      <tr><td>3</td><td>Lý thuyết chuẩn</td><td><span class="st todo">trung bình</span> Khung phân loại và phương pháp mượn từ tài liệu học thuật — xem bảng dưới. Tin cậy về mặt phương pháp, nhưng ngưỡng cụ thể không chuyển giao được giữa các ngành.</td></tr>
+      <tr><td>4</td><td>Suy luận riêng</td><td><span class="st todo">cần bảo vệ</span> Khung composition-vs-cannibalization áp cho dataset này; xếp <span class="m">baseline_revenue</span> là measure; tên gọi “Definitional Divergence Rate”. Chuẩn bị lập luận khi bị hỏi.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Nền lý thuyết cho Chương 2</h3>
+  <p style="font-size:13.5px;color:var(--ink-3)">Tự kiểm tra lại năm xuất bản và số trang trước khi trích dẫn.</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:300px">Thứ được thiết kế</th><th>Nền lý thuyết</th></tr></thead>
+    <tbody>
+      <tr><td>Measure/metric, grain, additive–semi–non-additive</td><td>Kimball &amp; Ross, <em>The Data Warehouse Toolkit</em></td></tr>
+      <tr><td>Giới hạn 5–9 KPI, tách KRI/PI/KPI</td><td>Parmenter, <em>Key Performance Indicators</em> (quy tắc 10/80/10)</td></tr>
+      <tr><td>North star + guardrail metric, OEC</td><td>Kohavi, Tang &amp; Xu, <em>Trustworthy Online Controlled Experiments</em></td></tr>
+      <tr><td>Tách bump khuyến mãi: switching / acceleration / category expansion</td><td>Blattberg &amp; Neslin, <em>Sales Promotion</em>; Gupta (1988); Van Heerde, Gupta &amp; Wittink (JMR 2003)</td></tr>
+      <tr><td>Counterfactual baseline, incremental margin</td><td>Rubin potential outcomes; Brodersen et al. (2015), CausalImpact</td></tr>
+      <tr><td>Difference-in-Differences</td><td>Card &amp; Krueger (1994); synthetic control của Abadie</td></tr>
+      <tr><td>LTV xác suất</td><td>Fader &amp; Hardie — BG/NBD + Gamma–Gamma</td></tr>
+      <tr><td>Safety stock, fill rate vs cycle service level, ABC–XYZ</td><td>Silver, Pyke &amp; Thomas, <em>Inventory and Production Management</em></td></tr>
+      <tr><td>WAPE thay MAPE khi có ngày cầu bằng 0</td><td>Hyndman &amp; Koehler (2006)</td></tr>
+      <tr><td>Faithfulness / groundedness cho agent</td><td>RAGAS; benchmark text-to-SQL Spider, BIRD</td></tr>
+      <tr><td>Bẫy Goodhart, nghịch lý Simpson</td><td>Goodhart (1975) / Strathern (1997); Simpson (1951)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note ok" style="margin-top:14px"><b>Điểm neo học thuật của P1.</b> Ba khái niệm cannibalization, pull-forward và incremental không phải phát minh riêng — chúng ánh xạ gần như một-một vào phân rã promotional bump trong marketing science. Đó là chỗ bạn neo phần đóng góp lý thuyết.</p>
+</section>
+
+<section id="bai-toan">
+  <div class="sec-head"><span class="sec-num">04</span><h2>Một bài toán lớn, sáu nhánh con</h2></div>
+  <p class="sec-sub">Bản v2 trình bày sáu bài toán ngang hàng nhau. Đó là cách sắp xếp sai cho một khóa luận: hội đồng sẽ hỏi ngay “rốt cuộc đề tài của em là gì”. Bản này gộp lại thành <strong>một bài toán nghiệp vụ gốc</strong> và rã xuống thành sáu nhánh con — mỗi nhánh vẫn giữ nguyên mã <span class="m">P1</span>…<span class="m">P6</span> để tra ngược về bảng chỉ số ở mục 07.</p>
+
+  <div class="root">
+    <p class="eyebrow" style="margin-bottom:8px">Bài toán gốc</p>
+    <p class="root-q">Doanh nghiệp cho đi <strong>31,6%</strong> giá trị trên <strong>38,4%</strong> số đơn hàng, khiến <strong>69,8%</strong> đơn khuyến mãi bán dưới giá vốn. Khoản chi này có sinh lời không?</p>
+    <p class="pc-pain">Độ sâu chiết khấu thực 31,6% (báo cáo nội bộ ghi 12,1% — thiếu 2,6 lần) · đổi lại chỉ được +1,4% sản phẩm mỗi đơn và +8,5% số đơn mỗi ngày chiến dịch</p>
+    <p class="pc-body">Đây là câu hỏi mà bất kỳ ai cũng hiểu ngay, kể cả người không làm dữ liệu: <em>giảm giá một phần ba để đổi lấy vài phần trăm đơn — có lời không?</em> Nó cũng là câu hỏi <strong>chưa trả lời được bằng dữ liệu thô</strong>, vì mức tăng doanh thu quan sát được trong kỳ chiến dịch luôn dương: đơn có promo tự chọn chính nó vào nhóm được đo. Muốn trả lời phải dựng được đường cơ sở phản thực, và muốn dựng được nó thì phải lần lượt giải sáu nhánh dưới đây.</p>
+    <div class="pc-grid">
+      <div class="pc-col"><h5>Vì sao chọn bài này làm gốc</h5><ul>
+        <li>Phát biểu được trong một câu, không cần thuật ngữ</li>
+        <li>Mọi con số trong phát biểu đều đã kiểm chứng lại trên dữ liệu gốc</li>
+        <li>Năm bài toán còn lại đều rã ra từ nó một cách tự nhiên, không phải ghép gượng</li>
+      </ul></div>
+      <div class="pc-col"><h5>Điều kiện để trả lời được</h5><ul>
+        <li>Chốt được một định nghĩa doanh thu duy nhất → <b>N1</b></li>
+        <li>Có baseline phản thực đạt ngưỡng chất lượng → <b>N2</b></li>
+        <li>Loại được các biến nhiễu cạnh tranh → <b>N4</b>, <b>N6</b></li>
+      </ul></div>
+      <div class="pc-col"><h5>Rào cản đã biết</h5><ul>
+        <li>Lịch khuyến mãi phủ <strong>46,7%</strong> số ngày 2013–2022; tháng 9 và tháng 12 phủ 100%, tháng 5 phủ 0% → không có kỳ đối chứng sạch theo mùa</li>
+        <li>Phải xây baseline theo lịch (calendar-only) chứ không thể lấy “kỳ không promo” làm đối chứng trực tiếp</li>
+      </ul></div>
+    </div>
+  </div>
+
+  <div class="tree">
+
+    <article class="pcard">
+      <div class="pc-head"><span class="pc-id">N1</span><h3 class="pc-title" style="margin:0">Muốn tính lời lỗ thì “doanh thu” là con số nào?</h3><span class="br-from">← P6</span><span class="st ok">đã đo</span></div>
+      <p class="pc-pain">Doanh thu 2022 có <strong>5 giá trị hợp lệ</strong>, chênh nhau tới 13,7% · <span class="m">sales.csv</span> bao gồm 59.462 đơn đã hủy · độ sâu chiết khấu bị báo cáo thiếu 2,6 lần</p>
+      <p class="pc-body">Nhánh này phải giải <em>trước tiên</em>, vì cả bài toán gốc là một phép trừ: doanh thu tăng thêm trừ đi chi phí chiết khấu. Nếu hai vế lấy từ hai định nghĩa khác nhau thì kết quả vô nghĩa. Mục tiêu của bài forecasting (<span class="m">sales.csv</span>) là doanh thu gross <em>bao gồm</em> đơn hủy; dashboard khách hàng dùng <span class="m">payment_value</span> là doanh thu net <em>loại</em> đơn hủy. Hai số cách nhau 13,7% và cùng được gọi là “revenue”.</p>
+      <div class="pc-grid">
+        <div class="pc-col"><h5>Câu hỏi con</h5><ul>
+          <li>Mỗi measure trong bài phải khai báo: giá theo mức nào, có lọc trạng thái đơn không, promo định nghĩa ra sao?</li>
+          <li>Semantic layer giảm độ lệch định nghĩa xuống mức nào?</li>
+          <li>Bao nhiêu phát hiện trong tài liệu gốc đổi kết luận khi đổi định nghĩa?</li>
+        </ul></div>
+        <div class="pc-col"><h5>Kỹ thuật</h5><ul>
+          <li>dbt (staging → intermediate → marts) + MetricFlow</li>
+          <li>Fault injection đo độ phủ kiểm thử thật</li>
+          <li>Gold set 50–100 câu có đáp án xác minh tay</li>
+        </ul></div>
+        <div class="pc-col"><h5>Vai trò trong mạch</h5><ul>
+          <li>Là <b>nền hạ tầng</b>, không phải một chương phân tích riêng</li>
+          <li>Đúng tầng Analytics Engineer, hợp định vị Modern Data Stack</li>
+          <li>Nhánh <b>N4</b> là case study minh họa cho chính nhánh này</li>
+        </ul></div>
+      </div>
+      <div class="tags"><span class="tag hi">Bằng chứng: rất mạnh, đã đo</span><span class="tag md">Kỹ thuật cao, thống kê thấp</span><span class="tag">Làm trước tiên</span></div>
+    </article>
+
+    <article class="pcard lead">
+      <div class="pc-head"><span class="pc-id">N2</span><h3 class="pc-title" style="margin:0">Khuyến mãi có tạo ra đơn <em>lẽ ra không tồn tại</em> không?</h3><span class="br-from">← P1</span><span class="crit">NHÁNH LÕI</span></div>
+      <p class="pc-pain">Ngày có chiến dịch 175,7 đơn so với 161,9 = +8,5% (chưa kiểm soát mùa vụ) · giỏ hàng không đổi: 5,01 so với 4,94 sản phẩm mỗi đơn</p>
+      <p class="pc-body">Đây là nhánh trả lời trực tiếp câu hỏi gốc, và là chương phân tích nhân quả của khóa luận. Một điều chỉnh quan trọng so với v2: chênh lệch AOV <em>không phải</em> bằng chứng cannibalization — so theo giá gốc, đơn có promo chỉ nhỏ hơn 1,95% và thậm chí có <em>nhiều</em> sản phẩm hơn. Giỏ hàng không đổi, nên đây là bài toán <strong>định giá thuần túy</strong>, không phải bài toán merchandising. Sáu giả thuyết chi tiết của nhánh này nằm ở mục 05.</p>
+      <div class="pc-grid">
+        <div class="pc-col"><h5>Câu hỏi con</h5><ul>
+          <li>Bao nhiêu đơn trong cửa sổ chiến dịch là incremental?</li>
+          <li>Chiến dịch nào gây bán dưới giá vốn, thiệt hại bao nhiêu?</li>
+          <li>Ngưỡng chiết khấu d* nào làm lợi nhuận đóng góp đổi dấu?</li>
+          <li>Dự báo được lợi nhuận gia tăng <em>trước</em> khi chạy không?</li>
+        </ul></div>
+        <div class="pc-col"><h5>Kỹ thuật</h5><ul>
+          <li>Counterfactual baseline calendar-only + block bootstrap</li>
+          <li>Difference-in-Differences cho Q3 năm lẻ</li>
+          <li>Spline / GAM tìm ngưỡng đổi dấu d*</li>
+        </ul></div>
+        <div class="pc-col"><h5>Hạn chế phải nêu</h5><ul>
+          <li>Chỉ có sáu mức chiết khấu rời rạc → CI của d* sẽ rộng</li>
+          <li>Không có kỳ đối chứng sạch (xem rào cản ở bài toán gốc)</li>
+        </ul></div>
+      </div>
+      <div class="tags"><span class="tag hi">Bằng chứng: mạnh, đã đo</span><span class="tag md">Độ khó: trung bình–cao</span><span class="tag">Chương phân tích chính</span></div>
+    </article>
+
+    <article class="pcard">
+      <div class="pc-head"><span class="pc-id">N3</span><h3 class="pc-title" style="margin:0">Khách kéo về bằng khuyến mãi có vòng đời kém hơn thật không?</h3><span class="br-from">← P3</span><span class="st fix">phải viết lại</span></div>
+      <p class="pc-pain">27,7% người đăng ký chưa từng mua (33.807) · từng mua lại 69,1% (có promo) so với 78,1% · <span class="strike">số đơn trọn đời 4,67 so với 7,67 (−39%)</span></p>
+      <p class="pc-body">Nếu khuyến mãi lỗ trong kỳ nhưng mang về khách tốt thì vẫn có thể biện minh là khoản đầu tư giữ chân. Đó là lý do nhánh này tồn tại. Nhưng con số <strong>−39%</strong> mà v2 dùng làm luận cứ <strong>không đứng được</strong>: <span class="m">promotions.csv</span> chỉ bắt đầu từ 2013, nên toàn bộ <strong>22.068 khách của cohort 2012 bị gán nhãn non-promo theo cấu trúc dữ liệu</strong>, và họ có 10,5 năm để tích lũy đơn (trung bình 14,19 đơn). Bỏ riêng cohort 2012 ra, khoảng cách còn <strong>4,79 so với 4,97 — tức −3,6%</strong>, và trong từng cohort năm một thì hai nhóm gần như trùng khít. Đây là <strong>nghịch lý Simpson</strong> dạng sách giáo khoa.</p>
+      <div class="pc-grid">
+        <div class="pc-col"><h5>Câu hỏi con</h5><ul>
+          <li>Sau khi khống chế cohort và cắt cửa sổ quan sát bằng nhau, hiệu ứng còn lại bao nhiêu?</li>
+          <li>Biến nào tại đơn 1 dự báo được việc quay lại?</li>
+          <li>Activate nhóm chưa mua hay reactivate nhóm Lost rẻ hơn?</li>
+        </ul></div>
+        <div class="pc-col"><h5>Kỹ thuật</h5><ul>
+          <li>So sánh <em>trong cùng cohort</em>, đếm đơn trong 12 tháng đầu kể từ đơn đầu tiên</li>
+          <li>Kaplan–Meier + log-rank; Cox PH tới đơn thứ hai</li>
+          <li>Propensity score matching để giảm tự chọn mẫu</li>
+        </ul></div>
+        <div class="pc-col"><h5>Hạn chế</h5><ul>
+          <li>Chênh lệch repeat rate 78,1%/69,1% <em>chưa</em> được khống chế cohort — phải kiểm lại bằng cùng phương pháp trước khi trích dẫn</li>
+          <li>Không có chi phí marketing → LTV:CAC chỉ so sánh tương đối</li>
+        </ul></div>
+      </div>
+      <div class="tags"><span class="tag lo">Kết luận cũ đã bị bác</span><span class="tag md">Độ khó: trung bình–cao</span><span class="tag hi">Giá trị học thuật cao</span></div>
+    </article>
+
+    <article class="pcard">
+      <div class="pc-head"><span class="pc-id">N4</span><h3 class="pc-title" style="margin:0">Có phải hết hàng mới làm giảm đơn, chứ không phải khuyến mãi?</h3><span class="br-from">← P4</span><span class="st ok">đã loại</span></div>
+      <p class="pc-pain">67,3% snapshot có <span class="m">stockout_flag = 1</span> · nhưng tỷ lệ SKU-ngày hết hàng thực tế chỉ <strong>3,81%</strong> · service level 96,2%</p>
+      <p class="pc-body">Đây là biến nhiễu cạnh tranh phải loại trước khi quy kết cho khuyến mãi — và nó <strong>đã bị loại</strong>. Nhưng cách v2 giải thích là <em>sai tên bệnh</em>: v2 nói hai chỉ số cùng đúng vì “khác grain”. Không phải. <span class="m">stockout_flag</span>, <span class="m">stockout_days</span> và <span class="m">fill_rate</span> nằm <strong>cùng một dòng</strong>, cùng grain SKU × tháng — 60.247 dòng ứng đúng 60.247 cặp <span class="m">(product_id, snapshot_date)</span> duy nhất, và <span class="m">fill_rate</span> là cột dẫn xuất tuyến tính từ <span class="m">stockout_days</span> (tương quan −1,0000). Bệnh thật là <strong>nhị phân hóa</strong>: cờ bật khi có <em>ít nhất một ngày</em> hết hàng, bất kể 1 ngày hay 28 ngày. Gọi đúng tên thì case study vẫn nguyên giá trị.</p>
+      <div class="pc-grid">
+        <div class="pc-col"><h5>Câu hỏi con</h5><ul>
+          <li>Doanh thu mất do hết hàng thực sự là bao nhiêu, đủ lớn để nhiễu vào N2 không?</li>
+          <li>Có bao nhiêu SKU chưa từng bán được đơn nào? (đã đo: <strong>814 / 2.412</strong>)</li>
+        </ul></div>
+        <div class="pc-col"><h5>Kỹ thuật</h5><ul>
+          <li>Phân loại ABC–XYZ</li>
+          <li>Censored demand để ước lượng lost sales</li>
+        </ul></div>
+        <div class="pc-col"><h5>Vai trò trong mạch</h5><ul>
+          <li>Loại một cách giải thích cạnh tranh → củng cố N2</li>
+          <li>Case study <b>lỗi nhị phân hóa</b> hoàn chỉnh, có số trước/sau, minh họa cho N1</li>
+        </ul></div>
+      </div>
+      <div class="tags"><span class="tag hi">Đã trả lời xong</span><span class="tag md">Nhãn cũ “lỗi grain” đã sửa</span><span class="tag">Gộp vào N1 làm case study</span></div>
+    </article>
+
+    <article class="pcard">
+      <div class="pc-head"><span class="pc-id">N5</span><h3 class="pc-title" style="margin:0">Kênh nào mang về khách khuyến mãi?</h3><span class="br-from">← P5</span><span class="st new">phát hiện mới</span></div>
+      <p class="pc-pain"><span class="m">customers.acquisition_channel</span> (first-touch) và <span class="m">orders.order_source</span> (last-touch) chỉ trùng nhau <strong>19,9%</strong> — gần bằng mức ngẫu nhiên của 6 kênh (16,7%)</p>
+      <p class="pc-body">Nếu chi khuyến mãi phải cắt bớt thì cắt ở đâu — đó là câu hỏi hành động nối tiếp nhánh N2. Muốn trả lời thì phải quy được chi phí và khách về từng kênh, và ở đây dataset có sẵn hai điểm chạm mà toàn bộ tài liệu gốc không dùng tới: nó phân tích kênh hoàn toàn bằng <span class="m">order_source</span>. Hai trường gần như độc lập nhau, nghĩa là bạn có sẵn một bài so sánh <em>first-touch và last-touch attribution</em> trên dữ liệu thật.</p>
+      <div class="pc-grid">
+        <div class="pc-col"><h5>Câu hỏi con</h5><ul>
+          <li>Thứ hạng kênh theo first-touch khác last-touch bao nhiêu?</li>
+          <li>Kênh nào bị last-click đánh giá thấp một cách hệ thống?</li>
+          <li>Ngân sách khuyến mãi nên dịch chuyển bao nhiêu và về đâu?</li>
+        </ul></div>
+        <div class="pc-col"><h5>Kỹ thuật</h5><ul>
+          <li>So sánh hai mô hình gán ghép trên cùng tập khách</li>
+          <li>LTV theo cohort kênh, cố định kênh theo first-touch</li>
+        </ul></div>
+        <div class="pc-col"><h5>Hạn chế</h5><ul>
+          <li>Không có chi phí quảng cáo → ROI chỉ so sánh tương đối giữa kênh</li>
+          <li>Chỉ hai điểm chạm, chưa phải đường dẫn đầy đủ</li>
+        </ul></div>
+      </div>
+      <div class="tags"><span class="tag md">Bằng chứng: trung bình–mạnh</span><span class="tag hi">Độ khó: trung bình</span><span class="tag lo">Thiếu dữ liệu chi phí</span><span class="tag">Hướng mở rộng</span></div>
+    </article>
+
+    <article class="pcard">
+      <div class="pc-head"><span class="pc-id">N6</span><h3 class="pc-title" style="margin:0">Lưu lượng web có giải thích được phần đơn giảm không?</h3><span class="br-from">← P2</span><span class="st fix">câu trả lời là KHÔNG</span></div>
+      <p class="pc-pain">Sessions 6,80M → 11,06M (+63%) · số đơn 76.849 → 36.004 (−53%) · nhưng tương quan giữa hai chuỗi trên sai phân bậc một chỉ <strong>+0,0105</strong></p>
+      <p class="pc-body">Nhánh này là <em>giả thuyết bị loại</em>, và đó chính là giá trị của nó. Nhìn bề ngoài đây là tín hiệu mạnh nhất dataset — traffic tăng gấp rưỡi mà đơn giảm hơn nửa. v2 đã xếp nó làm bài toán chính. Nhưng khi kiểm tra kỹ: <span class="m">bounce_rate</span> phẳng ở 0,0045 suốt 10 năm, và tương quan giữa đơn hàng ngày với phiên truy cập ngày gần như bằng không. <span class="m">web_traffic</span> được sinh <strong>độc lập</strong> với <span class="m">orders</span> — nó không phải nguồn giải thích, và phân rã <span class="m">Δln R = Δln S + Δln CVR + Δln AOV</span> không phải chẩn đoán mà là một <strong>đẳng thức tất yếu</strong> khi CVR được định nghĩa bằng orders/sessions.</p>
+      <div class="pc-grid">
+        <div class="pc-col"><h5>Câu hỏi con</h5><ul>
+          <li>Chuỗi <span class="m">web_traffic</span> có mang thông tin gì về đơn hàng không? <b>(đã trả lời: không)</b></li>
+          <li>Phần suy giảm đơn hàng thực sự nằm ở đâu — quy mô tệp khách hay tần suất mua?</li>
+        </ul></div>
+        <div class="pc-col"><h5>Kỹ thuật</h5><ul>
+          <li>Tương quan trên sai phân bậc một trước khi tin vào tương quan mức</li>
+          <li>Chow / Bai–Perron định vị điểm gãy trên chuỗi <em>đơn hàng</em></li>
+        </ul></div>
+        <div class="pc-col"><h5>Vai trò trong mạch</h5><ul>
+          <li>Cho thấy năng lực <b>loại</b> giả thuyết, không chỉ xác nhận — điểm cộng khi bảo vệ</li>
+          <li>Là ví dụ thứ hai cho N1: chỉ số đẹp không đồng nghĩa với chỉ số dùng được</li>
+        </ul></div>
+      </div>
+      <div class="tags"><span class="tag lo">Nguồn dữ liệu không dùng được</span><span class="tag hi">Giá trị phương pháp luận cao</span><span class="tag">Trình bày như một nhánh bị loại</span></div>
+    </article>
+
+  </div>
+
+  <p class="note" style="margin-top:22px"><b>Mạch trình bày đề xuất.</b> <b>N1</b> chốt định nghĩa (kèm <b>N4</b> và <b>N6</b> làm hai case study về chỉ số hỏng) → <b>N2</b> là chương phân tích nhân quả trung tâm → <b>N3</b> kiểm tra lập luận “đầu tư giữ chân” → <b>N5</b> là khuyến nghị hành động. Một câu tóm cả khóa luận: <em>trước khi trả lời được “khuyến mãi có lời không”, phải chứng minh rằng mình đang đo đúng thứ cần đo</em>.</p>
+  <p class="note" style="margin-top:10px"><b>Đổi gì so với bản v2.</b> v2 xếp sáu bài ngang hàng và đề xuất P2 làm bài chính. Bản này hạ P2 xuống thành nhánh bị loại (N6) vì hai chuỗi độc lập nhau, đưa P1 lên làm bài toán gốc, và <b>rút lại</b> con số “vòng đời ngắn hơn 39%” ở P3/H5 vì đó là nghịch lý Simpson. Toàn bộ số liệu ở mục này tái lập được bằng <span class="m">python scripts/verify/verify_problem_to_kpi.py</span>; diễn giải chi tiết ở <span class="m">docs/problem_to_kpi_review.md</span>.</p>
+</section>
+<section id="p1">
+  <div class="sec-head"><span class="sec-num">05</span><h2>Đào sâu nhánh N2 — sáu giả thuyết</h2></div>
+  <p class="sec-sub">Sáu giả thuyết dưới đây nằm <em>bên trong</em> nhánh lõi <b>N2</b> (mã cũ P1) — đừng nhầm với sáu nhánh của mục 04. Ba trong số đó đã có kết quả sơ bộ ngay từ thống kê mô tả; giả thuyết trung tâm dịch sang câu hỏi incremental.</p>
+
+  <h3>Problem statement <span class="st fix">đã viết lại</span></h3>
+  <p><strong>Bối cảnh.</strong> Doanh nghiệp thời trang thương mại điện tử Việt Nam, 646.945 đơn hàng giai đoạn 2012–2022. Doanh thu suy giảm với CAGR −3,80%/năm. Biên lợi nhuận gộp dao động 9,8–16,6% theo chu kỳ năm chẵn/lẻ, bám sát cường độ khuyến mãi.</p>
+  <p><strong>Quan sát mâu thuẫn.</strong> Khuyến mãi áp lên 38,4% số đơn. Doanh nghiệp báo cáo mức chiết khấu 12,1%, nhưng độ sâu thực tế đo được là <strong>31,6%</strong> — chênh 2,6 lần, do chiết khấu được áp hai lớp mà báo cáo chỉ đọc một. Ở mức chiết khấu thực đó, <strong>69,8% đơn có khuyến mãi được bán dưới giá vốn</strong>. Đổi lại, đơn có promo chỉ nhiều hơn 1,4% số sản phẩm, và ngày có chiến dịch chỉ nhiều hơn 8,5% số đơn.</p>
+  <p><strong>Quyết định đang bị kẹt.</strong> Bộ phận tăng trưởng quyết định độ sâu chiết khấu mỗi quý dựa trên một con số sai lệch 2,6 lần, và đánh giá hiệu quả bằng mức tăng doanh thu quan sát được — đại lượng luôn dương vì đơn có promo tự chọn chính nó vào nhóm được đo.</p>
+  <p><strong>Khoảng trống tri thức.</strong> Chưa có đường cơ sở phản thực để trả lời “nếu không chạy chiến dịch thì doanh thu là bao nhiêu”. Không có nó thì không phân biệt được ba cơ chế có hàm ý chính sách trái ngược: tăng trưởng thật, trợ giá cho cầu sẵn có, và kéo cầu tương lai về hiện tại.</p>
+  <p><strong>Hệ quả nếu không giải.</strong> Doanh nghiệp tiếp tục cho đi khoảng một phần ba giá trị đơn hàng trên 38% số đơn để đổi lấy mức tăng sản lượng một chữ số, trong khi lập luận bù lại bằng “khách thu hút được có vòng đời tốt hơn” hiện <strong>không có bằng chứng</strong> — xem H5.</p>
+
+  <h3>Sáu giả thuyết</h3>
+
+  <div class="hyp">
+    <div class="hyp-h"><span class="hyp-id">H1</span><span class="hyp-n">Cơ cấu khách hàng của đơn promo lệch khỏi đơn thường</span><span class="st ok">đã có kết quả</span></div>
+    <div class="hyp-rows">
+      <div class="hyp-k">H₀</div><div class="hyp-v">Phân phối phân khúc khách của đơn có promo bằng đơn không promo.</div>
+      <div class="hyp-k">Kiểm định</div><div class="hyp-v">χ² test of independence, effect size Cramér's V; xác nhận bằng so sánh phân tầng.</div>
+      <div class="hyp-k">Kết quả sơ bộ</div><div class="hyp-v found">Chênh lệch AOV theo giá gốc là −1,95% ở tổng thể, và giữ nguyên khi tách riêng khách mới (−1,8%) và khách quay lại (−2,4%). <strong>Riêng với AOV thì không có nghịch lý Simpson</strong> — và chênh lệch đó cũng chỉ 2%, quá nhỏ để là vấn đề. Lưu ý: kết luận này <em>chỉ</em> đúng cho AOV; với số đơn trọn đời ở H5 thì Simpson có thật.</div>
+      <div class="hyp-k">Ý nghĩa</div><div class="hyp-v rule">Câu hỏi ban đầu về AOV đã được giải quyết và hóa ra không quan trọng. Trọng tâm chuyển sang H2'.</div>
+    </div>
+  </div>
+
+  <div class="hyp">
+    <div class="hyp-h"><span class="hyp-id">H2′</span><span class="hyp-n">Khuyến mãi không tạo đủ đơn hàng gia tăng để bù phần giá trị cho đi</span> <span class="crit">GIẢ THUYẾT THEN CHỐT</span></div>
+    <div class="hyp-rows">
+      <div class="hyp-k">H₀</div><div class="hyp-v">Lợi nhuận gia tăng từ đơn incremental ≥ chi phí chiết khấu: Promo Profit ROI ≥ 1,0.</div>
+      <div class="hyp-k">H₁</div><div class="hyp-v">ROI &lt; 1,0 — chương trình khuyến mãi phá hủy giá trị ròng.</div>
+      <div class="hyp-k">Kiểm định</div><div class="hyp-v">Dựng baseline phản thực bằng mô hình calendar-only huấn luyện <em>chỉ trên các kỳ không có chiến dịch</em>, dự báo vào cửa sổ chiến dịch; incremental = thực tế − baseline. Khoảng tin cậy bằng block bootstrap.</div>
+      <div class="hyp-k">Tín hiệu thô</div><div class="hyp-v found">Ngày có chiến dịch 175,7 đơn/ngày so với 161,9 ngày không có = <strong>+8,5%</strong> (chưa kiểm soát mùa vụ). Nếu con số này giữ sau khi kiểm soát, thì +8,5% sản lượng đang được mua bằng 31,6% giá trị trên 38% số đơn — ROI gần như chắc chắn dưới 1.</div>
+      <div class="hyp-k">Quyết định</div><div class="hyp-v rule">Chỉ kết luận khi baseline đạt ngưỡng chất lượng K8. Nếu ROI &lt; 1,0 với CI không chứa 1,0 → khuyến nghị cắt hoặc thu hẹp chương trình, và RQ5 chuyển thành bài toán tìm độ sâu tối ưu thay vì bỏ hẳn.</div>
+    </div>
+  </div>
+
+  <div class="hyp">
+    <div class="hyp-h"><span class="hyp-id">H3</span><span class="hyp-n">Tồn tại ngưỡng chiết khấu mà trên đó lợi nhuận đóng góp chuyển âm</span></div>
+    <div class="hyp-rows">
+      <div class="hyp-k">H₀</div><div class="hyp-v">Contribution margin giảm đơn điệu tuyến tính theo độ sâu; không có điểm gãy.</div>
+      <div class="hyp-k">H₁</div><div class="hyp-v">Tồn tại d* sao cho CM(d) đổi dấu.</div>
+      <div class="hyp-k">Kiểm định</div><div class="hyp-v">Spline/GAM của CM theo <strong>độ sâu thực tế</strong> <span class="m">1 − net/list</span> (không phải <span class="m">discount_value</span>), tách theo danh mục; CI của d* bằng bootstrap.</div>
+      <div class="hyp-k">Dải quan sát</div><div class="hyp-v found">Độ sâu thực tế: p5 = 18,1% · p25 = 21,9% · p50 = 31,6% · p75 = 35,5% · p95 = 50,5%. Có đủ biến thiên để định vị d* trong dải quan sát — nhưng chỉ ở sáu mức rời rạc ứng với sáu chiến dịch, nên d* sẽ có CI rộng. Cần nêu rõ.</div>
+      <div class="hyp-k">Quyết định</div><div class="hyp-v rule">Nếu CI 95% của d* nằm trong dải quan sát → ban hành được chính sách giá sàn. Nếu không → không ngoại suy, ghi nhận là hạn chế của thiết kế dữ liệu.</div>
+    </div>
+  </div>
+
+  <div class="hyp">
+    <div class="hyp-h"><span class="hyp-id">H4</span><span class="hyp-n">Bán dưới giá vốn quý 3 là do Urban Blowout, không phải cú sốc giá vốn</span><span class="st ok">gần như đã xác nhận</span></div>
+    <div class="hyp-rows">
+      <div class="hyp-k">H₀</div><div class="hyp-v">Sau khi trừ xu hướng chung, COGS/Revenue quý 3 năm lẻ bằng năm chẵn.</div>
+      <div class="hyp-k">Kiểm định</div><div class="hyp-v">Difference-in-Differences: điều trị = Q3, đối chứng = Q1/Q2/Q4, thời kỳ = lẻ/chẵn. Kiểm tra parallel trends trước.</div>
+      <div class="hyp-k">Kết quả sơ bộ</div><div class="hyp-v found">COGS/Revenue Q3: năm lẻ <strong>1,0360</strong> · năm chẵn 0,8458. Các quý khác chênh không đáng kể (Q1 0,832/0,834 · Q2 0,826/0,829 · Q4 0,862/0,882). Cơ chế đã xác định: Urban Blowout cắt <span class="m">unit_price</span> còn 50% giá gốc trong khi <span class="m">cogs</span> giữ nguyên. Chỉ còn cần DiD để lượng hóa và kiểm soát xu hướng.</div>
+      <div class="hyp-k">Lưu ý</div><div class="hyp-v rule">n = 40 quý là cỡ mẫu nhỏ — báo cáo khoảng tin cậy, không chỉ p-value.</div>
+    </div>
+  </div>
+
+  <div class="hyp">
+    <div class="hyp-h"><span class="hyp-id">H5</span><span class="hyp-n">Khách thu hút bằng khuyến mãi không giữ chân tốt hơn</span> <span class="crit">GIẢ THUYẾT THEN CHỐT</span> <span class="st ok">ủng hộ mạnh</span></div>
+    <div class="hyp-rows">
+      <div class="hyp-k">H₀</div><div class="hyp-v">Đường cong giữ chân của hai nhóm bằng nhau.</div>
+      <div class="hyp-k">Kết quả sơ bộ</div><div class="hyp-v found">
+        Cohort đơn đầu 2013–2021 (n = 86.795):<br>
+        · Từng mua lại: <strong>78,1%</strong> (không promo) so với <strong>69,1%</strong> (có promo)<br>
+        · Mua lại trong 90 ngày: 18,5% so với 14,6%<br>
+        · Trung vị ngày tới đơn 2: 291 so với 362<br>
+        · <span class="strike">Số đơn trọn đời: 7,67 so với 4,67 (−39%)</span> — <strong>đã rút lại</strong><br>
+        </div>
+      <div class="hyp-k">Đính chính</div><div class="hyp-v found"><strong>Con số −39% là nghịch lý Simpson.</strong> <span class="m">promotions.csv</span> chỉ bắt đầu từ 2013, nên toàn bộ <strong>22.068 khách của cohort 2012 bị gán nhãn non-promo theo cấu trúc dữ liệu</strong>, và họ có 10,5 năm tích lũy đơn (trung bình 14,19). Bỏ cohort 2012 ra: <strong>4,79 so với 4,97, tức −3,6%</strong>; trong từng cohort năm một hai nhóm gần như trùng khít. Ba thước đo còn lại cũng chưa được khống chế cohort nên phải kiểm lại bằng cùng phương pháp trước khi trích dẫn.</div>
+      <div class="hyp-k">Còn phải làm</div><div class="hyp-v">Trước hết phải khống chế cohort và cắt cửa sổ quan sát bằng nhau cho mọi khách (đếm đơn trong 12 tháng đầu kể từ đơn đầu tiên). Sau đó mới tới Kaplan–Meier + log-rank để có ý nghĩa thống kê, và propensity score matching để giảm tự chọn mẫu.</div>
+      <div class="hyp-k">Quyết định</div><div class="hyp-v rule">Với bằng chứng hiện có, lập luận “chiết khấu là khoản đầu tư giữ chân” <strong>đã mất căn cứ</strong> và toàn bộ chi phí phải được biện minh ngay trong kỳ chạy chiến dịch. Chỉ khôi phục luận điểm này nếu hiệu ứng vẫn còn sau khi khống chế cohort <em>và</em> matching.</div>
+    </div>
+  </div>
+
+  <div class="hyp">
+    <div class="hyp-h"><span class="hyp-id">H6</span><span class="hyp-n">Không có hiệu ứng giỏ hàng bù lại phần margin cho đi</span><span class="st ok">đã có kết quả</span></div>
+    <div class="hyp-rows">
+      <div class="hyp-k">H₀</div><div class="hyp-v">Số sản phẩm và số dòng trên mỗi đơn không khác nhau giữa hai nhóm.</div>
+      <div class="hyp-k">Kết quả sơ bộ</div><div class="hyp-v found">Sản phẩm/đơn: 4,94 (không promo) so với 5,01 (có promo) = <strong>+1,4%</strong>. Dòng/đơn: 1,10 so với 1,11. Số danh mục/đơn: 1,01 cả hai. <strong>Không có hiệu ứng halo hay mua chéo.</strong></div>
+      <div class="hyp-k">Ý nghĩa</div><div class="hyp-v rule">Lập luận merchandising bị loại. Khuyến mãi ở doanh nghiệp này là công cụ giá thuần túy, nên bài toán là bài toán định giá — củng cố hướng của H2′ và H3.</div>
+    </div>
+  </div>
+</section>
+
+<section id="do-do">
+  <div class="sec-head"><span class="sec-num">06</span><h2>Measure → Metric → KPI</h2></div>
+  <p class="sec-sub">Bảng đo đã sửa theo cấu trúc dữ liệu thật. Thay đổi lớn nhất: phải tách rõ ba mức doanh thu (list / gross / net) vì chiết khấu áp hai lớp, và mọi ngưỡng KPI giờ suy từ phân phối thật.</p>
+
+  <h3>Tầng 5 — Measures <span class="st fix">đã sửa</span></h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:66px">Mã</th><th style="width:170px">Độ đo</th><th>Công thức</th><th style="width:140px">Grain</th><th style="width:86px">Trạng thái</th></tr></thead>
+    <tbody>
+      <tr><td>MS-01</td><td>List value</td><td class="f">quantity × products.price</td><td>Dòng đơn hàng</td><td><span class="st new">mới</span></td></tr>
+      <tr><td>MS-02</td><td>Gross revenue</td><td class="f">quantity × unit_price
+(= sales.csv Revenue)</td><td>Dòng đơn hàng</td><td><span class="st ok">đã kiểm</span></td></tr>
+      <tr><td>MS-03</td><td>Discount amount</td><td class="f">discount_amount (lớp 2)</td><td>Dòng đơn hàng</td><td><span class="st ok">đã kiểm</span></td></tr>
+      <tr><td>MS-04</td><td>Net revenue</td><td class="f">MS-02 − MS-03
+(= payment_value, khớp 100%)</td><td>Dòng đơn hàng</td><td><span class="st ok">đã kiểm</span></td></tr>
+      <tr><td>MS-05</td><td>Line cost</td><td class="f">quantity × products.cogs</td><td>Dòng đơn hàng</td><td><span class="st ok">đã kiểm</span></td></tr>
+      <tr><td>MS-06</td><td>Order count</td><td class="f">COUNT(DISTINCT order_id)</td><td>Đơn hàng</td><td><span class="st ok">đã kiểm</span></td></tr>
+      <tr><td>MS-07</td><td>Units sold</td><td class="f">SUM(quantity)</td><td>Dòng đơn hàng</td><td><span class="st ok">đã kiểm</span></td></tr>
+      <tr><td>MS-08</td><td>Cancelled flag</td><td class="f">order_status = 'cancelled'
+(59.462 đơn = 9,2%)</td><td>Đơn hàng</td><td><span class="st new">mới</span></td></tr>
+      <tr><td>MS-09</td><td>Refund amount</td><td class="f">SUM(refund_amount)</td><td>Dòng trả hàng</td><td><span class="st todo">chưa kiểm</span></td></tr>
+      <tr><td>MS-10</td><td>Sessions</td><td class="f">SUM(sessions)</td><td>Ngày × nguồn</td><td><span class="st ok">đã kiểm</span></td></tr>
+      <tr><td>MS-11</td><td>Baseline revenue</td><td class="f">ŷ từ mô hình calendar-only
+huấn luyện trên kỳ không promo</td><td>Ngày</td><td><span class="st todo">phải dựng</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="note" style="margin-top:12px"><b>Vì sao phải tách ba mức doanh thu.</b> Bản v1 chỉ có một khái niệm “line revenue” và định nghĩa list = revenue + discount — sai, vì lớp chiết khấu thứ nhất đã nằm sẵn trong <span class="m">unit_price</span>. Ba mức MS-01/02/04 là điều kiện cần để mọi chỉ số chiết khấu phía sau đúng.</p>
+
+  <h3>Tầng 6 — Metrics</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:66px">Mã</th><th style="width:180px">Chỉ số</th><th>Công thức</th><th style="width:120px">Giá trị hiện tại</th><th style="width:64px">RQ</th></tr></thead>
+    <tbody>
+      <tr><td>MT-01</td><td>Promo Penetration</td><td class="f">đơn có promo / tổng đơn</td><td class="num">38,36%</td><td>RQ1</td></tr>
+      <tr><td>MT-02</td><td>Độ sâu chiết khấu thực</td><td class="f">1 − MS-04 / MS-01</td><td class="num">31,6% (p50)</td><td>RQ1</td></tr>
+      <tr><td>MT-03</td><td>Độ lệch báo cáo chiết khấu</td><td class="f">MT-02 / discount_value − 1</td><td class="num">+161%</td><td>RQ1</td></tr>
+      <tr><td>MT-04</td><td>AOV theo giá gốc</td><td class="f">Σ MS-01 / MS-06</td><td class="num">27.008 / 27.545</td><td>RQ2</td></tr>
+      <tr><td>MT-05</td><td>Units per Transaction</td><td class="f">Σ MS-07 / MS-06</td><td class="num">5,01 / 4,94</td><td>RQ2</td></tr>
+      <tr><td>MT-06</td><td>Gross Margin %</td><td class="f">(MS-02 − MS-05) / MS-02</td><td class="num">12,8% (2022)</td><td>RQ3</td></tr>
+      <tr><td>MT-07</td><td>Net Margin %</td><td class="f">(MS-04 − MS-05) / MS-04</td><td class="num">8,5% (2022)</td><td>RQ3</td></tr>
+      <tr><td>MT-08</td><td>Below-Cost Order Rate</td><td class="f">đơn có MT-07 &lt; 0 / tổng đơn</td><td class="num">26,9% · promo 69,8%</td><td>RQ3 · RQ5</td></tr>
+      <tr><td>MT-09</td><td>Incremental Revenue</td><td class="f">Σ(thực tế − MS-11)
+trong cửa sổ chiến dịch</td><td class="num">chưa dựng</td><td>RQ4</td></tr>
+      <tr><td>MT-10</td><td>Incremental Margin</td><td class="f">MT-09 × MT-07 − Σ MS-03</td><td class="num">chưa dựng</td><td>RQ4</td></tr>
+      <tr><td>MT-11</td><td>Promo Profit ROI</td><td class="f">MT-10 / chi phí chiết khấu</td><td class="num">chưa dựng</td><td>RQ4 · RQ5</td></tr>
+      <tr><td>MT-12</td><td>Discount Dependency Index</td><td class="f">đơn có promo của KH
+/ tổng đơn của KH</td><td class="num">p50 0,35 · p75 0,50</td><td>RQ2</td></tr>
+      <tr><td>MT-13</td><td>Repeat Rate @90d</td><td class="f">KH mua lại ≤90 ngày
+/ KH mua lần đầu</td><td class="num">18,5% / 14,6%</td><td>RQ2</td></tr>
+      <tr><td>MT-14</td><td>Đơn trọn đời theo nhóm</td><td class="f">Σ đơn / KH của cohort</td><td class="num">7,67 / 4,67</td><td>RQ2</td></tr>
+      <tr><td>MT-15</td><td>Orders per 1.000 sessions</td><td class="f">MS-06 / MS-10 × 1000</td><td class="num">11,30 → 3,25</td><td>P2</td></tr>
+      <tr><td>MT-16</td><td>Revenue per Session</td><td class="f">MS-02 / MS-10</td><td class="num">243,6 → 105,7</td><td>P2</td></tr>
+      <tr><td>MT-17</td><td>Stockout Rate (SKU-ngày)</td><td class="f">Σ stockout_days
+/ Σ ngày trong tháng</td><td class="num">3,81%</td><td>P4</td></tr>
+      <tr><td>MT-18</td><td>Definitional Divergence</td><td class="f">|nguồn A − nguồn B| / A</td><td class="num">0% → 13,7%</td><td>P6</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Tầng 7 — KPI <span class="st fix">ngưỡng đã hiệu chuẩn lại</span></h3>
+  <p>Ngưỡng giờ suy từ ba cơ sở: <strong>điểm hòa vốn</strong> (cấu trúc, không tranh cãi), <strong>phân vị lịch sử</strong> (p50 làm mục tiêu, p90 làm ngưỡng đỏ), hoặc <strong>baseline ngây thơ</strong> (mô hình phải đánh bại seasonal naive).</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:50px">Mã</th><th style="width:170px">KPI</th><th style="width:150px">Bản v1</th><th style="width:190px">Đã hiệu chuẩn</th><th>Cơ sở</th></tr></thead>
+    <tbody>
+      <tr><td>K1</td><td>Promo Profit ROI</td><td class="strike">≥ 1,2×</td><td class="num">≥ <b>1,0</b> · đỏ &lt; 1,0</td><td>Điểm hòa vốn theo cấu trúc. Biên an toàn phải suy từ CI của baseline, không đặt tùy ý.</td></tr>
+      <tr><td>K2</td><td>Below-Cost Order Rate</td><td class="strike">≤ 0,5% · đỏ &gt;1,5%</td><td class="num">≤ <b>27,8%</b> · đỏ &gt; <b>65,3%</b></td><td>Phân vị tháng 2013–2022: p50 = 27,8% · p90 = 65,3%. Bản v1 sai <b>50 lần</b>. Phân phối lưỡng đỉnh — nên tách KPI riêng cho tháng có và không có chiến dịch.</td></tr>
+      <tr><td>K3</td><td>Net Margin % / đơn</td><td>≥ cùng kỳ năm trước</td><td class="num">≥ <b>8,5%</b> (mức 2022)</td><td>Giữ nguyên logic, thay bằng mức thực đã đo.</td></tr>
+      <tr><td>K4</td><td>Cannibalization Rate</td><td class="strike">≤ 40%</td><td><span class="st todo">chưa hiệu chuẩn được</span></td><td>Cần baseline phản thực mới tính được. Không đặt ngưỡng cho tới khi có MS-11.</td></tr>
+      <tr><td>K5</td><td>Repeat Rate @90d nhóm promo</td><td class="strike">≥ 0,8 × organic</td><td class="num">≥ <b>0,79 ×</b> (mức hiện tại)</td><td>Hiện tại 14,6% / 18,5% = 0,789. Ngưỡng v1 tình cờ đúng — giờ có căn cứ.</td></tr>
+      <tr><td>K6</td><td>Gross Margin % năm</td><td class="strike">≥ 16% (hiện ~14%)</td><td class="num">năm lẻ ≥ <b>11,2%</b><br>năm chẵn ≥ <b>15,3%</b></td><td>Margin dao động chẵn/lẻ nên một ngưỡng chung là vô nghĩa. Dùng trung bình từng nhóm năm.</td></tr>
+      <tr><td>K7</td><td>Discount Dependency Index</td><td>≤ 50%</td><td class="num">≤ <b>0,50</b> (p75)</td><td>Đúng bằng p75 của phân phối thật. Ngưỡng v1 được xác nhận.</td></tr>
+      <tr><td>K8</td><td>WAPE của baseline</td><td class="strike">≤ 12%</td><td class="num">≤ <b>18%</b> · đỏ &gt; 25%</td><td>Seasonal naive đạt WAPE 24,9–26,1% (2020–2022). Mô hình phải vượt naive ≥30%. Ngưỡng 12% của v1 là không tưởng.</td></tr>
+      <tr><td>K9</td><td>Definitional Divergence</td><td>= 0</td><td class="num">= <b>0</b> · hiện <b>13,7%</b></td><td>Giữ nguyên trên nguyên tắc; giờ có mức xuất phát đã đo.</td></tr>
+      <tr><td>K10</td><td>Orders per 1.000 sessions</td><td><span class="st new">KPI mới</span></td><td class="num">≥ <b>3,25</b> và tăng</td><td>North star của P2. Đã rơi 71% trong 10 năm — chặn đà rơi là mục tiêu tối thiểu.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note" style="margin-top:12px"><b>Bài học rút ra từ việc hiệu chuẩn.</b> Trong 9 ngưỡng của bản v1, có <b>2 đúng</b> (K7, K5 — tình cờ), <b>1 sai 50 lần</b> (K2), <b>1 bất khả thi</b> (K8), <b>1 vô nghĩa về cấu trúc</b> (K6), và <b>1 chưa tính được</b> (K4). Đây là minh chứng cụ thể cho lý do ngưỡng KPI phải suy từ dữ liệu — và nó xứng đáng thành một mục trong chương phương pháp của bạn.</p>
+</section>
+
+<section id="tra-cuu">
+  <div class="sec-head"><span class="sec-num">07</span><h2>Bảng tra cứu toàn bộ</h2></div>
+  <p class="sec-sub">Toàn bộ độ đo, chỉ số và KPI của sáu nhánh ở mục 04, kèm trạng thái kiểm chứng. Bộ lọc ghi cả mã nhánh mới (<b>N1</b>…<b>N6</b>) và mã cũ (<span class="m">P1</span>…<span class="m">P6</span>) để tra ngược sang bản v2.</p>
+
+  <div class="filters">
+    <div class="fgroup"><span class="flabel">Bài toán</span>
+      <button class="chip" data-p="all" aria-pressed="true">Tất cả</button>
+      <button class="chip" data-p="P1" aria-pressed="false">N2 · P1</button>
+      <button class="chip" data-p="P2" aria-pressed="false">N6 · P2</button>
+      <button class="chip" data-p="P3" aria-pressed="false">N3 · P3</button>
+      <button class="chip" data-p="P4" aria-pressed="false">N4 · P4</button>
+      <button class="chip" data-p="P5" aria-pressed="false">N5 · P5</button>
+      <button class="chip" data-p="P6" aria-pressed="false">N1 · P6</button>
+    </div>
+    <div class="fgroup"><span class="flabel">Tầng</span>
+      <button class="chip" data-l="all" aria-pressed="true">Tất cả</button>
+      <button class="chip" data-l="measure" aria-pressed="false">Measure</button>
+      <button class="chip" data-l="metric" aria-pressed="false">Metric</button>
+      <button class="chip" data-l="kpi" aria-pressed="false">KPI</button>
+    </div>
+    <div class="fgroup"><span class="flabel">Trạng thái</span>
+      <button class="chip" data-v="all" aria-pressed="true">Tất cả</button>
+      <button class="chip" data-v="ok" aria-pressed="false">Đã kiểm chứng</button>
+      <button class="chip" data-v="fix" aria-pressed="false">Đã sửa</button>
+      <button class="chip" data-v="todo" aria-pressed="false">Chưa kiểm</button>
+    </div>
+    <input type="search" id="q" placeholder="Tìm tên hoặc công thức…" aria-label="Tìm trong bảng tra cứu">
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="tw"><table id="lookup">
+    <thead><tr><th style="width:46px">P</th><th style="width:82px">Tầng</th><th style="width:90px">Trạng thái</th><th style="width:210px">Tên</th><th>Định nghĩa / giá trị</th><th style="width:180px">Ghi chú</th></tr></thead>
+    <tbody id="lookup-body"></tbody>
+  </table></div>
+</section>
+
+<section id="bay">
+  <div class="sec-head"><span class="sec-num">08</span><h2>Tám cạm bẫy khi thiết kế bộ chỉ số</h2></div>
+  <p class="sec-sub">Bảy cái đầu là lỗi kỹ thuật, cái cuối là lỗi quản trị. Sáu trong tám cái đã xuất hiện thật trong dataset này — có dẫn chứng cụ thể.</p>
+  <div class="two">
+    <div>
+      <div class="trap"><p class="trap-n"><span>01</span>Chép số mà không tự tính lại <span class="st fix">đã xảy ra</span></p><p class="trap-d">Bản v1 của chính trang này chép “margin 22%→14%” từ tài liệu. Tính lại thì margin dao động chẵn/lẻ và 2022 cao hơn 2013. Bẫy nguy hiểm nhất vì nó lây từ tài liệu này sang tài liệu khác.</p></div>
+      <div class="trap"><p class="trap-n"><span>02</span>Lỗi grain <span class="st fix">đã xảy ra</span></p><p class="trap-d">Stockout 67% (snapshot SKU-tháng) so với 3,81% (SKU-ngày) — chênh 18 lần. Cùng dữ liệu, hai grain, hai câu chuyện hoàn toàn khác.</p></div>
+      <div class="trap"><p class="trap-n"><span>03</span>Tin tên cột thay vì kiểm nội dung <span class="st fix">đã xảy ra</span></p><p class="trap-d"><span class="m">discount_value = 50</span> với <span class="m">promo_type = 'fixed'</span> trông như giảm 50%; thực tế <span class="m">discount_amount</span> chỉ ghi 1,26% còn chiết khấu thật nằm ẩn trong <span class="m">unit_price</span>.</p></div>
+      <div class="trap"><p class="trap-n"><span>04</span>Sai mẫu số <span class="st fix">đã xảy ra</span></p><p class="trap-d">Độ sâu chiết khấu tính trên <span class="m">gross</span> cho 12,1%; tính trên <span class="m">list</span> cho 31,6%. Cùng một tử số, hai mẫu số, sai lệch 2,6 lần.</p></div>
+    </div>
+    <div>
+      <div class="trap"><p class="trap-n"><span>05</span>Vanity metric</p><p class="trap-d">Báo cáo doanh thu mà không kèm biên lợi nhuận. Ở đây còn tệ hơn: doanh thu được báo cáo ở mức gross bao gồm cả đơn đã hủy.</p></div>
+      <div class="trap"><p class="trap-n"><span>06</span>Trung bình của tỷ lệ</p><p class="trap-d"><span class="m">AVG(margin_pct)</span> khác <span class="m">SUM(profit)/SUM(revenue)</span>. Với 26,9% số đơn có margin âm, chênh lệch giữa hai cách tính rất lớn.</p></div>
+      <div class="trap"><p class="trap-n"><span>07</span>Thiếu counterfactual</p><p class="trap-d">“Ngày có chiến dịch nhiều hơn 8,5% số đơn” chưa nói lên điều gì nếu chiến dịch được xếp đúng vào mùa cao điểm. Uplift quan sát được luôn dương.</p></div>
+      <div class="trap"><p class="trap-n"><span>08</span>Định luật Goodhart</p><p class="trap-d">Khi doanh thu là mục tiêu, cách rẻ nhất để đạt là chiết khấu. Ở đây: 38% đơn có promo, độ sâu thực 31,6%, và 69,8% số đơn đó bán dưới giá vốn. Mỗi KPI tăng trưởng phải kèm một guardrail lợi nhuận.</p></div>
+    </div>
+  </div>
+
+  <h3>Mẫu thẻ định nghĩa KPI</h3>
+  <p>Mười một dòng dưới đây cũng chính là cấu trúc một <span class="m">semantic model</span> trong dbt — viết thẻ này là viết sẵn phần code của P6.</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:40px">#</th><th style="width:200px">Trường</th><th>Nội dung phải có</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Tên &amp; mã</td><td>Mã ổn định để trích dẫn chéo</td></tr>
+      <tr><td class="num">2</td><td>Câu hỏi nghiệp vụ</td><td>Một câu — không viết ra được thì KPI này không cần tồn tại</td></tr>
+      <tr><td class="num">3</td><td>Công thức</td><td>Tử và mẫu tách bạch. Với dataset này: nói rõ list / gross / net</td></tr>
+      <tr><td class="num">4</td><td>Grain &amp; cửa sổ</td><td>Đơn vị nhỏ nhất và khoảng thời gian mặc định</td></tr>
+      <tr><td class="num">5</td><td>Chiều được phép cắt</td><td>Và quan trọng hơn: chiều <em>không</em> được cắt</td></tr>
+      <tr><td class="num">6</td><td>Bộ lọc chuẩn</td><td>Có loại <span class="m">cancelled</span> không — phải nhất quán toàn hệ thống</td></tr>
+      <tr><td class="num">7</td><td>Nguồn</td><td>Model dbt cụ thể, không phải “bảng orders”</td></tr>
+      <tr><td class="num">8</td><td>Target &amp; ngưỡng</td><td>Bằng số, kèm cơ sở: hòa vốn / phân vị / baseline ngây thơ</td></tr>
+      <tr><td class="num">9</td><td>Owner &amp; nhịp</td><td>Một người, không phải một phòng ban</td></tr>
+      <tr><td class="num">10</td><td>Hành động khi vi phạm</td><td>Cụ thể tới mức làm được ngay, có thời hạn</td></tr>
+      <tr><td class="num">11</td><td>Hạn chế đã biết</td><td>Thiên lệch, dữ liệu thiếu, giai đoạn không dùng được</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="tiep">
+  <div class="sec-head"><span class="sec-num">09</span><h2>Việc tiếp theo</h2></div>
+  <p class="sec-sub">Bước 1 và 2 của bản v1 đã xong. Đây là thứ tự cho phần còn lại.</p>
+  <ol class="steps">
+    <li><b>Chốt scope với giảng viên hướng dẫn — làm ngay tuần này.</b> Bạn đã có ba phát hiện định lượng đủ mạnh để bảo vệ đề tài: năm định nghĩa doanh thu lệch 13,7%, chiết khấu bị báo cáo thiếu 2,6 lần, và tỷ lệ chuyển đổi sụp 71%. Đề xuất trình bày theo cây ở mục 04: một bài toán gốc về kinh tế học khuyến mãi, sáu nhánh con.</li>
+    <li><b>Dựng semantic layer tối thiểu.</b> Chứng thực sáu chỉ số: List Value, Gross Revenue, Net Revenue, Độ sâu chiết khấu thực, Net Margin %, Orders per 1.000 sessions. Mọi phân tích sau đó đọc từ đây. Đây vừa là hạ tầng vừa là đóng góp của khóa luận.</li>
+    <li><b>Chạy phân rã log-cộng tính cho P2.</b> Nhẹ về kỹ thuật, mạnh về kết quả, và cho bạn một biểu đồ trung tâm cho cả khóa luận. Kèm Chow test để định vị điểm gãy.</li>
+    <li><b>Dựng baseline phản thực cho P1.</b> Mô hình calendar-only huấn luyện chỉ trên kỳ không có chiến dịch. Phải đạt WAPE ≤ 18% (vượt seasonal naive ≥30%) trước khi phát biểu bất cứ điều gì về incrementality.</li>
+    <li><b>Làm lại H5 với cửa sổ quan sát cố định.</b> Chênh lệch 39% số đơn trọn đời đã được xác định là nghịch lý Simpson do cohort 2012 (xem N3). Đếm lại trong 12 tháng đầu của mỗi khách, rồi mới tới propensity score matching.</li>
+    <li><b>Xây gold set 50 câu cho agent.</b> Mỗi câu có đáp án số đã xác minh tay. Không có bộ này thì phần AI agent không đo được — và đó là chỗ hội đồng hỏi đầu tiên.</li>
+  </ol>
+</section>
+
+<footer>
+  Dữ liệu: VinDatathon 2026 Round 1 — 15 file CSV, 126 MB giải nén, 04/07/2012–31/12/2022 (synthetic). Mọi con số gắn nhãn “đã kiểm chứng” được tính trực tiếp trên 714.669 dòng <code>order_items</code>, đối chiếu chéo với <code>payments</code> và <code>sales.csv</code>.<br>
+  Bối cảnh gốc: “Retail Analytics &amp; Forecasting”, AI Việt Nam. Dữ liệu là mô phỏng và đơn vị tiền không xác định — ưu tiên tỷ lệ và thứ hạng hơn giá trị tuyệt đối.
+</footer>
+
+</div>
+
+<script>
+const ROWS = [
+  // P1
+  {p:"P1",l:"measure",v:"new",n:"List value",f:"quantity × products.price",c:"Mẫu số đúng cho độ sâu chiết khấu. Bản v1 thiếu measure này."},
+  {p:"P1",l:"measure",v:"ok",n:"Gross revenue",f:"quantity × unit_price — khớp 100% với sales.csv",c:"Đã bao gồm lớp chiết khấu thứ nhất."},
+  {p:"P1",l:"measure",v:"ok",n:"Net revenue",f:"gross − discount_amount — khớp 100% với payment_value",c:"Tiền khách thực trả. Khớp tuyệt đối ở tolerance 0,01."},
+  {p:"P1",l:"measure",v:"ok",n:"Discount amount",f:"discount_amount = d × gross (lớp 2)",c:"Chỉ là lớp thứ hai. Lớp một nằm ẩn trong unit_price."},
+  {p:"P1",l:"measure",v:"todo",n:"Baseline revenue",f:"ŷ calendar-only, huấn luyện trên kỳ không promo",c:"Chưa dựng. Toàn bộ tầng incrementality phụ thuộc vào nó."},
+  {p:"P1",l:"metric",v:"ok",n:"Promo Penetration",f:"38,36% ở cấp đơn hàng",c:"Xác nhận con số ~38% của tài liệu."},
+  {p:"P1",l:"metric",v:"fix",n:"Độ sâu chiết khấu thực",f:"1 − net/list = 31,6% (p50); p25 21,9% · p75 35,5%",c:"Tài liệu báo cáo 12,1%. Sai 2,6 lần do chỉ đọc một lớp."},
+  {p:"P1",l:"metric",v:"ok",n:"AOV theo giá gốc",f:"promo 27.008 vs không promo 27.545 = −1,95%",c:"Chênh lệch AOV gần như hoàn toàn là hiệu ứng giá, không phải hành vi."},
+  {p:"P1",l:"metric",v:"ok",n:"Units per Transaction",f:"5,01 (promo) vs 4,94 (không) = +1,4%",c:"Không có hiệu ứng halo. H6 bị bác bỏ."},
+  {p:"P1",l:"metric",v:"ok",n:"Below-Cost Order Rate",f:"26,9% tổng · 69,8% trong nhóm promo · 0,17% ngoài",c:"Tính theo net margin. Bản v1 đặt ngưỡng 0,5% — sai 50 lần."},
+  {p:"P1",l:"metric",v:"ok",n:"Net Margin phân vị đơn hàng",f:"p25 −3,9% · p50 +8,7% · p75 +25,1%",c:"Một phần tư số đơn đang lỗ."},
+  {p:"P1",l:"metric",v:"ok",n:"Discount Dependency Index",f:"p50 0,353 · p75 0,50 · p90 1,00",c:"Grain khách hàng. p90 = 1,0 nghĩa là 10% khách chỉ mua khi có promo."},
+  {p:"P1",l:"metric",v:"todo",n:"Incremental Revenue / Margin / ROI",f:"cần MS-11",c:"Chưa tính được. Tín hiệu thô: ngày có chiến dịch +8,5% số đơn."},
+  {p:"P1",l:"kpi",v:"fix",n:"K1 · Promo Profit ROI",f:"≥ 1,0 (hòa vốn) — v1 đặt 1,2× tùy ý",c:"Biên an toàn phải suy từ CI của baseline."},
+  {p:"P1",l:"kpi",v:"fix",n:"K2 · Below-Cost Order Rate",f:"≤ 27,8% (p50 tháng) · đỏ > 65,3% (p90)",c:"Phân phối lưỡng đỉnh — nên tách tháng có/không chiến dịch."},
+  {p:"P1",l:"kpi",v:"todo",n:"K4 · Cannibalization Rate",f:"chưa hiệu chuẩn được",c:"Không đặt ngưỡng cho tới khi có baseline phản thực."},
+  {p:"P1",l:"kpi",v:"ok",n:"K5 · Repeat Rate nhóm promo",f:"≥ 0,79 × nhóm organic (mức hiện tại)",c:"14,6% / 18,5%. Ngưỡng v1 (0,8×) tình cờ đúng."},
+  {p:"P1",l:"kpi",v:"fix",n:"K6 · Gross Margin % năm",f:"năm lẻ ≥ 11,2% · năm chẵn ≥ 15,3%",c:"Một ngưỡng chung là vô nghĩa vì margin dao động chẵn/lẻ."},
+  {p:"P1",l:"kpi",v:"ok",n:"K7 · Discount Dependency Index",f:"≤ 0,50 (đúng bằng p75)",c:"Ngưỡng v1 được dữ liệu xác nhận."},
+  // P2
+  {p:"P2",l:"measure",v:"ok",n:"Sessions",f:"6,80M (2013) → 11,06M (2022) = +62,7%",c:"Grain ngày × nguồn. Không nối được xuống cấp phiên."},
+  {p:"P2",l:"measure",v:"ok",n:"Order count theo năm",f:"76.849 (2013) → 36.004 (2022) = −53,2%",c:"Đối lập hoàn toàn với xu hướng traffic."},
+  {p:"P2",l:"metric",v:"ok",n:"Orders per 1.000 sessions",f:"11,30 → 3,25 = −71,2%",c:"Chỉ số trung tâm của P2. Proxy cho CVR, không phải CVR thật."},
+  {p:"P2",l:"metric",v:"ok",n:"Revenue per Session",f:"243,6 → 105,7 = −56,6%",c:"Gộp CVR và AOV vào một số."},
+  {p:"P2",l:"metric",v:"ok",n:"AOV gross theo năm",f:"21.564 (2013) → 32.489 (2022) = +50,7%",c:"AOV TĂNG. Không phải nguyên nhân suy giảm."},
+  {p:"P2",l:"metric",v:"ok",n:"Phân rã log-cộng tính",f:"Δln R = +0,487 (traffic) − 1,245 (CVR) + 0,410 (AOV) = −0,348",c:"Tổng khớp chính xác ln(0,706). Toàn bộ suy giảm nằm ở CVR."},
+  {p:"P2",l:"metric",v:"ok",n:"Bounce rate",f:"0,0045 phẳng suốt 2013–2022",c:"Không phải nút thắt. Nhưng phẳng bất thường — dấu hiệu dữ liệu mô phỏng."},
+  {p:"P2",l:"kpi",v:"new",n:"K10 · Orders per 1.000 sessions",f:"≥ 3,25 và có xu hướng tăng",c:"North star mới của P2. Chặn đà rơi là mục tiêu tối thiểu."},
+  {p:"P2",l:"kpi",v:"todo",n:"Net Revenue Retention",f:"≥ 100%",c:"Chưa tính. Cần tách doanh thu từ khách cũ và khách mới."},
+  // P3
+  {p:"P3",l:"measure",v:"ok",n:"Khách từng mua",f:"88.123 / 121.930",c:"Loại đơn cancelled."},
+  {p:"P3",l:"metric",v:"ok",n:"Activation Rate",f:"72,3% — tức 27,7% chưa từng mua",c:"Xác nhận chính xác con số của tài liệu."},
+  {p:"P3",l:"metric",v:"ok",n:"Repeat Rate trọn đời theo nhóm promo",f:"78,1% (không promo) vs 69,1% (có promo)",c:"Cohort đơn đầu 2013–2021, n = 86.795."},
+  {p:"P3",l:"metric",v:"ok",n:"Repeat Rate @90d",f:"18,5% vs 14,6%",c:"Chênh 3,9 điểm phần trăm."},
+  {p:"P3",l:"metric",v:"fix",n:"Số đơn trọn đời",f:"4,79 vs 4,97 = −3,6% (đã bỏ cohort 2012)",c:"Con số cũ 7,67 vs 4,67 (−39%) đã rút lại: nghịch lý Simpson do promotions.csv bắt đầu từ 2013."},
+  {p:"P3",l:"metric",v:"ok",n:"Trung vị ngày tới đơn thứ hai",f:"291 vs 362 ngày",c:"Dùng trung vị, phân phối lệch phải mạnh."},
+  {p:"P3",l:"metric",v:"todo",n:"LTV12 xác suất",f:"BG/NBD × Gamma–Gamma",c:"Chưa dựng. Tránh thiên lệch tuổi khách hàng."},
+  {p:"P3",l:"kpi",v:"todo",n:"LTV : CAC",f:"≥ 3 (chỉ so sánh tương đối)",c:"Dataset không có chi phí marketing."},
+  // P4
+  {p:"P4",l:"measure",v:"ok",n:"stockout_days",f:"trung bình 1,7 ngày/tháng khi flag = 1",c:"Cột này mới là nguồn hợp lệ, không phải stockout_flag."},
+  {p:"P4",l:"metric",v:"fix",n:"Stockout Rate (SKU-ngày)",f:"3,81% — không phải 67,3%",c:"Chênh 18 lần so với tỷ lệ snapshot có cờ. Lỗi grain điển hình."},
+  {p:"P4",l:"metric",v:"ok",n:"Fill Rate",f:"0,9613 tổng · 0,9425 khi có stockout · 1,0000 khi không",c:"Nhất quán hoàn toàn với stockout rate thật. Không có mâu thuẫn."},
+  {p:"P4",l:"metric",v:"todo",n:"Lost Sales ước lượng",f:"cầu kiểm duyệt phục hồi − doanh số thực",c:"Cần mô hình censored demand."},
+  {p:"P4",l:"metric",v:"todo",n:"Safety Stock cần thiết",f:"z × σ_LT × √lead_time",c:"z suy từ critical ratio Cᵤ/(Cᵤ+C_o), không chọn 95% tùy ý."},
+  {p:"P4",l:"kpi",v:"fix",n:"Service Level",f:"hiện 96,2% (= 1 − 3,81%)",c:"Đã đạt mức thường được coi là tốt. Bài toán không phải khủng hoảng."},
+  // P5
+  {p:"P5",l:"measure",v:"new",n:"acquisition_channel",f:"customers.csv — first touch, cấp khách hàng",c:"Tài liệu gốc KHÔNG dùng cột này. Bản v1 nói dataset thiếu — sai."},
+  {p:"P5",l:"measure",v:"ok",n:"order_source",f:"orders.csv — last touch, cấp đơn hàng",c:"Trường duy nhất tài liệu gốc sử dụng."},
+  {p:"P5",l:"metric",v:"new",n:"Độ lệch first-touch vs last-touch",f:"chỉ trùng 19,9% (ngẫu nhiên = 16,7%)",c:"Hai trường gần như độc lập. Mở ra bài toán attribution thật."},
+  {p:"P5",l:"metric",v:"ok",n:"Phân bố kênh thu hút",f:"organic 36.450 · social 24.448 · paid 24.285 · email 14.674 · referral 12.270 · direct 9.803",c:"Cấp khách hàng, từ customers.csv."},
+  {p:"P5",l:"metric",v:"todo",n:"LTV12 theo cohort kênh",f:"Σ net revenue 12 tháng / KH cohort",c:"Gán kênh theo first-touch, cố định suốt vòng đời."},
+  {p:"P5",l:"kpi",v:"todo",n:"LTV : CAC theo kênh",f:"≥ 3 (tương đối)",c:"Nêu rõ hạn chế thiếu dữ liệu chi phí."},
+  // P6
+  {p:"P6",l:"measure",v:"ok",n:"Số định nghĩa cùng tồn tại",f:"5 định nghĩa doanh thu hợp lệ",c:"sales.csv · gross · net · loại cancelled · loại cả hai."},
+  {p:"P6",l:"measure",v:"ok",n:"Đơn cancelled",f:"59.462 = 9,2% tổng đơn",c:"Vẫn nằm trong sales.csv — mục tiêu forecasting."},
+  {p:"P6",l:"metric",v:"ok",n:"Definitional Divergence Rate",f:"0% → 13,7% tùy cặp nguồn so sánh",c:"Bằng chứng mở đầu cho toàn khóa luận."},
+  {p:"P6",l:"metric",v:"ok",n:"Số phát biểu bị đảo sau kiểm chứng",f:"2 / 6 phát hiện nền của tài liệu",c:"Margin trend và diễn giải web traffic."},
+  {p:"P6",l:"metric",v:"todo",n:"Metric Coverage",f:"chỉ số chứng thực / tổng chỉ số dùng",c:"Chỉ số ngoài semantic layer là chỉ số không được bảo hành."},
+  {p:"P6",l:"metric",v:"todo",n:"Fault Detection Rate",f:"lỗi tiêm bị bắt / lỗi tiêm",c:"Thước đo thật của bộ test, thay cho pass rate."},
+  {p:"P6",l:"metric",v:"todo",n:"Agent Answer Accuracy",f:"khớp đáp án vàng / tổng câu hỏi",c:"So sánh hai nhánh: qua semantic layer và text-to-SQL thô."},
+  {p:"P6",l:"metric",v:"todo",n:"Agent Faithfulness",f:"tỷ lệ truy vết được về chỉ số chứng thực",c:"Bắt hiện tượng đúng số nhưng sai đường."},
+  {p:"P6",l:"kpi",v:"ok",n:"K9 · Definitional Divergence",f:"= 0 cho chỉ số chứng thực · hiện 13,7%",c:"Chặn merge khi vi phạm."},
+  {p:"P6",l:"kpi",v:"fix",n:"K8 · WAPE của baseline",f:"≤ 18% · đỏ > 25% — v1 đặt 12%",c:"Seasonal naive đạt 24,9–26,1%. Mô hình phải vượt naive ≥30%."},
+  {p:"P6",l:"kpi",v:"todo",n:"Data Freshness p95",f:"≤ 6 giờ",c:"Quy ước ngành, chưa suy từ nhu cầu nghiệp vụ thật."},
+];
+
+const LAY={measure:"Measure",metric:"Metric",kpi:"KPI"};
+const NBR={P1:"N2",P2:"N6",P3:"N3",P4:"N4",P5:"N5",P6:"N1"};
+const VST={ok:["ok","đã kiểm chứng"],fix:["fix","đã sửa"],new:["new","phát hiện mới"],todo:["todo","chưa kiểm"]};
+const body=document.getElementById("lookup-body");
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+body.innerHTML=ROWS.map(r=>{
+  const vs=VST[r.v]||VST.todo;
+  return '<tr data-p="'+r.p+'" data-l="'+r.l+'" data-v="'+r.v+'" data-s="'+esc((r.n+" "+r.f+" "+r.c).toLowerCase())+'">'
+   +'<td><span class="pid">'+NBR[r.p]+' · '+r.p+'</span></td>'
+   +'<td><span class="lay '+r.l+'">'+LAY[r.l]+'</span></td>'
+   +'<td><span class="st '+vs[0]+'">'+vs[1]+'</span></td>'
+   +'<td>'+esc(r.n)+'</td>'
+   +'<td class="f">'+esc(r.f)+'</td>'
+   +'<td>'+esc(r.c)+'</td></tr>';
+}).join("");
+
+let fp="all",fl="all",fv="all",fq="";
+const rows=Array.from(body.rows);
+const countEl=document.getElementById("count");
+function apply(){
+  let n=0;
+  for(const tr of rows){
+    const ok=(fp==="all"||tr.dataset.p===fp)&&(fl==="all"||tr.dataset.l===fl)
+      &&(fv==="all"||tr.dataset.v===fv||(fv==="ok"&&tr.dataset.v==="new"))
+      &&(fq===""||tr.dataset.s.includes(fq));
+    tr.classList.toggle("hidden",!ok);
+    if(ok)n++;
+  }
+  countEl.textContent=n+" / "+rows.length+" dòng";
+}
+function wire(attr,setter){
+  document.querySelectorAll(".chip["+attr+"]").forEach(b=>b.addEventListener("click",()=>{
+    setter(b.getAttribute(attr));
+    document.querySelectorAll(".chip["+attr+"]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+    apply();
+  }));
+}
+wire("data-p",v=>fp=v); wire("data-l",v=>fl=v); wire("data-v",v=>fv=v);
+document.getElementById("q").addEventListener("input",e=>{fq=e.target.value.trim().toLowerCase();apply();});
+apply();
+</script>
+
+</body></html>

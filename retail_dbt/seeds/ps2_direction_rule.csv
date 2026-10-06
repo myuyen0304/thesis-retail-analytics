@@ -1,0 +1,4 @@
+window_months,is_main_window,min_run_months
+3,false,6
+6,true,6
+9,false,6

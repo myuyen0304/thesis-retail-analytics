@@ -8,7 +8,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+/build/
 develop-eggs/
 dist/
 downloads/
@@ -150,6 +150,11 @@ activemq-data/
 # Environments
 .env
 .envrc
+# Thông tin kết nối Databricks cá nhân, lưu lại trên máy để dùng qua nhiều phiên.
+/.env.databricks.local
+/.env.snowflake.local
+# Khóa API LLM của AI Explain (apps/retail_app/ai_explain/provider.py)
+/.env.ai.local
 .venv
 env/
 venv/
@@ -224,8 +229,17 @@ __marimo__/
 # Data nguồn — KHÔNG commit (126MB). Tải từ Google Drive, xem README.md
 data/
 
-# Silver 3NF — dữ liệu dẫn xuất do scripts/build_silver.py sinh ra, KHÔNG commit
+# Silver 3NF — dữ liệu dẫn xuất do scripts/build/build_silver.py sinh ra, KHÔNG commit
 silver/
 
 # File output/tạm sinh ra khi chạy notebook
 .baseline_dump.txt
+
+# Data Warehouse (DuckDB) — do scripts/build/build_gold.py sinh ra từ silver/, KHÔNG commit
+warehouse/
+
+# dbt — artifact sinh ra khi chạy, KHÔNG commit
+retail_dbt/target/
+retail_dbt/logs/
+retail_dbt/dbt_packages/
+retail_dbt/.user.yml

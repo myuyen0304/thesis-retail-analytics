@@ -1,7 +1,7 @@
 """Tiền xử lý: 14 CSV nguồn -> Silver 3NF gồm 19 file CSV.
 
-Thiết kế theo `normalized_schema.mmd` (relational diagram) và DDL §8 của `docs/normalized_schema.md`.
-Logic port từ `databricks/retail_medallion/src/silver/core/*.sql`, trừ hai chỗ theo sơ đồ đã chốt:
+Thiết kế theo `docs/design/normalized_schema.mmd` (relational diagram) và DDL §8 của `docs/normalized_schema.md`.
+Logic port từ `archive/databricks/retail_medallion/src/silver/core/*.sql`, trừ hai chỗ theo sơ đồ đã chốt:
 `payment_method` nằm ở `payment` (không ở `order`), `zip` là chuỗi.
 
 Nguyên tắc:
@@ -9,7 +9,7 @@ Nguyên tắc:
 - Chỉ bỏ một cột sau khi đã đối soát nó là bản sao / dẫn xuất khớp 100%.
 - Có bất kỳ check nào FAIL thì dừng, không ghi file nào.
 
-Chạy từ root repo:  .venv/Scripts/python.exe scripts/build_silver.py
+Chạy từ root repo:  .venv/Scripts/python.exe scripts/build/build_silver.py
 """
 import os
 import sys
@@ -189,7 +189,7 @@ for t, cols in [('promotion', ['promo_name']), ('product_return', ['order_id', '
                 ('review', ['order_id', 'line_number'])]:
     check(f'UK {t}({", ".join(cols)})', T[t].duplicated(cols).sum(), len(T[t]))
 
-FK = [  # (bảng con, cột con, bảng cha, cột cha) — theo quan hệ trong normalized_schema.mmd
+FK = [  # (bảng con, cột con, bảng cha, cột cha) — theo quan hệ trong docs/design/normalized_schema.mmd
     ('city', ['region'], 'region', ['region']),
     ('district', ['region'], 'region', ['region']),
     ('zip_area', ['city'], 'city', ['city']),
@@ -220,7 +220,7 @@ check('order ||--|{ order_item: đơn nào cũng có dòng hàng', (~T['order'].
 check('order ||--|| payment: đơn nào cũng có payment', (~T['order'].order_id.isin(pay.order_id)).sum())
 
 p, oi, sh = T['product'], T['order_item'], T['shipment']
-CHECKS = [  # 13 ràng buộc của DDL §8 (cùng danh sách với normalization.ipynb §6)
+CHECKS = [  # 13 ràng buộc của DDL §8 (cùng danh sách với notebooks/02_design/normalization.ipynb §6)
     ('product.unit_cogs <= list_price', num(p.unit_cogs) > num(p.list_price)),
     ('order_item.quantity > 0', num(oi.quantity) <= 0),
     ('order_item.discount_amount >= 0', num(oi.discount_amount) < 0),

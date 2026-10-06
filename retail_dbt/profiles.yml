@@ -1,0 +1,36 @@
+# Không chứa bí mật: thông tin Snowflake đọc từ biến môi trường (máy cá nhân hoặc GitHub Actions secrets).
+retail_dbt:
+  target: postgres
+  outputs:
+    postgres:          # dev chính: PostgreSQL local (docker-compose.yml ở root, cổng 5433)
+      type: postgres
+      host: "{{ env_var('PG_HOST', 'localhost') }}"
+      port: "{{ env_var('PG_PORT', '5433') | as_number }}"
+      dbname: "{{ env_var('PG_DATABASE', 'retail') }}"
+      user: "{{ env_var('PG_USER', 'retail') }}"
+      password: "{{ env_var('PG_PASSWORD', 'retail') }}"
+      schema: public
+      threads: 4
+    duckdb:            # dev nhẹ: 1 file, không cần server/Docker
+      type: duckdb
+      path: warehouse/dbt.duckdb   # tương đối từ root repo, đã gitignore
+      threads: 4
+    databricks:        # lab kiểm chứng DWH/KPI (docs/dwh_roadmap.md), Databricks Free; cần .venv-databricks (dbt-databricks)
+      type: databricks
+      host: "{{ env_var('DATABRICKS_HOST', '') }}"            # không có https://
+      http_path: "{{ env_var('DATABRICKS_HTTP_PATH', '') }}"  # /sql/1.0/warehouses/<id>
+      token: "{{ env_var('DATABRICKS_TOKEN', '') }}"          # access token OAuth lấy từ `databricks auth token`, không dùng PAT
+      catalog: "{{ env_var('DATABRICKS_CATALOG', 'retail_lab') }}"
+      schema: dbt
+      threads: 4
+    snowflake:         # production / demo khóa luận; chạy qua scripts/snowflake/run_dbt.py (đọc .env.snowflake.local)
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', 'RETAIL_DBT') }}"   # user TYPE=SERVICE, scripts/snowflake/bootstrap.sql
+      # key-pair: Snowflake chặn password cho user service (đợt 2026-08–10); khóa bí mật nằm ngoài repo
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH', '') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'TRANSFORMER') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'TRANSFORM_WH') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'RETAIL') }}"
+      schema: dbt
+      threads: 4

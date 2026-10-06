@@ -1,0 +1,19 @@
+# Môi trường đang chạy trên máy chính — pin version để hai máy giống nhau.
+# LƯU Ý: pandas 3.x, KHÔNG phải 2.x. Hành vi dtype chuỗi khác nhau đáng kể giữa hai bản.
+
+pandas==3.0.5
+numpy==2.5.1
+matplotlib==3.11.1
+pyarrow==25.0.1      # pandas 3.0 dùng cho string dtype (uv tự nâng từ 25.0.0 khi cài streamlit, 2026-09-27)
+ipykernel==7.3.0     # để chạy notebook trong VS Code / Jupyter
+duckdb==1.5.5        # Data Warehouse (star schema) — scripts/build/build_gold.py
+dbt-core==1.12.5       # dbt: retail_dbt/ (staging -> marts star schema)
+dbt-duckdb==1.11.0      # target dev
+dbt-snowflake==1.12.1   # target production
+dbt-postgres==1.11.0    # target dev chính (PostgreSQL local, docker-compose.yml)
+psycopg[binary]==3.3.6  # scripts/ingest/ingest_raw.py
+streamlit==1.64.0       # app phân tích GĐ 2: apps/retail_app/ (docs/gd2_app_plan.md)
+databricks-sql-connector==4.4.0  # app đọc DWH Databricks lab (backend 'databricks'), đăng nhập OAuth
+databricks-sdk==0.117.0           # lấy token từ profile Databricks CLI cho app + scripts/parity
+openai==3.24.0          # AI Explain: client chuẩn OpenAI, dev gọi DeepSeek (apps/retail_app/ai_explain/provider.py)
+pytest==9.1.1          # test của app: .venv/Scripts/python.exe -m pytest apps/retail_app

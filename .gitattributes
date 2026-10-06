@@ -1,0 +1,6 @@
+# Chuan hoa line ending — tranh notebook bi diff toan file giua hai may
+* text=auto
+*.ipynb text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.csv text eol=lf
