@@ -34,7 +34,7 @@ thesis-retail-analytics/
 ├── data/          ← ở đây
 │   ├── orders.csv
 │   └── ...
-├── eda.ipynb
+├── notebooks/
 └── ...
 ```
 
@@ -57,7 +57,39 @@ Kiểm tra đủ **14 file nguồn**:
 | `sales.csv` | 3.833 × 3 | 1 ngày — **target** |
 | `sample_submission.csv` | 548 × 3 | 1 ngày — mẫu nộp bài |
 
-(`data/submission.csv` là output do `baseline.ipynb` sinh ra, không có trong bộ tải về.)
+(`data/submission.csv` là output do `notebooks/04_forecasting/baseline.ipynb` sinh ra, không có trong bộ tải về.)
+
+---
+
+## Cây thư mục
+
+```
+thesis-retail-analytics/
+├── README.md · CLAUDE.md · requirements.txt · docker-compose.yml
+├── data/                  (gitignore) 14 CSV nguồn — tải từ Drive
+├── notebooks/             phân tích + bằng chứng cho docs/ (chạy với thư mục làm việc = root repo)
+│   ├── 01_exploration/    eda, business_eda, full_data_exploration, dataset_storytelling_eda
+│   ├── 02_design/         data_model (star), normalization (3NF), database_design_demo
+│   ├── 03_cleaning/       full_dataset_cleaning
+│   └── 04_forecasting/    baseline
+├── scripts/               chạy từ root repo
+│   ├── ingest/            ingest_raw.py      14 CSV → PostgreSQL schema raw
+│   ├── build/             build_silver.py    → silver/ (3NF) · build_gold.py → warehouse/ (đối chứng dbt)
+│   ├── verify/            verify_problem_to_kpi.py
+│   └── docs_gen/          sinh hình / slide cho docs/
+├── retail_dbt/            dbt: staging → intermediate → marts (star) → reporting (KPI 5 PS)
+├── docs/                  tài liệu (*.md để phẳng)
+│   ├── design/            *.mmd, relational diagram, diagrams/
+│   ├── presentations/     *.pptx
+│   └── references/        tài liệu tham khảo, sơ đồ pipeline
+├── archive/databricks/    bản Databricks cũ — chỉ tham khảo, không chạy
+├── .vscode/settings.json  cho notebook chạy từ root repo
+└── silver/ · warehouse/   (gitignore) sinh lại được bằng scripts/build/
+```
+
+**Notebook đọc `data/` theo đường dẫn tương đối từ root repo.** VS Code đã cấu hình sẵn (`.vscode/settings.json`).
+Dùng Jupyter Lab/Notebook thì kernel mặc định chạy ở thư mục của notebook: thêm `%cd ../..` ở cell đầu khi chạy tay,
+đừng sửa `DATA = 'data'`.
 
 ---
 
@@ -65,12 +97,14 @@ Kiểm tra đủ **14 file nguồn**:
 
 | File | Nội dung |
 |---|---|
-| `eda.ipynb` | Tìm cấu trúc sinh dữ liệu — 5 phát hiện chính, không xây model |
-| `data_model.ipynb` | Kiểm chứng các quyết định trong `star_schema.md` |
-| `normalization.ipynb` | Kiểm chứng các phụ thuộc hàm trong `normalized_schema.md` |
-| `baseline.ipynb` | Baseline seasonal average + trend — **có lỗi đã biết**, chỉ dùng làm mốc so sánh |
-| `star_schema.md` | Dimensional model + ERD |
-| `normalized_schema.md` | Mô hình chuẩn hóa 1NF→3NF (19 bảng); §9 so sánh hai mô hình |
+| `notebooks/01_exploration/eda.ipynb` | Tìm cấu trúc sinh dữ liệu — 5 phát hiện chính, không xây model |
+| `notebooks/02_design/data_model.ipynb` | Kiểm chứng các quyết định trong `docs/star_schema.md` |
+| `notebooks/02_design/normalization.ipynb` | Kiểm chứng các phụ thuộc hàm trong `docs/normalized_schema.md` |
+| `notebooks/04_forecasting/baseline.ipynb` | Baseline seasonal average + trend — **có lỗi đã biết**, chỉ dùng làm mốc so sánh |
+| `docs/star_schema_tu_ps.md` | Dẫn star schema từ 5 PS: PS → KPI → grain → fact → dimension, bus matrix |
+| `docs/star_schema.md` | Dimensional model + ERD |
+| `docs/normalized_schema.md` | Mô hình chuẩn hóa 1NF→3NF (19 bảng); §9 so sánh hai mô hình |
+| `docs/` | Toàn bộ tài liệu business, EDA, data dictionary, schema và defense |
 | `CLAUDE.md` | Bối cảnh project cho Claude Code — **đọc file này trước** |
 
 **Convention:** file `.md` là phần *diễn giải*, notebook là phần *chứng minh chạy lại được*.
@@ -84,7 +118,7 @@ Mỗi khẳng định trong `.md` có một cell tương ứng trong notebook. S
 
 | Người | Notebook phụ trách |
 |---|---|
-| myuyen | `eda.ipynb`, `data_model.ipynb`, `normalization.ipynb`, `baseline.ipynb` |
+| myuyen | `notebooks/01_exploration/eda.ipynb`, `notebooks/02_design/data_model.ipynb`, `notebooks/02_design/normalization.ipynb`, `notebooks/04_forecasting/baseline.ipynb` |
 | *(bạn cùng nhóm)* | *(điền khi nhận việc)* |
 
 ### Vòng lặp hằng ngày
