@@ -15,7 +15,6 @@ Lựa chọn trạng thái (ghi lại để eval chấm nhất quán):
 - nhóm không tồn tại trong chiều → `no_data`.
 """
 import datetime as dt
-import functools
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -614,21 +613,25 @@ def run(call: ToolCall | dict, backend: str, *, timeout_s: float | None = None,
         sess.close()
 
 
-@functools.lru_cache(maxsize=4)
+_KNOWN_GROUPS: dict[str, frozenset] = {}
+
+
 def known_groups(backend: str) -> frozenset:
     """Tên mọi nhóm của 3 chiều PS5 (Streetwear, East, organic_search...), để bộ điều phối biết câu hỏi có lọc nhóm hay
-    không. Đọc qua phiên chỉ-đọc như mọi tool; lỗi kết nối → tập rỗng (khi đó tool cũng không trả số)."""
-    try:
+    không. Đọc qua phiên chỉ-đọc như mọi tool. Chỉ nhớ kết quả ĐỌC ĐƯỢC; lỗi (kể cả tập rỗng) thì raise, không trả tập
+    rỗng: tập rỗng nghĩa là "câu hỏi không lọc nhóm" và sẽ tắt ngầm phép kiểm bỏ bộ lọc (lỗi chặn AI3, A08). Trên
+    Databricks lỗi thoáng qua (warehouse nguội, token) dễ xảy ra, nên không được nhớ lỗi suốt đời process."""
+    if backend not in _KNOWN_GROUPS:
         sess = open_session(backend, ALLOWED_RELATIONS)
-    except Exception:       # noqa: BLE001
-        return frozenset()
-    try:
-        rows = sess.fetch(Statement('select distinct dimension_value from reporting.rpt_revenue_segment_yearly')).records()
-        return frozenset(r['dimension_value'] for r in rows if isinstance(r['dimension_value'], str))
-    except Exception:       # noqa: BLE001
-        return frozenset()
-    finally:
-        sess.close()
+        try:
+            rows = sess.fetch(Statement('select distinct dimension_value from reporting.rpt_revenue_segment_yearly')).records()
+        finally:
+            sess.close()
+        groups = frozenset(r['dimension_value'] for r in rows if isinstance(r['dimension_value'], str))
+        if not groups:
+            raise RuntimeError('rpt_revenue_segment_yearly không có nhóm nào')
+        _KNOWN_GROUPS[backend] = groups
+    return _KNOWN_GROUPS[backend]
 
 
 def tool_schemas() -> list[dict]:

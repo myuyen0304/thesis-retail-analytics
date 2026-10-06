@@ -124,6 +124,43 @@ def test_luat_4_nhin_thay_bang_ngoai_danh_sach_bi_chan(obj):
     assert any('nhìn thấy bảng' in w for w in _v(objects=BASE_OBJECTS + [obj]))
 
 
+@pytest.mark.parametrize('bo', [
+    lambda g: g[0] == 'table' and g[3] == 'rpt_build_info' and g[4] == SP,      # thiếu SELECT một bảng
+    lambda g: g[0] == 'catalog' and g[1] == CAT and g[4] == SP,                  # thiếu USE CATALOG
+], ids=['thieu-select', 'thieu-use-catalog'])
+def test_tu_kiem_thieu_quyen_cua_chinh_minh_bi_chan(bo):
+    assert any('không nhận ra quyền' in w for w in _v(grants=[g for g in BASE_GRANTS if not bo(g)]))
+
+
+def test_tu_kiem_grantee_ghi_theo_ten_hien_thi_bi_chan():
+    # Nếu UC ghi quyền của SP theo tên hiển thị thay vì application id, luật 2–3 không áp được → phải từ chối ồn ào
+    renamed = [g[:4] + ('retail-ai-ro',) + g[5:] if g[4] == SP else g for g in BASE_GRANTS]
+    assert any('không nhận ra quyền' in w for w in _v(grants=renamed))
+
+
+def test_known_groups_khong_nho_loi(monkeypatch):
+    """Lỗi đọc danh sách nhóm không được nhớ thành tập rỗng (tập rỗng = "không lọc nhóm" → tắt kiểm bỏ bộ lọc)."""
+    from ai_explain import service
+    from tests.test_ai_chat import FakeProvider, call, final
+    monkeypatch.setattr(tools, '_KNOWN_GROUPS', {})
+    real = tools.open_session
+    hong = {'lan': 0}
+
+    def open_hong(*a, **k):
+        hong['lan'] += 1
+        if hong['lan'] == 2:                 # lần 1: tool đọc số; lần 2: known_groups → lỗi thoáng qua
+            raise RuntimeError('warehouse đang khởi động')
+        return real(*a, **k)
+
+    monkeypatch.setattr(tools, 'open_session', open_hong)
+    t = service.run_turn('R 2019?', [], 'duckdb', FakeProvider(
+        call('get_revenue_summary', metric='R', year=2019), final('ok', 'R 2019 là {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].r'}])))
+    assert t.status == 'query_error' and 'danh sách nhóm' in t.message
+    assert tools._KNOWN_GROUPS == {}                       # không nhớ lỗi
+    assert 'Streetwear' in tools.known_groups('duckdb')    # lần sau đọc lại được
+    assert 'duckdb' in tools._KNOWN_GROUPS
+
+
 class _Cursor:
     """Cursor giả: trả lần lượt kết quả cho 3 câu của _check_dbx_identity."""
 

@@ -237,10 +237,10 @@ def _dbx_violations(me: str, expected: str, grants: list, objects: list, allowed
     Quyền cấp cho nhóm nền tảng luôn tính là áp dụng cho tài khoản AI, không dựa vào is_member()."""
     if (me or '').lower() != expected.lower():
         return [f'danh tính đang kết nối ({me}) không phải service principal AI đã cấu hình']
-    applies = lambda who, member: who == me or bool(member) or _dbx_platform(who)
+    applies = lambda who, member: who.lower() == me.lower() or bool(member) or _dbx_platform(who)
     out = []
     if (owned := sorted('.'.join(x for x in (c, s, n) if x) for _, c, s, n, who, m in objects
-                        if (who == me or m) and not _dbx_platform(who))):
+                        if applies(who, m) and not _dbx_platform(who))):
         out.append(f'tài khoản AI là owner của {owned[:5]}')
     if (extra := sorted({f"{p} trên {lvl} {'.'.join(x for x in (c, s, n) if x)} (cấp cho {g})"
                          for lvl, c, s, n, g, p, m in grants
@@ -251,6 +251,15 @@ def _dbx_violations(me: str, expected: str, grants: list, objects: list, allowed
                        and not (c == catalog and f'{s}.{n}' in allowed_relations)
                        and c != 'samples' and not (c == 'system' and s == 'ai'))):
         out.append(f'tài khoản AI nhìn thấy bảng ngoài danh sách cho phép: {seen[:5]}')
+    # Tự kiểm: phải nhận ra quyền cần có của CHÍNH mình. Nếu UC ghi grantee theo dạng khác current_user() (vd. tên hiển
+    # thị của SP) thì luật 2–3 âm thầm không áp dụng được; thà từ chối còn hơn đạt nhờ không nhìn thấy quyền.
+    mine = {(lvl, c, s, n, p) for lvl, c, s, n, g, p, m in grants if applies(g, m)}
+    need = ({('catalog', catalog, None, None, 'USE_CATALOG')}
+            | {('schema', catalog, r.split('.')[0], None, 'USE_SCHEMA') for r in allowed_relations}
+            | {('table', catalog, *r.split('.'), 'SELECT') for r in allowed_relations})
+    if (lack := sorted(f"{p} {'.'.join(x for x in (c, s, n) if x)}" for lvl, c, s, n, p in need - mine)):
+        out.append(f'không nhận ra quyền của chính tài khoản AI (thiếu {lack[:5]}): có thể chưa cấp quyền, hoặc '
+                   'grantee không ghi theo current_user()')
     return out
 
 

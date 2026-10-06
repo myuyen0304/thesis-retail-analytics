@@ -328,7 +328,12 @@ def run_turn(question: str, history: list[dict], backend: str, provider, *, sess
             continue
 
         turn.raw_final = reply.content
-        status, errors, chk = _check_final(parse_final(reply.content), turn.results, question, tools.known_groups(backend))
+        try:        # chỉ cần khi có số từ kho; lỗi đọc thì không đoán "câu hỏi không lọc nhóm"
+            groups = tools.known_groups(backend) if any(r.ok for r in turn.results.values()) else frozenset()
+        except Exception as e:       # noqa: BLE001
+            return finish('query_error', 'Không đọc được danh sách nhóm (ngành, vùng, kênh) để kiểm câu trả lời có bỏ '
+                          f'ngầm bộ lọc nhóm hay không ({type(e).__name__}); không hiện diễn giải, hãy hỏi lại.')
+        status, errors, chk = _check_final(parse_final(reply.content), turn.results, question, groups)
         if not errors:
             msg = '' if chk is not None else (parse_final(reply.content) or {}).get('answer', '')
             if status != 'ok' and chk is None:
