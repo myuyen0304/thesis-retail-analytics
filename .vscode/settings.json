@@ -1,0 +1,5 @@
+{
+    // Notebook nằm trong notebooks/<nhóm>/ nhưng mọi đường dẫn data viết tương đối từ ROOT repo ('data', 'silver').
+    // Dòng này cho kernel Jupyter trong VS Code chạy với thư mục làm việc = root repo.
+    "jupyter.notebookFileRoot": "${workspaceFolder}"
+}
