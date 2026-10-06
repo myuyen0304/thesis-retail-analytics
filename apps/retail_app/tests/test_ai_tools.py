@@ -572,3 +572,6 @@ def test_dbt_cap_lai_quyen_ai_dung_danh_sach_tool():
     macro = re.sub(r'\{#.*?#\}', '', (ROOT / 'retail_dbt' / 'macros' / 'ai_readonly_grants.sql').read_text(
         encoding='utf-8'), flags=re.S)                                   # bỏ phần chú thích, chỉ xét SQL
     assert "target.type == 'postgres'" in macro and 'pg_roles' in macro and 'default privileges' not in macro.lower()
+    # Databricks: SELECT từng bảng trong var, KHÔNG cấp SELECT cả schema/catalog (thừa kế xuống mọi bảng)
+    assert "target.type == 'databricks'" in macro and "env_var('RETAIL_AI_DBX_PRINCIPAL'" in macro
+    assert 'grant select on table' in macro and not re.search(r'grant (select|all)[^\n]*on (schema|catalog)', macro, re.I)

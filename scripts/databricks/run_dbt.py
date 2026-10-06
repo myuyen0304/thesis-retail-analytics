@@ -8,6 +8,7 @@ Chạy từ root repo:
   (mọi tham số khác được chuyển nguyên cho dbt, vd. `build -s staging`)
 Profile, warehouse, catalog lấy từ .env.databricks.local (DATABRICKS_CONFIG_PROFILE, DATABRICKS_WAREHOUSE_ID,
 RETAIL_DATABRICKS_CATALOG — mặc định retail_lab); --profile / --warehouse-id ghi đè.
+Application id của service principal AI (RETAIL_AI_DBX_CLIENT_ID trong .env.ai.local) được chuyển cho hook cấp quyền.
 """
 import argparse
 import os
@@ -45,6 +46,11 @@ env = {**os.environ, 'PYTHONUTF8': '1',
        'DATABRICKS_HTTP_PATH': f'/sql/1.0/warehouses/{a.warehouse_id}',
        'DATABRICKS_TOKEN': token,
        'DATABRICKS_CATALOG': c.get('RETAIL_DATABRICKS_CATALOG', 'retail_lab')}
+# Hook on-run-end (macros/ai_readonly_grants.sql) cấp lại SELECT 14 bảng cho service principal chỉ-đọc của chat AI.
+# Lấy application id (không lấy secret) từ .env.ai.local; chưa có thì hook bỏ qua.
+principal = os.environ.get('RETAIL_AI_DBX_PRINCIPAL') or local_config('.env.ai.local').get('RETAIL_AI_DBX_CLIENT_ID')
+if principal:
+    env['RETAIL_AI_DBX_PRINCIPAL'] = principal
 dbt = os.path.join('.venv-databricks', 'Scripts', 'dbt.exe')
 sys.exit(subprocess.call([dbt, *dbt_args, '--project-dir', 'retail_dbt', '--profiles-dir', 'retail_dbt',
                           '--target', 'databricks', '--target-path', 'target_databricks'], env=env))
