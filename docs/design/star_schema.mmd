@@ -1,0 +1,192 @@
+%% Star schema (mô hình chiều) cho 14 file CSV nguồn
+%% Nguồn chuẩn: docs/star_schema.md; kiểm chứng: notebooks/02_design/star_schema_validation.ipynb
+%% ERD vật lý hiện có: 7 fact + 6 dimension + 1 bridge. Không biểu diễn bảng đề xuất như đã triển khai.
+%% Lõi PS1–PS5 là fact_order_item + date/product/customer/order_junk và geography qua customer.
+%% Tái sử dụng conformed dimension khi thêm nghiệp vụ; không join fact detail-detail rồi SUM.
+%% Quy ước khóa: PK khóa chính, FK khóa ngoại, UK khóa tự nhiên (natural key).
+%% order_id trong fact_order_item là degenerate dimension — không có bảng dimension riêng.
+erDiagram
+    %% ---------- fact_order_item: ngôi sao lõi, grain = 1 dòng hàng
+    dim_date          ||--o{ fact_order_item   : "ngày đặt"
+    dim_customer      ||--o{ fact_order_item   : "mua"
+    dim_product       ||--o{ fact_order_item   : "được bán"
+    dim_order_junk    ||--o{ fact_order_item   : "bối cảnh đơn"
+    dim_geography     ||--o{ dim_customer      : "outrigger"
+
+    fact_order_item   ||--o{ bridge_item_promo : "áp dụng"
+    dim_promotion     ||--o{ bridge_item_promo : "áp dụng"
+
+    %% ---------- fact_order: accumulating snapshot, dim_date đóng 3 vai trò
+    dim_date          ||--o{ fact_order        : "ngày đặt"
+    dim_date          |o--o{ fact_order        : "ngày gửi"
+    dim_date          |o--o{ fact_order        : "ngày giao"
+    dim_customer      ||--o{ fact_order        : "đặt"
+    dim_order_junk    ||--o{ fact_order        : "bối cảnh đơn"
+
+    %% ---------- return / review trỏ vào DÒNG HÀNG; không join nhiều fact detail rồi SUM
+    fact_order_item   ||--o{ fact_return       : "bị trả"
+    fact_order_item   ||--o{ fact_review       : "được đánh giá"
+    dim_date          ||--o{ fact_return       : "ngày trả"
+    dim_date          ||--o{ fact_review       : "ngày đánh giá"
+
+    %% ---------- các fact theo ngày / snapshot
+    dim_date          ||--o{ fact_daily_sales        : "ngày"
+    dim_date          ||--o{ fact_inventory_snapshot : "mốc cuối tháng"
+    dim_product       ||--o{ fact_inventory_snapshot : "tồn kho"
+    dim_date          ||--o{ fact_web_traffic        : "ngày"
+
+    %% ================= DIMENSIONS
+    dim_date {
+        int     date_sk            PK "dạng YYYYMMDD"
+        date    full_date          UK
+        int     year
+        int     quarter
+        int     month
+        string  month_name
+        int     day_of_month
+        int     day_of_week        "0 = thứ Hai"
+        int     day_of_year
+        boolean is_weekend
+        boolean is_month_end
+        date    month_start_date  "ngày đầu tháng"
+        int     days_in_month     "số ngày theo lịch, có năm nhuận"
+        boolean is_urban_blowout   "năm lẻ, 30/07–02/09"
+        boolean is_forecast_period "từ 2023-01-01"
+    }
+
+    dim_customer {
+        int     customer_sk         PK
+        int     customer_id         UK
+        int     geography_sk        FK
+        string  gender
+        string  age_group
+        string  acquisition_channel
+        date    signup_date         "KHÔNG đáng tin"
+        boolean signup_date_valid
+    }
+
+    dim_geography {
+        int    geography_sk PK
+        int    zip          UK
+        string city         "cắt chéo district"
+        string district
+        string region
+    }
+
+    dim_product {
+        int     product_sk    PK
+        int     product_id    UK
+        string  product_name  "KHÔNG duy nhất"
+        string  category
+        string  segment       "1 segment thuộc 1–2 category"
+        string  size
+        string  color
+        decimal current_price "giá hiện tại, KHÔNG phải giá lịch sử"
+        decimal current_cogs
+        boolean price_anomaly "price < 100, chỉ để lọc/kiểm tra"
+    }
+
+    dim_promotion {
+        int     promotion_sk        PK
+        string  promo_id            UK
+        string  promo_name
+        string  promo_type
+        decimal discount_value
+        date    start_date
+        date    end_date
+        string  applicable_category "NULL = mọi category"
+        string  promo_channel
+        boolean stackable_flag
+        int     min_order_value
+    }
+
+    dim_order_junk {
+        int    order_junk_sk  PK
+        string order_status   UK "UK = tổ hợp 4 cột"
+        string payment_method UK
+        string device_type    UK
+        string order_source   UK
+    }
+
+    %% ================= FACTS
+    fact_order_item {
+        int     order_item_sk   PK "khóa thay thế snapshot; cần map bền vững khi incremental"
+        int     order_id        UK "degenerate; UK ghép cùng line_number"
+        int     line_number     UK "thứ tự nguồn trong đơn; không unique riêng"
+        int     date_sk         FK
+        int     customer_sk     FK
+        int     product_sk      FK
+        int     order_junk_sk   FK
+        int     quantity
+        decimal unit_price      "giá TẠI THỜI ĐIỂM BÁN"
+        decimal gross_amount    "quantity × unit_price"
+        decimal discount_amount
+        decimal net_amount      "gross − discount"
+        decimal cogs_amount
+    }
+
+    bridge_item_promo {
+        int order_item_sk PK, FK
+        int promotion_sk  PK, FK
+    }
+
+    fact_order {
+        int     order_id         PK
+        int     order_date_sk    FK
+        int     ship_date_sk     FK "NULL nếu chưa gửi"
+        int     delivery_date_sk FK
+        int     customer_sk      FK
+        int     order_junk_sk    FK
+        decimal payment_value    "= SUM(net_amount), giữ để đối soát"
+        int     installments     "thông tin mới duy nhất từ payments"
+        decimal shipping_fee
+        int     days_to_ship
+        int     days_to_deliver
+    }
+
+    fact_return {
+        string  return_id       PK
+        int     order_item_sk   FK
+        int     date_sk         FK
+        string  return_reason
+        int     return_quantity
+        decimal refund_amount
+    }
+
+    fact_review {
+        string review_id     PK
+        int    order_item_sk FK
+        int    date_sk       FK
+        int    rating        "từ 1 đến 5"
+    }
+
+    fact_daily_sales {
+        int     date_sk   PK, FK
+        decimal revenue   "SUM(gross_amount), KHÔNG trừ discount"
+        decimal cogs
+        boolean is_actual "FALSE cho 548 dòng mẫu; chưa phải forecast thật"
+    }
+
+    fact_inventory_snapshot {
+        int     date_sk           PK, FK
+        int     product_sk        PK, FK
+        int     stock_on_hand     "bán cộng tính, KHÔNG cộng qua nhiều ngày"
+        int     units_received
+        int     units_sold        "KHÔNG khớp fact_order_item"
+        int     stockout_days
+        decimal days_of_supply    "tỷ lệ dẫn xuất; không SUM"
+        decimal fill_rate         "tỷ lệ dẫn xuất; tính lại ở grain đích"
+        decimal sell_through_rate "tỷ lệ dẫn xuất; tính lại ở grain đích"
+        boolean stockout_flag     "dẫn xuất"
+        boolean overstock_flag    "dẫn xuất"
+    }
+
+    fact_web_traffic {
+        int     date_sk                  PK, FK
+        int     sessions
+        int     unique_visitors
+        int     page_views
+        decimal bounce_rate              "xấp xỉ 0,005, phi thực tế"
+        decimal avg_session_duration_sec
+        string  traffic_source           "1 nhãn/ngày, KHÔNG phải phân rã"
+    }
