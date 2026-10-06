@@ -3,7 +3,7 @@
 Thiết kế mô hình quan hệ chuẩn hóa cho 14 file CSV nguồn, và trả lời câu hỏi
 **khi nào dùng chuẩn nào**.
 
-Mọi phụ thuộc hàm khẳng định ở đây đều được chứng minh trong `normalization.ipynb`.
+Mọi phụ thuộc hàm khẳng định ở đây đều được chứng minh trong `notebooks/02_design/normalization.ipynb`.
 Tài liệu song song: `star_schema.md` — **cùng dữ liệu, mô hình ngược lại** (§9 giải thích tại sao).
 
 ---
@@ -11,7 +11,7 @@ Tài liệu song song: `star_schema.md` — **cùng dữ liệu, mô hình ngư�
 ## 1. Hiểu dataset
 
 14 file CSV phẳng, không có khai báo khóa, không có ràng buộc. Toàn vẹn tham chiếu thực tế
-**hoàn hảo** (0 orphan trên 14 quan hệ — `data_model.ipynb` §3), nên đây là bài toán *khôi phục
+**hoàn hảo** (0 orphan trên 14 quan hệ — `notebooks/02_design/data_model.ipynb` §3), nên đây là bài toán *khôi phục
 cấu trúc từ dữ liệu*, không phải bài toán làm sạch.
 
 | File | Dòng × Cột | Grain (1 dòng = ?) | Khóa tự nhiên | Phủ thời gian |
@@ -135,7 +135,7 @@ nên quan hệ ở đây hiện ra như đường nối chứ không như đối
 | `ORDER` | `"order"` | bỏ `zip` (§4.2); đặt trong nháy vì là từ khóa SQL |
 | `ORDER_ITEM` | `order_item` | **thêm `line_number`** (§2.1) |
 | *(quan hệ M:N)* | `order_item_promotion` | **quan hệ hóa thành bảng** (§2.2) |
-| `PAYMENT` | `payment` | teo còn đúng 1 cột `installments` (§4.4, §5) |
+| `PAYMENT` | `payment` | còn `installments` + `payment_method`; bỏ `payment_value` (§4.4, §5) |
 | `SHIPMENT` | `shipment` | giữ nguyên |
 | `PRODUCT_RETURN` | `product_return` | FK trỏ **dòng hàng**, không phải đơn |
 | `REVIEW` | `review` + `review_title_label` | **1 → 2 bảng** (§4.3) |
@@ -146,9 +146,10 @@ nên quan hệ ở đây hiện ra như đường nối chứ không như đối
 tương ứng, nên không có bảng nào ở §6 xuất hiện mà không truy được nguồn gốc.
 
 `PAYMENT` là ví dụ gọn nhất cho việc *conceptual ≠ logical*: thanh toán rõ ràng là một khái
-niệm nghiệp vụ có thật, nhưng xuống tới logical thì `payment_method` trùng `orders` (§4.4) và
-`payment_value` suy ra được 100% (§5), nên bảng chỉ còn `installments`. Thực thể **không biến
-mất**, nó **teo lại** — và điều đó chỉ nhìn thấy được khi có mức khái niệm để đối chiếu.
+niệm nghiệp vụ có thật, nhưng xuống tới logical thì `payment_value` suy ra được 100% (§5) nên bị
+bỏ; `payment_method` tuy trùng `orders` (§4.4) nhưng được **giữ lại** — chỉ ở một nơi duy nhất
+(`payment`), bỏ khỏi `order`. Thực thể **không biến mất**, nó **gọn lại còn hai cột** — và điều
+đó chỉ nhìn thấy được khi có mức khái niệm để đối chiếu.
 
 #### Vì sao `web_traffic` và `daily_sales_forecast` không có ở đây
 
@@ -173,14 +174,14 @@ Cardinality ở §1.1 và §6 là **cùng một bộ số** — không có quan 
 
 | Quan hệ | Cardinality | Số liệu | Nguồn |
 |---|---|---|---|
-| `ORDER` → `ORDER_ITEM` | 1 : 1..N | 0 đơn không có dòng hàng; tối đa 5 dòng/đơn | `normalization.ipynb` §2.1, §6 |
-| `ORDER` → `PAYMENT` | 1 : 1 | 0 đơn không có payment; 1:1 đầy đủ | `normalization.ipynb` §6 |
-| `ORDER` → `SHIPMENT` | 1 : 0..1 | **80.878** đơn không có shipment | `normalization.ipynb` §6 |
-| `ORDER_ITEM` → `REVIEW` | 1 : 0..1 | `UNIQUE(order_id, line_number)` 0 vi phạm / 113.551 | `normalization.ipynb` §6 |
-| `ORDER_ITEM` → `PRODUCT_RETURN` | 1 : 0..1 | `UNIQUE(order_id, line_number)` 0 vi phạm / 39.939 — xem ghi chú bên dưới | `normalization.ipynb` §6 |
-| `CUSTOMER` → `ORDER` | 1 : 0..N | **31.684** khách chưa mua lần nào | `data_model.ipynb` §3 |
-| `PRODUCT` → `ORDER_ITEM` | 1 : 0..N | **814** sản phẩm chưa bán lần nào | `data_model.ipynb` §3 |
-| `PRODUCT` → `INVENTORY_SNAPSHOT` | 1 : 0..N | chỉ 1.624/2.412 SP có snapshot | `data_model.ipynb` §6 |
+| `ORDER` → `ORDER_ITEM` | 1 : 1..N | 0 đơn không có dòng hàng; tối đa 5 dòng/đơn | `notebooks/02_design/normalization.ipynb` §2.1, §6 |
+| `ORDER` → `PAYMENT` | 1 : 1 | 0 đơn không có payment; 1:1 đầy đủ | `notebooks/02_design/normalization.ipynb` §6 |
+| `ORDER` → `SHIPMENT` | 1 : 0..1 | **80.878** đơn không có shipment | `notebooks/02_design/normalization.ipynb` §6 |
+| `ORDER_ITEM` → `REVIEW` | 1 : 0..1 | `UNIQUE(order_id, line_number)` 0 vi phạm / 113.551 | `notebooks/02_design/normalization.ipynb` §6 |
+| `ORDER_ITEM` → `PRODUCT_RETURN` | 1 : 0..1 | `UNIQUE(order_id, line_number)` 0 vi phạm / 39.939 — xem ghi chú bên dưới | `notebooks/02_design/normalization.ipynb` §6 |
+| `CUSTOMER` → `ORDER` | 1 : 0..N | **31.684** khách chưa mua lần nào | `notebooks/02_design/data_model.ipynb` §3 |
+| `PRODUCT` → `ORDER_ITEM` | 1 : 0..N | **814** sản phẩm chưa bán lần nào | `notebooks/02_design/data_model.ipynb` §3 |
+| `PRODUCT` → `INVENTORY_SNAPSHOT` | 1 : 0..N | chỉ 1.624/2.412 SP có snapshot | `notebooks/02_design/data_model.ipynb` §6 |
 
 > **Ghi chú về `PRODUCT_RETURN`:** `returns` có **2 cặp** `(order_id, product_id)` trùng, thoạt nhìn
 > giống một dòng hàng bị trả hai lần. Nhưng cả hai cặp đều nằm trong **16 khóa nhập nhằng** ở §2.1,
@@ -307,14 +308,28 @@ Năm bảng vi phạm.
 | `product_name → segment` | **0 vi phạm / 2.172 tên** |
 | 2.412 SKU ↔ 2.172 model | `(category, segment)` bị lặp thừa **240 lần** |
 
+Toàn bộ snapshot hiện tại cũng cho `product_name → size, color` với 0 vi phạm / 2.172 tên. Tuy
+nhiên, đây **không được khai báo là FD nghiệp vụ**: một model thời trang có thể phát sinh nhiều
+biến thể size và color trong trạng thái dữ liệu tương lai. Dữ liệu hữu hạn chỉ cho biết FD đang đúng
+trên instance hiện tại, không chứng minh nó là quy tắc của miền nghiệp vụ.
+
+Vì vậy hai nhóm thuộc tính được xử lý khác nhau có chủ ý:
+
+- `category`, `segment` mô tả model và được xem là ổn định theo `product_name` ⇒ chuyển sang
+  `product_model`.
+- `size`, `color` mô tả biến thể/SKU ⇒ giữ trong `product`, dù snapshot hiện tại chưa thể hiện đủ
+  các tổ hợp biến thể.
+
 **Phân rã:**
 ```
-product_model(product_name PK, category, segment)        -- 2.172 dòng
-product(product_id PK, product_name FK, size, color, ...) -- 2.412 dòng
+product_model(product_name PK, category, segment)              -- 2.172 dòng
+product(product_id PK, product_name FK, size, color,
+        list_price, unit_cogs)                                 -- 2.412 dòng
 ```
 
-**Kiểm tra ngược quan trọng:** `(product_name, size, color)` có **240 dòng trùng** ⇒ **không phải khóa**.
-Vậy `product_id` là định danh **cần thiết thật**, không phải surrogate trang trí:
+Phân rã này **lossless** vì giao của hai bảng là `product_name`, khóa của `product_model`, và bảo
+toàn hai FD nghiệp vụ đã chấp nhận. `(product_name, size, color)` có **240 dòng trùng**, nên không
+phải candidate key; `product_id` vẫn là định danh **cần thiết thật**, không phải surrogate trang trí:
 
 ```text
  product_id    product_name size color        price
@@ -322,7 +337,7 @@ Vậy `product_id` là định danh **cần thiết thật**, không phải surr
         380 LotusWear UE-01    S   red    34.036218
 ```
 
-(Chênh lệch giá 370× này là vấn đề chất lượng dữ liệu đã ghi ở `star_schema.md` §6 mục 1 —
+(Chênh lệch giá 370× này là vấn đề chất lượng dữ liệu đã ghi ở `docs/star_schema.md` §6 mục 1 —
 **không** phải trục phân tích.)
 
 ### 4.2 `customers` và `orders`: địa lý lặp qua hai tầng
@@ -355,14 +370,23 @@ nhiều title. Vậy phụ thuộc bắc cầu là `review_id → review_title �
 mới là thứ suy ra — cấu trúc ở đây là dấu vết của **dữ liệu sinh tổng hợp**. Nhưng dựa trên dữ liệu
 đang có, FD chỉ chạy theo một chiều, và 3NF ép phải tách.
 
-### 4.4 Cột sao chép từ bảng cha
+### 4.4 Cột sao chép giữa hai bảng cùng khóa
 
 | Cột | Bằng chứng | Xử lý |
 |---|---|---|
-| `payments.payment_method` | lệch **0 / 646.945** so với `orders` | bỏ — `order_id → orders → payment_method` |
+| `orders.payment_method` | lệch **0 / 646.945** so với `payments` | bỏ — `order_id → payment → payment_method` |
 | `reviews.customer_id` | lệch **0 / 113.551** so với `orders` | bỏ — suy ra từ `order_id` |
 
-Sau khi bỏ `payment_method` và `payment_value` (§5), bảng `payments` **chỉ còn `installments`**.
+`payment_method` xuất hiện y hệt ở **cả hai** bảng nguồn (`orders.csv` và `payments.csv`, cùng
+khóa `order_id`, quan hệ 1:1). FD `order_id → payment_method` đúng đối xứng ở cả hai phía, nên tự
+bản thân FD **không** nói được bảng nào phải giữ bản gốc — 3NF chỉ cấm giữ ở **cả hai cùng lúc**,
+không quyết định giữ ở đâu. Chọn giữ ở `payment` (bỏ khỏi `order`) là **quyết định ngữ nghĩa**:
+`payment_method` mô tả *cách thanh toán được thực hiện*, cùng nhóm với `installments`; khác nhóm
+với `order_status`/`device_type`/`order_source` (mô tả *cách đặt hàng*), vẫn ở lại `order`. Đây là
+judgment call, giống `geography` ở §4.5 — không phải điều dữ liệu tự ép ra.
+
+Sau khi bỏ `payment_value` (suy ra được 100%, §5) nhưng giữ `payment_method`, bảng `payment`
+**còn hai cột `installments` và `payment_method`**.
 
 *(`promotions.promo_name` unique 50/50 → chỉ là candidate key, **không** tạo FD bắc cầu. Giữ nguyên.)*
 
@@ -404,6 +428,63 @@ Phương án A đạt chuẩn nhưng *tạo ra* một lớp bất nhất mới m
 
 DDL §8 dùng phương án A (vì tài liệu này là bài toán chuẩn hóa); production nên cân nhắc B —
 `star_schema.md` §5.4 đã lập luận cho hướng đó.
+
+### 4.6 Candidate key và FD cho năm bảng còn lại
+
+Bản rà trước chỉ ghi “không nằm trong 5 bảng vi phạm”, chưa đủ để kết luận đạt 3NF. Cell §4.6
+trong `notebooks/02_design/normalization.ipynb` đã bổ sung hai lớp kiểm tra: xác nhận candidate key trên toàn bộ dữ liệu
+và tìm phản ví dụ cho các FD không khóa hợp lý nhất.
+
+| Quan hệ | Candidate key được khai báo | NULL trong key | Dòng trùng key |
+|---|---|---:|---:|
+| `shipment` | `order_id` | 0 | 0 / 566.067 |
+| `product_return` | `return_id` | 0 | 0 / 39.939 |
+| `product_return` | `(order_id, line_number)` — alternate key | 0 | 0 / 39.939 |
+| `inventory_snapshot` | `(snapshot_date, product_id)` | 0 | 0 / 60.247 |
+| `web_traffic` | `traffic_date` | 0 | 0 / 3.652 |
+| `daily_sales_forecast` | `forecast_date` | 0 | 0 / 548 |
+
+Các FD có nguy cơ tạo phụ thuộc bắc cầu đều bị dữ liệu bác bỏ:
+
+| Quan hệ | FD thử | Số giá trị determinant vi phạm / tổng | Kết luận |
+|---|---|---:|---|
+| `shipment` | `ship_date → delivery_date` | 3.830 / 3.831 | sai |
+| `shipment` | `ship_date → shipping_fee` | 3.831 / 3.831 | sai |
+| `product_return` | `return_reason → return_quantity` | 5 / 5 | sai |
+| `product_return` | `return_reason → refund_amount` | 5 / 5 | sai |
+| `product_return` | `return_quantity → refund_amount` | 8 / 8 | sai |
+| `inventory_snapshot` | `snapshot_date → stock_on_hand` | 126 / 126 | sai; cần cả hai vế khóa |
+| `inventory_snapshot` | `product_id → stock_on_hand` | 1.135 / 1.624 | sai; cần cả hai vế khóa |
+| `inventory_snapshot` | `stock_on_hand → units_received` | 1.456 / 1.895 | sai |
+| `inventory_snapshot` | `stockout_days → stock_on_hand` | 29 / 29 | sai |
+| `web_traffic` | `traffic_source → sessions` | 6 / 6 | sai |
+| `web_traffic` | `sessions → unique_visitors` | 192 / 3.447 | sai |
+| `web_traffic` | `unique_visitors → page_views` | 257 / 3.382 | sai |
+
+`daily_sales_forecast` cần đọc cẩn thận hơn: `revenue → cogs` và `cogs → revenue` đều cho 0
+vi phạm, nhưng `revenue` và `cogs` cũng đều **unique 548/548**. Đây là FD đúng một cách vô hiệu
+trên file template — mỗi giá trị chỉ xuất hiện một lần — không phải quy tắc nghiệp vụ và không biến
+measure thành candidate key. Khóa ổn định vẫn là `forecast_date`.
+
+Quét toàn bộ FD một-cột còn tìm thấy các quan hệ vô tình đúng trên instance: `product_name → size`,
+`product_name → color`, `unit_cogs → list_price` trong `product`; và
+`discount_value → promo_type`, `discount_value → applicable_category`,
+`applicable_category → promo_type` trong `promotion`. Chúng không được khai báo là FD nghiệp vụ:
+
+- `product_name → size, color` có 0 vi phạm / 2.172 tên trong snapshot, nhưng model thời trang có
+  thể có nhiều biến thể. Hai cột này vẫn thuộc grain SKU của `product`.
+- `unit_cogs` có tới **2.381 giá trị / 2.412 dòng**; các lần trùng tình cờ có cùng `list_price`.
+  Giá vốn không phải định danh của giá bán.
+- Promotion chỉ có 6 mức `discount_value` và ba nhóm category hiện có
+  (`Outdoor → percentage`, `Streetwear → fixed`, `NULL → percentage`). Loại, mức và category
+  giảm giá là các lựa chọn nghiệp vụ độc lập.
+
+Các ví dụ này nhắc lại giới hạn quan trọng: **một snapshot có thể bác bỏ FD, nhưng không thể tự
+chứng minh FD ngữ nghĩa cho mọi trạng thái tương lai**.
+
+Với tập FD nghiệp vụ đã khai báo, năm quan hệ trên đạt 3NF: mọi thuộc tính không khóa chỉ phụ thuộc
+vào candidate key của chính quan hệ; không còn FD không khóa nào được chấp nhận. Kết luận này giờ có
+cell tái chạy được, thay vì suy ra từ việc “chưa nhìn thấy vi phạm”.
 
 ---
 
@@ -452,7 +533,7 @@ Ba lần cùng một kiểu lỗi ⇒ không phải tai nạn mà là thiếu m�
 
 Và ràng buộc bao trùm cả hai: **mọi khẳng định "khớp 100%" phải ghi rõ dung sai.** `days_of_supply`
 cho thấy cả hai chiều hỏng — `atol` lỏng biến *gần đúng* thành *đúng*, `atol` chặt mà thiếu bước
-làm tròn thì biến *đúng* thành *sai*. Cell §5 của `normalization.ipynb` giữ nguyên bốn công thức
+làm tròn thì biến *đúng* thành *sai*. Cell §5 của `notebooks/02_design/normalization.ipynb` giữ nguyên bốn công thức
 sai ở trên để con số 55,5 / 65,9 / 93,6 / 69,5 tái lập được, không chỉ được kể lại.
 
 ---
@@ -529,13 +610,13 @@ erDiagram
         string region   FK
     }
     zip_area {
-        int    zip      PK
+        string zip      PK
         string city     FK
         string district FK
     }
     customer {
         int    customer_id         PK
-        int    zip                 FK
+        string zip                 FK
         string gender
         string age_group
         string acquisition_channel
@@ -571,7 +652,6 @@ erDiagram
         date   order_date
         int    customer_id    FK
         string order_status
-        string payment_method
         string device_type
         string order_source
     }
@@ -589,8 +669,9 @@ erDiagram
         string promo_id    PK, FK
     }
     payment {
-        int order_id     PK, FK
-        int installments
+        int    order_id       PK, FK
+        int    installments
+        string payment_method
     }
     shipment {
         int     order_id      PK, FK
@@ -600,8 +681,8 @@ erDiagram
     }
     product_return {
         string  return_id       PK
-        int     order_id        FK
-        int     line_number     FK
+        int     order_id        FK, UK
+        int     line_number     FK, UK
         date    return_date
         string  return_reason
         int     return_quantity
@@ -613,8 +694,8 @@ erDiagram
     }
     review {
         string review_id    PK
-        int    order_id     FK
-        int    line_number  FK
+        int    order_id     FK, UK
+        int    line_number  FK, UK
         date   review_date
         string review_title FK
     }
@@ -657,12 +738,12 @@ không nối vào cây giao dịch. `sales.csv` **không** xuất hiện: nó l�
 | `zip_area` | 39.948 | `geography` còn lại |
 | `customer` | 121.930 | bỏ `city` |
 | `product_model` | 2.172 | **MỚI** — tách 3NF |
-| `product` | 2.412 | bỏ `category`, `segment` |
+| `product` | 2.412 | bỏ `category`, `segment`; giữ `size`, `color` ở grain SKU |
 | `promotion` | 50 | 1:1 |
-| `order` | 646.945 | bỏ `zip` |
+| `order` | 646.945 | bỏ `zip`, `payment_method` |
 | `order_item` | 714.669 | **+ `line_number`**, bỏ 2 cột promo |
 | `order_item_promotion` | 276.522 | **MỚI** — tách 1NF |
-| `payment` | 646.945 | chỉ còn `installments` |
+| `payment` | 646.945 | giữ `payment_method`; bỏ `payment_value` |
 | `shipment` | 566.067 | 1:0..1 |
 | `product_return` | 39.939 | FK trỏ dòng hàng |
 | `review_title_label` | 18 | **MỚI** — tách 3NF |
@@ -688,26 +769,30 @@ mục tương ứng. Cột 2NF dùng lập luận cấu trúc ở §9.3: **PK m�
 | `district` | `district` | ✅ | hiển nhiên | ✅ tách ra ở §4.5 |
 | `zip_area` | `zip` | ✅ | hiển nhiên | ✅ `city`/`district`/`region` đã tách — §4.5 |
 | `customer` | `customer_id` | ✅ | hiển nhiên | ✅ đã bỏ `city` — §4.2 |
-| `product_model` | `product_name` | ✅ | hiển nhiên | ✅ chính là bảng sinh ra để sửa §4.1 |
-| `product` | `product_id` | ✅ | hiển nhiên | ✅ đã bỏ `category`/`segment` — §4.1 |
+| `product_model` | `product_name` | ✅ | hiển nhiên | ✅ giữ `category`/`segment` phụ thuộc model — §4.1 |
+| `product` | `product_id` | ✅ | hiển nhiên | ✅ `size`/`color` là thuộc tính SKU; FD snapshot không dùng để phân rã — §4.1, §4.6 |
 | `promotion` | `promo_id` | ✅ | hiển nhiên | ✅ `promo_name` chỉ là candidate key — §4.4 |
-| `"order"` | `order_id` | ✅ | hiển nhiên | ✅ đã bỏ `zip` — §4.2 |
+| `"order"` | `order_id` | ✅ | hiển nhiên | ✅ đã bỏ `zip` (§4.2) và `payment_method` (§4.4) |
 | `order_item` | `(order_id, line_number)` | ✅ **sau khi thêm `line_number`** — §2.1 | ✅ **đã kiểm cả 3 cột không khóa** — §3.2 | ✅ không có FD bắc cầu — §3.2 |
 | `order_item_promotion` | `(order_id, line_number, promo_id)` | ✅ chính là bảng sinh ra để sửa §2.2 | toàn khóa (all-key) ⇒ hiển nhiên đạt tới BCNF — §3 | ✅ |
-| `payment` | `order_id` | ✅ | hiển nhiên | ✅ đã bỏ `payment_method` — §4.4 |
-| `shipment` | `order_id` | ✅ | hiển nhiên | không nằm trong 5 bảng vi phạm ở §4 |
-| `product_return` | `return_id` + `UNIQUE (order_id, line_number)` | ✅ | hiển nhiên | không nằm trong 5 bảng vi phạm ở §4 |
+| `payment` | `order_id` | ✅ | hiển nhiên | ✅ giữ `payment_method` (judgment call, §4.4); đã bỏ `payment_value` (§5) |
+| `shipment` | `order_id` | ✅ | hiển nhiên | ✅ các FD không khóa bị bác bỏ — §4.6 |
+| `product_return` | `return_id` + `UNIQUE (order_id, line_number)` | ✅ | hiển nhiên | ✅ hai candidate key; FD không khóa bị bác bỏ — §4.6 |
 | `review_title_label` | `review_title` | ✅ | hiển nhiên | ✅ chính là bảng sinh ra để sửa §4.3 |
 | `review` | `review_id` + `UNIQUE (order_id, line_number)` | ✅ | hiển nhiên | ✅ đã bỏ `rating` (§4.3) và `customer_id` (§4.4) |
-| `inventory_snapshot` | `(snapshot_date, product_id)` | ✅ đã bỏ `reorder_flag` — §2.3 | ✅ **vi phạm ở cả hai vế, đã sửa** — §3.1 | không nằm trong 5 bảng vi phạm ở §4 |
-| `web_traffic` | `traffic_date` | ✅ | hiển nhiên | không nằm trong 5 bảng vi phạm ở §4 |
-| `daily_sales_forecast` | `forecast_date` | ✅ | hiển nhiên | không nằm trong 5 bảng vi phạm ở §4 |
+| `inventory_snapshot` | `(snapshot_date, product_id)` | ✅ đã bỏ `reorder_flag` — §2.3 | ✅ **vi phạm ở cả hai vế, đã sửa** — §3.1 | ✅ các FD bộ phận/bắc cầu bị bác bỏ — §4.6 |
+| `web_traffic` | `traffic_date` | ✅ | hiển nhiên | ✅ các FD không khóa bị bác bỏ — §4.6 |
+| `daily_sales_forecast` | `forecast_date` | ✅ | hiển nhiên | ✅ FD giữa hai measure chỉ là unique ngẫu nhiên — §4.6 |
 
-⚠️ **Đọc đúng chữ "không nằm trong 5 bảng vi phạm ở §4".** §4 rà FD bắc cầu trên 5 bảng nguồn
-(`products`, `customers`, `orders`, `reviews`, `payments`) cộng `geography` như một judgment call.
-Năm bảng ghi dòng đó **chưa được kiểm khẳng định** là đạt 3NF — chúng chỉ *không bị đợt rà đó bắt*.
-Ghi "✅ 3NF" cho chúng sẽ là một khẳng định không có cell chứng minh, đúng thứ mà kỷ luật ở §5 cấm:
-*trông giống thì chưa đủ*.
+⚠️ Dấu ✅ ở cột 3NF có nghĩa là đạt **với tập FD nghiệp vụ được khai báo**, có key và phản chứng
+trên snapshot hiện tại. Nó không có nghĩa một file hữu hạn đã chứng minh được mọi trạng thái dữ liệu
+tương lai; giới hạn này được minh họa bằng các FD vô tình đúng ở cuối §4.6.
+
+> **Kết luận dùng khi bảo vệ:** `product_name → category, segment` được chấp nhận là FD nghiệp vụ
+> nên hai cột này nằm trong `product_model`. Dữ liệu hiện tại cũng cho
+> `product_name → size, color` với 0 vi phạm, nhưng đây chỉ là FD đúng trên snapshot: một model
+> thời trang vẫn có thể có nhiều biến thể. Vì vậy `size`, `color` tiếp tục nằm trong `product`, và
+> mô hình đạt 3NF theo tập FD nghiệp vụ đã được xác nhận.
 
 **Dư thừa đã loại được, đếm cụ thể:**
 
@@ -717,7 +802,7 @@ Ghi "✅ 3NF" cho chúng sẽ là một khẳng định không có cell chứng 
 | Thuộc tính sản phẩm lặp theo mốc snapshot | 3 cột × tới 126 mốc / SP | FK `product_id` (§3.1) |
 | `city` lưu hai nơi | `customers` **và** `geography` | chỉ `zip_area` (§4.2) |
 | `zip` lưu hai nơi | `orders` **và** `customers` | chỉ `customer` (§4.2) |
-| `payment_method` lưu hai nơi | `orders` **và** `payments` | chỉ `"order"` (§4.4) |
+| `payment_method` lưu hai nơi | `orders` **và** `payments` | chỉ `payment` (§4.4) |
 | `rating` lặp theo từng đánh giá | 113.551 dòng | 18 dòng `review_title_label` (§4.3) |
 | Cột tính được | `payment_value`, cả 5 cột dẫn xuất của `inventory`, cả `sales.csv` | bỏ / chuyển thành view (§5) |
 
@@ -725,7 +810,7 @@ Ghi "✅ 3NF" cho chúng sẽ là một khẳng định không có cell chứng 
 
 ## 8. DDL
 
-**Mọi `CHECK` dưới đây đã được chạy thử trên dữ liệu nguồn** (`normalization.ipynb` §6):
+**Mọi `CHECK` dưới đây đã được chạy thử trên dữ liệu nguồn** (`notebooks/02_design/normalization.ipynb` §6):
 **13/13 đạt** — nhưng chỉ khi join đúng khóa. Ràng buộc liên bảng `return_quantity <= quantity`
 cho kết quả trái ngược tùy cách nối `returns` với `order_item`:
 
@@ -762,7 +847,7 @@ CREATE TABLE district (
 );                                                        -- 39 dòng
 
 CREATE TABLE zip_area (
-    zip         INTEGER     PRIMARY KEY,
+    zip         VARCHAR(5)  PRIMARY KEY,
     city        VARCHAR(64) NOT NULL REFERENCES city,
     district    VARCHAR(32) NOT NULL REFERENCES district
 );                                                        -- 39.948 dòng
@@ -771,7 +856,7 @@ CREATE TABLE zip_area (
 -- ========== KHÁCH HÀNG ==========
 CREATE TABLE customer (
     customer_id         INTEGER     PRIMARY KEY,
-    zip                 INTEGER     NOT NULL REFERENCES zip_area,
+    zip                 VARCHAR(5)  NOT NULL REFERENCES zip_area,
     gender              VARCHAR(16) NOT NULL,
     age_group           VARCHAR(16) NOT NULL,
     acquisition_channel VARCHAR(32) NOT NULL,
@@ -794,7 +879,8 @@ CREATE TABLE product (
     unit_cogs     DECIMAL(14,6) NOT NULL,
     CHECK (unit_cogs <= list_price)
 );                                                        -- 2.412 dòng
--- (product_name, size, color) KHÔNG unique (240 trùng) ⇒ product_id là cần thiết
+-- (product_name, size, color) KHÔNG unique (240 dòng trùng)
+-- ⇒ product_id vẫn là cần thiết; xem §4.1
 
 CREATE TABLE promotion (
     promo_id            VARCHAR(16)   PRIMARY KEY,
@@ -816,10 +902,9 @@ CREATE TABLE "order" (
     order_date     DATE        NOT NULL,
     customer_id    INTEGER     NOT NULL REFERENCES customer,
     order_status   VARCHAR(16) NOT NULL,
-    payment_method VARCHAR(24) NOT NULL,
     device_type    VARCHAR(12) NOT NULL,
     order_source   VARCHAR(24) NOT NULL
-);                                                        -- 646.945 dòng; ĐÃ BỎ zip (§4.2)
+);                                                        -- 646.945 dòng; ĐÃ BỎ zip (§4.2), payment_method (§4.4)
 
 CREATE TABLE order_item (
     order_id        INTEGER       NOT NULL REFERENCES "order",
@@ -840,9 +925,10 @@ CREATE TABLE order_item_promotion (                        -- tách nhóm lặp,
 );                                                        -- 276.522 dòng
 
 CREATE TABLE payment (
-    order_id     INTEGER  PRIMARY KEY REFERENCES "order",
-    installments SMALLINT NOT NULL CHECK (installments > 0)
-);   -- 646.945 dòng — payment_method (§4.4) và payment_value (§5) đã bỏ
+    order_id       INTEGER     PRIMARY KEY REFERENCES "order",
+    installments   SMALLINT    NOT NULL CHECK (installments > 0),
+    payment_method VARCHAR(24) NOT NULL
+);   -- 646.945 dòng — payment_value (§5) đã bỏ; payment_method giữ ở đây, KHÔNG ở order (§4.4)
 
 CREATE TABLE shipment (
     order_id      INTEGER       PRIMARY KEY REFERENCES "order",
