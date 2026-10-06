@@ -42,14 +42,14 @@ erDiagram
     }
 
     zip_area {
-        int    zip      PK
+        string zip      PK
         string city     FK
         string district FK
     }
 
     customer {
         int    customer_id         PK
-        int    zip                 FK
+        string zip                 FK
         string gender
         string age_group
         string acquisition_channel
@@ -89,7 +89,6 @@ erDiagram
         date   order_date
         int    customer_id    FK
         string order_status
-        string payment_method
         string device_type
         string order_source
     }
@@ -110,8 +109,9 @@ erDiagram
     }
 
     payment {
-        int order_id     PK, FK
-        int installments
+        int    order_id       PK, FK
+        string payment_method
+        int    installments
     }
 
     shipment {
@@ -123,8 +123,8 @@ erDiagram
 
     product_return {
         string  return_id       PK
-        int     order_id        FK
-        int     line_number     FK
+        int     order_id        FK, UK
+        int     line_number     FK, UK
         date    return_date
         string  return_reason
         int     return_quantity
@@ -138,8 +138,8 @@ erDiagram
 
     review {
         string review_id    PK
-        int    order_id     FK
-        int    line_number  FK
+        int    order_id     FK, UK
+        int    line_number  FK, UK
         date   review_date
         string review_title FK
     }
