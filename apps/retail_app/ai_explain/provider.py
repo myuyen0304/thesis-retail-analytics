@@ -13,11 +13,10 @@ Model chỉ nhận: câu hỏi, ngữ cảnh có cấu trúc, schema tool, kết
 không nhận dòng cấp khách hàng (tool chỉ đọc bảng reporting).
 """
 import json
-import os
 import time
 from dataclasses import dataclass, field
 
-from dwh.connection import ROOT
+from dwh.connection import ROOT, env_file_config
 
 AI_CONFIG = ROOT / '.env.ai.local'
 DEFAULT_BASE_URL = 'https://api.deepseek.com'
@@ -30,15 +29,7 @@ class ProviderError(Exception):
 
 
 def ai_config() -> dict:
-    cfg = {}
-    if AI_CONFIG.exists():
-        for line in AI_CONFIG.read_text(encoding='utf-8').splitlines():
-            k, sep, v = line.strip().partition('=')
-            if sep and not k.startswith('#'):
-                cfg[k.strip()] = v.strip().strip("'\"")
-    keys = set(cfg) | {k for k in os.environ if k.startswith('RETAIL_AI_')}
-    out = {k: os.environ.get(k) or cfg.get(k) for k in keys}
-    return {k: v for k, v in out.items() if v}
+    return env_file_config(AI_CONFIG, ('RETAIL_AI_',))
 
 
 @dataclass(frozen=True)

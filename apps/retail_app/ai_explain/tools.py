@@ -24,8 +24,7 @@ from itertools import product
 from ai_explain import metric_catalog as cat
 from ai_explain.contracts import Evidence, QueryRecord, ToolCall, ToolResult
 from dwh.connection import describe
-from dwh.guarded import (DEFAULT_MAX_ROWS, DEFAULT_TIMEOUT_S, GuardError, QueryTimeout, RowLimitExceeded, Statement,
-                         open_session)
+from dwh.guarded import DEFAULT_MAX_ROWS, GuardError, QueryTimeout, RowLimitExceeded, Statement, open_session
 
 TOOL_VERSION = 'v1.3'
 ALLOWED_RELATIONS = frozenset({
@@ -107,6 +106,12 @@ class _Turn:
         st = Statement(sql, params)
         self.queries.append(QueryRecord(source, st.render(self.backend), params))
         return self.sess.fetch(st)
+
+    def same_build(self) -> bool:
+        """Databricks không có snapshot xuyên câu như REPEATABLE READ của Postgres: đọc lại build marker cuối lượt,
+        đổi thì các câu trước có thể thuộc lần dựng khác. Chỉ phát hiện được lần dựng làm đổi rpt_build_info."""
+        rows = self.sess.fetch(Statement('select built_at_utc from reporting.rpt_build_info')).rows
+        return rows == [(self.build['built_at_utc'],)]
 
     def snapshot(self) -> ToolResult | None:
         bi = self.fetch('reporting.rpt_build_info',
@@ -572,7 +577,7 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')
 
 
-def run(call: ToolCall | dict, backend: str, *, timeout_s: float = DEFAULT_TIMEOUT_S,
+def run(call: ToolCall | dict, backend: str, *, timeout_s: float | None = None,
         max_rows: int = DEFAULT_MAX_ROWS) -> ToolResult:
     if isinstance(call, dict):
         call = ToolCall(call.get('tool'), call.get('arguments'))
@@ -594,7 +599,11 @@ def run(call: ToolCall | dict, backend: str, *, timeout_s: float = DEFAULT_TIMEO
         return ToolResult('query_error', f'Không kết nối được {backend}: {type(e).__name__}.')
     try:
         turn = _Turn(sess, backend, spec.name, args)
-        return turn.snapshot() or spec.handler(turn, args)
+        result = turn.snapshot() or spec.handler(turn, args)
+        if backend == 'databricks' and hasattr(turn, 'build') and not turn.same_build():
+            return ToolResult('query_error', 'Kho vừa được dựng lại trong lúc đọc (build marker đổi giữa các câu); '
+                              'không trả số trộn hai lần dựng. Hỏi lại sau khi build xong.')
+        return result
     except QueryTimeout as e:
         return ToolResult('query_error', f'Truy vấn quá thời gian ({e}); không trả số thay thế.')
     except RowLimitExceeded as e:

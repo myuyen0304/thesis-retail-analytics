@@ -31,7 +31,7 @@ MAX_OUTPUT_TOKENS = 2048          # live 2026-10-05: tối đa 877 token ra cho 
 PROMPT_FRAME_TOKENS = 512         # phần khung chat template / khối tool của nhà cung cấp (không nằm trong JSON gửi đi)
 PROMPT_MESSAGE_TOKENS = 16        # token đặc biệt đánh dấu vai trò, mỗi tin nhắn
 CONTEXT_TURNS = 3
-CHAT_BACKENDS = ('duckdb', 'postgres')      # guarded.open_session; Databricks chưa có đường đọc chỉ-đọc cho AI
+CHAT_BACKENDS = ('duckdb', 'postgres', 'databricks')   # guarded.open_session: mỗi backend có đường đọc chỉ-đọc riêng
 
 # trạng thái của cả lượt chat (rộng hơn contracts.TOOL_STATUSES)
 TURN_STATUSES = ('ok', 'needs_clarification', 'unsupported', 'no_data', 'quality_blocked', 'query_error',
@@ -272,7 +272,7 @@ def run_turn(question: str, history: list[dict], backend: str, provider, *, sess
     t0 = time.monotonic()
     turn = TurnResult('provider_error', question, model=getattr(provider, 'label', type(provider).__name__))
     if backend not in CHAT_BACKENDS:
-        turn.status, turn.message = 'unsupported', f'Chat chưa hỗ trợ backend {backend}. Chọn DuckDB hoặc PostgreSQL.'
+        turn.status, turn.message = 'unsupported', f'Chat chưa hỗ trợ backend {backend}. Chọn DuckDB, PostgreSQL hoặc Databricks.'
         return turn
     ctx = history[-CONTEXT_TURNS:]
     messages = [{'role': 'system', 'content': system_prompt(today or dt.date.today())}]

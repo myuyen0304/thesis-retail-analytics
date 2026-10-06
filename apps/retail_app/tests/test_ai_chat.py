@@ -230,9 +230,11 @@ def test_toi_da_4_lan_goi_tool():
     assert t.status == 'answer_validation_failed' and t.llm_calls == service.MAX_LLM_CALLS
 
 
-def test_databricks_chua_ho_tro_khong_goi_model():
+def test_backend_chua_ho_tro_khong_goi_model():
+    # Databricks có đường đọc chỉ-đọc từ 2026-10-06 (tests/test_ai_databricks.py); Snowflake thì chưa
+    assert 'databricks' in service.CHAT_BACKENDS
     fake = FakeProvider()
-    t = service.run_turn('R 2019?', [], 'databricks', fake)
+    t = service.run_turn('R 2019?', [], 'snowflake', fake)
     assert t.status == 'unsupported' and not fake.seen
 
 

@@ -27,18 +27,22 @@ def duckdb_path() -> Path:
     return Path(os.environ.get('RETAIL_DUCKDB_PATH', DUCKDB_PATH))
 
 
-def databricks_config() -> dict:
-    """Giá trị đã điền trong .env.databricks.local; trường trống bị bỏ qua, biến môi trường cùng tên được ưu tiên
-    (giống scripts/ingest/snapshot.py:local_config)."""
+def env_file_config(path: Path, prefixes: tuple[str, ...]) -> dict:
+    """Giá trị đã điền trong file cá nhân dạng KEY='value' (Git ignore); trường trống bị bỏ qua, biến môi trường cùng
+    tên (theo `prefixes`) được ưu tiên (giống scripts/ingest/snapshot.py:local_config)."""
     cfg = {}
-    if DATABRICKS_CONFIG.exists():
-        for line in DATABRICKS_CONFIG.read_text(encoding='utf-8').splitlines():
+    if path.exists():
+        for line in path.read_text(encoding='utf-8').splitlines():
             k, sep, v = line.strip().partition('=')
             if sep and not k.startswith('#'):
                 cfg[k.strip()] = v.strip().strip("'\"")
-    keys = set(cfg) | {k for k in os.environ if k.startswith(('DATABRICKS_', 'RETAIL_DATABRICKS_'))}
+    keys = set(cfg) | {k for k in os.environ if k.startswith(prefixes)}
     out = {k: os.environ.get(k) or cfg.get(k) for k in keys}
     return {k: v for k, v in out.items() if v}
+
+
+def databricks_config() -> dict:
+    return env_file_config(DATABRICKS_CONFIG, ('DATABRICKS_', 'RETAIL_DATABRICKS_'))
 
 
 def describe(backend: str) -> str:
