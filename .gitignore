@@ -155,6 +155,8 @@ activemq-data/
 /.env.snowflake.local
 # Khóa API LLM của AI Explain (apps/retail_app/ai_explain/provider.py)
 /.env.ai.local
+# Nội dung Secrets để dán vào Streamlit Community Cloud (docs/streamlit_cloud_deploy.md)
+/.env.streamlit_cloud.local
 .venv
 env/
 venv/

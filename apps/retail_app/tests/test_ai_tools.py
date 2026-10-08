@@ -576,5 +576,7 @@ def test_dbt_cap_lai_quyen_ai_dung_danh_sach_tool():
     assert "target.type == 'databricks'" in macro and "env_var('RETAIL_AI_DBX_PRINCIPAL'" in macro
     # SP của app (Databricks Apps) chỉ đọc đúng các bảng mà trang đọc
     assert set(proj['vars']['app_read_relations']) == set(queries.SOURCE.values())
-    assert "env_var('RETAIL_APP_DBX_PRINCIPAL'" in macro
+    assert "env_var('RETAIL_APP_DBX_PRINCIPAL', ''), var('app_read_relations')" in macro
+    # SP của bản public trên Streamlit Community Cloud: cùng danh sách bảng của trang, không phải danh sách AI
+    assert "env_var('RETAIL_WEB_DBX_PRINCIPAL', ''), var('app_read_relations')" in macro
     assert 'grant select on table' in macro and not re.search(r'grant (select|all)[^\n]*on (schema|catalog)', macro, re.I)
