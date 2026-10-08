@@ -1,0 +1,14 @@
+# Thư viện của app khi deploy, dùng chung cho hai nơi (2026-10-08):
+# - Streamlit Community Cloud: đọc file này vì nằm cùng thư mục với app.py (ưu tiên hơn requirements.txt ở root);
+# - Databricks Apps: scripts/databricks/build_app_bundle.py chép file này ra gốc gói deploy.
+# Ghim đúng phiên bản đã chạy test. Không có duckdb/psycopg: bản deploy chỉ đọc Databricks.
+# Databricks Apps chạy Python 3.11 (log deploy 2026-10-07): numpy 2.5.x đòi Python >=3.12 nên dùng 2.4.6,
+# bản mới nhất còn hỗ trợ 3.11. Bộ này đã chạy toàn bộ test app trên Python 3.11 (2026-10-07).
+streamlit==1.64.0
+altair==6.3.0
+pandas==3.0.5
+numpy==2.4.6
+pyarrow==25.0.1
+openai==3.24.0
+databricks-sql-connector==4.4.0
+databricks-sdk==0.117.0
