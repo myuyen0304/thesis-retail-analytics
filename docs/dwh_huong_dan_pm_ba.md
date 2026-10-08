@@ -1656,11 +1656,31 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   - secret scope `retail-ai`;
   - app `retail-analytics` (SP của app chỉ đọc 21 bảng các trang dùng);
   - code đã tải lên workspace.
-- **Chờ PM:**
-  - tạo khóa DeepSeek mới và đưa vào secret (terminal riêng);
-  - thay khóa trong `.env.ai.local`;
-  - thu hồi khóa cũ.
+- **Khóa DeepSeek (PM làm 2026-10-07):** tạo khóa **mới chỉ dùng cho Databricks**, tự đưa vào secret trong terminal riêng.
+  Khóa cũ giữ trong `.env.ai.local` để chạy local; chỉ thu hồi khi nghi bị lộ.
+- **Lưu ý demo:** bản Free tự dừng app sau 24 giờ, hoặc sớm hơn khi tài khoản chạm giới hạn sử dụng (gặp ngày 2026-10-07);
+  trước buổi demo phải bật lại app. Cách tự bật lại: `docs/databricks_app_van_hanh.md`.
 
-  Sau đó mới khởi động và deploy app.
-- **Lưu ý demo:** bản Free tự dừng app sau 24 giờ; trước buổi demo phải bấm Start app.
+### 2026-10-07: app chạy trên Databricks Apps
 
+- **Deploy thành công** (bản code `fdb8681`), sau khi sửa 2 lỗi:
+  - Databricks Apps chạy Python 3.11, không cài được numpy 2.5.1 → ghim numpy 2.4.6; toàn bộ test app chạy lại trên Python 3.11 đạt (`2425dbf`);
+  - lệnh khởi động không chạy qua shell nên cờ `--server.port ${...}` làm app crash → bỏ cờ, nền tảng tự đặt cổng (`fdb8681`).
+- **Cùng tối (12:20 UTC)** Databricks tự tắt app: *"stopped due to workspace or account status"* (giới hạn bản Free).
+  Bảng usage: ngày 06/10 SQL dùng 10,56 DBU không bị tắt; ngày 07/10 tổng thấp hơn nhưng có thêm app chạy liên tục 3,78 DBU.
+
+### 2026-10-08: bật lại app Databricks; chuẩn bị bản public trên Streamlit Community Cloud
+
+- **Bật lại app** bằng `apps start` (tự deploy lại gói `fdb8681`). Hướng dẫn PM tự bật lại: `docs/databricks_app_van_hanh.md`.
+- **PM chọn có bản public** (ai cũng xem, không cần đăng nhập). Databricks Apps không cho mở công khai, nên giao diện chạy trên
+  **Streamlit Community Cloud**, dữ liệu vẫn đọc **kho Databricks production**. PM chọn: chat để tự do, dùng khóa DeepSeek riêng;
+  tắt app Databricks khi bản Streamlit chạy ổn.
+- **Đã làm (PM duyệt):**
+  - SP mới `retail-web-ro` cho các trang: kiểm lại chỉ SELECT đúng 21 bảng; hook dbt cấp lại quyền sau mỗi build;
+  - `requirements.txt` của bản deploy chuyển về `apps/retail_app/` (dùng chung cho Streamlit Cloud và gói Databricks);
+  - nội dung Secrets sẵn trong `.env.streamlit_cloud.local` (Git ignore), PM chỉ điền khóa DeepSeek.
+- **Kiểm (giả lập Streamlit Cloud trên máy):** không file `.env`, không profile, chỉ biến môi trường từ Secrets → 8/8 trang mở được,
+  chat C01 ra số, câu 2024 báo không có dữ liệu, câu dự báo 2023 báo không hỗ trợ.
+- **PM làm tiếp:** theo `docs/streamlit_cloud_deploy.md` (tạo khóa, deploy, bật public, smoke).
+- **Giới hạn:** bản public phụ thuộc bản Free của cả Streamlit (app ngủ khi lâu không ai xem) và Databricks (có thể bị chặn khi chạm
+  giới hạn); không cam kết luôn sẵn sàng.

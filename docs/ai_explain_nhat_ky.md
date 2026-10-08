@@ -181,8 +181,42 @@ Hạn tiến độ khóa luận: **2026-10-25**.
   - tạo app `retail-analytics` (chưa chạy): URL `https://retail-analytics-7474650611714585.aws.databricksapps.com`, SP của app `053217a2-6d16-409a-bfde-080805aceb04`, resource gồm warehouse và 2 secret của SP AI;
   - hook dbt (commit `92d63bd`) cấp SELECT **đúng 21 bảng** của các trang cho SP của app. Chạy `run-operation`, rồi kiểm: SP app 21 bảng, SP AI 14 bảng;
   - gói code `92d63bd` tải lên `/Workspace/Users/.../retail-analytics-app` bằng `workspace import-dir`. `databricks sync` không dùng được vì bỏ qua thư mục `build/` (bị gitignore).
-- **Chờ PM:** khóa DeepSeek **mới** đưa vào `retail-ai/deepseek-api-key` (terminal riêng); thay trong `.env.ai.local`; thu hồi khóa cũ.
-- **Việc tiếp theo:** thêm resource `deepseek-api-key` cho app → start compute → `apps deploy` → smoke.
+- **Khóa DeepSeek (PM làm 2026-10-07):** khóa **mới chỉ cho Databricks**, PM tự đưa vào `retail-ai/deepseek-api-key` (terminal riêng).
+  Khóa cũ giữ trong `.env.ai.local` cho local; chỉ thu hồi khi nghi bị lộ.
+
+### 2026-10-07: B4, deploy app trên Databricks Apps
+
+- **Lỗi 1:** `No matching distribution found for numpy==2.5.1`: Databricks Apps chạy **Python 3.11** (pip 24.0), numpy 2.5.x đòi ≥3.12.
+  Sửa: numpy 2.4.6. Toàn bộ test app chạy lại trên Python 3.11: 517 đạt, 109 bỏ qua do thiếu cấu hình cloud (`2425dbf`).
+- **Lỗi 2:** app crash `Invalid value for '--server.port': '${DATABRICKS_APP_PORT:-8000}'`: `command` không chạy qua shell.
+  Sửa: bỏ `--server.port/--server.address`, runtime tự đặt qua `STREAMLIT_SERVER_PORT/ADDRESS` (`fdb8681`).
+- **Kết quả:** deployment `01f1c21213781b3ab17c57ce9d75624e` SUCCEEDED, server cổng 8000, health 200.
+- **12:20 UTC:** Databricks tự tắt compute: *"App compute was stopped due to workspace or account status"*; bản deploy đang chạy
+  bị gỡ (`active_deployment` = null). `system.billing.usage`: 06/10 SQL 10,56 DBU không bị tắt; 07/10 SQL 2,84 + APPS 3,78 DBU bị tắt.
+  Ngưỡng của bản Free không công bố, nên chỉ ghi là quan sát.
+
+### 2026-10-08: bật lại app; bản public trên Streamlit Community Cloud (PM chọn)
+
+- **Bật lại:** `apps start` → compute ACTIVE, tự deploy lại từ workspace (`BUILD_REVISION` = `fdb8681`), RUNNING.
+  Hướng dẫn PM tự làm: `docs/databricks_app_van_hanh.md`.
+- **Lý do có bản public:** Databricks Apps bắt người xem đăng nhập workspace, không có chế độ công khai. Giao diện chạy trên
+  Streamlit Community Cloud; dữ liệu vẫn đọc `retail_lab` trên Databricks. PM chọn: chat tự do, khóa DeepSeek riêng cho bản public;
+  tắt app Databricks khi bản Streamlit ổn.
+- **Danh tính:** trên Databricks Apps nền tảng tự cấp SP cho các trang; ngoài Databricks thì không. **Không** dùng `retail-ai-ro`
+  cho các trang (nới quyền là nới guard). Tạo SP `retail-web-ro` (application id `f1e26aa2-0daf-4aaf-987f-b6cbf55d07e1`, secret hết hạn
+  2027-01-06); hook dbt cấp SELECT đúng `app_read_relations` qua env `RETAIL_WEB_DBX_PRINCIPAL`; chạy `run-operation`, kiểm lại:
+  21 SELECT + USE CATALOG `retail_lab` + USE SCHEMA `reporting`, không gì thêm.
+- **Không sửa code app:** Streamlit nạp Secrets lúc khởi động server và đặt các khóa gốc thành biến môi trường
+  (`streamlit/web/bootstrap.py` → `secrets.load_if_toml_exists()`); `connection.py`, `provider.py`, `guarded.py` đều đọc biến môi trường.
+- **Thư viện:** `deploy/databricks_app/requirements.txt` chuyển thành `apps/retail_app/requirements.txt`. Streamlit Cloud ưu tiên file
+  cùng thư mục với entrypoint hơn file ở root (root có numpy 2.5.1 và dbt); `build_app_bundle.py` chép file này ra gốc gói Databricks.
+- **Kiểm giả lập trên máy (Python 3.11):** chạy gói `build/databricks_app` (không file `.env`, `DATABRICKS_CONFIG_FILE` trỏ file không có),
+  biến môi trường lấy từ `.env.streamlit_cloud.local`; kiểm `connection.ROOT` là gốc gói và nguồn ghi "SP của app".
+  8/8 trang không lỗi; chat qua SP AI + DeepSeek: C01 `ok` (CAGR −6,4%), C07 `no_data`, C08 `unsupported`.
+  Lần chạy đầu nạp nhầm code từ repo (đọc profile của PM); đã sửa script và chạy lại, chỉ tính lần sau.
+- **Test:** `test_dbt_cap_lai_quyen_ai_dung_danh_sach_tool` đạt (kiểm thêm env `RETAIL_WEB_DBX_PRINCIPAL` dùng danh sách bảng của trang).
+  Các test PostgreSQL chưa chạy lại vì Docker đang tắt.
+- **Chưa làm (PM):** deploy trên share.streamlit.io theo `docs/streamlit_cloud_deploy.md`, bật public, smoke; sau đó `apps stop` app Databricks.
 
 ---
 
