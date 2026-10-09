@@ -1691,3 +1691,33 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
 - **Đã kiểm (ẩn danh, từ ngoài):** app báo mở công khai; 8/8 trang mở được, không trang nào báo lỗi; Tổng quan đọc kho
   Databricks `retail_lab`, đủ 11 năm.
 - **PM làm tiếp:** hỏi thử 3 câu chat theo `docs/streamlit_cloud_deploy.md` Bước 5; ổn thì tắt app Databricks (Bước 6).
+
+### 2026-10-09: chat AI sửa lỗi câu "… mạnh nhất" bị chặn (dev xong, chờ PM xem)
+
+- **Lỗi PM thấy được:** hỏi "giai đoạn sập giảm bao nhiêu", chat hay viết thêm câu "Đây cũng là giai đoạn giảm mạnh nhất…". App
+  không kiểm được câu đó nên chặn cả phần lời, chỉ hiện bảng số (nhật ký AI §3 mục 10).
+- **Đã sửa:** app tự kiểm câu "Đây (cũng) là … mạnh nhất" với bảng xếp hạng tính trên đủ các giai đoạn / ngành / vùng: đúng thì
+  hiện, sai thì vẫn chặn. Câu nói "theo CAGR" hay "bằng tiền" phải đúng theo tiêu chí đó. Commit `09b9930` và `24c86d5` (nhánh `app/myuyen`,
+  **chưa push**).
+- **Kiểm:**
+  - test không gọi model: 272 đạt trên DuckDB; 87 test cần PostgreSQL **chưa kiểm được** vì Docker Desktop đang tắt;
+  - chạy lại 1.082 câu trả lời cũ: không câu nào trước qua mà nay bị chặn;
+  - model thật, bộ 12 câu mới D\* × 3 lượt: **34/36** đạt chấm tự động, đọc tay 0 số sai;
+  - đúng 3 câu cũ hay lỗi (C02, A03, A03d) × 3 lượt: **9/9**, không lượt nào phải sửa (trước: C02 phải sửa 3/6 lượt).
+- **Lần chạy D\* đầu:** hỏi "ngành nào giảm **ít** nhất" thì chat trả lời lệch sang "giảm nhiều nhất" (đã sửa, xem dòng cuối).
+  Chi tiết: `docs/ai_explain_nhat_ky.md`.
+- **Bản public** (https://retail-analytics-ps.streamlit.app/) chưa có bản sửa này. Muốn có thì push nhánh `app/myuyen`, Streamlit
+  Cloud tự deploy lại: chờ PM quyết.
+- **Sửa thêm cùng ngày** (commit `24c86d5`): câu "Đây là … lớn nhất" phải nói về tăng/giảm, không được nói về tỷ trọng; hỏi "giảm
+  ít nhất" thì chat nêu số từng ngành hoặc báo "chưa xếp được", không đổi sang "giảm nhiều nhất". Model thật D11 × 3 sau sửa: 3/3
+  đúng hướng. Câu hỏi PM còn lại chỉ là: có cần chat trả lời thẳng "ngành giảm ít nhất là …" không (phải thêm xếp hạng phía nhỏ).
+
+### 2026-10-09: chat trả lời thẳng "ngành / vùng / kênh giảm ít nhất là …" (dev xong, chờ PM xem)
+
+- **PM chốt:** chat cần trả lời thẳng "ngành giảm ít nhất là …".
+- **Đã làm:** công cụ theo nhóm tính thêm nhóm giảm ít nhất / tăng ít nhất trên đủ các nhóm (chỉ trong các nhóm cùng chiều). App
+  kiểm câu "ít nhất / nhẹ nhất" phải dẫn đúng xếp hạng này. Commit `02b772e`, `c1700ad`.
+- **Kiểm:** model thật, bộ 10 câu mới F\* × 3: hỏi ngành / vùng / kênh giảm hoặc tăng ít nhất **21/21**; đọc tay 0 số sai.
+- **Chưa có phía "ít nhất"** cho giai đoạn và cho N/U/P: chat nói "chưa xếp được" kèm số (6/6 lượt sau sửa).
+- **Ví dụ:** "Năm 2019 ngành hàng nào giảm ít nhất?" → "Casual, giảm 22.448.071 VND".
+
