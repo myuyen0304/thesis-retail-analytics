@@ -503,10 +503,42 @@ def test_cau_noi_xep_hang_sai_hoac_khong_doi_chieu_duoc_thi_van_chan():
             'nhỏ nhất')
     blocked(TURNS, 'Cú đổi hướng cuối 2016 có độ lớn {c1}. Đây là mức đổi hướng nhỏ nhất.',
             [{'id': 'c1', 'path': 'T1.rows[2016].magnitude', 'sign': 'am'}], 'xếp hạng')
+    # câu nối nói về TỶ TRỌNG (chỉ tiêu mức), không có chữ tăng/giảm: West 2021 kéo giảm nhiều nhất nhưng không chiếm
+    # tỷ trọng lớn nhất → không được lấy xếp hạng ΔR để cho qua
+    t = _one(('get_segment_contribution', dict(metric='R', dimension='region', year=2021)),
+             'West giảm {c1} năm 2021. Vùng này chiếm tỷ trọng lớn nhất.',
+             [{'id': 'c1', 'path': 'T1.rows[West].delta_r', 'sign': 'am'}], q='Năm 2021 vùng nào kéo R xuống nhiều nhất?')
+    assert t.status == 'answer_validation_failed', t.answer_md
+    t = _one(('get_segment_contribution', dict(metric='R', dimension='region', year=2021)),
+             'West giảm {c1} năm 2021. Vùng này là vùng mạnh nhất.',
+             [{'id': 'c1', 'path': 'T1.rows[West].delta_r', 'sign': 'am'}], q='Năm 2021 vùng nào kéo R xuống nhiều nhất?')
+    assert t.status == 'answer_validation_failed', t.answer_md
     # A04: số giai đoạn n_phases không chứng minh "cùng tháng thấp nhất"
     t = _one(('get_calendar_pattern', {'pattern': 'mua_vu'}), 'Tháng thấp nhất là tháng {c1}. Tháng thấp nhất cũng lặp '
              'lại ở cả {c2} giai đoạn.', [{'id': 'c1', 'path': 'T1.derived.trough_months'},
                                          {'id': 'c2', 'path': 'T1.derived.n_phases'}], q='Tháng nào bán ít nhất?')
+    assert t.status == 'answer_validation_failed'
+
+
+def test_live_d11_hoi_it_nhat_loi_nhac_khong_day_sang_nhieu_nhat():
+    # live D11: lời nhắc cũ gợi ý derived.largest_*.phases (câu hỏi về ngành) và câu nối "Đây là…" → model đổi câu hỏi
+    t = _one(('get_segment_contribution', SEG_2019),
+             'Năm 2019 cả {c1} ngành đều giảm R. Ngành giảm ít nhất theo mức đổi R là {c2}, với ΔR là {c3}.',
+             [{'id': 'c1', 'path': 'T1.derived.n_groups_down'}, {'id': 'c2', 'path': 'T1.rows[Casual].dimension_value'},
+              {'id': 'c3', 'path': 'T1.rows[Casual].delta_r', 'sign': 'am'}], q='Năm 2019 ngành hàng nào giảm ít nhất?')
+    errs = ' | '.join(t.validation_errors)
+    assert t.status == 'answer_validation_failed'
+    assert 'KHÔNG đổi sang trả lời phía lớn nhất' in errs and '.phases' not in errs and 'Đây là' not in errs, errs
+    # câu nói giới hạn của tool, không có số, không gọi tên nhóm: không phải claim xếp hạng
+    t = _one(('get_segment_contribution', SEG_2019),
+             'Năm 2019 cả {c1} ngành đều giảm R: Casual giảm {c2}. Dữ liệu chỉ xếp hạng phía giảm nhiều nhất, không xếp '
+             'hạng phía giảm ít nhất.', [{'id': 'c1', 'path': 'T1.derived.n_groups_down'},
+                                       {'id': 'c2', 'path': 'T1.rows[Casual].delta_r', 'sign': 'am'}],
+             q='Năm 2019 ngành hàng nào giảm ít nhất?')
+    assert t.status == 'ok', t.validation_errors
+    # nhưng gọi tên nhóm trong câu đó thì vẫn chặn
+    t = _one(('get_segment_contribution', SEG_2019), 'Casual giảm ít nhất, dù dữ liệu chỉ xếp hạng phía nhiều nhất.', [],
+             q='Năm 2019 ngành hàng nào giảm ít nhất?')
     assert t.status == 'answer_validation_failed'
 
 

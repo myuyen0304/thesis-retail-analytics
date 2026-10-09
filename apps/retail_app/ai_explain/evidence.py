@@ -124,6 +124,10 @@ WEAK_WORDS = ('nhỏ nhất', 'ít nhất')
 _CRIT_CAGR = re.compile(r'(?:theo|xét|lẫn|tiêu chí)\s+(?:cả\s+)?(?:tiêu chí\s+)?(?:cagr|tốc độ)')
 _CRIT_TIEN = re.compile(r'bằng tiền|(?:theo|xét|tiêu chí)\s+(?:cả\s+)?(?:tiêu chí\s+)?(?:mức đổi r(?!\w)|số tiền|tiền|δr)')
 # câu nối mở đầu bằng đại từ chỉ giai đoạn / nhóm / điểm vừa nói ở câu trước: "Đây cũng là giai đoạn giảm mạnh nhất"
+# câu nối nói về chỉ tiêu MỨC (tỷ trọng, R cao / thấp nhất), không phải mức đổi: largest_* không chứng minh được
+_NOT_CHANGE = re.compile(r'tỷ trọng|chiếm|cao nhất|thấp nhất|quy mô')
+# câu nói giới hạn của tool ("dữ liệu chỉ xếp hạng phía giảm nhiều nhất, không xếp hạng phía ít nhất"): không phải claim
+_RANK_LIMIT = re.compile(r'(?:không|chưa|chỉ)\s+(?:có\s+)?(?:xếp hạng|xếp)(?!\w)')
 _ANAPHOR = re.compile(r'^\s*(?:và\s+)?(?:đây|đó|(?:giai đoạn|ngành hàng|ngành|nhóm|vùng|khu vực|kênh|điểm đổi hướng|'
                       r'điểm|cú đổi hướng)\s+(?:này|đó))(?!\w)')
 # so sánh hai số ("2019 cao hơn 2020") là phép tính model tự làm: chỉ được nói khi câu dẫn cột thay đổi tool đã tính
@@ -384,10 +388,14 @@ def _verified_anaphor_rank(sent: str, prev: str, by_id: dict, results: dict, nee
     nhưng đại từ ở đầu câu trỏ về giai đoạn / nhóm / điểm mà CÂU NGAY TRƯỚC đã dẫn số (rows[X] hoặc claim xếp hạng
     một phần tử). App tự đối chiếu X với derived.largest_* tính trên đủ tập, theo chiều tăng/giảm của câu và theo
     tiêu chí câu nêu; giai đoạn mà câu không nêu tiêu chí thì phải đứng đầu theo CẢ tiền lẫn CAGR. Không tin lời model.
-    "nhỏ nhất", "ít nhất" (phía ngược) không đối chiếu được nên vẫn chặn. `need`: chỉ đối chiếu các tiêu chí này
-    (tiêu chí câu nêu mà chỗ đặt trong câu chưa chứng minh)."""
+    "nhỏ nhất", "ít nhất" (phía ngược) không đối chiếu được nên vẫn chặn. Câu phải có chữ tăng/giảm: xếp hạng ở đây là
+    theo MỨC ĐỔI (ΔR, CAGR, độ lớn đổi hướng); câu nói về tỷ trọng / mức R ("vùng này chiếm tỷ trọng lớn nhất") là chỉ
+    tiêu khác nên không đối chiếu. `need`: chỉ đối chiếu các tiêu chí này (tiêu chí câu nêu mà chỗ đặt trong câu
+    chưa chứng minh)."""
     low = _PLACEHOLDER.sub(' ', sent).lower()
     if not _ANAPHOR.match(low) or not any(w in low for w in STRONG_WORDS) or any(w in low for w in WEAK_WORDS):
+        return False
+    if _NOT_CHANGE.search(low):
         return False
     # đối tượng của câu trước: mọi claim trỏ vào dòng có thể xếp hạng phải cùng một dòng
     bound = {}
@@ -407,8 +415,6 @@ def _verified_anaphor_rank(sent: str, prev: str, by_id: dict, results: dict, nee
     (ref, row), = bound.values()
     kind, key = _rank_kind(row)
     d = _direction(low)
-    if not d and _is_num(row.get(key)):
-        d = (row[key] > 0) - (row[key] < 0)
     if not d:
         return False
     res = results[ref]
@@ -542,8 +548,17 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             continue
         if not ranks and _verified_anaphor_rank(sent, prev, by_id, results):
             continue
+        low = sent.lower()
+        if not paths and _RANK_LIMIT.search(low) and not any(rx.search(sent) for rx in _DRIVER_WORD.values()):
+            continue        # câu nói giới hạn của tool, không khẳng định nhóm nào (live D11 sau sửa, lượt 3)
+        if not ranks and any(w in low for w in WEAK_WORDS) and not any(w in low for w in STRONG_WORDS):
+            # live D11: lời nhắc cũ chỉ cách dùng largest_* nên model đổi câu hỏi "ít nhất" thành "nhiều nhất"
+            errors.append(f'câu "{sent.strip()[:80]}" xếp hạng phía "nhỏ nhất / ít nhất". Tool chỉ xếp phía lớn nhất cho '
+                          'nhóm, giai đoạn, điểm đổi hướng (tháng thấp nhất thì dẫn trough_*): bỏ câu xếp hạng, nêu số của '
+                          'từng nhóm, hoặc trả status "unsupported". KHÔNG đổi sang trả lời phía lớn nhất')
+            continue
         if not ranks:
-            crit = _criteria(sent)
+            crit = _criteria(sent) if any(r.ok and _is_phase_result(r) for r in results.values()) else set()
             where = (' hoặc '.join(h for k, h in (('tien', 'derived.largest_*.phases'),
                                                     ('cagr', 'derived.largest_*_cagr.phases')) if k in crit)
                      or 'derived.largest_* hoặc top_*_driver')
