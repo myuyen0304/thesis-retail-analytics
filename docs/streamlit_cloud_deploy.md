@@ -4,6 +4,8 @@ PM chọn ngày 2026-10-08. Vì **Databricks Apps không cho mở công khai** (
 Streamlit chạy trên **Streamlit Community Cloud** (miễn phí). **Dữ liệu vẫn đọc từ kho Databricks production**
 (catalog `retail_lab`), đúng quyết định 2026-10-05: chỉ chỗ đặt giao diện đổi, kho và số liệu không đổi.
 
+**Link công khai (deploy 2026-10-09):** https://retail-analytics-ps.streamlit.app/
+
 ```
 Người xem (không cần đăng nhập)
    │

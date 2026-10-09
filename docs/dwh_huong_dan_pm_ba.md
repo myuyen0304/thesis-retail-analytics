@@ -1684,3 +1684,10 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
 - **PM làm tiếp:** theo `docs/streamlit_cloud_deploy.md` (tạo khóa, deploy, bật public, smoke).
 - **Giới hạn:** bản public phụ thuộc bản Free của cả Streamlit (app ngủ khi lâu không ai xem) và Databricks (có thể bị chặn khi chạm
   giới hạn); không cam kết luôn sẵn sàng.
+
+### 2026-10-09: bản public chạy trên Streamlit Community Cloud (dev kiểm các trang; chờ PM hỏi thử chat)
+
+- **Link công khai:** https://retail-analytics-ps.streamlit.app/ (không cần đăng nhập). PM tự deploy từ nhánh `app/myuyen`.
+- **Đã kiểm (ẩn danh, từ ngoài):** app báo mở công khai; 8/8 trang mở được, không trang nào báo lỗi; Tổng quan đọc kho
+  Databricks `retail_lab`, đủ 11 năm.
+- **PM làm tiếp:** hỏi thử 3 câu chat theo `docs/streamlit_cloud_deploy.md` Bước 5; ổn thì tắt app Databricks (Bước 6).

@@ -218,6 +218,17 @@ Hạn tiến độ khóa luận: **2026-10-25**.
   Các test PostgreSQL chưa chạy lại vì Docker đang tắt.
 - **Chưa làm (PM):** deploy trên share.streamlit.io theo `docs/streamlit_cloud_deploy.md`, bật public, smoke; sau đó `apps stop` app Databricks.
 
+### 2026-10-09: bản public chạy trên Streamlit Community Cloud
+
+- **PM deploy** theo `docs/streamlit_cloud_deploy.md`: nhánh `app/myuyen` (commit `0f07cc5`), entrypoint `apps/retail_app/app.py`,
+  Python 3.11. Link: https://retail-analytics-ps.streamlit.app/
+- **Kiểm từ ngoài, ẩn danh** (không đăng nhập, chỉ cookie phiên do Streamlit Cloud cấp): `/~/+/_stcore/health` = `ok`;
+  `api/v2/app/status` báo `viewerAuthEnabled: false` (mở công khai), `streamlitVersion` 1.64.0 (đúng file thư viện đã ghim).
+- **Smoke qua websocket của Streamlit** (`scratchpad/smoke_public.py`, chạy từng trang như người xem): 8/8 trang không exception,
+  không `st.error`; Tổng quan ghi nguồn Databricks catalog `retail_lab`, `rpt_revenue_yearly` 11 dòng.
+  Không gửi câu chat trong lần kiểm này.
+- **Chưa làm:** PM hỏi thử 3 câu chat (C01, C07, C08) trên link public; sau đó `apps stop` app Databricks.
+
 ---
 
 ## 3. Cần cải thiện (lỗi và hạn chế đang biết)
