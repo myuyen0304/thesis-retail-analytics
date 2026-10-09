@@ -23,7 +23,7 @@ from ai_explain.contracts import ToolCall, ToolResult
 from ai_explain.evidence import DATE_RE, Checked, allowed_years, check_digits, question_numbers, validate
 from ai_explain.provider import ProviderError, openai_tools, parse_arguments
 
-PROMPT_VERSION = 'ai3-2026-10-09'
+PROMPT_VERSION = 'ai3-2026-10-09b'
 MAX_TOOL_CALLS = 4
 MAX_LLM_CALLS = 6
 SESSION_TOKEN_LIMIT = 200_000
@@ -106,8 +106,10 @@ QUY TẮC BẮT BUỘC
    Ví dụ đúng: "Giai đoạn giảm mạnh nhất theo CAGR là {{c3}}" (c3 = T1.derived.largest_decrease_cagr.phases);
    "Ngành kéo giảm nhiều nhất là {{c2}}" (c2 = T1.derived.largest_decrease.groups). Nêu hai tiêu chí thì mỗi tiêu chí
    một chỗ đặt. Câu nối "Đây (cũng) là giai đoạn / ngành … mạnh nhất" chỉ viết NGAY SAU câu đã dẫn số của chính giai
-   đoạn / ngành đó (rows[<tên>]); app tự đối chiếu với xếp hạng. Không dùng derived.largest_* cho ý "nhỏ nhất / ít nhất"
-   (giảm ít nhất, đổi hướng nhỏ nhất): tool chỉ xếp phía lớn nhất.
+   đoạn / ngành đó (rows[<tên>]); app tự đối chiếu với xếp hạng. "Giảm / tăng ít nhất" của NHÓM (ngành, vùng, kênh):
+   derived.smallest_decrease.groups / smallest_increase.groups (chỉ trong các nhóm cùng chiều; vd. "Ngành giảm ít nhất
+   năm 2019 là {{c4}}"). Không dùng derived.largest_* hay top_*_driver cho ý "nhỏ nhất / ít nhất"; giai đoạn, điểm đổi
+   hướng, N/U/P chưa có xếp hạng phía nhỏ: nói chưa xếp được, không đổi sang phía lớn nhất.
    Tên nhóm (ngành hàng, khu vực, kênh) KHÔNG viết thẳng: dùng chỗ đặt trỏ vào derived.largest_*.groups hoặc
    rows[<nhóm>].dimension_value; hoặc viết tên nhóm cùng vế với một claim rows[<nhóm>].<cột>.
    Tên thành phần N/U/P thì viết thẳng ("số đơn (N)", "số món mỗi đơn (U)", "giá mỗi món (P)") rồi đặt số của

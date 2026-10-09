@@ -165,12 +165,14 @@ def test_e05_e06_e17_nhom_moi_nam(src, dim, year):
         assert x['contribution_to_delta'] == pytest.approx((e[year] - e[year - 1]) / (r_tot1 - r_tot0), rel=RTOL)
     # "kéo giảm nhiều nhất" = ΔR âm nhất, "kéo tăng nhiều nhất" = ΔR dương nhất, tính trên CSV
     deltas = {g: e[year] - e[year - 1] for g, e in exp.items()}
-    for key, sign in (('largest_decrease', -1), ('largest_increase', +1)):
+    # "giảm ít nhất" (smallest_*, PM 2026-10-09) = ΔR âm gần 0 nhất TRONG các nhóm giảm; tương tự chiều tăng
+    for key, sign, pick in (('largest_decrease', -1, max), ('largest_increase', +1, max),
+                            ('smallest_decrease', -1, min), ('smallest_increase', +1, min)):
         cand = {g: v for g, v in deltas.items() if sign * v > 0}
         if not cand:
             assert r.derived[key] is None
             continue
-        best = max(sign * v for v in cand.values())
+        best = pick(sign * v for v in cand.values())
         assert r.derived[key]['groups'] == sorted(g for g, v in cand.items() if sign * v == best)
         assert r.derived[key]['delta_r'] == _money(sign * best)
     assert sum(x['share'] for x in r.rows) == pytest.approx(1, rel=RTOL)
@@ -421,6 +423,15 @@ def test_e22_dong_hang_giu_moi_nhom(monkeypatch, tmp_path):
     assert r.status == 'ok'
     assert r.derived['largest_decrease'] == {'groups': ['Outdoor', 'Streetwear'], 'delta_r': Decimal('-463947221.16'),
                                              'tie': True}
+
+
+def test_dong_hang_phia_giam_it_nhat_giu_moi_nhom(monkeypatch, tmp_path):
+    # GenZ giảm đúng bằng Casual năm 2019 → hai nhóm đồng hạng "giảm ít nhất"
+    p = _ban_sao(tmp_path, "update reporting.rpt_revenue_segment_yearly set delta_r = -22448070.60 "
+                           "where dimension_name = 'category' and dimension_value = 'GenZ' and year = 2019")
+    monkeypatch.setenv('RETAIL_DUCKDB_PATH', str(p))
+    r = _run('get_segment_contribution', metric='R', dimension='category', year=2019)
+    assert r.derived['smallest_decrease'] == {'groups': ['Casual', 'GenZ'], 'delta_r': Decimal('-22448070.60'), 'tie': True}
 
 
 def test_bang_nhom_thieu_dong_thi_khong_xep_hang(monkeypatch, tmp_path):

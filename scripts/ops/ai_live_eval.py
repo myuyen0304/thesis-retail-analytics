@@ -345,14 +345,48 @@ ACCEPT_D = [
     C('D10', 'Giai đoạn đi ngang 2019–2022 có phải giai đoạn giảm mạnh nhất không?', {'ok'}, [(TRD, {'view': 'phases'})],
       [({TRD}, ('rows[D].cagr', 'rows[D].delta_r', '.derived.largest_decrease.phases',
                 '.derived.largest_decrease_cagr.phases'))], banned=['đúng, giai đoạn đi ngang', 'là giai đoạn giảm mạnh nhất, với']),
-    # bẫy: tool chỉ xếp phía lớn nhất; "giảm ít nhất" không được khẳng định bằng xếp hạng tự làm
-    C('D11', 'Năm 2019 ngành hàng nào giảm ít nhất?', {'ok', 'unsupported', 'needs_clarification'},
-      banned=['giảm ít nhất là Casual'],
-      if_ok=([(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2019})], [])),
+    # D11 lúc soạn là bẫy (tool chỉ xếp phía lớn nhất). ĐỔI 2026-10-09 sau khi PM chốt cần trả lời thẳng "ngành giảm ít
+    # nhất là …": tool thêm smallest_* nên đáp án đúng nay là Casual qua smallest_decrease.groups.
+    C('D11', 'Năm 2019 ngành hàng nào giảm ít nhất?', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2019})],
+      [({SEG}, '.derived.smallest_decrease.groups')], ['Casual']),
     C('D12', 'Còn theo CAGR thì giai đoạn nào đứng đầu chiều tăng?', {'ok'}, [(TRD, {'view': 'phases'})],
       [({TRD}, '.derived.largest_increase_cagr.phases')], ['A — Tăng trưởng'], after='D01'),
 ]
-SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D}
+# Bộ nghiệm thu lần 5 (F*), soạn 2026-10-09 SAU khi thêm xếp hạng phía nhỏ cho nhóm (smallest_*, PM chốt cần trả lời thẳng
+# "ngành giảm ít nhất là …"; tool v1.4, prompt ai3-2026-10-09b). D* đã dùng để sửa nên không còn khách quan. Gồm: phía nhỏ ở
+# đủ 3 chiều và cả chiều tăng, năm có nhóm tăng lẫn giảm, hỏi cả hai phía, follow-up, chữ "nhẹ nhất", và phần CHƯA có
+# phía nhỏ (giai đoạn, N/U/P) phải không bịa xếp hạng. Chưa dùng để chỉnh; chốt và commit TRƯỚC lượt gọi model đầu.
+ACCEPT_F = [
+    C('F01', 'Năm 2019 vùng nào giảm ít nhất?', {'ok'}, [(SEG, {'metric': 'R', 'dimension': 'region', 'year': 2019})],
+      [({SEG}, '.derived.smallest_decrease.groups')], ['West']),
+    C('F02', 'Năm 2022 ngành hàng nào tăng ít nhất?', {'ok'}, [(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2022})],
+      [({SEG}, '.derived.smallest_increase.groups')], ['Outdoor']),
+    C('F03', 'Kênh nào giảm nhẹ nhất năm 2020?', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'acquisition_channel', 'year': 2020})],
+      [({SEG}, '.derived.smallest_decrease.groups')], ['direct']),
+    C('F04', 'Năm 2018 ngành nào giảm ít nhất, ngành nào tăng ít nhất?', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2018})],
+      [({SEG}, '.derived.smallest_decrease.groups'), ({SEG}, '.derived.smallest_increase.groups')],
+      ['Streetwear', 'GenZ']),
+    C('F05', 'Năm 2017 ngành hàng nào giảm nhiều nhất và ngành nào giảm ít nhất?', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2017})],
+      [({SEG}, '.derived.largest_decrease.groups'), ({SEG}, '.derived.smallest_decrease.groups')],
+      ['Streetwear', 'GenZ']),
+    C('F06', 'Còn theo vùng?', {'ok'}, [(SEG, {'metric': 'R', 'dimension': 'region', 'year': 2017})],
+      [({SEG}, '.derived.smallest_decrease.groups')], ['Central'], after='F05'),
+    C('F07', 'Vùng nào kéo R xuống mạnh nhất năm 2018?', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'region', 'year': 2018})],
+      [({SEG}, '.derived.largest_decrease.groups')], ['East']),
+    # phía nhỏ CHƯA có cho giai đoạn và N/U/P: không được tự xếp (bộ kiểm chặn), trả lời bằng số hoặc báo chưa xếp được
+    C('F08', 'Giai đoạn nào giảm ít nhất?', {'ok', 'unsupported', 'needs_clarification'}),
+    C('F09', 'Năm 2019 trong số đơn, số món, giá thì thành phần nào kéo giảm ít nhất?',
+      {'ok', 'unsupported', 'needs_clarification'}),
+    C('F10', 'Năm 2021 kênh nào tăng ít nhất?', {'ok', 'no_data', 'unsupported'},
+      if_ok=([(SEG, {'metric': 'R', 'dimension': 'acquisition_channel', 'year': 2021})], [])),
+]
+SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D,
+        'f': ACCEPT_F}
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -448,13 +482,13 @@ def main() -> int:
     ap.add_argument('--cases', nargs='*')
     ap.add_argument('--set', default='chuan', choices=[*SETS, 'tat_ca'],
                     help='chuan = E* (đã dùng chỉnh prompt); moi = H* (nghiệm thu AI2→AI3); ai3 = A*, ai3b = B*, '
-                         'ai3c = C* (nghiệm thu AI3); d = D* (câu xếp hạng, 2026-10-09)')
+                         'ai3c = C* (nghiệm thu AI3); d = D* (câu xếp hạng, 2026-10-09); f = F* (phía nhỏ, 2026-10-09)')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
     a = ap.parse_args()
-    pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D if a.set == 'tat_ca' else SETS[a.set]
+    pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
-    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D}
+    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F}
     if a.kiem_rubric:
         return check_rubric(cases, a.backend)
     p = provider.from_config()

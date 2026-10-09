@@ -542,6 +542,37 @@ def test_live_d11_hoi_it_nhat_loi_nhac_khong_day_sang_nhieu_nhat():
     assert t.status == 'answer_validation_failed'
 
 
+def test_nhom_giam_it_nhat_tra_loi_thang_bang_smallest():
+    # PM 2026-10-09: cần trả lời thẳng "ngành giảm ít nhất là …" → derived.smallest_decrease (tính trên đủ tập)
+    q = 'Năm 2019 ngành hàng nào giảm ít nhất?'
+    seg = ('get_segment_contribution', SEG_2019)
+    t = _one(seg, 'Năm 2019 ngành giảm ít nhất là {c1}, giảm {c2}.',
+             [{'id': 'c1', 'path': 'T1.derived.smallest_decrease.groups'},
+              {'id': 'c2', 'path': 'T1.derived.smallest_decrease.delta_r', 'sign': 'am'}], q=q)
+    assert t.status == 'ok', t.validation_errors
+    assert '**Casual**' in t.answer_md and '22.448.071' in t.answer_md
+    # câu nối: Casual (câu trước) đúng là ngành giảm ít nhất; GenZ thì không
+    t = _one(seg, 'Casual giảm {c1} năm 2019. Đây là ngành giảm ít nhất.',
+             [{'id': 'c1', 'path': 'T1.rows[Casual].delta_r', 'sign': 'am'}], q=q)
+    assert t.status == 'ok', t.validation_errors
+    for sai, claims in [
+        ('GenZ giảm {c1} năm 2019. Đây là ngành giảm ít nhất.',                      # GenZ không phải
+         [{'id': 'c1', 'path': 'T1.rows[GenZ].delta_r', 'sign': 'am'}]),
+        ('Ngành giảm ít nhất là {c1}.', [{'id': 'c1', 'path': 'T1.derived.largest_decrease.groups'}]),   # phía ngược
+        ('Ngành kéo giảm nhiều nhất là {c1}.', [{'id': 'c1', 'path': 'T1.derived.smallest_decrease.groups'}]),
+        ('Ngành tăng ít nhất là {c1}.', [{'id': 'c1', 'path': 'T1.derived.smallest_decrease.groups'}]),  # ngược chiều
+        ('Ngành giảm nhẹ nhất là {c1}.', [{'id': 'c1', 'path': 'T1.derived.largest_decrease.groups'}]),  # "nhẹ nhất"
+        ('Năm 2019 GenZ là ngành giảm nhẹ nhất, giảm {c1}.',                                         # không dẫn xếp hạng
+         [{'id': 'c1', 'path': 'T1.rows[GenZ].delta_r', 'sign': 'am'}]),
+    ]:
+        t = _one(seg, sai, claims, q=q)
+        assert t.status == 'answer_validation_failed', (sai, t.answer_md)
+    # N/U/P chưa có xếp hạng phía nhỏ: "số đơn giảm ít nhất" không được đối chiếu với top_down_driver
+    t = _one(('get_revenue_drivers', dict(metric='R', year=2019)), 'R năm 2019 giảm ít nhất ở số đơn (N), góp {c1}.',
+             [{'id': 'c1', 'path': 'T1.rows[0].contrib_n', 'sign': 'am'}], q='Thành phần nào giảm ít nhất năm 2019?')
+    assert t.status == 'answer_validation_failed'
+
+
 def test_live_thanh_phan_nhieu_nhat_khong_co_chu_tang_giam():
     # live H04c: năm 2022 R tăng, câu "đóng góp nhiều nhất là giá mỗi món (P)" không có chữ tăng/giảm → theo chiều ΔR
     ok = final(answer='Thành phần đóng góp nhiều nhất là giá mỗi món (P), góp {c1}.',

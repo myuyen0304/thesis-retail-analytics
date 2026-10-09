@@ -19,7 +19,7 @@ Bị chặn (answer_validation_failed) khi:
   tự đối chiếu với kho: câu gọi tên thẳng N/U/P, và câu nối "Đây (cũng) là … mạnh nhất" trỏ về giai đoạn / nhóm / điểm
   mà câu ngay trước đã dẫn số (2026-10-09);
 - câu xếp hạng giai đoạn nêu tiêu chí (theo CAGR / bằng tiền) mà thiếu chỗ đặt của tiêu chí đó; câu "nhỏ nhất /
-  ít nhất" dẫn derived.largest_* (phía ngược);
+  ít nhất" dẫn derived.largest_* (phía ngược) và câu "nhiều nhất" dẫn derived.smallest_*;
 - tên nhóm (ngành hàng, khu vực, kênh) viết thẳng mà không gắn với claim đã dùng (rows[<nhóm>] hoặc danh sách nhóm
   của claim xếp hạng): giá trị đúng ở một ô không chứng minh câu văn nói đúng nhóm;
 - câu so sánh ("cao hơn", "thấp hơn"...) không dẫn số thay đổi do tool tính;
@@ -114,11 +114,11 @@ _DATA_DATES = re.compile(r'2012-07-04|2022-12-31|0?4/0?7/2012|31/12/2022')     #
 MONEY_SUFFIX = ' VND'   # PM chốt 2026-10-05 (metric_catalog.DECISIONS['currency_vnd'])
 
 RANK_WORDS = ('nhiều nhất', 'lớn nhất', 'mạnh nhất', 'cao nhất', 'thấp nhất', 'ít nhất', 'chủ yếu', 'đứng đầu',
-              'nhỏ nhất', 'mạnh hơn cả', 'dẫn đầu')
+              'nhỏ nhất', 'mạnh hơn cả', 'dẫn đầu', 'nhẹ nhất', 'chậm nhất', 'yếu nhất')
 # từ xếp hạng nói về phía CỰC (ΔR âm nhất / dương nhất): largest_* chứng minh được. "nhỏ nhất", "ít nhất" là phía
-# ngược lại (giảm ít nhất), largest_* không chứng minh được.
+# ngược lại (giảm ít nhất): chỉ smallest_* chứng minh được (có cho nhóm từ 2026-10-09; giai đoạn / điểm đổi hướng chưa có).
 STRONG_WORDS = ('mạnh nhất', 'nhiều nhất', 'lớn nhất', 'dẫn đầu', 'đứng đầu', 'mạnh hơn cả')
-WEAK_WORDS = ('nhỏ nhất', 'ít nhất')
+WEAK_WORDS = ('nhỏ nhất', 'ít nhất', 'nhẹ nhất', 'chậm nhất', 'yếu nhất')
 # tiêu chí xếp hạng giai đoạn PS2 mà câu văn nêu: theo CAGR (largest_*_cagr) hay theo mức đổi R bằng tiền (largest_*)
 # Chỉ tính là tiêu chí khi đi sau "theo / xét / lẫn / tiêu chí": "mức đổi R là {c2}" chỉ là dẫn số, không phải tiêu chí.
 _CRIT_CAGR = re.compile(r'(?:theo|xét|lẫn|tiêu chí)\s+(?:cả\s+)?(?:tiêu chí\s+)?(?:cagr|tốc độ)')
@@ -309,11 +309,11 @@ def _adjacent_direction(seg: str) -> int:
 
 
 def _rank_direction(path: str) -> int:
-    """Hướng của claim xếp hạng: −1 (largest_decrease, top_down_driver), +1 (largest_increase, top_up_driver),
-    0 nếu không phải claim xếp hạng."""
-    if '.derived.largest_decrease' in path or path.endswith('top_down_driver'):
+    """Hướng của claim xếp hạng: −1 (largest_/smallest_decrease, top_down_driver), +1 (largest_/smallest_increase,
+    top_up_driver), 0 nếu không phải claim xếp hạng."""
+    if re.search(r'\.derived\.(?:largest|smallest)_decrease', path) or path.endswith('top_down_driver'):
         return -1
-    if '.derived.largest_increase' in path or path.endswith('top_up_driver'):
+    if re.search(r'\.derived\.(?:largest|smallest)_increase', path) or path.endswith('top_up_driver'):
         return 1
     return LEVEL_RANK.get(path.rsplit('.', 1)[-1], 0)
 
@@ -335,7 +335,7 @@ def _verified_driver_rank(sent: str, results: dict) -> bool:
     """Câu xếp hạng gọi tên thẳng N/U/P ("R giảm chủ yếu ở số đơn"): app tự đối chiếu với top_down_driver /
     top_up_driver của kết quả phân rã DUY NHẤT trong lượt, theo chữ tăng/giảm của câu. Không tin lời model."""
     rows = [r for res in results.values() if res.ok for r in res.rows if 'top_down_driver' in r]
-    if len(rows) != 1:
+    if len(rows) != 1 or any(w in sent.lower() for w in WEAK_WORDS):     # top_*_driver là phía LỚN nhất
         return False
     d = _direction(_PLACEHOLDER.sub(' ', sent))
     if not d and any(w in sent.lower() for w in STRONG_WORDS) and _is_num(rows[0].get('delta_r')):
@@ -393,8 +393,10 @@ def _verified_anaphor_rank(sent: str, prev: str, by_id: dict, results: dict, nee
     tiêu khác nên không đối chiếu. `need`: chỉ đối chiếu các tiêu chí này (tiêu chí câu nêu mà chỗ đặt trong câu
     chưa chứng minh)."""
     low = _PLACEHOLDER.sub(' ', sent).lower()
-    if not _ANAPHOR.match(low) or not any(w in low for w in STRONG_WORDS) or any(w in low for w in WEAK_WORDS):
+    strong, weak = any(w in low for w in STRONG_WORDS), any(w in low for w in WEAK_WORDS)
+    if not _ANAPHOR.match(low) or strong == weak:
         return False
+    side = 'smallest' if weak else 'largest'      # "Đây là ngành giảm ít nhất" → smallest_decrease (chỉ nhóm có)
     if _NOT_CHANGE.search(low):
         return False
     # đối tượng của câu trước: mọi claim trỏ vào dòng có thể xếp hạng phải cùng một dòng
@@ -420,7 +422,7 @@ def _verified_anaphor_rank(sent: str, prev: str, by_id: dict, results: dict, nee
     res = results[ref]
     crit = need if need is not None else (_criteria(sent) or {'tien', 'cagr'}) if _is_phase_result(res) else {'tien'}
     for k in crit:
-        top = res.derived.get(f"largest_{'increase' if d > 0 else 'decrease'}{'_cagr' if k == 'cagr' else ''}")
+        top = res.derived.get(f"{side}_{'increase' if d > 0 else 'decrease'}{'_cagr' if k == 'cagr' else ''}")
         if not isinstance(top, dict) or top.get('tie') or not _row_label_in(row, kind, top.get(kind)):
             return False
     return True
@@ -551,11 +553,14 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
         low = sent.lower()
         if not paths and _RANK_LIMIT.search(low) and not any(rx.search(sent) for rx in _DRIVER_WORD.values()):
             continue        # câu nói giới hạn của tool, không khẳng định nhóm nào (live D11 sau sửa, lượt 3)
-        if not ranks and any(w in low for w in WEAK_WORDS) and not any(w in low for w in STRONG_WORDS):
+        weak = any(w in low for w in WEAK_WORDS) and not any(w in low for w in STRONG_WORDS)
+        strong = any(w in low for w in STRONG_WORDS) and not any(w in low for w in WEAK_WORDS)
+        if not ranks and weak:
             # live D11: lời nhắc cũ chỉ cách dùng largest_* nên model đổi câu hỏi "ít nhất" thành "nhiều nhất"
-            errors.append(f'câu "{sent.strip()[:80]}" xếp hạng phía "nhỏ nhất / ít nhất". Tool chỉ xếp phía lớn nhất cho '
-                          'nhóm, giai đoạn, điểm đổi hướng (tháng thấp nhất thì dẫn trough_*): bỏ câu xếp hạng, nêu số của '
-                          'từng nhóm, hoặc trả status "unsupported". KHÔNG đổi sang trả lời phía lớn nhất')
+            errors.append(f'câu "{sent.strip()[:80]}" xếp hạng phía "nhỏ nhất / ít nhất" nhưng trong câu không có chỗ đặt '
+                          'xếp hạng phía đó. Nhóm (ngành, vùng, kênh): dùng derived.smallest_decrease.groups / '
+                          'smallest_increase.groups; tháng thấp nhất: trough_*. Giai đoạn, điểm đổi hướng: tool không xếp '
+                          'phía nhỏ, bỏ câu xếp hạng hoặc trả status "unsupported". KHÔNG đổi sang trả lời phía lớn nhất')
             continue
         if not ranks:
             crit = _criteria(sent) if any(r.ok and _is_phase_result(r) for r in results.values()) else set()
@@ -566,10 +571,14 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
                           f'không có chỗ đặt trỏ vào {where} (xếp hạng trên đủ tập). Đặt chỗ đặt xếp hạng ngay trong '
                           'câu đó, hoặc mở câu bằng "Đây là…" ngay sau câu dẫn số của chính giai đoạn / nhóm ấy')
             continue
-        if (any(w in sent.lower() for w in WEAK_WORDS) and not any(w in sent.lower() for w in STRONG_WORDS)
-                and all('.derived.largest_' in p for p in paths if _rank_direction(p))):
-            errors.append(f'câu "{sent.strip()[:80]}" nói "nhỏ nhất / ít nhất" nhưng derived.largest_* là phía lớn nhất '
-                          '(ΔR âm nhất / dương nhất); tool không xếp phía nhỏ nhất')
+        ranked = [p for p in paths if _rank_direction(p) and p.rsplit('.', 1)[-1] not in LEVEL_RANK]
+        if weak and ranked and all('.derived.smallest_' not in p for p in ranked):
+            errors.append(f'câu "{sent.strip()[:80]}" nói "nhỏ nhất / ít nhất" nhưng chỗ đặt là phía lớn nhất (largest_*, '
+                          'top_*_driver); nhóm thì dùng derived.smallest_decrease / smallest_increase.groups')
+            continue
+        if strong and ranked and all('.derived.smallest_' in p for p in ranked):
+            errors.append(f'câu "{sent.strip()[:80]}" nói "nhiều nhất / mạnh nhất" nhưng chỗ đặt là phía nhỏ nhất '
+                          '(smallest_*); dùng derived.largest_*')
             continue
         crit_errs = _criteria_errors(sent, paths, results, prev, by_id)
         if crit_errs:
