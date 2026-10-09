@@ -436,6 +436,168 @@ def test_live_xep_hang_goi_ten_n_u_p_duoc_app_doi_chieu():
     assert not evidence.check_digits('Dữ liệu từ 2012-07-04 đến 2022-12-31.', set())
 
 
+PHASES = ('get_revenue_trend', {'view': 'phases'})
+TURNS = ('get_revenue_trend', {'view': 'turning_points'})
+
+
+def _one(tool, answer, claims, q='Giai đoạn sập thì CAGR bao nhiêu?'):
+    """Một lượt, model trả cùng một câu ở cả lần đầu và lần sửa: trạng thái cho biết bộ kiểm có cho qua không."""
+    f = final(answer=answer, claims=claims)
+    return service.run_turn(q, [], 'duckdb', FakeProvider(call(tool[0], **tool[1]), f, f))
+
+
+def test_live_cau_noi_day_la_manh_nhat_duoc_app_doi_chieu():
+    # §3 mục 10 nhật ký (live A03, A03d, C02): câu nối "Đây (cũng) là… mạnh nhất" không có chỗ đặt xếp hạng, đại từ trỏ
+    # về giai đoạn câu trước đã dẫn số. App đối chiếu với derived.largest_* trên đủ 4 giai đoạn.
+    c = [{'id': 'c1', 'path': 'T1.rows[C].delta_r', 'sign': 'am'}, {'id': 'c2', 'path': 'T1.rows[C].cagr', 'sign': 'am'},
+         {'id': 'c3', 'path': 'T1.derived.n_phases'}]
+    # không nêu tiêu chí → C phải đứng đầu theo CẢ tiền lẫn CAGR (đúng trong kho)
+    t = _one(PHASES, 'Giai đoạn sập (C), R giảm {c1}, CAGR {c2}. Đây cũng là giai đoạn giảm mạnh nhất trong {c3} giai đoạn.', c)
+    assert t.status == 'ok', t.validation_errors
+    t = _one(PHASES, 'Giai đoạn sập, R giảm {c1}; đây cũng là mức giảm mạnh nhất theo cả mức đổi R bằng tiền lẫn CAGR '
+                     'trong {c3} giai đoạn.', c)
+    assert t.status == 'ok', t.validation_errors
+    # A03d: CAGR dẫn ở câu trước bằng claim xếp hạng, tiền dẫn ngay trong câu
+    t = _one(PHASES, 'Giai đoạn sập là {c1}, CAGR {c2}. Đây là giai đoạn giảm mạnh nhất theo CAGR, và cũng đứng đầu về mức '
+                     'đổi R bằng tiền tại {c4}.',
+             [{'id': 'c1', 'path': 'T1.derived.largest_decrease_cagr.phases'}, c[1],
+              {'id': 'c4', 'path': 'T1.derived.largest_decrease.phases'}])
+    assert t.status == 'ok', t.validation_errors
+    # A03 (tăng, "dẫn đầu")
+    t = _one(PHASES, 'Giai đoạn tăng trưởng (A) có mức tăng R {c1}. Đây là giai đoạn tăng mạnh nhất theo mức đổi R bằng '
+                     'tiền, và cũng dẫn đầu theo CAGR.', [{'id': 'c1', 'path': 'T1.rows[A].delta_r', 'sign': 'duong'}])
+    assert t.status == 'ok', t.validation_errors
+    # điểm đổi hướng và nhóm
+    t = _one(TURNS, 'Cú đổi hướng cuối 2018 có độ lớn {c1}. Đây là cú đổi hướng giảm mạnh nhất.',
+             [{'id': 'c1', 'path': 'T1.rows[2018].magnitude', 'sign': 'am'}])
+    assert t.status == 'ok', t.validation_errors
+    t = _one(('get_segment_contribution', SEG_2019), 'Streetwear giảm {c1} năm 2019. Đây là mức giảm lớn nhất trong các '
+             'ngành hàng.', [{'id': 'c1', 'path': 'T1.rows[Streetwear].delta_r', 'sign': 'am'}],
+             q='Ngành nào kéo giảm R mạnh nhất năm 2019?')
+    assert t.status == 'ok', t.validation_errors
+
+
+def test_cau_noi_xep_hang_sai_hoac_khong_doi_chieu_duoc_thi_van_chan():
+    def blocked(tool, answer, claims, why=''):
+        t = _one(tool, answer, claims)
+        assert t.status == 'answer_validation_failed', (answer, t.answer_md)
+        assert why in ' | '.join(t.validation_errors), t.validation_errors
+    b = [{'id': 'c1', 'path': 'T1.rows[B].cagr', 'sign': 'am'}]
+    # B không phải giai đoạn giảm mạnh nhất
+    blocked(PHASES, 'Giai đoạn B có CAGR {c1}. Đây là giai đoạn giảm mạnh nhất.', b, 'xếp hạng')
+    # A đứng đầu chiều TĂNG, câu nói giảm
+    blocked(PHASES, 'Giai đoạn A có CAGR {c1}. Đây là giai đoạn giảm mạnh nhất.',
+            [{'id': 'c1', 'path': 'T1.rows[A].cagr', 'sign': 'duong'}], 'xếp hạng')
+    # câu trước nói hai giai đoạn: đại từ không rõ trỏ vào đâu
+    blocked(PHASES, 'CAGR của A là {c1}, của C là {c2}. Đây là giai đoạn giảm mạnh nhất.',
+            [{'id': 'c1', 'path': 'T1.rows[A].cagr', 'sign': 'duong'},
+             {'id': 'c2', 'path': 'T1.rows[C].cagr', 'sign': 'am'}], 'xếp hạng')
+    # không mở bằng đại từ (live A10: chú thích trong ngoặc)
+    blocked(PHASES, 'Ví dụ giai đoạn C (giai đoạn giảm mạnh nhất) có CAGR {c1}.',
+            [{'id': 'c1', 'path': 'T1.rows[C].cagr', 'sign': 'am'}], 'xếp hạng')
+    # nêu tiêu chí CAGR nhưng chỉ dẫn xếp hạng theo tiền
+    blocked(PHASES, 'Giai đoạn giảm mạnh nhất theo CAGR là {c1}.',
+            [{'id': 'c1', 'path': 'T1.derived.largest_decrease.phases'}], 'largest_*_cagr')
+    # "nhỏ nhất" dẫn largest_* (phía ngược); câu nối "nhỏ nhất" (live A03c) cũng không đối chiếu được
+    blocked(TURNS, 'Cú đổi hướng nhỏ nhất là {c1}.', [{'id': 'c1', 'path': 'T1.derived.largest_decrease.turns'}],
+            'nhỏ nhất')
+    blocked(TURNS, 'Cú đổi hướng cuối 2016 có độ lớn {c1}. Đây là mức đổi hướng nhỏ nhất.',
+            [{'id': 'c1', 'path': 'T1.rows[2016].magnitude', 'sign': 'am'}], 'xếp hạng')
+    # câu nối nói về TỶ TRỌNG (chỉ tiêu mức), không có chữ tăng/giảm: West 2021 kéo giảm nhiều nhất nhưng không chiếm
+    # tỷ trọng lớn nhất → không được lấy xếp hạng ΔR để cho qua
+    t = _one(('get_segment_contribution', dict(metric='R', dimension='region', year=2021)),
+             'West giảm {c1} năm 2021. Vùng này chiếm tỷ trọng lớn nhất.',
+             [{'id': 'c1', 'path': 'T1.rows[West].delta_r', 'sign': 'am'}], q='Năm 2021 vùng nào kéo R xuống nhiều nhất?')
+    assert t.status == 'answer_validation_failed', t.answer_md
+    t = _one(('get_segment_contribution', dict(metric='R', dimension='region', year=2021)),
+             'West giảm {c1} năm 2021. Vùng này là vùng mạnh nhất.',
+             [{'id': 'c1', 'path': 'T1.rows[West].delta_r', 'sign': 'am'}], q='Năm 2021 vùng nào kéo R xuống nhiều nhất?')
+    assert t.status == 'answer_validation_failed', t.answer_md
+    # A04: số giai đoạn n_phases không chứng minh "cùng tháng thấp nhất"
+    t = _one(('get_calendar_pattern', {'pattern': 'mua_vu'}), 'Tháng thấp nhất là tháng {c1}. Tháng thấp nhất cũng lặp '
+             'lại ở cả {c2} giai đoạn.', [{'id': 'c1', 'path': 'T1.derived.trough_months'},
+                                         {'id': 'c2', 'path': 'T1.derived.n_phases'}], q='Tháng nào bán ít nhất?')
+    assert t.status == 'answer_validation_failed'
+
+
+def test_live_d11_hoi_it_nhat_loi_nhac_khong_day_sang_nhieu_nhat():
+    # live D11: lời nhắc cũ gợi ý derived.largest_*.phases (câu hỏi về ngành) và câu nối "Đây là…" → model đổi câu hỏi
+    t = _one(('get_segment_contribution', SEG_2019),
+             'Năm 2019 cả {c1} ngành đều giảm R. Ngành giảm ít nhất theo mức đổi R là {c2}, với ΔR là {c3}.',
+             [{'id': 'c1', 'path': 'T1.derived.n_groups_down'}, {'id': 'c2', 'path': 'T1.rows[Casual].dimension_value'},
+              {'id': 'c3', 'path': 'T1.rows[Casual].delta_r', 'sign': 'am'}], q='Năm 2019 ngành hàng nào giảm ít nhất?')
+    errs = ' | '.join(t.validation_errors)
+    assert t.status == 'answer_validation_failed'
+    assert 'KHÔNG đổi sang trả lời phía lớn nhất' in errs and '.phases' not in errs and 'Đây là' not in errs, errs
+    # câu nói giới hạn của tool, không có số, không gọi tên nhóm: không phải claim xếp hạng
+    t = _one(('get_segment_contribution', SEG_2019),
+             'Năm 2019 cả {c1} ngành đều giảm R: Casual giảm {c2}. Dữ liệu chỉ xếp hạng phía giảm nhiều nhất, không xếp '
+             'hạng phía giảm ít nhất.', [{'id': 'c1', 'path': 'T1.derived.n_groups_down'},
+                                       {'id': 'c2', 'path': 'T1.rows[Casual].delta_r', 'sign': 'am'}],
+             q='Năm 2019 ngành hàng nào giảm ít nhất?')
+    assert t.status == 'ok', t.validation_errors
+    # live F09 / F08: câu từ chối nhắc cả "N/U/P", câu gợi ý hỏi tiếp → không phải claim
+    drv = ('get_revenue_drivers', dict(metric='R', year=2019))
+    t = _one(drv, 'Năm 2019, ΔR là {c1}. Với ba thành phần N/U/P, dữ liệu hiện chưa xếp hạng được thành phần nào kéo giảm '
+                  'ít nhất. Bạn có thể hỏi thành phần nào kéo giảm nhiều nhất.',
+             [{'id': 'c1', 'path': 'T1.rows[0].delta_r', 'sign': 'am'}], q='Thành phần nào kéo giảm ít nhất năm 2019?')
+    assert t.status == 'ok', t.validation_errors
+    # gọi tên một chủ thể cụ thể thì vẫn kiểm: một thành phần, một giai đoạn, một năm
+    for sai in ('Số món mỗi đơn (U) giảm ít nhất, dù dữ liệu chưa xếp hạng phía này. ΔR là {c1}.',
+                'Giai đoạn C giảm mạnh nhất, bạn có thể hỏi thêm. ΔR là {c1}.',
+                'Năm 2019 giảm mạnh nhất, bạn có thể hỏi thêm. ΔR là {c1}.'):
+        t = _one(drv, sai, [{'id': 'c1', 'path': 'T1.rows[0].delta_r', 'sign': 'am'}], q='Năm 2019 thế nào?')
+        assert t.status == 'answer_validation_failed', (sai, t.answer_md)
+    # nhưng gọi tên nhóm trong câu đó thì vẫn chặn
+    t = _one(('get_segment_contribution', SEG_2019), 'Casual giảm ít nhất, dù dữ liệu chỉ xếp hạng phía nhiều nhất.', [],
+             q='Năm 2019 ngành hàng nào giảm ít nhất?')
+    assert t.status == 'answer_validation_failed'
+
+
+def test_nhom_giam_it_nhat_tra_loi_thang_bang_smallest():
+    # PM 2026-10-09: cần trả lời thẳng "ngành giảm ít nhất là …" → derived.smallest_decrease (tính trên đủ tập)
+    q = 'Năm 2019 ngành hàng nào giảm ít nhất?'
+    seg = ('get_segment_contribution', SEG_2019)
+    t = _one(seg, 'Năm 2019 ngành giảm ít nhất là {c1}, giảm {c2}.',
+             [{'id': 'c1', 'path': 'T1.derived.smallest_decrease.groups'},
+              {'id': 'c2', 'path': 'T1.derived.smallest_decrease.delta_r', 'sign': 'am'}], q=q)
+    assert t.status == 'ok', t.validation_errors
+    assert '**Casual**' in t.answer_md and '22.448.071' in t.answer_md
+    # câu nối: Casual (câu trước) đúng là ngành giảm ít nhất; GenZ thì không
+    t = _one(seg, 'Casual giảm {c1} năm 2019. Đây là ngành giảm ít nhất.',
+             [{'id': 'c1', 'path': 'T1.rows[Casual].delta_r', 'sign': 'am'}], q=q)
+    assert t.status == 'ok', t.validation_errors
+    for sai, claims in [
+        ('GenZ giảm {c1} năm 2019. Đây là ngành giảm ít nhất.',                      # GenZ không phải
+         [{'id': 'c1', 'path': 'T1.rows[GenZ].delta_r', 'sign': 'am'}]),
+        ('Ngành giảm ít nhất là {c1}.', [{'id': 'c1', 'path': 'T1.derived.largest_decrease.groups'}]),   # phía ngược
+        ('Ngành kéo giảm nhiều nhất là {c1}.', [{'id': 'c1', 'path': 'T1.derived.smallest_decrease.groups'}]),
+        ('Ngành tăng ít nhất là {c1}.', [{'id': 'c1', 'path': 'T1.derived.smallest_decrease.groups'}]),  # ngược chiều
+        ('Ngành giảm nhẹ nhất là {c1}.', [{'id': 'c1', 'path': 'T1.derived.largest_decrease.groups'}]),  # "nhẹ nhất"
+        ('Năm 2019 GenZ là ngành giảm nhẹ nhất, giảm {c1}.',                                         # không dẫn xếp hạng
+         [{'id': 'c1', 'path': 'T1.rows[GenZ].delta_r', 'sign': 'am'}]),
+    ]:
+        t = _one(seg, sai, claims, q=q)
+        assert t.status == 'answer_validation_failed', (sai, t.answer_md)
+    # N/U/P chưa có xếp hạng phía nhỏ: "số đơn giảm ít nhất" không được đối chiếu với top_down_driver
+    t = _one(('get_revenue_drivers', dict(metric='R', year=2019)), 'R năm 2019 giảm ít nhất ở số đơn (N), góp {c1}.',
+             [{'id': 'c1', 'path': 'T1.rows[0].contrib_n', 'sign': 'am'}], q='Thành phần nào giảm ít nhất năm 2019?')
+    assert t.status == 'answer_validation_failed'
+
+
+def test_live_thanh_phan_nhieu_nhat_khong_co_chu_tang_giam():
+    # live H04c: năm 2022 R tăng, câu "đóng góp nhiều nhất là giá mỗi món (P)" không có chữ tăng/giảm → theo chiều ΔR
+    ok = final(answer='Thành phần đóng góp nhiều nhất là giá mỗi món (P), góp {c1}.',
+               claims=[{'id': 'c1', 'path': 'T1.rows[0].contrib_p', 'sign': 'duong'}])
+    q = 'R năm 2022 đổi chủ yếu nhờ đâu?'
+    assert service.run_turn(q, [], 'duckdb', FakeProvider(
+        call('get_revenue_drivers', metric='R', year=2022), ok)).status == 'ok'
+    sai = final(answer='Thành phần đóng góp nhiều nhất là số món mỗi đơn (U), góp {c1}.',
+                claims=[{'id': 'c1', 'path': 'T1.rows[0].contrib_u'}])
+    assert service.run_turn(q, [], 'duckdb', FakeProvider(
+        call('get_revenue_drivers', metric='R', year=2022), sai, sai)).status == 'answer_validation_failed'
+
+
 def test_live_tu_so_sanh_hai_so_thi_chan():
     # E12 live: hỏi tháng 8, model lấy R cả năm rồi tự so "2019 cao hơn 2020" để kết luận
     sai = final('unsupported', 'Chưa có số theo tháng. R 2019 là {c1}, cao hơn R 2020 là {c2}.',

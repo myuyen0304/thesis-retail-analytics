@@ -1,9 +1,0 @@
-# Ghim đúng phiên bản đã chạy test ở .venv local (2026-10-06). Không có duckdb/psycopg: app trên Databricks chỉ đọc Databricks.
-streamlit==1.64.0
-altair==6.3.0
-pandas==3.0.5
-numpy==2.5.1
-pyarrow==25.0.1
-openai==3.24.0
-databricks-sql-connector==4.4.0
-databricks-sdk==0.117.0

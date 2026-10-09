@@ -1656,11 +1656,68 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   - secret scope `retail-ai`;
   - app `retail-analytics` (SP của app chỉ đọc 21 bảng các trang dùng);
   - code đã tải lên workspace.
-- **Chờ PM:**
-  - tạo khóa DeepSeek mới và đưa vào secret (terminal riêng);
-  - thay khóa trong `.env.ai.local`;
-  - thu hồi khóa cũ.
+- **Khóa DeepSeek (PM làm 2026-10-07):** tạo khóa **mới chỉ dùng cho Databricks**, tự đưa vào secret trong terminal riêng.
+  Khóa cũ giữ trong `.env.ai.local` để chạy local; chỉ thu hồi khi nghi bị lộ.
+- **Lưu ý demo:** bản Free tự dừng app sau 24 giờ, hoặc sớm hơn khi tài khoản chạm giới hạn sử dụng (gặp ngày 2026-10-07);
+  trước buổi demo phải bật lại app. Cách tự bật lại: `docs/databricks_app_van_hanh.md`.
 
-  Sau đó mới khởi động và deploy app.
-- **Lưu ý demo:** bản Free tự dừng app sau 24 giờ; trước buổi demo phải bấm Start app.
+### 2026-10-07: app chạy trên Databricks Apps
+
+- **Deploy thành công** (bản code `fdb8681`), sau khi sửa 2 lỗi:
+  - Databricks Apps chạy Python 3.11, không cài được numpy 2.5.1 → ghim numpy 2.4.6; toàn bộ test app chạy lại trên Python 3.11 đạt (`2425dbf`);
+  - lệnh khởi động không chạy qua shell nên cờ `--server.port ${...}` làm app crash → bỏ cờ, nền tảng tự đặt cổng (`fdb8681`).
+- **Cùng tối (12:20 UTC)** Databricks tự tắt app: *"stopped due to workspace or account status"* (giới hạn bản Free).
+  Bảng usage: ngày 06/10 SQL dùng 10,56 DBU không bị tắt; ngày 07/10 tổng thấp hơn nhưng có thêm app chạy liên tục 3,78 DBU.
+
+### 2026-10-08: bật lại app Databricks; chuẩn bị bản public trên Streamlit Community Cloud
+
+- **Bật lại app** bằng `apps start` (tự deploy lại gói `fdb8681`). Hướng dẫn PM tự bật lại: `docs/databricks_app_van_hanh.md`.
+- **PM chọn có bản public** (ai cũng xem, không cần đăng nhập). Databricks Apps không cho mở công khai, nên giao diện chạy trên
+  **Streamlit Community Cloud**, dữ liệu vẫn đọc **kho Databricks production**. PM chọn: chat để tự do, dùng khóa DeepSeek riêng;
+  tắt app Databricks khi bản Streamlit chạy ổn.
+- **Đã làm (PM duyệt):**
+  - SP mới `retail-web-ro` cho các trang: kiểm lại chỉ SELECT đúng 21 bảng; hook dbt cấp lại quyền sau mỗi build;
+  - `requirements.txt` của bản deploy chuyển về `apps/retail_app/` (dùng chung cho Streamlit Cloud và gói Databricks);
+  - nội dung Secrets sẵn trong `.env.streamlit_cloud.local` (Git ignore), PM chỉ điền khóa DeepSeek.
+- **Kiểm (giả lập Streamlit Cloud trên máy):** không file `.env`, không profile, chỉ biến môi trường từ Secrets → 8/8 trang mở được,
+  chat C01 ra số, câu 2024 báo không có dữ liệu, câu dự báo 2023 báo không hỗ trợ.
+- **PM làm tiếp:** theo `docs/streamlit_cloud_deploy.md` (tạo khóa, deploy, bật public, smoke).
+- **Giới hạn:** bản public phụ thuộc bản Free của cả Streamlit (app ngủ khi lâu không ai xem) và Databricks (có thể bị chặn khi chạm
+  giới hạn); không cam kết luôn sẵn sàng.
+
+### 2026-10-09: bản public chạy trên Streamlit Community Cloud (dev kiểm các trang; chờ PM hỏi thử chat)
+
+- **Link công khai:** https://retail-analytics-ps.streamlit.app/ (không cần đăng nhập). PM tự deploy từ nhánh `app/myuyen`.
+- **Đã kiểm (ẩn danh, từ ngoài):** app báo mở công khai; 8/8 trang mở được, không trang nào báo lỗi; Tổng quan đọc kho
+  Databricks `retail_lab`, đủ 11 năm.
+- **PM làm tiếp:** hỏi thử 3 câu chat theo `docs/streamlit_cloud_deploy.md` Bước 5; ổn thì tắt app Databricks (Bước 6).
+
+### 2026-10-09: chat AI sửa lỗi câu "… mạnh nhất" bị chặn (dev xong, chờ PM xem)
+
+- **Lỗi PM thấy được:** hỏi "giai đoạn sập giảm bao nhiêu", chat hay viết thêm câu "Đây cũng là giai đoạn giảm mạnh nhất…". App
+  không kiểm được câu đó nên chặn cả phần lời, chỉ hiện bảng số (nhật ký AI §3 mục 10).
+- **Đã sửa:** app tự kiểm câu "Đây (cũng) là … mạnh nhất" với bảng xếp hạng tính trên đủ các giai đoạn / ngành / vùng: đúng thì
+  hiện, sai thì vẫn chặn. Câu nói "theo CAGR" hay "bằng tiền" phải đúng theo tiêu chí đó. Commit `09b9930` và `24c86d5` (nhánh `app/myuyen`,
+  **chưa push**).
+- **Kiểm:**
+  - test không gọi model: 272 đạt trên DuckDB; 87 test cần PostgreSQL **chưa kiểm được** vì Docker Desktop đang tắt;
+  - chạy lại 1.082 câu trả lời cũ: không câu nào trước qua mà nay bị chặn;
+  - model thật, bộ 12 câu mới D\* × 3 lượt: **34/36** đạt chấm tự động, đọc tay 0 số sai;
+  - đúng 3 câu cũ hay lỗi (C02, A03, A03d) × 3 lượt: **9/9**, không lượt nào phải sửa (trước: C02 phải sửa 3/6 lượt).
+- **Lần chạy D\* đầu:** hỏi "ngành nào giảm **ít** nhất" thì chat trả lời lệch sang "giảm nhiều nhất" (đã sửa, xem dòng cuối).
+  Chi tiết: `docs/ai_explain_nhat_ky.md`.
+- **Bản public** (https://retail-analytics-ps.streamlit.app/) chưa có bản sửa này. Muốn có thì push nhánh `app/myuyen`, Streamlit
+  Cloud tự deploy lại: chờ PM quyết.
+- **Sửa thêm cùng ngày** (commit `24c86d5`): câu "Đây là … lớn nhất" phải nói về tăng/giảm, không được nói về tỷ trọng; hỏi "giảm
+  ít nhất" thì chat nêu số từng ngành hoặc báo "chưa xếp được", không đổi sang "giảm nhiều nhất". Model thật D11 × 3 sau sửa: 3/3
+  đúng hướng. Câu hỏi PM còn lại chỉ là: có cần chat trả lời thẳng "ngành giảm ít nhất là …" không (phải thêm xếp hạng phía nhỏ).
+
+### 2026-10-09: chat trả lời thẳng "ngành / vùng / kênh giảm ít nhất là …" (dev xong, chờ PM xem)
+
+- **PM chốt:** chat cần trả lời thẳng "ngành giảm ít nhất là …".
+- **Đã làm:** công cụ theo nhóm tính thêm nhóm giảm ít nhất / tăng ít nhất trên đủ các nhóm (chỉ trong các nhóm cùng chiều). App
+  kiểm câu "ít nhất / nhẹ nhất" phải dẫn đúng xếp hạng này. Commit `02b772e`, `c1700ad`.
+- **Kiểm:** model thật, bộ 10 câu mới F\* × 3: hỏi ngành / vùng / kênh giảm hoặc tăng ít nhất **21/21**; đọc tay 0 số sai.
+- **Chưa có phía "ít nhất"** cho giai đoạn và cho N/U/P: chat nói "chưa xếp được" kèm số (6/6 lượt sau sửa).
+- **Ví dụ:** "Năm 2019 ngành hàng nào giảm ít nhất?" → "Casual, giảm 22.448.071 VND".
 

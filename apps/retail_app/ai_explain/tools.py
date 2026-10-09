@@ -25,7 +25,7 @@ from ai_explain.contracts import Evidence, QueryRecord, ToolCall, ToolResult
 from dwh.connection import describe
 from dwh.guarded import DEFAULT_MAX_ROWS, GuardError, QueryTimeout, RowLimitExceeded, Statement, open_session
 
-TOOL_VERSION = 'v1.3'
+TOOL_VERSION = 'v1.4'
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
     'reporting.rpt_driver_period', 'reporting.rpt_revenue_segment_yearly', 'reporting.driver_rule',
@@ -226,12 +226,13 @@ _SEG_COLS = ['dimension_name', 'dimension_value', 'year', 'r', 'r_total', 'share
              'delta_r_is_small']
 
 
-def _extreme(rows: list[dict], sign: int) -> dict | None:
-    """Nhóm có ΔR âm nhất (sign=-1) / dương nhất (sign=+1) trên ĐỦ tập nhóm. Đồng hạng → trả mọi nhóm, tie=True."""
+def _extreme(rows: list[dict], sign: int, pick=max) -> dict | None:
+    """Nhóm có ΔR âm nhất (sign=-1) / dương nhất (sign=+1) trên ĐỦ tập nhóm. Đồng hạng → trả mọi nhóm, tie=True.
+    pick=min: phía NHỎ trong các nhóm cùng chiều ("giảm ít nhất" = ΔR âm gần 0 nhất; PM chốt 2026-10-09 cần trả lời thẳng)."""
     cand = [r for r in rows if r['delta_r'] is not None and sign * r['delta_r'] > 0]
     if not cand:
         return None
-    best = max(sign * r['delta_r'] for r in cand)
+    best = pick(sign * r['delta_r'] for r in cand)
     groups = [r['dimension_value'] for r in cand if sign * r['delta_r'] == best]
     return {'groups': groups, 'delta_r': sign * best, 'tie': len(groups) > 1}
 
@@ -252,6 +253,7 @@ def _segment(turn: _Turn, a: dict) -> ToolResult:
     if n_groups != {len(rows)}:      # xếp hạng phải trên đủ tập, không trên phần bị thiếu
         return ToolResult('query_error', f'Tập nhóm {dim} năm {year} không đủ ({len(rows)} dòng, n_groups={n_groups}).')
     derived = {'largest_decrease': _extreme(rows, -1), 'largest_increase': _extreme(rows, +1),
+               'smallest_decrease': _extreme(rows, -1, min), 'smallest_increase': _extreme(rows, +1, min),
                'n_groups': len(rows), 'n_groups_down': rows[0]['n_groups_down'], 'n_groups_up': rows[0]['n_groups_up'],
                'denominator': 'ΔR và R toàn công ty cùng năm (không đổi khi chỉ xem một nhóm)'}
     if (g := a.get('group')) is not None:
@@ -261,13 +263,15 @@ def _segment(turn: _Turn, a: dict) -> ToolResult:
         derived['selected_group'] = g
     if rows[0]['delta_r_is_small']:
         derived['small_delta_rule'] = cat.DECISIONS['driver_small_delta_rule']
-    return ToolResult('ok', f'R theo {dim} năm {year} so {year - 1}; "kéo giảm nhiều nhất" = ΔR âm nhất.',
+    return ToolResult('ok', f'R theo {dim} năm {year} so {year - 1}; "kéo giảm nhiều nhất" = ΔR âm nhất; "giảm ít nhất" = '
+                      'ΔR âm gần 0 nhất trong các nhóm giảm (smallest_decrease); tương tự cho chiều tăng.',
                       rows=rows, derived=derived, evidence=turn.evidence(
                           filters={'dimension_name': dim, 'year': year}, grain='một chiều × một nhóm × năm',
                           metrics=cat.metric_defs('R', 'delta_r', 'yoy_rate', 'share', 'share_shift_pp',
                                                   'contribution_to_delta'),
-                          method='Xếp theo ΔR (tiền) trên đủ tập nhóm; đồng hạng giữ tất cả. Không dùng delta_r_rank '
-                                 '(rank 1 = tăng nhiều nhất / giảm ít nhất).',
+                          method='Xếp theo ΔR (tiền) trên đủ tập nhóm, cả phía lớn nhất (largest_*) lẫn phía nhỏ nhất '
+                                 '(smallest_*: chỉ trong các nhóm cùng chiều); đồng hạng giữ tất cả. Không dùng '
+                                 'delta_r_rank (rank 1 = tăng nhiều nhất / giảm ít nhất).',
                           read_at=read_at))
 
 

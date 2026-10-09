@@ -1,13 +1,15 @@
 """Dựng gói deploy Databricks Apps ở build/databricks_app/ (Git ignore) từ code đang checkout.
 
 Giữ cấu trúc repo để `ROOT` của app (parents[3] của dwh/connection.py) trỏ đúng gốc gói:
-  app.yaml, requirements.txt              ← deploy/databricks_app/
+  app.yaml                                ← deploy/databricks_app/
+  requirements.txt                        ← apps/retail_app/ (dùng chung với Streamlit Community Cloud)
   apps/retail_app/**                      ← trừ tests/, __pycache__/, .pytest_cache/
   retail_dbt/...                          ← đúng các file ai_explain.metric_catalog.DEFINITION_FILES (chat ghi hash)
 Không chép file .env.* (secret đi qua resource của app), không chép data/ hay warehouse/.
 
 Chạy từ root repo:  .venv/Scripts/python.exe scripts/databricks/build_app_bundle.py
-Rồi: databricks sync build/databricks_app <đường dẫn workspace> && databricks apps deploy ... (docs/ai_explain_nhat_ky.md)
+Rồi: databricks workspace import-dir build/databricks_app <đường dẫn workspace> --overwrite && databricks apps deploy ...
+(`databricks sync` bỏ qua build/ vì bị gitignore; docs/ai_explain_nhat_ky.md)
 """
 import shutil
 import subprocess
@@ -23,8 +25,8 @@ from ai_explain.metric_catalog import DEFINITION_FILES  # noqa: E402
 if OUT.exists():
     shutil.rmtree(OUT)
 OUT.mkdir(parents=True)
-for f in ('app.yaml', 'requirements.txt'):
-    shutil.copy(ROOT / 'deploy' / 'databricks_app' / f, OUT / f)
+shutil.copy(ROOT / 'deploy' / 'databricks_app' / 'app.yaml', OUT / 'app.yaml')
+shutil.copy(ROOT / 'apps' / 'retail_app' / 'requirements.txt', OUT / 'requirements.txt')
 shutil.copytree(ROOT / 'apps' / 'retail_app', OUT / 'apps' / 'retail_app',
                 ignore=shutil.ignore_patterns('tests', 'conftest.py', '__pycache__', '.pytest_cache', '*.pyc', '.env*'))
 for f in DEFINITION_FILES:

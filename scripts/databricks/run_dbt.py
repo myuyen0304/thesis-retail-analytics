@@ -54,6 +54,9 @@ if principal:
 # SP của app Databricks Apps (đọc 21 bảng của các trang): application id ghi ở .env.databricks.local
 if c.get('RETAIL_APP_DBX_PRINCIPAL'):
     env['RETAIL_APP_DBX_PRINCIPAL'] = c['RETAIL_APP_DBX_PRINCIPAL']
+# SP retail-web-ro của bản public trên Streamlit Community Cloud (cùng 21 bảng): application id ở .env.databricks.local
+if c.get('RETAIL_WEB_DBX_PRINCIPAL'):
+    env['RETAIL_WEB_DBX_PRINCIPAL'] = c['RETAIL_WEB_DBX_PRINCIPAL']
 dbt = os.path.join('.venv-databricks', 'Scripts', 'dbt.exe')
 sys.exit(subprocess.call([dbt, *dbt_args, '--project-dir', 'retail_dbt', '--profiles-dir', 'retail_dbt',
                           '--target', 'databricks', '--target-path', 'target_databricks'], env=env))

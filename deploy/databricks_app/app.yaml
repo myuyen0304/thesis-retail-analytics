@@ -1,14 +1,12 @@
 # Databricks Apps: app phân tích + chat AI (production, PM chốt 2026-10-05). Gói deploy do
 # scripts/databricks/build_app_bundle.py dựng ở build/databricks_app/ (giữ cấu trúc repo: apps/retail_app + file SQL
 # định nghĩa mà chat ghi phiên bản). Chỉ đọc Databricks; Postgres/DuckDB không có trên app.
+# command chạy KHÔNG qua shell (không mở rộng ${...}); runtime tự đặt cổng/địa chỉ cho Streamlit
+# qua STREAMLIT_SERVER_PORT/ADDRESS, nên không truyền --server.port (deploy 2026-10-07 crash vì cờ này).
 command:
   - streamlit
   - run
   - apps/retail_app/app.py
-  - --server.port
-  - "${DATABRICKS_APP_PORT:-8000}"
-  - --server.address
-  - "0.0.0.0"
 env:
   # Reverse proxy của Databricks Apps khác origin → phải tắt CORS/XSRF của Streamlit (tài liệu Databricks Apps)
   - name: STREAMLIT_SERVER_ENABLE_CORS

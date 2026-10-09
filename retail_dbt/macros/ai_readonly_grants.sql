@@ -10,7 +10,9 @@
    USE CATALOG, USE SCHEMA reporting và SELECT đúng danh sách var. Hook Databricks chỉ chạy một câu, nên từng GRANT
    chạy qua run_query; chưa đặt principal thì bỏ qua. Guard của app (dwh/guarded.py) vẫn kiểm quyền thật khi đọc.
    Cùng cách đó cấp cho SP của app Databricks Apps (env RETAIL_APP_DBX_PRINCIPAL) đúng var app_read_relations
-   (= dwh.queries.SOURCE, các bảng mà trang đọc; test_ai_tools.py kiểm). SP của app không dùng cho chat AI. #}
+   (= dwh.queries.SOURCE, các bảng mà trang đọc; test_ai_tools.py kiểm). SP của app không dùng cho chat AI.
+   2026-10-08: thêm SP retail-web-ro của bản public trên Streamlit Community Cloud (env RETAIL_WEB_DBX_PRINCIPAL),
+   cùng danh sách app_read_relations (docs/streamlit_cloud_deploy.md). #}
 {% macro ai_readonly_grants() -%}
 {%- if target.type == 'postgres' -%}
 do $$
@@ -35,6 +37,7 @@ end $$
 {%- if execute -%}
     {%- do _dbx_grant_read(env_var('RETAIL_AI_DBX_PRINCIPAL', ''), var('ai_readonly_relations'), 'RETAIL_AI_DBX_PRINCIPAL') -%}
     {%- do _dbx_grant_read(env_var('RETAIL_APP_DBX_PRINCIPAL', ''), var('app_read_relations'), 'RETAIL_APP_DBX_PRINCIPAL') -%}
+    {%- do _dbx_grant_read(env_var('RETAIL_WEB_DBX_PRINCIPAL', ''), var('app_read_relations'), 'RETAIL_WEB_DBX_PRINCIPAL') -%}
 {%- endif -%}
 select 1
 {%- else -%}
