@@ -146,9 +146,12 @@ st.subheader(f'Số đơn toàn công ty, năm {nam}: đổi vì số khách (C)
 st.caption(f'Phần này tính trên **toàn công ty**, không chia theo {ten_chieu} đang chọn ở trên '
            '(rpt_driver_period chỉ có số cả công ty).')
 d = pick(dp.set_index('period_code'), str(nam), 'driver_period', f'của năm {nam}')
-k1, k2, k3 = st.columns(3)
-kpi(k1, f'Số đơn toàn công ty đổi ({nam - 1}→{nam})', num(d['delta_n'], 0, signed=True) + ' đơn',
-    f'N {nam - 1}: {num(d["n_start"])}; N {nam}: {num(d["n_end"])}. Hai phần bên cạnh cộng lại đúng bằng số này.')
+# PM 2026-10-09: nhãn dài "Số đơn toàn công ty đổi (…)" bị cắt "…". Phạm vi "toàn công ty" đã ở tiêu đề + chú thích ngay
+# trên và trong help, nên nhãn thẻ chỉ giữ ý chính + kỳ; 3 thẻ dùng hang_the để cao bằng nhau như thẻ PS4/PS5.
+k1, k2, k3 = hang_the('the_ps5_cf', 3)
+kpi(k1, f'Số đơn đổi ({nam - 1}→{nam})', num(d['delta_n'], 0, signed=True) + ' đơn',
+    f'Số đơn toàn công ty (không theo {ten_chieu} đang chọn). N {nam - 1}: {num(d["n_start"])}; N {nam}: '
+    f'{num(d["n_end"])}. Hai phần bên cạnh cộng lại đúng bằng số này.')
 kpi(k2, 'Phần do số khách C', num(d['contrib_c'], 0, signed=True) + ' đơn',
     '(C₁ − C₀) × F₀: số khách có đơn đã giao đổi, giữ số đơn mỗi khách như năm trước.')
 kpi(k3, 'Phần do tần suất F', num(d['contrib_f'], 0, signed=True) + ' đơn',

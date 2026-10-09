@@ -1700,7 +1700,7 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   hiện, sai thì vẫn chặn. Câu nói "theo CAGR" hay "bằng tiền" phải đúng theo tiêu chí đó. Commit `09b9930` và `24c86d5` (nhánh `app/myuyen`,
   **chưa push**).
 - **Kiểm:**
-  - test không gọi model: 272 đạt trên DuckDB; 87 test cần PostgreSQL **chưa kiểm được** vì Docker Desktop đang tắt;
+  - test không gọi model: 272 đạt trên DuckDB; 87 test cần PostgreSQL lúc đầu chưa kiểm được vì Docker tắt; bật Docker chạy lại cùng ngày: **124/124 test PostgreSQL đạt**;
   - chạy lại 1.082 câu trả lời cũ: không câu nào trước qua mà nay bị chặn;
   - model thật, bộ 12 câu mới D\* × 3 lượt: **34/36** đạt chấm tự động, đọc tay 0 số sai;
   - đúng 3 câu cũ hay lỗi (C02, A03, A03d) × 3 lượt: **9/9**, không lượt nào phải sửa (trước: C02 phải sửa 3/6 lượt).
@@ -1721,3 +1721,19 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
 - **Chưa có phía "ít nhất"** cho giai đoạn và cho N/U/P: chat nói "chưa xếp được" kèm số (6/6 lượt sau sửa).
 - **Ví dụ:** "Năm 2019 ngành hàng nào giảm ít nhất?" → "Casual, giảm 22.448.071 VND".
 
+
+### 2026-10-09: PS5, thẻ "Số đơn đổi" không còn bị cắt chữ (dev xong, chờ PM xem)
+
+- **PM báo:** thẻ đầu của phần "Số đơn toàn công ty: đổi vì số khách (C) hay tần suất (F)" hiện "Số đơn toàn công ty đổi
+  (2016→2…", khó đọc.
+- **Đã sửa:**
+  - nhãn thẻ rút còn "Số đơn đổi (2016→2017)". Chữ "toàn công ty" vẫn ở tiêu đề, dòng chú thích ngay trên và phần chú giải (?)
+    của thẻ (`views/ps5_nhom.py`);
+  - 3 thẻ dùng chung khuôn `hang_the` như thẻ PS4/PS5 nên cao bằng nhau;
+  - `hang_the` (`ui/common.py`): nhãn dài được xuống dòng thay vì bị cắt "…". Khi thẻ hẹp (≤ 230px, vd. màn 1024px), MỌI thẻ trong
+    hàng chừa sẵn 2 dòng nhãn, nên dòng số vẫn thẳng hàng. Áp luôn cho thẻ PS4 và thẻ đầu trang PS5 (trước đó "Do số món/đơn U",
+    "Ngành hàng giảm nhiều nhất" cũng bị cắt ở màn hẹp).
+- **Kiểm:** chụp ảnh thật (DuckDB) ở 1024, 1150, 1280px: nhãn đủ chữ, 3 số thẳng hàng; thẻ PS4, PS5 không lệch. Test trang
+  PS1, PS4, PS5 và smoke trên DuckDB đạt; bật Docker chạy lại mọi test PostgreSQL (gồm 8 trang smoke, trang PS4, PS5): 124/124 đạt.
+- **PM xem:** chạy lại app (sửa ở `ui/common.py` cần tắt app rồi bật lại, không chỉ tải lại trang).
+- **Chưa commit.**
