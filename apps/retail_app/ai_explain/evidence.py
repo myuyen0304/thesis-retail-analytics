@@ -15,7 +15,11 @@ Bị chặn (answer_validation_failed) khi:
 - `sign` sai dấu thật, hoặc chữ "tăng"/"giảm" ngay trước số ngược dấu thật;
 - vế câu gọi tên R mà số là G, hoặc ngược lại;
 - câu có từ xếp hạng ("nhiều nhất", "chủ yếu"...) mà CHÍNH câu đó không có chỗ đặt trỏ vào phần xếp hạng tính trên
-  đủ tập (`derived.largest_*`, `top_*_driver`), hoặc hướng xếp hạng ngược chữ tăng/giảm của câu;
+  đủ tập (`derived.largest_*`, `top_*_driver`), hoặc hướng xếp hạng ngược chữ tăng/giảm của câu. Hai ngoại lệ do APP
+  tự đối chiếu với kho: câu gọi tên thẳng N/U/P, và câu nối "Đây (cũng) là … mạnh nhất" trỏ về giai đoạn / nhóm / điểm
+  mà câu ngay trước đã dẫn số (2026-10-09);
+- câu xếp hạng giai đoạn nêu tiêu chí (theo CAGR / bằng tiền) mà thiếu chỗ đặt của tiêu chí đó; câu "nhỏ nhất /
+  ít nhất" dẫn derived.largest_* (phía ngược);
 - tên nhóm (ngành hàng, khu vực, kênh) viết thẳng mà không gắn với claim đã dùng (rows[<nhóm>] hoặc danh sách nhóm
   của claim xếp hạng): giá trị đúng ở một ô không chứng minh câu văn nói đúng nhóm;
 - câu so sánh ("cao hơn", "thấp hơn"...) không dẫn số thay đổi do tool tính;
@@ -68,7 +72,7 @@ LEVEL_RANK = {'peak_month': 1, 'peak_index': 1, 'peak_months': 1, 'max_index_odd
 # Số tự nó đã là phép xếp hạng hai đầu trên đủ tập (tháng cao nhất ÷ thấp nhất): câu "giữa tháng cao nhất và thấp nhất
 # là {c}" hợp lệ khi dẫn ô này
 RANK_BOTH = {'season_peak_trough_ratio'}
-HIGH_WORDS, LOW_WORDS = ('cao nhất', 'lớn nhất', 'nhiều nhất', 'đứng đầu'), ('thấp nhất', 'nhỏ nhất', 'ít nhất')
+HIGH_WORDS, LOW_WORDS = ('cao nhất', 'lớn nhất', 'nhiều nhất', 'đứng đầu', 'dẫn đầu'), ('thấp nhất', 'nhỏ nhất', 'ít nhất')
 DRIVER_LABEL = {'n': 'số đơn (N)', 'u': 'số món mỗi đơn (U)', 'p': 'giá mỗi món (P)'}
 # Nhãn chỉ tiêu của từng cột, để renderer tự ghi số đó là gì (không tin nhãn model tự viết).
 FIELD_LABEL = {'r': 'R', 'g': 'G', 'r_prior_year': 'R', 'r_start': 'R', 'r_end': 'R', 'r_total': 'R toàn công ty',
@@ -110,7 +114,18 @@ _DATA_DATES = re.compile(r'2012-07-04|2022-12-31|0?4/0?7/2012|31/12/2022')     #
 MONEY_SUFFIX = ' VND'   # PM chốt 2026-10-05 (metric_catalog.DECISIONS['currency_vnd'])
 
 RANK_WORDS = ('nhiều nhất', 'lớn nhất', 'mạnh nhất', 'cao nhất', 'thấp nhất', 'ít nhất', 'chủ yếu', 'đứng đầu',
-              'nhỏ nhất', 'mạnh hơn cả')
+              'nhỏ nhất', 'mạnh hơn cả', 'dẫn đầu')
+# từ xếp hạng nói về phía CỰC (ΔR âm nhất / dương nhất): largest_* chứng minh được. "nhỏ nhất", "ít nhất" là phía
+# ngược lại (giảm ít nhất), largest_* không chứng minh được.
+STRONG_WORDS = ('mạnh nhất', 'nhiều nhất', 'lớn nhất', 'dẫn đầu', 'đứng đầu', 'mạnh hơn cả')
+WEAK_WORDS = ('nhỏ nhất', 'ít nhất')
+# tiêu chí xếp hạng giai đoạn PS2 mà câu văn nêu: theo CAGR (largest_*_cagr) hay theo mức đổi R bằng tiền (largest_*)
+# Chỉ tính là tiêu chí khi đi sau "theo / xét / lẫn / tiêu chí": "mức đổi R là {c2}" chỉ là dẫn số, không phải tiêu chí.
+_CRIT_CAGR = re.compile(r'(?:theo|xét|lẫn|tiêu chí)\s+(?:cả\s+)?(?:tiêu chí\s+)?(?:cagr|tốc độ)')
+_CRIT_TIEN = re.compile(r'bằng tiền|(?:theo|xét|tiêu chí)\s+(?:cả\s+)?(?:tiêu chí\s+)?(?:mức đổi r(?!\w)|số tiền|tiền|δr)')
+# câu nối mở đầu bằng đại từ chỉ giai đoạn / nhóm / điểm vừa nói ở câu trước: "Đây cũng là giai đoạn giảm mạnh nhất"
+_ANAPHOR = re.compile(r'^\s*(?:và\s+)?(?:đây|đó|(?:giai đoạn|ngành hàng|ngành|nhóm|vùng|khu vực|kênh|điểm đổi hướng|'
+                      r'điểm|cú đổi hướng)\s+(?:này|đó))(?!\w)')
 # so sánh hai số ("2019 cao hơn 2020") là phép tính model tự làm: chỉ được nói khi câu dẫn cột thay đổi tool đã tính
 COMPARE_WORDS = ('cao hơn', 'thấp hơn', 'lớn hơn', 'nhỏ hơn', 'nhiều hơn', 'ít hơn', 'vượt')
 NEG_WORDS = ('giảm', 'sụt', 'kéo xuống', 'âm', 'mất')
@@ -316,14 +331,113 @@ def _verified_driver_rank(sent: str, results: dict) -> bool:
     """Câu xếp hạng gọi tên thẳng N/U/P ("R giảm chủ yếu ở số đơn"): app tự đối chiếu với top_down_driver /
     top_up_driver của kết quả phân rã DUY NHẤT trong lượt, theo chữ tăng/giảm của câu. Không tin lời model."""
     rows = [r for res in results.values() if res.ok for r in res.rows if 'top_down_driver' in r]
+    if len(rows) != 1:
+        return False
     d = _direction(_PLACEHOLDER.sub(' ', sent))
-    if len(rows) != 1 or not d:
+    if not d and any(w in sent.lower() for w in STRONG_WORDS) and _is_num(rows[0].get('delta_r')):
+        # "Thành phần đóng góp nhiều nhất là giá mỗi món (P)" (live H04c): câu không có chữ tăng/giảm → theo chiều ΔR
+        d = (rows[0]['delta_r'] > 0) - (rows[0]['delta_r'] < 0)
+    if not d:
         return False
     top = rows[0]['top_down_driver' if d < 0 else 'top_up_driver']
     clauses = [c for c in re.split(r'[,:()]|\{c\d+\}', sent) if any(w in c.lower() for w in RANK_WORDS)]
     # vế chứa từ xếp hạng không gọi tên N/U/P ("... và là thành phần kéo giảm nhiều nhất") → xét cả câu
     said = [_said_driver(c) or _said_driver(_PLACEHOLDER.sub(' ', sent)) for c in clauses]
     return bool(top) and bool(clauses) and all(x == str(top).upper() for x in said)
+
+
+def _criteria(sent: str) -> set[str]:
+    """Tiêu chí xếp hạng câu văn nêu: {'cagr'}, {'tien'}, cả hai ("cả mức đổi R bằng tiền lẫn CAGR") hoặc rỗng."""
+    s = _PLACEHOLDER.sub(' ', sent).lower()
+    return {k for k, rx in (('cagr', _CRIT_CAGR), ('tien', _CRIT_TIEN)) if rx.search(s)}
+
+
+def _is_phase_result(res) -> bool:
+    return 'largest_decrease_cagr' in res.derived      # chỉ kết quả giai đoạn PS2 có hai tiêu chí xếp hạng
+
+
+def _rank_kind(row: dict) -> tuple[str, str] | None:
+    """(danh sách trong derived.largest_*, cột xếp hạng) mà dòng này thuộc về: giai đoạn, điểm đổi hướng, nhóm."""
+    if row.get('phase_code') is not None and 'cagr' in row:
+        return 'phases', 'delta_r'
+    if row.get('turning_year') is not None:
+        return 'turns', 'magnitude'
+    if isinstance(row.get('dimension_value'), str):
+        return 'groups', 'delta_r'
+    return None
+
+
+def _row_label_in(row: dict, kind: str, labels) -> bool:
+    """Dòng có nằm trong danh sách xếp hạng không. Nhãn do tools.py dựng: "C — Sập (2018→2019)",
+    "cuối 2016 (A → B)", tên nhóm."""
+    if not isinstance(labels, list):
+        return False
+    if kind == 'phases':
+        return any(str(x).startswith(f"{row['phase_code']} — ") for x in labels)
+    if kind == 'turns':
+        return any(str(x).startswith(f"cuối {row['turning_year']} ") for x in labels)
+    return row['dimension_value'] in labels
+
+
+def _verified_anaphor_rank(sent: str, prev: str, by_id: dict, results: dict, need: set | None = None) -> bool:
+    """Câu nối "Đây (cũng) là giai đoạn giảm mạnh nhất…" (live A03, A03d, C02, E05): câu không có chỗ đặt xếp hạng
+    nhưng đại từ ở đầu câu trỏ về giai đoạn / nhóm / điểm mà CÂU NGAY TRƯỚC đã dẫn số (rows[X] hoặc claim xếp hạng
+    một phần tử). App tự đối chiếu X với derived.largest_* tính trên đủ tập, theo chiều tăng/giảm của câu và theo
+    tiêu chí câu nêu; giai đoạn mà câu không nêu tiêu chí thì phải đứng đầu theo CẢ tiền lẫn CAGR. Không tin lời model.
+    "nhỏ nhất", "ít nhất" (phía ngược) không đối chiếu được nên vẫn chặn. `need`: chỉ đối chiếu các tiêu chí này
+    (tiêu chí câu nêu mà chỗ đặt trong câu chưa chứng minh)."""
+    low = _PLACEHOLDER.sub(' ', sent).lower()
+    if not _ANAPHOR.match(low) or not any(w in low for w in STRONG_WORDS) or any(w in low for w in WEAK_WORDS):
+        return False
+    # đối tượng của câu trước: mọi claim trỏ vào dòng có thể xếp hạng phải cùng một dòng
+    bound = {}
+    for cid in _PLACEHOLDER.findall(prev):
+        if cid not in by_id:
+            continue
+        c, v, fld, row = by_id[cid]
+        ref = c['path'].split('.')[0]
+        if row is not None and _rank_kind(row):
+            bound[id(row)] = (ref, row)
+        elif isinstance(v, list) and len(v) == 1 and '.derived.largest_' in c['path']:
+            hit = [r for r in results[ref].rows if _rank_kind(r) and _row_label_in(r, _rank_kind(r)[0], v)]
+            if len(hit) == 1:
+                bound[id(hit[0])] = (ref, hit[0])
+    if len(bound) != 1:
+        return False
+    (ref, row), = bound.values()
+    kind, key = _rank_kind(row)
+    d = _direction(low)
+    if not d and _is_num(row.get(key)):
+        d = (row[key] > 0) - (row[key] < 0)
+    if not d:
+        return False
+    res = results[ref]
+    crit = need if need is not None else (_criteria(sent) or {'tien', 'cagr'}) if _is_phase_result(res) else {'tien'}
+    for k in crit:
+        top = res.derived.get(f"largest_{'increase' if d > 0 else 'decrease'}{'_cagr' if k == 'cagr' else ''}")
+        if not isinstance(top, dict) or top.get('tie') or not _row_label_in(row, kind, top.get(kind)):
+            return False
+    return True
+
+
+def _criteria_errors(sent: str, paths: list[str], results: dict, prev: str = '', by_id: dict | None = None) -> list[str]:
+    """Câu xếp hạng giai đoạn nêu tiêu chí ("theo CAGR", "bằng tiền", "cả … lẫn …") thì mỗi tiêu chí phải có chỗ đặt
+    trỏ vào đúng bảng xếp hạng: CAGR → derived.largest_*_cagr, tiền → derived.largest_* (live A03: câu "… và cũng đứng
+    đầu theo CAGR" chỉ dẫn xếp hạng theo tiền). Câu nối "Đây là…" thì tiêu chí còn thiếu được app đối chiếu với đối
+    tượng của câu trước (live A03d: CAGR dẫn ở câu trước, tiền dẫn trong câu)."""
+    have = set()
+    for p in paths:
+        ref = p.split('.')[0]
+        if '.derived.largest_' in p and ref in results and _is_phase_result(results[ref]):
+            have.add('cagr' if re.search(r'\.derived\.largest_\w+_cagr\.', p) else 'tien')
+    if not have:
+        return []
+    missing = _criteria(sent) - have
+    if missing and by_id is not None and _verified_anaphor_rank(sent, prev, by_id, results, need=missing):
+        return []
+    hint = {'cagr': 'derived.largest_*_cagr.phases', 'tien': 'derived.largest_*.phases'}
+    return [f'câu "{sent.strip()[:80]}" xếp hạng giai đoạn theo {"CAGR" if k == "cagr" else "mức đổi R bằng tiền"} '
+            f'nhưng không có chỗ đặt trỏ vào {hint[k]} (mỗi tiêu chí một chỗ đặt)' for k in sorted(missing)]
 
 
 def _year_of(fld: str, row: dict | None):
@@ -413,19 +527,38 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             errors.append(f'chỗ đặt {{{cid}}} không có claim hợp lệ')
     errors += check_digits(answer, allowed_years(results) | set(extra_allowed))
 
-    # câu xếp hạng: chỗ đặt xếp hạng phải nằm trong CHÍNH câu đó và cùng hướng với chữ tăng/giảm của câu
-    for sent in _SENTENCE.split(answer):
+    # câu xếp hạng: chỗ đặt xếp hạng phải nằm trong CHÍNH câu đó và cùng hướng với chữ tăng/giảm của câu; hoặc app tự
+    # đối chiếu được (N/U/P viết thẳng, câu nối "Đây là…" trỏ về đối tượng của câu ngay trước)
+    pieces = _SENTENCE.split(answer)
+    for i, sent in enumerate(pieces):
         if not any(w in sent.lower() for w in RANK_WORDS):
             continue
-        ranks = [_rank_direction(by_id[cid][0]['path']) for cid in _PLACEHOLDER.findall(sent) if cid in by_id]
-        ranks = [r for r in ranks if r]
+        prev = next((p for p in reversed(pieces[:i]) if p.strip()), '')
+        paths = [by_id[cid][0]['path'] for cid in _PLACEHOLDER.findall(sent) if cid in by_id]
+        ranks = [r for r in map(_rank_direction, paths) if r]
         if not ranks and _verified_driver_rank(sent, results):
             continue
         if not ranks and any(by_id[cid][2] in RANK_BOTH for cid in _PLACEHOLDER.findall(sent) if cid in by_id):
             continue
+        if not ranks and _verified_anaphor_rank(sent, prev, by_id, results):
+            continue
         if not ranks:
+            crit = _criteria(sent)
+            where = (' hoặc '.join(h for k, h in (('tien', 'derived.largest_*.phases'),
+                                                    ('cagr', 'derived.largest_*_cagr.phases')) if k in crit)
+                     or 'derived.largest_* hoặc top_*_driver')
             errors.append(f'câu "{sent.strip()[:80]}" có ý xếp hạng ("nhiều nhất", "chủ yếu"...) nhưng trong câu '
-                          'không có chỗ đặt trỏ vào derived.largest_* hoặc top_*_driver (xếp hạng trên đủ tập)')
+                          f'không có chỗ đặt trỏ vào {where} (xếp hạng trên đủ tập). Đặt chỗ đặt xếp hạng ngay trong '
+                          'câu đó, hoặc mở câu bằng "Đây là…" ngay sau câu dẫn số của chính giai đoạn / nhóm ấy')
+            continue
+        if (any(w in sent.lower() for w in WEAK_WORDS) and not any(w in sent.lower() for w in STRONG_WORDS)
+                and all('.derived.largest_' in p for p in paths if _rank_direction(p))):
+            errors.append(f'câu "{sent.strip()[:80]}" nói "nhỏ nhất / ít nhất" nhưng derived.largest_* là phía lớn nhất '
+                          '(ΔR âm nhất / dương nhất); tool không xếp phía nhỏ nhất')
+            continue
+        crit_errs = _criteria_errors(sent, paths, results, prev, by_id)
+        if crit_errs:
+            errors += crit_errs
             continue
         level = [_rank_direction(by_id[cid][0]['path']) for cid in _PLACEHOLDER.findall(sent)
                  if cid in by_id and by_id[cid][0]['path'].rsplit('.', 1)[-1] in LEVEL_RANK]

@@ -23,7 +23,7 @@ from ai_explain.contracts import ToolCall, ToolResult
 from ai_explain.evidence import DATE_RE, Checked, allowed_years, check_digits, question_numbers, validate
 from ai_explain.provider import ProviderError, openai_tools, parse_arguments
 
-PROMPT_VERSION = 'ai3-2026-10-05c'
+PROMPT_VERSION = 'ai3-2026-10-09'
 MAX_TOOL_CALLS = 4
 MAX_LLM_CALLS = 6
 SESSION_TOKEN_LIMIT = 200_000
@@ -56,6 +56,7 @@ class TurnResult:
     model: str = ''
     prompt_version: str = PROMPT_VERSION
     raw_final: str | None = None          # JSON cuối của model, giữ cho eval
+    raw_first: str | None = None          # JSON lần đầu khi phải sửa (repair_errors là lỗi của bản này)
     prompt_bounds: list = field(default_factory=list)    # [(cận trên prompt app tính, prompt_tokens thật)] mỗi lần gọi
 
     def __post_init__(self):
@@ -102,6 +103,11 @@ QUY TẮC BẮT BUỘC
    (.groups nhóm, .phases giai đoạn, .turns điểm đổi hướng, .components khoản chênh G − R), rows[0].top_down_driver /
    top_up_driver (N/U/P), derived.peak_months / trough_months, rows[<giai đoạn>].peak_month / trough_month,
    rows[0].max_index_odd / min_index_even. "Kéo giảm nhiều nhất" = ΔR âm nhất.
+   Ví dụ đúng: "Giai đoạn giảm mạnh nhất theo CAGR là {{c3}}" (c3 = T1.derived.largest_decrease_cagr.phases);
+   "Ngành kéo giảm nhiều nhất là {{c2}}" (c2 = T1.derived.largest_decrease.groups). Nêu hai tiêu chí thì mỗi tiêu chí
+   một chỗ đặt. Câu nối "Đây (cũng) là giai đoạn / ngành … mạnh nhất" chỉ viết NGAY SAU câu đã dẫn số của chính giai
+   đoạn / ngành đó (rows[<tên>]); app tự đối chiếu với xếp hạng. Không dùng derived.largest_* cho ý "nhỏ nhất / ít nhất"
+   (giảm ít nhất, đổi hướng nhỏ nhất): tool chỉ xếp phía lớn nhất.
    Tên nhóm (ngành hàng, khu vực, kênh) KHÔNG viết thẳng: dùng chỗ đặt trỏ vào derived.largest_*.groups hoặc
    rows[<nhóm>].dimension_value; hoặc viết tên nhóm cùng vế với một claim rows[<nhóm>].<cột>.
    Tên thành phần N/U/P thì viết thẳng ("số đơn (N)", "số món mỗi đơn (U)", "giá mỗi món (P)") rồi đặt số của
@@ -349,6 +355,6 @@ def run_turn(question: str, history: list[dict], backend: str, provider, *, sess
             return finish('answer_validation_failed', 'Câu diễn giải của mô hình không qua bước kiểm số, nên không hiện. '
                           + tail, errors=errors)
         repaired = True
-        turn.repair_errors = list(errors)
+        turn.repair_errors, turn.raw_first = list(errors), reply.content
         messages.append({'role': 'user', 'content': 'Câu trả lời chưa qua bước kiểm của app: ' + '; '.join(errors)
                          + '. Sửa lại, chỉ trả JSON đúng định dạng.'})

@@ -313,7 +313,46 @@ ACCEPT_AI3C = [
       [(MON, {'metric': 'R', 'year': 2020, 'month': 4}), (MON, {'metric': 'R_and_G', 'year': 2020, 'month': 4})],
       [({MON}, '.yoy_rate')], ['2,8'], ['−2,8', 'giảm 2,8']),
 ]
-SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C}
+# Bộ nghiệm thu lần 4 (D*), soạn 2026-10-09 SAU khi sửa §3 mục 10 nhật ký (câu xếp hạng: app đối chiếu câu nối "Đây là…",
+# kiểm tiêu chí tiền / CAGR; prompt ai3-2026-10-09). Tập trung câu xếp hạng ở mọi loại (giai đoạn hai tiêu chí, điểm đổi
+# hướng, khoản G − R, nhóm năm/chiều khác, N/U/P năm tăng) + bẫy "ít nhất" và giai đoạn không đứng đầu. Chưa dùng để
+# chỉnh; chốt và commit TRƯỚC lượt gọi model đầu. Ngoài chấm tự động, xem dòng "câu xếp hạng: … phải sửa ở lần đầu".
+ACCEPT_D = [
+    C('D01', 'Trong bốn giai đoạn, giai đoạn nào giảm mạnh nhất, tính theo cả số tiền lẫn tốc độ mỗi năm?', {'ok'},
+      [(TRD, {'view': 'phases'})], [({TRD}, '.derived.largest_decrease.phases'),
+                                    ({TRD}, '.derived.largest_decrease_cagr.phases')], ['C — Sập']),
+    C('D02', 'Giai đoạn nào doanh thu tăng mạnh nhất?', {'ok', 'needs_clarification'},
+      if_ok=([(TRD, {'view': 'phases'})], [({TRD}, ('.derived.largest_increase.phases',
+                                                    '.derived.largest_increase_cagr.phases'))])),
+    C('D03', 'Trong ba lần đổi hướng, lần nào làm doanh thu rơi mạnh nhất?', {'ok'}, [(TRD, {'view': 'turning_points'})],
+      [({TRD}, '.derived.largest_decrease.turns')], ['cuối 2018']),
+    C('D04', 'Năm 2016, G hụt sang R nhiều nhất ở khoản nào?', {'ok'}, [(GAP, {'period': 'year', 'year': 2016})],
+      [({GAP}, '.derived.largest_decrease.components')], ['đơn hủy']),
+    C('D05', 'Năm 2021 vùng nào kéo R xuống nhiều nhất?', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'region', 'year': 2021})],
+      [({SEG}, '.derived.largest_decrease.groups')], ['West']),
+    C('D06', 'Năm 2022 ngành hàng nào góp phần tăng R nhiều nhất?', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2022})],
+      [({SEG}, '.derived.largest_increase.groups')], ['Streetwear']),
+    C('D07', 'R năm 2015 đổi chủ yếu nhờ số đơn, số món hay giá?', {'ok'}, [(DRV, {'metric': 'R', 'year': 2015})],
+      [({DRV}, ('.top_up_driver', '.contrib_n'))], ['số đơn'], ['nguyên nhân là']),
+    C('D08', 'Năm 2021 thành phần nào trong N, U, P làm R giảm nhiều nhất?', {'ok'}, [(DRV, {'metric': 'R', 'year': 2021})],
+      [({DRV}, DRIVER_N)], ['số đơn']),
+    C('D09', 'Giai đoạn sập giảm bao nhiêu tiền, và đó có phải mức giảm lớn nhất không?', {'ok'},
+      [(TRD, {'view': 'phases'})], [({TRD}, ('rows[C].delta_r', '.derived.largest_decrease.delta_r'))],
+      must_neg=['554.945.327']),
+    # bẫy: D không giảm mạnh nhất (C mới là); câu đúng phải nói "không"
+    C('D10', 'Giai đoạn đi ngang 2019–2022 có phải giai đoạn giảm mạnh nhất không?', {'ok'}, [(TRD, {'view': 'phases'})],
+      [({TRD}, ('rows[D].cagr', 'rows[D].delta_r', '.derived.largest_decrease.phases',
+                '.derived.largest_decrease_cagr.phases'))], banned=['đúng, giai đoạn đi ngang', 'là giai đoạn giảm mạnh nhất, với']),
+    # bẫy: tool chỉ xếp phía lớn nhất; "giảm ít nhất" không được khẳng định bằng xếp hạng tự làm
+    C('D11', 'Năm 2019 ngành hàng nào giảm ít nhất?', {'ok', 'unsupported', 'needs_clarification'},
+      banned=['giảm ít nhất là Casual'],
+      if_ok=([(SEG, {'metric': 'R', 'dimension': 'category', 'year': 2019})], [])),
+    C('D12', 'Còn theo CAGR thì giai đoạn nào đứng đầu chiều tăng?', {'ok'}, [(TRD, {'view': 'phases'})],
+      [({TRD}, '.derived.largest_increase_cagr.phases')], ['A — Tăng trưởng'], after='D01'),
+]
+SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D}
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -409,13 +448,13 @@ def main() -> int:
     ap.add_argument('--cases', nargs='*')
     ap.add_argument('--set', default='chuan', choices=[*SETS, 'tat_ca'],
                     help='chuan = E* (đã dùng chỉnh prompt); moi = H* (nghiệm thu AI2→AI3); ai3 = A*, ai3b = B*, '
-                         'ai3c = C* (nghiệm thu AI3)')
+                         'ai3c = C* (nghiệm thu AI3); d = D* (câu xếp hạng, 2026-10-09)')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
     a = ap.parse_args()
-    pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C if a.set == 'tat_ca' else SETS[a.set]
+    pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
-    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C}
+    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D}
     if a.kiem_rubric:
         return check_rubric(cases, a.backend)
     p = provider.from_config()
@@ -446,7 +485,7 @@ def main() -> int:
                     'answer_md': t.answer_md, 'claims': {k: {'path': pth, 'value': str(v), 'shown': s}
                                                          for k, (pth, v, s) in t.values.items()},
                     'message': t.message, 'validation_errors': t.validation_errors, 'repair_errors': t.repair_errors,
-                    'raw_final': t.raw_final,
+                    'raw_final': t.raw_final, 'raw_first': t.raw_first,
                     'prompt_tokens': t.prompt_tokens, 'completion_tokens': t.completion_tokens,
                     'llm_calls': t.llm_calls, 'latency_s': round(time.monotonic() - t0, 2), 'model': t.model,
                     'prompt_version': t.prompt_version, 'backend': a.backend, 'set': a.set, 'git_rev': rev,
@@ -468,6 +507,11 @@ def main() -> int:
     if bounds:
         print(f'cận trên prompt: {len(bounds)} lần gọi, {len(over)} lần prompt_tokens thật VƯỢT cận trên; '
               f'cận / thật nhỏ nhất {min(b / x for b, x in bounds if x):.2f}')
+    # §3 mục 10 nhật ký: lỗi câu xếp hạng thường được sửa ở lần thử lại nên không lộ ra ở chấm tự động; đếm riêng
+    rank = [r for r in rows if any('xếp hạng' in e for e in r['repair_errors'])]
+    rank_fail = [r for r in rows if any('xếp hạng' in e for e in r['validation_errors'])]
+    print(f'câu xếp hạng: {len(rank)}/{len(rows)} lượt phải sửa ở lần đầu, {len(rank_fail)} lượt vẫn bị chặn sau khi sửa '
+          f"{sorted({r['case_id'] for r in rank + rank_fail})}")
     print('Phần lời: đọc answer_md trong log (không vượt bằng chứng, không nói nguyên nhân).')
     return 0 if n_pass == len(rows) and not over else 1
 
