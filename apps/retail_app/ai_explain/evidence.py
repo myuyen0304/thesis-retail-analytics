@@ -127,7 +127,10 @@ _CRIT_TIEN = re.compile(r'bằng tiền|(?:theo|xét|tiêu chí)\s+(?:cả\s+)?(
 # câu nối nói về chỉ tiêu MỨC (tỷ trọng, R cao / thấp nhất), không phải mức đổi: largest_* không chứng minh được
 _NOT_CHANGE = re.compile(r'tỷ trọng|chiếm|cao nhất|thấp nhất|quy mô')
 # câu nói giới hạn của tool ("dữ liệu chỉ xếp hạng phía giảm nhiều nhất, không xếp hạng phía ít nhất"): không phải claim
-_RANK_LIMIT = re.compile(r'(?:không|chưa|chỉ)\s+(?:có\s+)?(?:xếp hạng|xếp)(?!\w)')
+# và câu gợi ý hỏi tiếp ("bạn có thể hỏi giai đoạn giảm mạnh nhất"); chỉ miễn khi câu không gọi tên chủ thể cụ thể
+_RANK_LIMIT = re.compile(r'(?:không|chưa|chỉ)\s+(?:có\s+)?(?:xếp hạng|xếp)(?!\w)|(?:có thể|hãy|thử)\s+hỏi(?!\w)')
+# chủ thể cụ thể trong câu: giai đoạn A–D, năm, tháng (tên nhóm đã có bước kiểm riêng; N/U/P xét bằng _said_driver)
+_NAMED_SUBJECT = re.compile(r'giai đoạn\s+[A-D](?!\w)|(?<!\d)(?:19|20)\d\d(?!\d)|tháng\s+\d', re.I)
 _ANAPHOR = re.compile(r'^\s*(?:và\s+)?(?:đây|đó|(?:giai đoạn|ngành hàng|ngành|nhóm|vùng|khu vực|kênh|điểm đổi hướng|'
                       r'điểm|cú đổi hướng)\s+(?:này|đó))(?!\w)')
 # so sánh hai số ("2019 cao hơn 2020") là phép tính model tự làm: chỉ được nói khi câu dẫn cột thay đổi tool đã tính
@@ -551,8 +554,11 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
         if not ranks and _verified_anaphor_rank(sent, prev, by_id, results):
             continue
         low = sent.lower()
-        if not paths and _RANK_LIMIT.search(low) and not any(rx.search(sent) for rx in _DRIVER_WORD.values()):
-            continue        # câu nói giới hạn của tool, không khẳng định nhóm nào (live D11 sau sửa, lượt 3)
+        if (not paths and _RANK_LIMIT.search(low) and not _said_driver(sent)
+                and not _NAMED_SUBJECT.search(_PLACEHOLDER.sub(' ', sent))):
+            # câu nói giới hạn của tool / gợi ý hỏi tiếp, không khẳng định chủ thể nào (live D11 sau sửa, F08, F09).
+            # "N/U/P" nhắc cả ba thì _said_driver = None; gọi riêng một thành phần thì vẫn kiểm.
+            continue
         weak = any(w in low for w in WEAK_WORDS) and not any(w in low for w in STRONG_WORDS)
         strong = any(w in low for w in STRONG_WORDS) and not any(w in low for w in WEAK_WORDS)
         if not ranks and weak:

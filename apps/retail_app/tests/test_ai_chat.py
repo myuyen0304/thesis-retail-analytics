@@ -536,6 +536,18 @@ def test_live_d11_hoi_it_nhat_loi_nhac_khong_day_sang_nhieu_nhat():
                                        {'id': 'c2', 'path': 'T1.rows[Casual].delta_r', 'sign': 'am'}],
              q='Năm 2019 ngành hàng nào giảm ít nhất?')
     assert t.status == 'ok', t.validation_errors
+    # live F09 / F08: câu từ chối nhắc cả "N/U/P", câu gợi ý hỏi tiếp → không phải claim
+    drv = ('get_revenue_drivers', dict(metric='R', year=2019))
+    t = _one(drv, 'Năm 2019, ΔR là {c1}. Với ba thành phần N/U/P, dữ liệu hiện chưa xếp hạng được thành phần nào kéo giảm '
+                  'ít nhất. Bạn có thể hỏi thành phần nào kéo giảm nhiều nhất.',
+             [{'id': 'c1', 'path': 'T1.rows[0].delta_r', 'sign': 'am'}], q='Thành phần nào kéo giảm ít nhất năm 2019?')
+    assert t.status == 'ok', t.validation_errors
+    # gọi tên một chủ thể cụ thể thì vẫn kiểm: một thành phần, một giai đoạn, một năm
+    for sai in ('Số món mỗi đơn (U) giảm ít nhất, dù dữ liệu chưa xếp hạng phía này. ΔR là {c1}.',
+                'Giai đoạn C giảm mạnh nhất, bạn có thể hỏi thêm. ΔR là {c1}.',
+                'Năm 2019 giảm mạnh nhất, bạn có thể hỏi thêm. ΔR là {c1}.'):
+        t = _one(drv, sai, [{'id': 'c1', 'path': 'T1.rows[0].delta_r', 'sign': 'am'}], q='Năm 2019 thế nào?')
+        assert t.status == 'answer_validation_failed', (sai, t.answer_md)
     # nhưng gọi tên nhóm trong câu đó thì vẫn chặn
     t = _one(('get_segment_contribution', SEG_2019), 'Casual giảm ít nhất, dù dữ liệu chỉ xếp hạng phía nhiều nhất.', [],
              q='Năm 2019 ngành hàng nào giảm ít nhất?')
