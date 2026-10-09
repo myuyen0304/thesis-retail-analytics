@@ -253,7 +253,7 @@ Hạn tiến độ khóa luận: **2026-10-25**.
   - Chạy lại offline **1.082 câu trả lời cuối** trong mọi log live cũ (dựng lại kết quả tool từ lời gọi đã log, DuckDB): không câu
     nào trước qua mà nay bị chặn; 1 câu A03 trước bị chặn nay qua (A đứng đầu cả tiền lẫn CAGR, app đã đối chiếu).
   - Test AI trên DuckDB: 272 đạt. 87 test lỗi đều vì **Docker Desktop tắt** (86 test `_pg_` không nối được PostgreSQL; 1 test giao
-    diện đổi sang backend postgres bị dừng ở bước đọc `build_info`: "ConnectionTimeout"). Chưa chạy lại khi bật Docker.
+    diện đổi sang backend postgres bị dừng ở bước đọc `build_info`: "ConnectionTimeout"). **Bật Docker, chạy lại cùng ngày (sau cả đợt "ít nhất"): 124/124 test PostgreSQL đạt.**
 - **Model thật, bộ D\*** (12 câu soạn sau khi sửa, commit trước lần gọi đầu; DuckDB, 3 lượt, `deepseek-flash`, prompt
   `ai3-2026-10-09`, code `09b9930`; log `warehouse/ai_eval/live_20261009T085911Z_d_28660.jsonl`, ~0,19 USD):
   - chấm tự động **34/36**; câu xếp hạng **3/36** lượt phải sửa ở lần đầu, đều là D11 (câu bẫy "giảm ít nhất");

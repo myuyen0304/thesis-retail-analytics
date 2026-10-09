@@ -246,7 +246,9 @@ def test_ps5_c_f_2019(monkeypatch, backend):
     at = _ps5(monkeypatch, backend)
     assert [m.value for m in at.metric][3:] == ['−22.481 đơn', '−16.578 đơn', '−5.903 đơn']
     # review 2026-09-29: phần C/F là số toàn công ty, không theo chiều đang chọn → nhãn phải nói rõ phạm vi
-    assert at.metric[3].label == 'Số đơn toàn công ty đổi (2018→2019)'
+    # PM 2026-10-09: nhãn dài bị cắt "…" → nhãn thẻ rút gọn; phạm vi toàn công ty ở tiêu đề, chú thích và help
+    assert at.metric[3].label == 'Số đơn đổi (2018→2019)'
+    assert 'Số đơn toàn công ty' in at.metric[3].help
     assert any(s.value.startswith('Số đơn toàn công ty, năm 2019') for s in at.subheader)
     assert any('không chia theo ngành hàng đang chọn' in c.value for c in at.caption)
     d = queries.driver_period(backend).set_index('period_code').loc['2019']

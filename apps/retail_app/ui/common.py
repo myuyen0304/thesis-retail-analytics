@@ -166,13 +166,19 @@ def hang_the(key: str, n: int) -> list:
       đẩy xuống tùy độ dài chữ);
     - các thẻ cao bằng thẻ cao nhất;
     - cỡ chữ số lớn = 11% bề rộng thẻ (container query), tối đa bằng cỡ mặc định, nên thẻ hẹp vẫn không cắt số;
-    - dòng xám dài thì xuống dòng thay vì bị cắt "…"."""
+    - dòng xám dài thì xuống dòng thay vì bị cắt "…";
+    - nhãn dài cũng xuống dòng; thẻ hẹp (≤ 230px) thì mọi thẻ chừa 2 dòng nhãn để số vẫn thẳng hàng (PM 2026-10-09)."""
     k = f'.st-key-{key}'
     css = (f'{k} [data-testid="stHorizontalBlock"] {{align-items: stretch;}}'
            f'{k} [data-testid="stColumn"] > [data-testid="stVerticalBlock"], '
            f'{k} [data-testid="stElementContainer"]:has([data-testid="stMetric"]) {{height: 100%;}}'
            f'{k} [data-testid="stMetric"] {{height: 100%; box-sizing: border-box; container-type: inline-size;}}'
            f'{k} [data-testid="stMetricValue"] {{font-size: clamp(1.1rem, 11cqi, 2.25rem);}}'
+           # nhãn dài không bị cắt "…" (PM 2026-10-09): cho xuống dòng; thẻ hẹp thì MỌI thẻ chừa đủ 2 dòng nhãn để
+           # dòng số vẫn thẳng hàng giữa các thẻ (thẻ cùng bề rộng nên cùng khớp điều kiện container query)
+           f'{k} [data-testid="stMetricLabel"], {k} [data-testid="stMetricLabel"] * '
+           '{white-space: normal; overflow: visible; text-overflow: clip; height: auto;}'
+           f'@container (max-width: 230px) {{{k} [data-testid="stMetricLabel"] {{min-height: 2.8em; align-items: flex-start;}}}}'
            f'{k} div:has(> [data-testid="stMetricDeltaDescription"]) '
            '{flex-direction: column; align-items: flex-start; gap: 0.3rem;}'
            f'{k} [data-testid="stMetricDeltaDescription"], {k} [data-testid="stMetricDeltaDescription"] * '
