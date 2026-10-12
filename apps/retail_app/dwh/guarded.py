@@ -14,10 +14,12 @@ Khác `connection.read_sql`:
 """
 import datetime as dt
 import os
+import json
 import threading
 from dataclasses import dataclass
 
 from dwh.connection import ROOT, databricks_config, duckdb_path, env_file_config
+from dwh import releases
 
 DEFAULT_TIMEOUT_S = 5.0
 DATABRICKS_TIMEOUT_S = 60.0     # warehouse 2X-Small khởi động nguội: câu đầu đo được 21,8 giây (2026-10-06)
@@ -71,7 +73,7 @@ class _DuckDBSession:
         timer = threading.Timer(self.timeout_s, self.con.interrupt)   # DuckDB không có statement_timeout
         timer.start()
         try:
-            cur = self.con.execute(st.render('duckdb'), list(st.params))
+            cur = self.con.execute(releases.sql_for(st.render('duckdb'), releases.resolve('duckdb')), list(st.params))
             rows = cur.fetchmany(self.max_rows + 1)
         except self._duckdb.InterruptException as e:
             raise QueryTimeout(f'quá {self.timeout_s} giây') from e
@@ -231,7 +233,7 @@ def _dbx_platform(who: str) -> bool:
 
 
 def _dbx_violations(me: str, expected: str, grants: list, objects: list, allowed_relations: frozenset[str],
-                    catalog: str) -> list[str]:
+                    catalog: str, required_relations=None) -> list[str]:
     """Lý do từ chối (rỗng = đạt). grants: (mức, catalog, schema, tên, grantee, quyền, là_thành_viên);
     objects: (loại, catalog, schema, tên, owner, là_thành_viên). Hàm thuần để test từng luật không cần cloud.
     Quyền cấp cho nhóm nền tảng luôn tính là áp dụng cho tài khoản AI, không dựa vào is_member()."""
@@ -254,9 +256,10 @@ def _dbx_violations(me: str, expected: str, grants: list, objects: list, allowed
     # Tự kiểm: phải nhận ra quyền cần có của CHÍNH mình. Nếu UC ghi grantee theo dạng khác current_user() (vd. tên hiển
     # thị của SP) thì luật 2–3 âm thầm không áp dụng được; thà từ chối còn hơn đạt nhờ không nhìn thấy quyền.
     mine = {(lvl, c, s, n, p) for lvl, c, s, n, g, p, m in grants if applies(g, m)}
+    required = allowed_relations if required_relations is None else required_relations
     need = ({('catalog', catalog, None, None, 'USE_CATALOG')}
-            | {('schema', catalog, r.split('.')[0], None, 'USE_SCHEMA') for r in allowed_relations}
-            | {('table', catalog, *r.split('.'), 'SELECT') for r in allowed_relations})
+            | {('schema', catalog, r.split('.')[0], None, 'USE_SCHEMA') for r in required}
+            | {('table', catalog, *r.split('.'), 'SELECT') for r in required})
     if (lack := sorted(f"{p} {'.'.join(x for x in (c, s, n) if x)}" for lvl, c, s, n, p in need - mine)):
         out.append(f'không nhận ra quyền của chính tài khoản AI (thiếu {lack[:5]}): có thể chưa cấp quyền, hoặc '
                    'grantee không ghi theo current_user()')
@@ -295,14 +298,16 @@ class _DatabricksSession:
                                   catalog=catalog, session_configuration={'STATEMENT_TIMEOUT': str(max(1, int(timeout_s)))})
         try:
             self.cur = self.conn.cursor()
-            _check_dbx_identity(self.cur, client_id, allowed_relations, catalog)
+            allowed, required = _release_scope(self.cur, allowed_relations, catalog)
+            _check_dbx_identity(self.cur, client_id, allowed, catalog, required)
         except Exception:
             self.close()
             raise
 
     def fetch(self, st: Statement) -> Fetched:
         try:
-            self.cur.execute(st.render('databricks'), list(st.params))
+            self.cur.execute(releases.sql_for(st.render('databricks'), releases.current()
+                                             if releases.enabled('databricks') else None), list(st.params))
             rows = self.cur.fetchmany(self.max_rows + 1)
         except Exception as e:
             if 'TIMEOUT' in str(e).upper() or 'TIMED OUT' in str(e).upper():
@@ -320,7 +325,48 @@ class _DatabricksSession:
             self.conn.close()
 
 
-def _check_dbx_identity(cur, expected: str, allowed_relations: frozenset[str], catalog: str) -> None:
+_REGISTRY_VISIBLE = ('select count(*) from system.information_schema.tables where table_catalog = ? '
+                     "and table_schema = 'retail_control' and table_name = 'state'")
+
+
+def _read_registry(cur) -> dict:
+    cur.execute(f"select payload from {releases.CONTROL_RELATION} where name = 'main'")
+    rows = cur.fetchall()
+    if len(rows) != 1:
+        raise GuardError('Registry phải có đúng một dòng main')
+    try:
+        return json.loads(rows[0][0])
+    except (TypeError, ValueError) as e:
+        raise GuardError('Registry không đọc được') from e
+
+
+def _release_scope(cur, allowed_relations: frozenset[str], catalog: str):
+    """(relation được phép thấy, relation bắt buộc có quyền) cho _check_dbx_identity.
+
+    Chế độ cũ (mặc định) vẫn đọc `reporting.*`. Pipeline cấp cho SP AI quyền đọc bản mới (r_<id>_reporting.*) và
+    registry ngay ở stage validate, trước khi app bật chế độ versioned. Nếu SP thấy registry thì chấp nhận thêm
+    các bản registry ghi là đã qua quality gate; bản không có trong registry vẫn bị coi là quyền thừa. Không pin:
+    câu SQL vẫn đọc `reporting.*`, evidence không được ghi release_id của bản không đọc."""
+    try:
+        if releases.enabled('databricks'):
+            state = _read_registry(cur)
+            # Pin từ UI hoặc phiên tool đầu tiên; các tool còn lại giữ cùng bản trong lượt chat.
+            record = releases.current() or releases.choose(state)
+            if record != releases.choose(state, record['release_id']):
+                raise GuardError('Registry đã đổi nội dung phiên bản bất biến')
+            releases.pin(record)
+            required = frozenset({record['schema'] + '.' + r.split('.')[1] for r in allowed_relations}
+                                 | {releases.CONTROL_RELATION})
+            return releases.allowed_versions(state, allowed_relations), required
+        cur.execute(_REGISTRY_VISIBLE, [catalog])
+        if not cur.fetchone()[0]:
+            return allowed_relations, allowed_relations
+        return releases.allowed_versions(_read_registry(cur), allowed_relations), allowed_relations
+    except ValueError as e:                 # registry ghi bản chưa qua gate / sai định danh
+        raise GuardError(f'registry phiên bản không hợp lệ: {e}') from e
+
+
+def _check_dbx_identity(cur, expected: str, allowed_relations: frozenset[str], catalog: str, required_relations=None) -> None:
     """Đọc danh tính và quyền THẬT của phiên (như _check_pg_role); vi phạm thì GuardError, không đọc dữ liệu."""
     cur.execute('select current_user()')
     me = cur.fetchone()[0]
@@ -328,7 +374,7 @@ def _check_dbx_identity(cur, expected: str, allowed_relations: frozenset[str], c
     grants = [tuple(r) for r in cur.fetchall()]
     cur.execute(_DBX_OBJECTS)
     objects = [tuple(r) for r in cur.fetchall()]
-    if (why := _dbx_violations(me, expected, grants, objects, allowed_relations, catalog)):
+    if (why := _dbx_violations(me, expected, grants, objects, allowed_relations, catalog, required_relations)):
         raise GuardError('; '.join(why))
 
 

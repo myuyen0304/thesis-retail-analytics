@@ -1,0 +1,17 @@
+.git
+.venv*
+.env*
+**/__pycache__
+**/.pytest_cache
+**/*.log
+**/secrets.toml
+retail_dbt/target*
+retail_dbt/logs
+retail_dbt/dbt_packages
+data
+silver
+warehouse
+archive
+build
+docs
+notebooks

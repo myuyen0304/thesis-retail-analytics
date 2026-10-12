@@ -23,6 +23,7 @@ from itertools import product
 from ai_explain import metric_catalog as cat
 from ai_explain.contracts import Evidence, QueryRecord, ToolCall, ToolResult
 from dwh.connection import describe
+from dwh import releases
 from dwh.guarded import DEFAULT_MAX_ROWS, GuardError, QueryTimeout, RowLimitExceeded, Statement, open_session
 
 TOOL_VERSION = 'v1.4'
@@ -93,6 +94,11 @@ def _iso(v):
     return v.isoformat() if isinstance(v, (dt.date, dt.datetime)) else v
 
 
+def _release_evidence():
+    record = releases.current()
+    return {k: record[k] for k in ('release_id', 'snapshot_id', 'code_version', 'run_id')} if record else {}
+
+
 class _Turn:
     """Gói phiên đọc + bằng chứng của một lần gọi tool."""
 
@@ -103,7 +109,8 @@ class _Turn:
     def fetch(self, source: str, sql: str, params: tuple = ()):
         assert source in ALLOWED_RELATIONS, source
         st = Statement(sql, params)
-        self.queries.append(QueryRecord(source, st.render(self.backend), params))
+        record = releases.current() if releases.enabled(self.backend) else None
+        self.queries.append(QueryRecord(releases.sql_for(source, record), releases.sql_for(st.render(self.backend), record), params))
         return self.sess.fetch(st)
 
     def same_build(self) -> bool:
@@ -141,7 +148,7 @@ class _Turn:
             request_id=uuid.uuid4().hex, tool=self.tool, tool_version=TOOL_VERSION, arguments_applied=dict(self.args),
             filters_applied=filters, grain=grain, metrics=metrics, method=method, backend=self.backend,
             source_description=describe(self.backend),
-            data_version={k: _iso(v) for k, v in self.build.items()},
+            data_version={**{k: _iso(v) for k, v in self.build.items()}, **_release_evidence()},
             quality={k: _iso(v) for k, v in self.health.items()},
             definition_version=cat.definition_version(), read_at_utc=read_at, queries=list(self.queries),
         )
@@ -580,6 +587,7 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')
 
 
+@releases.pinned_read
 def run(call: ToolCall | dict, backend: str, *, timeout_s: float | None = None,
         max_rows: int = DEFAULT_MAX_ROWS) -> ToolResult:
     if isinstance(call, dict):

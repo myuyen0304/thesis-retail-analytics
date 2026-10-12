@@ -16,6 +16,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from dwh import releases
+
 BACKENDS = ('postgres', 'duckdb', 'databricks')
 ROOT = Path(__file__).resolve().parents[3]                 # root repo
 DUCKDB_PATH = ROOT / 'warehouse' / 'dbt.duckdb'            # do `dbt build --target duckdb` sinh ra
@@ -24,6 +26,15 @@ DATABRICKS_CONFIG = ROOT / '.env.databricks.local'         # file cá nhân (Git
 
 def duckdb_path() -> Path:
     # RETAIL_DUCKDB_PATH cho phép trỏ sang file khác (test sửa số trên bản sao, xem tests/test_khong_hardcode.py)
+    record = releases.resolve('duckdb')
+    if record:
+        if record.get('artifact_path'):
+            root = Path(os.getenv('RETAIL_RELEASE_STATE', 'warehouse/pipeline/state.json')).resolve().parent
+            path = (root / record['artifact_path']).resolve()
+            if not path.is_relative_to(root):
+                raise ValueError('Đường dẫn artifact vượt khỏi thư mục pipeline')
+            return path
+        return Path(record['duckdb_path'])
     return Path(os.environ.get('RETAIL_DUCKDB_PATH', DUCKDB_PATH))
 
 
@@ -109,7 +120,7 @@ def _fetch_duckdb(sql: str):
 _databricks_auth = None   # Config của databricks-sdk, giữ lại giữa các câu: SDK tự làm mới token OAuth khi hết hạn
 
 
-def _fetch_databricks(sql: str):
+def _fetch_databricks(sql: str, *, resolve_release=True):
     # Máy local: profile OAuth của Databricks CLI (`databricks auth login --profile retail-dev`), không dùng PAT.
     # Trên Databricks Apps: không có profile; nền tảng đặt DATABRICKS_HOST/CLIENT_ID/CLIENT_SECRET của SP của app
     # → Config() mặc định. Chat AI KHÔNG đi đường này (dwh/guarded.py dùng SP chỉ-đọc riêng).
@@ -127,6 +138,11 @@ def _fetch_databricks(sql: str):
     with dbsql.connect(server_hostname=_databricks_auth.host.removeprefix('https://').rstrip('/'),
                        http_path=f"/sql/1.0/warehouses/{c['DATABRICKS_WAREHOUSE_ID']}", access_token=token,
                        catalog=c.get('RETAIL_DATABRICKS_CATALOG', 'retail_lab')) as conn, conn.cursor() as cur:
+        if resolve_release and releases.enabled('databricks'):
+            def fetch(statement):
+                cur.execute(statement)
+                return cur.fetchall()
+            sql = releases.sql_for(sql, releases.resolve('databricks', fetch))
         cur.execute(sql)
         # TIMESTAMP của Databricks về Python kèm múi giờ (UTC); Postgres/DuckDB trả giờ UTC không múi → bỏ múi cho giống
         utc = lambda v: v.astimezone(dt.timezone.utc).replace(tzinfo=None) \
@@ -164,9 +180,14 @@ def read_sql(sql: str, backend: str) -> pd.DataFrame:
     if backend == 'postgres':
         cols, rows = _fetch_postgres(sql)
     elif backend == 'duckdb':
+        sql = releases.sql_for(sql, releases.resolve('duckdb'))
         cols, rows = _fetch_duckdb(sql)
     elif backend == 'databricks':
         cols, rows = _fetch_databricks(sql)
     else:
         raise ValueError(f'Backend không hỗ trợ: {backend!r}')
     return _normalize(cols, rows)
+
+
+def release_for_read(backend: str):
+    return releases.resolve(backend, lambda sql: _fetch_databricks(sql, resolve_release=False)[1])

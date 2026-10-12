@@ -14,6 +14,10 @@
    2026-10-08: thêm SP retail-web-ro của bản public trên Streamlit Community Cloud (env RETAIL_WEB_DBX_PRINCIPAL),
    cùng danh sách app_read_relations (docs/streamlit_cloud_deploy.md). #}
 {% macro ai_readonly_grants() -%}
+{%- if var('release_id', '') -%}
+{# Pipeline chỉ cấp quyền sau quality gate, không cấp trong lúc build. #}
+select 1
+{%- else -%}
 {%- if target.type == 'postgres' -%}
 do $$
 declare
@@ -42,6 +46,7 @@ end $$
 select 1
 {%- else -%}
 select 1
+{%- endif -%}
 {%- endif -%}
 {%- endmacro %}
 

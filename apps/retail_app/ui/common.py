@@ -6,7 +6,8 @@ import pandas as pd
 import streamlit as st
 
 from dwh import queries
-from dwh.connection import default_backend, describe, enabled_backends
+from dwh import releases
+from dwh.connection import default_backend, describe, enabled_backends, release_for_read
 from ui.fmt import num, pct, ty
 
 BACKEND_LABEL = {'postgres': 'PostgreSQL (Docker)', 'duckdb': 'DuckDB (file, dự phòng)',
@@ -22,6 +23,7 @@ def backend() -> str:
 
 
 def sidebar() -> None:
+    releases.reset()
     backend()
     st.session_state._reads = {}          # bảng đã đọc trong lượt chạy này (report_reads liệt kê lại)
     st.sidebar.radio('Nguồn dữ liệu', enabled_backends(), key='backend', format_func=BACKEND_LABEL.get)
@@ -31,7 +33,7 @@ def sidebar() -> None:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def load(query_name: str, backend_name: str) -> tuple[pd.DataFrame, dt.datetime]:
+def load(query_name: str, backend_name: str, release_id: str = '') -> tuple[pd.DataFrame, dt.datetime]:
     # backend_name là tham số tường minh → cache tách riêng từng backend.
     # Trả kèm thời điểm truy vấn DB thật (không phải lúc lấy từ cache).
     return getattr(queries, query_name)(backend_name), dt.datetime.now()
@@ -42,7 +44,8 @@ def load_or_stop(query_name: str, allow_empty: bool = False) -> pd.DataFrame:
     allow_empty=True cho bảng được phép rỗng (vd. log nạp trên DuckDB), trang tự xử lý."""
     b = backend()
     try:
-        df, read_at = load(query_name, b)
+        record = release_for_read(b)
+        df, read_at = load(query_name, b, record['release_id'] if record else '')
     except Exception as e:  # lỗi kết nối: báo rõ để người demo chuyển backend
         st.session_state.pop('reloaded', None)
         st.error(f'Không đọc được `{query_name}` từ {BACKEND_LABEL[b]}: {type(e).__name__}.')

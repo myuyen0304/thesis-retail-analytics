@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from ai_explain import metric_catalog as cat
 from ai_explain import tools
+from dwh.releases import pinned_read
 from ai_explain.contracts import ToolCall, ToolResult
 from ai_explain.evidence import DATE_RE, Checked, allowed_years, check_digits, question_numbers, validate
 from ai_explain.provider import ProviderError, openai_tools, parse_arguments
@@ -275,6 +276,7 @@ def prompt_bound(messages: list[dict], schemas: list[dict]) -> int:
     return body + PROMPT_FRAME_TOKENS + PROMPT_MESSAGE_TOKENS * len(messages)
 
 
+@pinned_read
 def run_turn(question: str, history: list[dict], backend: str, provider, *, session_tokens_used: int = 0,
              today: dt.date | None = None) -> TurnResult:
     t0 = time.monotonic()

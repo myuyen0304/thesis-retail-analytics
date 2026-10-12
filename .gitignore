@@ -157,6 +157,7 @@ activemq-data/
 /.env.ai.local
 # Nội dung Secrets để dán vào Streamlit Community Cloud (docs/streamlit_cloud_deploy.md)
 /.env.streamlit_cloud.local
+/.env.airflow.local
 .venv
 env/
 venv/

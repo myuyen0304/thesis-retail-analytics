@@ -11,12 +11,12 @@
 
 {% macro health_log_setup() %}
     {% if execute and flags.WHICH in health_log_commands() %}
-        {% do run_query('create schema if not exists ops') %}
-        {% do run_query("create table if not exists ops.dbt_invocation (
+        {% do run_query('create schema if not exists ' ~ release_schema('ops')) %}
+        {% do run_query("create table if not exists " ~ release_schema('ops') ~ ".dbt_invocation (
             invocation_id varchar(64), command varchar(20), target_name varchar(50),
             started_at_utc timestamp, finished_at_utc timestamp, dbt_version varchar(20),
             n_tests_in_project integer, n_models_in_project integer)") %}
-        {% do run_query("create table if not exists ops.dbt_node_result (
+        {% do run_query("create table if not exists " ~ release_schema('ops') ~ ".dbt_node_result (
             invocation_id varchar(64), node_id varchar(500), resource_type varchar(20), node_name varchar(300),
             status varchar(20), failures integer, execution_time " ~ type_double() ~ ", message varchar(2000),
             test_kind varchar(50), column_name varchar(200), tested_model varchar(200), description varchar(1000))") %}
@@ -33,7 +33,7 @@
         {% set n_tests = nodes | selectattr('resource_type', 'equalto', 'test') | list | length %}
         {% set n_models = nodes | selectattr('resource_type', 'equalto', 'model') | list | length %}
         {% set finished = modules.datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S') %}
-        {% do run_query("insert into ops.dbt_invocation values ('" ~ invocation_id ~ "', '" ~ flags.WHICH ~ "', '"
+        {% do run_query("insert into " ~ release_schema('ops') ~ ".dbt_invocation values ('" ~ invocation_id ~ "', '" ~ flags.WHICH ~ "', '"
             ~ target.name ~ "', cast('" ~ run_started_at.strftime('%Y-%m-%d %H:%M:%S') ~ "' as timestamp), cast('"
             ~ finished ~ "' as timestamp), '" ~ dbt_version ~ "', " ~ n_tests ~ ", " ~ n_models ~ ")") %}
         {% set rows = [] %}
@@ -51,7 +51,7 @@
                 ~ _sql_str(n.description if n.description else none) ~ ")") %}
         {% endfor %}
         {% if rows %}
-            {% do run_query('insert into ops.dbt_node_result values ' ~ rows | join(', ')) %}
+            {% do run_query('insert into ' ~ release_schema('ops') ~ '.dbt_node_result values ' ~ rows | join(', ')) %}
         {% endif %}
     {% endif %}
 {% endmacro %}
