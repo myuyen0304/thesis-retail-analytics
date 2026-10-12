@@ -68,7 +68,7 @@ METRICS = {m['metric_id']: m for m in [
     _m('G', 'G — doanh thu gộp', ['doanh thu gộp', 'tiền hàng mọi đơn'], MONEY_UNIT,
        'SUM(quantity × unit_price), mọi trạng thái đơn, theo ngày đặt hàng', 'cộng qua tập dòng không giao nhau',
        note='Đối chứng sales.csv.Revenue. Không phải R.', sources=[_Y]),
-    _m('R', 'R — doanh thu thực nhận', ['doanh thu thuần', 'doanh thu đơn đã giao'], MONEY_UNIT,
+    _m('R', 'R — doanh thu đơn đã giao', ['doanh thu thuần', 'doanh thu đơn đã giao', 'tiền thực nhận'], MONEY_UNIT,
        'SUM(quantity × unit_price − discount_amount), chỉ order_status = delivered, theo ngày đặt hàng',
        'cộng qua tập dòng không giao nhau',
        note='Đơn returned bị loại cả đơn, không trừ refund thêm. Không phải dòng tiền theo ngày thanh toán.',

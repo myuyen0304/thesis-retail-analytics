@@ -15,7 +15,6 @@ from dwh.guarded import ai_databricks_principal
 from ui.common import BACKEND_LABEL, backend, notes, page_header
 from ui.fmt import arrow_safe, num
 
-page_header('Hỏi dữ liệu (AI)', 'Hỏi bằng tiếng Việt về doanh thu PS1–PS5; mọi con số lấy từ kho và có bằng chứng.')
 
 GOI_Y = {q: q for q in [
     'G hụt thành R bao nhiêu năm 2019, khoản nào lớn nhất?',          # PS1
@@ -34,6 +33,8 @@ TRANG_THAI = {
 b = backend()
 if st.session_state.get('ai_backend') != b:          # cách ly ngữ cảnh/bằng chứng giữa các backend (E20)
     st.session_state.ai_turns, st.session_state.ai_tokens, st.session_state.ai_backend = [], 0, b
+
+page_header('Hỏi dữ liệu (AI)', 'Hỏi bằng tiếng Việt về doanh thu PS1–PS5; mọi con số lấy từ kho và có bằng chứng.')
 
 
 def _md(s: str) -> str:

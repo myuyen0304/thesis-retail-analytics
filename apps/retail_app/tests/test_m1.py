@@ -13,10 +13,10 @@ from dwh import queries
 from ui.fmt import num, pct, trieu, ty
 
 APP = Path(__file__).resolve().parents[1] / 'app.py'
-DECK = {'G: tiền hàng mọi đơn': '16.430.476.585,53', 'R: tiền thực nhận': '12.518.175.957,20',
-        'Tỷ lệ thực nhận R/G': '76,2%'}
+DECK = {'G: tiền hàng mọi đơn': '16.430.476.585,53', 'R: doanh thu đơn đã giao': '12.518.175.957,20',
+        'Tỷ lệ R/G': '76,2%'}
 # feedback PM 2026-10-02: thẻ ghi gọn theo tỷ; số đầy đủ của deck nằm trong tooltip (?) của thẻ
-THE_DECK = [('G: tiền hàng mọi đơn', '16,43 tỷ'), ('R: tiền thực nhận', '12,52 tỷ'), ('Tỷ lệ thực nhận R/G', '76,2%')]
+THE_DECK = [('G: tiền hàng mọi đơn', '16,43 tỷ'), ('R: doanh thu đơn đã giao', '12,52 tỷ'), ('Tỷ lệ R/G', '76,2%')]
 BACKENDS = ['postgres', 'duckdb']
 
 
@@ -51,15 +51,15 @@ def test_tong_quan_hien_dung_so_deck(monkeypatch, backend):
     assert m[:3] == THE_DECK                            # hàng thẻ đầu = 2012–2022, đúng số deck (làm tròn)
     _so_day_du_trong_help(at)
     t = queries.revenue_total(backend).set_index('period_code').loc['2013-2022']
-    assert m[3:6] == [('G: tiền hàng mọi đơn', ty(t['g'], 2)), ('R: tiền thực nhận', ty(t['r'], 2)),
-                      ('Tỷ lệ thực nhận R/G', pct(t['capture_rate']))]
+    assert m[3:6] == [('G: tiền hàng mọi đơn', ty(t['g'], 2)), ('R: doanh thu đơn đã giao', ty(t['r'], 2)),
+                      ('Tỷ lệ R/G', pct(t['capture_rate']))]
     assert at.dataframe[0].value['R (đơn đã giao)'].tolist() == [ty(v, 2) for v in queries.revenue_yearly(backend)['r']]
 
 
 def _so_day_du_trong_help(at):
     """Tiêu chí M1 (số đầy đủ của deck) vẫn kiểm được: rê chuột vào (?) của thẻ G, R."""
     assert f"Số đầy đủ: {DECK['G: tiền hàng mọi đơn']}." in at.metric[0].help
-    assert f"Số đầy đủ: {DECK['R: tiền thực nhận']}." in at.metric[1].help
+    assert f"Số đầy đủ: {DECK['R: doanh thu đơn đã giao']}." in at.metric[1].help
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
@@ -85,8 +85,8 @@ def test_ps1_chon_mot_nam_thi_doi_theo_rpt_revenue_yearly(monkeypatch, backend):
     assert not at.exception and not at.error
     y = queries.revenue_yearly(backend).set_index('year').loc[2019]
     assert _metrics(at) == [
-        ('G: tiền hàng mọi đơn', ty(y['g'], 2)), ('R: tiền thực nhận', ty(y['r'], 2)),
-        ('Tỷ lệ thực nhận R/G', pct(y['capture_rate'])), ('Tỷ lệ tiền hàng bị hủy', pct(y['cancelled_rate'])),
+        ('G: tiền hàng mọi đơn', ty(y['g'], 2)), ('R: doanh thu đơn đã giao', ty(y['r'], 2)),
+        ('Tỷ lệ R/G', pct(y['capture_rate'])), ('Tỷ lệ tiền hàng bị hủy', pct(y['cancelled_rate'])),
         ('Tỷ lệ chiết khấu', pct(y['discount_rate'])),
     ]
     assert _metrics(at)[0][1] == '1,14 tỷ'

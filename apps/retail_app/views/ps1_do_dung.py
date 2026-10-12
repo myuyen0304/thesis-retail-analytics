@@ -102,7 +102,7 @@ if kind == 'year':   # một năm: kèm bảng 12 tháng
                  column_config={c: right for c in tbl.columns if c != 'Tháng'})
 
 # --- R/G và tỷ lệ hủy theo năm ---
-st.subheader('Tỷ lệ thực nhận và tỷ lệ hủy theo năm')
+st.subheader('Tỷ lệ R/G và tỷ lệ tiền hàng bị hủy theo năm')
 st.caption('Hai biểu đồ và bảng dưới đây luôn hiện mọi năm để so sánh'
            + (f'; đường gạch đứng đánh dấu năm {code} đang chọn.' if kind == 'year' else '.'))
 y = yearly.copy()
@@ -138,7 +138,7 @@ st.dataframe(show, hide_index=True, height='content',   # đủ 11 năm, không 
 
 notes(
     cach_doc=[
-        'Tỷ lệ thực nhận R/G càng gần 100% càng ít thất thoát.',
+        'R/G là tỷ lệ doanh thu đơn đã giao trên tiền hàng mọi đơn. G−R gồm hủy, trả, chưa giao và chiết khấu; không đồng nhất với thất thoát.',
         'Thác G → R: cột đỏ là phần bị trừ khỏi G (đơn hủy, đơn trả, đơn chưa giao, chiết khấu của đơn đã giao). '
         'Bốn phần cộng lại đúng bằng G − R (dbt test `assert_rpt_total`); số trên bảng đã làm tròn nên cộng lại có thể lệch ở chữ số cuối.',
         'Tỷ lệ tiền hàng bị hủy càng thấp càng tốt. Đây là tỷ trọng **giá trị**, khác tỷ lệ **số đơn** bị hủy.',

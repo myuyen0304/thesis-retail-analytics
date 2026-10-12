@@ -27,6 +27,8 @@ def sidebar() -> None:
     backend()
     st.session_state._reads = {}          # bảng đã đọc trong lượt chạy này (report_reads liệt kê lại)
     st.sidebar.radio('Nguồn dữ liệu', enabled_backends(), key='backend', format_func=BACKEND_LABEL.get)
+    if st.session_state.get('ai_backend') != backend():
+        st.session_state.ai_turns, st.session_state.ai_tokens, st.session_state.ai_backend = [], 0, backend()
     if st.sidebar.button('Đọc lại dữ liệu'):
         st.cache_data.clear()
         st.session_state.reloaded = True   # report_reads sẽ báo thành công sau khi trang đọc xong
@@ -132,7 +134,7 @@ def info_strip() -> None:
         st.markdown(
             f'**Kỳ phân tích:** {i["analysis_start_year"]}–{i["analysis_end_year"]}{ref}; '
             f'tăng trưởng năm tính từ {i["growth_start_year"]}.  \n'
-            '**R** = tiền thực nhận: chỉ đơn đã giao, đã trừ chiết khấu. '
+            '**R** = doanh thu đơn đã giao, sau chiết khấu; không phải dòng tiền theo ngày thanh toán. '
             '**G** = tiền hàng của mọi đơn (kể cả hủy, trả, chưa giao), chưa trừ chiết khấu; G chính là `sales.csv`. '
             'Mọi số gom theo ngày đặt hàng.  \n'
             '**Tiền:** VND (PM chốt ngày 05/10/2026; dữ liệu nguồn không ghi đơn vị). "tỷ" là tỷ đồng, '
@@ -196,8 +198,8 @@ def kpi_revenue(row: pd.Series) -> None:
     c1, c2, c3 = st.columns(3)
     kpi(c1, 'G: tiền hàng mọi đơn', ty(row['g'], 2),
         f'Mọi đơn, chưa trừ chiết khấu (= sales.csv). Số đầy đủ: {num(row["g"], 2)}.')
-    kpi(c2, 'R: tiền thực nhận', ty(row['r'], 2), f'Chỉ đơn đã giao, đã trừ chiết khấu. Số đầy đủ: {num(row["r"], 2)}.')
-    kpi(c3, 'Tỷ lệ thực nhận R/G', pct(row['capture_rate'], 1), 'Càng gần 100% càng ít thất thoát.')
+    kpi(c2, 'R: doanh thu đơn đã giao', ty(row['r'], 2), f'Chỉ đơn đã giao, sau chiết khấu, theo ngày đặt hàng. Số đầy đủ: {num(row["r"], 2)}.')
+    kpi(c3, 'Tỷ lệ R/G', pct(row['capture_rate'], 1), 'Tỷ lệ R trên G cùng kỳ; chênh G−R không đồng nhất với thất thoát.')
 
 
 def notes(cach_doc: list[str], gioi_han: list[str]) -> None:
