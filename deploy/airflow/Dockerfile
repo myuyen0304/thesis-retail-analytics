@@ -1,5 +1,7 @@
 FROM apache/airflow:3.3.2-python3.12
 USER root
+# lightgbm cần thư viện OpenMP của hệ thống (stage dự báo, 2026-10-15)
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 RUN python -m venv /opt/pipeline && chown -R airflow:0 /opt/pipeline
 USER airflow
 COPY deploy/airflow/requirements-pipeline.txt /tmp/requirements-pipeline.txt
