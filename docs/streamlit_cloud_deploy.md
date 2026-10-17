@@ -97,7 +97,7 @@ Lệnh chỉ dừng compute, **không xóa** app; bật lại theo `docs/databri
 | Không ai mở app một thời gian | Streamlit cho app **ngủ** (diễn đàn Streamlit báo khoảng 12 giờ không có lượt xem; Streamlit không công bố con số chính thức) | người xem bấm **Yes, get this app back up**, đợi khoảng 1 phút. Trước demo: tự mở trước 10–15 phút |
 | Warehouse Databricks đang tắt | câu đầu chậm 20–60 giây (đo 21,8 giây ngày 2026-10-06) | đợi, rồi tải lại trang; các trang giữ kết quả 10 phút nên lượt sau nhanh |
 | Databricks Free chạm giới hạn sử dụng | trang báo lỗi đọc kho; không có cách vượt trên bản Free | đợi hôm sau; xem `docs/databricks_app_van_hanh.md` mục 4 |
-| Push code mới lên nhánh đang deploy | Streamlit **tự deploy lại** sau vài phút | chỉ push lên nhánh này khi test local đã đạt (quy trình `docs/dwh_roadmap.md`) |
+| Push code mới lên nhánh đang deploy | Streamlit lẽ ra tự deploy lại sau vài phút, nhưng **ngày 2026-10-09 không tự cập nhật**: sau push và merge PR #3, hơn 6 phút bản public vẫn chạy code cũ | chỉ push khi test local đã đạt (quy trình `docs/dwh_roadmap.md`); push xong mà không thấy đổi thì vào share.streamlit.io, ở dòng app bấm **⋮ → Reboot** (lấy code mới nhất của nhánh). Nhánh đang deploy ghi ở dòng app trong danh sách, không nằm trong Settings |
 | Chat báo lỗi gọi model | khóa DeepSeek hết tiền hoặc bị thu hồi | nạp tiền hoặc tạo khóa mới, sửa dòng `RETAIL_AI_API_KEY` trong **Settings → Secrets** (app tự khởi động lại) |
 | Thấy lượng gọi DeepSeek tăng bất thường | có người lạm dụng chat | thu hồi khóa `streamlit-public` trên trang DeepSeek; chat báo lỗi, các trang vẫn chạy |
 | Trang báo lỗi xác thực Databricks | secret của SP hết hạn | xem mục 4 |
