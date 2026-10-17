@@ -3,7 +3,8 @@
    - Chỉ chạy trên target postgres, và chỉ khi role đã tồn tại (DB mới chưa tạo role thì bỏ qua, build không lỗi).
    - Chỉ cấp ĐÚNG danh sách var ai_readonly_relations (= ai_explain.tools.ALLOWED_RELATIONS, test_ai_tools.py kiểm);
      không ALTER DEFAULT PRIVILEGES cho cả schema (role AI không được đọc int_reporting_order_items).
-   - Bảng chưa có (build một phần) thì bỏ qua bảng đó.
+   - Bảng chưa có (build một phần) thì bỏ qua bảng đó. Var ai_optional_relations (rpt_forecast_*, B3 2026-10-15) cũng cấp
+     theo cách này: build thường không có hai bảng đó nên không cấp gì.
    Tạo role lần đầu và kiểm quyền vẫn bằng scripts/ops/pg_ai_readonly_role.py (--check).
    Databricks (2026-10-06): cấp cho service principal chỉ-đọc của AI (application id trong env RETAIL_AI_DBX_PRINCIPAL,
    scripts/databricks/run_dbt.py tự lấy từ .env.ai.local; không ghi cứng vì khác nhau theo workspace):
@@ -12,7 +13,9 @@
    Cùng cách đó cấp cho SP của app Databricks Apps (env RETAIL_APP_DBX_PRINCIPAL) đúng var app_read_relations
    (= dwh.queries.SOURCE, các bảng mà trang đọc; test_ai_tools.py kiểm). SP của app không dùng cho chat AI.
    2026-10-08: thêm SP retail-web-ro của bản public trên Streamlit Community Cloud (env RETAIL_WEB_DBX_PRINCIPAL),
-   cùng danh sách app_read_relations (docs/streamlit_cloud_deploy.md). #}
+   cùng danh sách app_read_relations (docs/streamlit_cloud_deploy.md).
+   RV11 (2026-10-15): SP của app và của bản web cấp thêm var app_optional_relations (ba bảng trang Dự báo), cũng bỏ qua
+   bảng chưa có như bảng tùy chọn của AI; build thường không có các bảng đó nên không cấp gì. #}
 {% macro ai_readonly_grants() -%}
 {%- if var('release_id', '') -%}
 {# Pipeline chỉ cấp quyền sau quality gate, không cấp trong lúc build. #}
@@ -30,7 +33,7 @@ begin
     if to_regnamespace('reporting') is not null then
         execute format('grant usage on schema reporting to %I', role_name);
     end if;
-    foreach rel in array array[{% for r in var('ai_readonly_relations') %}'{{ r }}'{{ ', ' if not loop.last }}{% endfor %}]
+    foreach rel in array array[{% for r in var('ai_readonly_relations') + var('ai_optional_relations', []) %}'{{ r }}'{{ ', ' if not loop.last }}{% endfor %}]
     loop
         if to_regclass(rel) is not null then
             execute format('grant select on %s to %I', rel, role_name);
@@ -39,9 +42,12 @@ begin
 end $$
 {%- elif target.type == 'databricks' -%}
 {%- if execute -%}
-    {%- do _dbx_grant_read(env_var('RETAIL_AI_DBX_PRINCIPAL', ''), var('ai_readonly_relations'), 'RETAIL_AI_DBX_PRINCIPAL') -%}
-    {%- do _dbx_grant_read(env_var('RETAIL_APP_DBX_PRINCIPAL', ''), var('app_read_relations'), 'RETAIL_APP_DBX_PRINCIPAL') -%}
-    {%- do _dbx_grant_read(env_var('RETAIL_WEB_DBX_PRINCIPAL', ''), var('app_read_relations'), 'RETAIL_WEB_DBX_PRINCIPAL') -%}
+    {%- do _dbx_grant_read(env_var('RETAIL_AI_DBX_PRINCIPAL', ''), var('ai_readonly_relations') + var('ai_optional_relations', []),
+                           'RETAIL_AI_DBX_PRINCIPAL') -%}
+    {%- do _dbx_grant_read(env_var('RETAIL_APP_DBX_PRINCIPAL', ''), var('app_read_relations') + var('app_optional_relations', []),
+                           'RETAIL_APP_DBX_PRINCIPAL') -%}
+    {%- do _dbx_grant_read(env_var('RETAIL_WEB_DBX_PRINCIPAL', ''), var('app_read_relations') + var('app_optional_relations', []),
+                           'RETAIL_WEB_DBX_PRINCIPAL') -%}
 {%- endif -%}
 select 1
 {%- else -%}
