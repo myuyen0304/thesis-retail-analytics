@@ -3,6 +3,7 @@
 ## Cấu trúc dự án
 
 Trọng tâm: DWH phân tích doanh thu. Đọc `CLAUDE.md` và `README.md` trước khi sửa.
+Làm dự báo hoặc AI agent GĐ2 thì đọc thêm `docs/ke_hoach_ai_gd2.md` trước (sổ quyết định §2, nhật ký §8).
 
 - `retail_dbt/`: SQL theo tầng `staging`, `intermediate`, `marts`, `reporting`; kiểm thử trong `tests/`.
 - `apps/retail_app/`: ứng dụng Streamlit; `dwh/` truy vấn, `views/` trang, `ui/` thành phần chung, `tests/` kiểm thử.
