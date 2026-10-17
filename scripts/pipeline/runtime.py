@@ -58,5 +58,20 @@ class Databricks:
             self.query(f'insert into {raw}._ingest_log values (cast(? as timestamp), ?, ?, ?, 0)',
                        [context['started_at'], name, entry['rows'], entry['csv_md5']])
 
+    def ingest_forecast(self, context):
+        """Hai file parquet của stage dự báo vào r_<id>_raw, để dbt Databricks dựng rpt_forecast_*.
+        Chưa nghiệm thu trên workspace (chưa có writer SP, 2026-10-15)."""
+        from pathlib import Path
+        from databricks.sdk import WorkspaceClient
+        w = WorkspaceClient(config=self.auth)
+        raw = f"r_{context['release_id']}_raw"
+        self.query('create volume if not exists pipeline_landing.forecasts')
+        volume = f"/Volumes/{self.catalog}/pipeline_landing/forecasts/{context['release_id']}"
+        for name in ('forecast_daily', 'forecast_backtest'):
+            with (Path(context['forecast_path']) / f'{name}.parquet').open('rb') as f:
+                w.files.upload(f'{volume}/{name}.parquet', f, overwrite=True)
+            self.query(f"create or replace table {raw}.{name} as "
+                       f"select * from read_files('{volume}/{name}.parquet', format => 'parquet')")
+
     def close(self):
         self.connection.close()
