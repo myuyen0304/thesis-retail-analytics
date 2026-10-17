@@ -278,7 +278,8 @@ def _utc_naive(v):
 
 
 class _DatabricksSession:
-    def __init__(self, timeout_s: float, max_rows: int, allowed_relations: frozenset[str]):
+    def __init__(self, timeout_s: float, max_rows: int, allowed_relations: frozenset[str],
+                 optional_relations: frozenset[str] = frozenset()):
         from databricks import sql as dbsql
         from databricks.sdk.core import Config
         client_id, secret = ai_databricks_principal()
@@ -298,7 +299,7 @@ class _DatabricksSession:
                                   catalog=catalog, session_configuration={'STATEMENT_TIMEOUT': str(max(1, int(timeout_s)))})
         try:
             self.cur = self.conn.cursor()
-            allowed, required = _release_scope(self.cur, allowed_relations, catalog)
+            allowed, required = _release_scope(self.cur, allowed_relations, catalog, optional_relations)
             _check_dbx_identity(self.cur, client_id, allowed, catalog, required)
         except Exception:
             self.close()
@@ -340,13 +341,20 @@ def _read_registry(cur) -> dict:
         raise GuardError('Registry không đọc được') from e
 
 
-def _release_scope(cur, allowed_relations: frozenset[str], catalog: str):
+def _release_scope(cur, allowed_relations: frozenset[str], catalog: str, optional: frozenset[str] = frozenset()):
     """(relation được phép thấy, relation bắt buộc có quyền) cho _check_dbx_identity.
+
+    `optional` (B3, 2026-10-15): relation được phép đọc nhưng KHÔNG bắt buộc có quyền, vì không phải bản dữ liệu nào cũng
+    có (rpt_forecast_* chỉ có trong bản của pipeline từ B2b; build thường và bản dựng trước B2b không có). Bắt buộc
+    quyền trên chúng thì guard khóa luôn cả chat PS1–PS5 ở chế độ cũ hoặc khi rollback. Thiếu quyền thì tool dự báo
+    tự báo lỗi đọc trung thực.
 
     Chế độ cũ (mặc định) vẫn đọc `reporting.*`. Pipeline cấp cho SP AI quyền đọc bản mới (r_<id>_reporting.*) và
     registry ngay ở stage validate, trước khi app bật chế độ versioned. Nếu SP thấy registry thì chấp nhận thêm
     các bản registry ghi là đã qua quality gate; bản không có trong registry vẫn bị coi là quyền thừa. Không pin:
     câu SQL vẫn đọc `reporting.*`, evidence không được ghi release_id của bản không đọc."""
+    allowed_relations = frozenset(allowed_relations) | frozenset(optional)
+    must = frozenset(allowed_relations) - frozenset(optional)
     try:
         if releases.enabled('databricks'):
             state = _read_registry(cur)
@@ -355,13 +363,13 @@ def _release_scope(cur, allowed_relations: frozenset[str], catalog: str):
             if record != releases.choose(state, record['release_id']):
                 raise GuardError('Registry đã đổi nội dung phiên bản bất biến')
             releases.pin(record)
-            required = frozenset({record['schema'] + '.' + r.split('.')[1] for r in allowed_relations}
+            required = frozenset({record['schema'] + '.' + r.split('.')[1] for r in must}
                                  | {releases.CONTROL_RELATION})
             return releases.allowed_versions(state, allowed_relations), required
         cur.execute(_REGISTRY_VISIBLE, [catalog])
         if not cur.fetchone()[0]:
-            return allowed_relations, allowed_relations
-        return releases.allowed_versions(_read_registry(cur), allowed_relations), allowed_relations
+            return allowed_relations, must
+        return releases.allowed_versions(_read_registry(cur), allowed_relations), must
     except ValueError as e:                 # registry ghi bản chưa qua gate / sai định danh
         raise GuardError(f'registry phiên bản không hợp lệ: {e}') from e
 
@@ -379,13 +387,15 @@ def _check_dbx_identity(cur, expected: str, allowed_relations: frozenset[str], c
 
 
 def open_session(backend: str, allowed_relations: frozenset[str], timeout_s: float | None = None,
-                 max_rows: int = DEFAULT_MAX_ROWS):
+                 max_rows: int = DEFAULT_MAX_ROWS, optional_relations: frozenset[str] = frozenset()):
     """Một phiên đọc cho một lượt gọi tool. Gọi .fetch(Statement) nhiều lần, rồi .close().
-    timeout_s=None: mặc định theo backend (Databricks lâu hơn vì warehouse có thể đang khởi động)."""
+    timeout_s=None: mặc định theo backend (Databricks lâu hơn vì warehouse có thể đang khởi động).
+    optional_relations: được phép đọc nhưng không bắt buộc có quyền / có bảng (xem _release_scope)."""
     if backend == 'duckdb':
         return _DuckDBSession(timeout_s or DEFAULT_TIMEOUT_S, max_rows)
     if backend == 'postgres':
-        return _PostgresSession(timeout_s or DEFAULT_TIMEOUT_S, max_rows, allowed_relations)
+        return _PostgresSession(timeout_s or DEFAULT_TIMEOUT_S, max_rows,
+                                frozenset(allowed_relations) | frozenset(optional_relations))
     if backend == 'databricks':
-        return _DatabricksSession(timeout_s or DATABRICKS_TIMEOUT_S, max_rows, allowed_relations)
+        return _DatabricksSession(timeout_s or DATABRICKS_TIMEOUT_S, max_rows, allowed_relations, optional_relations)
     raise ValueError(f'Backend không hỗ trợ: {backend!r}')
