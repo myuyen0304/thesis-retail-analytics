@@ -8,3 +8,8 @@ databricks-sql-connector==4.4.0
 PyYAML>=6,<7
 pandas==3.0.5
 numpy==2.5.1
+# stage dự báo (scripts/forecast, B2b, 2026-10-15); cùng version với requirements.txt. Image chưa build lại để kiểm.
+statsmodels==0.15.0
+lightgbm==4.7.0
+holidays==0.106
+scipy==1.18.1
