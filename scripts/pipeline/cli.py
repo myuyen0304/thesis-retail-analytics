@@ -323,6 +323,10 @@ def main():
             try:
                 registry = Registry(a.root, cloud.query if cloud else None)
                 state = registry.read()['payload']
+                if a.release_id not in state['releases']:
+                    ready = sorted(r for r, rec in state['releases'].items() if rec.get('status') == 'ready')
+                    ap.error(f'không có phiên bản {a.release_id} trong registry; các bản rollback được: '
+                             + (', '.join(ready) or 'chưa có'))
                 record = checked(state['releases'][a.release_id])
                 verify_consumers(record, registry, cloud)
                 registry.publish(a.release_id, state['active'])
