@@ -10,7 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from ai_explain import metric_catalog as cat
-from ai_explain import charts, provider, service, tools
+from ai_explain import charts, links, provider, service, tools
 from dwh.guarded import ai_databricks_principal
 from ui.common import BACKEND_LABEL, backend, notes, page_header
 from ui.fmt import arrow_safe, num
@@ -108,6 +108,12 @@ def _turn(t: service.TurnResult) -> None:
                 for c in spec.captions:
                     st.caption(_md(c))
                 st.caption(f'Biểu đồ vẽ từ kết quả {spec.ref} ({spec.n_points} điểm), xem trong **Bằng chứng {spec.ref}**.')
+            # B6 deep link: app dựng từ tham số của tool đã ok (ai_explain/links.py), không từ câu văn của mô hình
+            if (ls := links.page_links(t.calls, t.results)):
+                for lk in ls:
+                    st.page_link(lk.page, label=f'Mở trang {lk.label}', icon=':material/open_in_new:',
+                                 query_params=lk.query_params or None)
+                st.caption('Trang mở sẵn đúng kỳ / chiều / năm của câu hỏi và đọc bản dữ liệu đang phục vụ lúc mở trang.')
         if t.values:
             with st.expander('Các con số trong câu trả lời lấy từ đâu'):
                 st.dataframe(_values_df(t.values), hide_index=True)
