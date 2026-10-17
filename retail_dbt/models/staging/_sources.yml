@@ -32,3 +32,16 @@ sources:
       - name: web_traffic
       - name: sales
       - name: sample_submission
+
+  # Kết quả stage dự báo của pipeline (scripts/forecast/stage.py). Chỉ dùng khi pipeline truyền var forecast_path
+  # (models reporting/rpt_forecast_* tắt khi không có var này, nên build cũ không đổi).
+  # - target duckdb    : đọc thẳng parquet trong thư mục run
+  # - target databricks: bảng r_<id>_raw.forecast_* do scripts/pipeline/runtime.py ingest_forecast nạp
+  - name: forecast
+    schema: "{{ ('r_' ~ var('release_id') ~ '_raw') if var('release_id', '') else 'raw' }}"
+    config:
+      meta:
+        external_location: "read_parquet('{{ var(\"forecast_path\", \"\") }}/{name}.parquet')"
+    tables:
+      - name: forecast_daily
+      - name: forecast_backtest
