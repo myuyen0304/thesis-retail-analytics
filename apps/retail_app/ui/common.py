@@ -94,6 +94,20 @@ def pick(df: pd.DataFrame, key, query_name: str, what: str) -> pd.Series:
     return df.loc[key]
 
 
+def url_choice(name: str, options: list, default: int, what: str) -> int:
+    """Vị trí chọn sẵn của một bộ lọc khi trang được mở từ link của chat (B6 deep link, ai_explain/links.py):
+    ?name=giá trị có trong options thì chọn đúng giá trị đó; không có tham số thì giữ mặc định của trang;
+    giá trị lạ thì báo rõ rồi dùng mặc định, không để trang văng lỗi."""
+    raw = st.query_params.get(name)
+    if raw is None:
+        return default
+    by_text = {str(o): i for i, o in enumerate(options)}
+    if raw in by_text:
+        return by_text[raw]
+    st.info(f'Link mở trang ghi {what} `{raw}`, không có trong danh sách của trang; trang hiện {what} mặc định.')
+    return default
+
+
 def need_keys(keys, df: pd.DataFrame, query_name: str, what: str) -> None:
     """Mọi khóa trong keys phải có trong index của df (vd. năm của bảng này phải có ở bảng kia)."""
     thieu = [k for k in dict.fromkeys(keys) if k not in df.index]
