@@ -29,8 +29,10 @@ Mỗi số hiện kèm nhãn do app dựng từ chính ô dữ liệu (chỉ ti�
 """
 import re
 from dataclasses import dataclass, field
+from datetime import date as _date
 from numbers import Number
 
+from ai_explain import metric_catalog as cat
 from ui.fmt import num, pct
 
 MONEY = {'r', 'g', 'r_prior_year', 'delta_r', 'r_start', 'r_end', 'contrib_n', 'contrib_u', 'contrib_p', 'r_total',
@@ -39,22 +41,27 @@ MONEY = {'r', 'g', 'r_prior_year', 'delta_r', 'r_start', 'r_end', 'contrib_n', '
          'cancelled_gross', 'returned_gross', 'undelivered_gross', 'delivered_discount', 'gap_g_minus_r', 'amount',
          'r_same_month_prior_year', 'r_12m_before', 'r_12m_after'}
 PRICE = {'p_start', 'p_end'}
-RATE = {'yoy_rate', 'share', 'contribution_to_delta', 'r_change_rate', 'n_change_rate', 'u_change_rate', 'p_change_rate',
+# B3 (2026-10-15): số dự báo / sai số backtest (tiền), đọc từ rpt_forecast_* (ai_explain/tools.py _forecast*)
+MONEY |= {'g_forecast', 'cogs_forecast', 'lower_g', 'upper_g', 'score', 'mae_g', 'mae_cogs', 'rmse_g'}
+FORECAST_FIELDS = {'g_forecast', 'cogs_forecast', 'lower_g', 'upper_g', 'cogs_ratio'}
+PCT100 = {'mape_g_thang', 'typical_month_error'}      # kho lưu đã nhân 100 (11,4 = 11,4%), không nhân thêm
+RATE = {'coverage_80', 'improvement_vs_floor', 'yoy_rate', 'share', 'contribution_to_delta', 'r_change_rate', 'n_change_rate', 'u_change_rate', 'p_change_rate',
         'capture_rate', 'share_cancelled', 'share_returned', 'share_undelivered', 'share_discount',
         'total_change_rate', 'cagr', 'magnitude', 'august_odd_vs_even', 'loo_min_odd_vs_even', 'loo_max_odd_vs_even',
         'eom_share', 'eom_expected_share'}
 PP = {'share_shift_pp'}
 PP_FRAC = {'eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess'}     # hiệu hai tỷ lệ (0,0718) → "7,2 điểm %"
-COUNT = {'n_start', 'n_end', 'n_groups', 'n_groups_up', 'n_groups_down',
+COUNT = {'n_start', 'n_end', 'n_groups', 'n_groups_up', 'n_groups_down', 'n_days', 'n_days_in_period', 'n_folds',
+         'n_candidates', 'n_pass_floor',
          'n_years', 'n_years_with_pattern', 'n_odd_years', 'n_even_years', 'n_phases', 'n_phases_eom_positive',
          'n_phases_same_peak', 'n_phases_same_trough'}
 UNITS = {'u_start', 'u_end'}
-INDEX = {'month_index', 'august_index_odd', 'august_index_even', 'max_index_odd', 'min_index_even', 'peak_index',
+INDEX = {'cogs_ratio', 'tai_tao_bien_do', 'month_index', 'august_index_odd', 'august_index_even', 'max_index_odd', 'min_index_even', 'peak_index',
          'trough_index', 'season_peak_trough_ratio', 'loo_min_ratio', 'loo_max_ratio'}
 MONTHS = {'month', 'peak_month', 'trough_month', 'peak_months', 'trough_months'}
 YEARS = {'year', 'start_year', 'end_year', 'turning_year', 'first_year', 'last_year'}
 # khóa chọn dòng theo tên trong path rows[<tên>]: nhóm PS5, giai đoạn A–D, năm của điểm đổi hướng
-ROW_KEYS = ('dimension_value', 'phase_code', 'turning_year')
+ROW_KEYS = ('dimension_value', 'phase_code', 'turning_year', 'candidate', 'period')
 # Số THAY ĐỔI: dương = tăng, âm = giảm. contribution_to_delta / share là TỶ LỆ, không thuộc nhóm này:
 # contribution_to_delta dương = cùng chiều ΔR toàn công ty (Streetwear 2019: +83,6% của mức GIẢM).
 SIGNED = {'delta_r', 'contrib_n', 'contrib_u', 'contrib_p', 'yoy_rate', 'share_shift_pp', 'r_change_rate',
@@ -62,7 +69,11 @@ SIGNED = {'delta_r', 'contrib_n', 'contrib_u', 'contrib_p', 'yoy_rate', 'share_s
           'total_change_rate', 'cagr', 'magnitude', 'august_odd_vs_even', 'loo_min_odd_vs_even', 'loo_max_odd_vs_even',
           'eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess'}
 # Câu so sánh ("thấp hơn"...) được nói khi dẫn một cột chênh lệch / kết luận so sánh do tool tính
-COMPARED = SIGNED | {'gap_g_minus_r', 'odd_even_order'}
+COMPARED = SIGNED | {'gap_g_minus_r', 'odd_even_order', 'improvement_vs_floor',   # B3: mức thấp hơn mốc sàn, tool tính
+                     'beats_floor_all_folds', 'n_pass_floor'}                        # "vượt mốc sàn ở cả 3 fold", tool tính
+# Thước backtest: câu "{a} thấp hơn {b}" được nói khi hai chỗ đặt cùng thước nằm hai bên chữ so sánh và app kiểm được chiều
+BACKTEST_COMPARABLE = {'score', 'mae_g', 'mae_cogs', 'rmse_g', 'mape_g_thang'}
+_LOWER_WORDS, _HIGHER_WORDS = ('thấp hơn', 'nhỏ hơn', 'ít hơn'), ('cao hơn', 'lớn hơn', 'nhiều hơn')
 # Ô xếp hạng mức (tháng cao nhất, chỉ số tháng 8 cao nhất của năm lẻ...): +1 = phía cao, −1 = phía thấp
 LEVEL_RANK = {'peak_month': 1, 'peak_index': 1, 'peak_months': 1, 'max_index_odd': 1, 'n_phases_same_peak': 1,
               'trough_month': -1, 'trough_index': -1, 'trough_months': -1, 'min_index_even': -1,
@@ -99,11 +110,20 @@ FIELD_LABEL = {'r': 'R', 'g': 'G', 'r_prior_year': 'R', 'r_start': 'R', 'r_end':
                'eom_share': 'tỷ trọng R từ ngày 26', 'eom_expected_share': 'tỷ trọng nếu rải đều',
                'eom_excess': 'mức dồn cuối tháng', 'n_years_with_pattern': 'số năm có nhịp',
                'n_phases_same_peak': 'số giai đoạn cùng tháng cao nhất',
-               'n_phases_same_trough': 'số giai đoạn cùng tháng thấp nhất'}
+               'n_phases_same_trough': 'số giai đoạn cùng tháng thấp nhất',
+               # B3: dự báo (nhãn "dự báo" do APP gắn, không tin chữ model viết)
+               'g_forecast': 'dự báo G', 'cogs_forecast': 'dự báo COGS', 'lower_g': 'cận dưới khoảng 80% dự báo G',
+               'upper_g': 'cận trên khoảng 80% dự báo G', 'cogs_ratio': 'COGS/G dự báo',
+               'typical_month_error': 'sai số tháng điển hình, backtest 2020–2022',
+               'score': 'điểm ngày kết hợp, backtest 2020–2022', 'mae_g': 'MAE G, backtest', 'mae_cogs': 'MAE COGS, backtest',
+               'rmse_g': 'RMSE G, backtest', 'r2_g': 'R² G, backtest', 'mape_g_thang': 'MAPE G tháng, backtest 2020–2022',
+               'coverage_80': 'tỷ lệ ngày trong khoảng 80%, backtest', 'tai_tao_bien_do': 'tỷ lệ tái tạo biên độ tháng 8/2021',
+               'improvement_vs_floor': 'điểm thấp hơn mốc seasonal naive 2 năm'}
 METRIC_FAMILY = {f: 'R' for f in ('r', 'r_prior_year', 'r_start', 'r_end', 'r_total', 'delta_r', 'contrib_n', 'contrib_u',
                                   'contrib_p', 'yoy_rate', 'r_change_rate', 'share', 'share_shift_pp',
                                   'contribution_to_delta', 'r_same_month_prior_year', 'r_12m_before', 'r_12m_after',
-                                  'total_change_rate', 'cagr', 'magnitude')} | {'g': 'G'}
+                                  'total_change_rate', 'cagr', 'magnitude')} | {'g': 'G'} | {
+    f: 'G' for f in ('g_forecast', 'lower_g', 'upper_g')} | {'cogs_forecast': 'COGS', 'cogs_ratio': 'COGS/G'}
 _START_FIELDS = {'r_start', 'n_start', 'u_start', 'p_start'}
 DRIVER_FAMILY = {f'{k}{x}': k.upper() for k in 'nup' for x in ('_start', '_end', '_change_rate')} | {
     'contrib_n': 'N', 'contrib_u': 'U', 'contrib_p': 'P'}
@@ -114,6 +134,7 @@ _DATA_DATES = re.compile(r'2012-07-04|2022-12-31|0?4/0?7/2012|31/12/2022')     #
 MONEY_SUFFIX = ' VND'   # PM chốt 2026-10-05 (metric_catalog.DECISIONS['currency_vnd'])
 
 RANK_WORDS = ('nhiều nhất', 'lớn nhất', 'mạnh nhất', 'cao nhất', 'thấp nhất', 'ít nhất', 'chủ yếu', 'đứng đầu',
+              'chính xác nhất', 'tốt nhất', 'kém nhất',
               'nhỏ nhất', 'mạnh hơn cả', 'dẫn đầu', 'nhẹ nhất', 'chậm nhất', 'yếu nhất')
 # từ xếp hạng nói về phía CỰC (ΔR âm nhất / dương nhất): largest_* chứng minh được. "nhỏ nhất", "ít nhất" là phía
 # ngược lại (giảm ít nhất): chỉ smallest_* chứng minh được (có cho nhóm từ 2026-10-09; giai đoạn / điểm đổi hướng chưa có).
@@ -128,7 +149,13 @@ _CRIT_TIEN = re.compile(r'bằng tiền|(?:theo|xét|tiêu chí)\s+(?:cả\s+)?(
 _NOT_CHANGE = re.compile(r'tỷ trọng|chiếm|cao nhất|thấp nhất|quy mô')
 # câu nói giới hạn của tool ("dữ liệu chỉ xếp hạng phía giảm nhiều nhất, không xếp hạng phía ít nhất"): không phải claim
 # và câu gợi ý hỏi tiếp ("bạn có thể hỏi giai đoạn giảm mạnh nhất"); chỉ miễn khi câu không gọi tên chủ thể cụ thể
-_RANK_LIMIT = re.compile(r'(?:không|chưa|chỉ)\s+(?:có\s+)?(?:xếp hạng|xếp)(?!\w)|(?:có thể|hãy|thử)\s+hỏi(?!\w)')
+_RANK_LIMIT = re.compile(r'(?:không|chưa|chỉ)\s+(?:có\s+)?(?:xếp hạng|xếp)(?!\w)|(?:có thể|hãy|thử)\s+hỏi(?!\w)'
+                         # câu mô tả LUẬT chọn model ("lấy điểm ngày thấp nhất"), không khẳng định model nào (live B3c GM14)
+                         r'|luật chọn|theo luật|thước chọn')
+# tên chỉ tiêu season_peak_trough_ratio ("tỷ lệ tháng cao nhất so với tháng thấp nhất", "chênh mùa (cao nhất / thấp nhất)"):
+# là TÊN số, không phải câu xếp hạng (live B6 V05, 3/3 lượt bị chặn nhầm). Bỏ cụm này trước khi tìm chữ xếp hạng; chữ xếp
+# hạng còn lại trong câu ("giai đoạn có chênh mùa lớn nhất") vẫn bị kiểm
+_METRIC_NAME_RANK = re.compile(r'(?:tháng\s+)?cao nhất\s*(?:so với|so|trên|÷|/)\s*(?:tháng\s+)?thấp nhất', re.I)
 # chủ thể cụ thể trong câu: giai đoạn A–D, năm, tháng (tên nhóm đã có bước kiểm riêng; N/U/P xét bằng _said_driver)
 _NAMED_SUBJECT = re.compile(r'giai đoạn\s+[A-D](?!\w)|(?<!\d)(?:19|20)\d\d(?!\d)|tháng\s+\d', re.I)
 _ANAPHOR = re.compile(r'^\s*(?:và\s+)?(?:đây|đó|(?:giai đoạn|ngành hàng|ngành|nhóm|vùng|khu vực|kênh|điểm đổi hướng|'
@@ -151,7 +178,9 @@ _DRIVER_WORD = {'N': re.compile(r'số đơn|(?<!\w)N(?!\w)'),
 _DUP_MONEY = re.compile(r'\s*(?:VND|VNĐ|đồng)(?!\w)', re.I)
 _DUP_PCT = re.compile(r'\s*%')
 _DUP_PP = re.compile(r'\s*điểm\s*(?:%|phần trăm)', re.I)
-_METRIC_WORD = re.compile(r'ΔR|(?<![\w])[RG](?![\w])|doanh thu thực nhận|tiền thực nhận|tiền hàng|doanh thu gộp')
+_METRIC_WORD = re.compile(r'ΔR|(?<![\w])[RG](?![\w])|doanh thu thực nhận|tiền thực nhận|tiền hàng|doanh thu gộp'
+                          r'|(?<![\w])COGS(?![\w])|giá vốn', re.I)
+_RATIO_WORD = re.compile(r'(?:tỷ lệ\s+)?(?:COGS|giá vốn)\s*(?:/|trên|÷)\s*(?:G|doanh thu(?:\s+gộp)?)(?![\w])', re.I)
 
 
 def _is_num(v) -> bool:
@@ -180,7 +209,12 @@ def _resolve(path: str, results: dict):
         raise ValueError(f'{ref} có trạng thái {res.status}, không có số')
     if m.group(2).startswith('rows'):
         sel, fld = m.group(3), m.group(4)
-        if sel.isdigit() and not (len(sel) == 4 and 'turning_year' in (res.rows[0] if res.rows else {})):
+        # chuỗi từng năm (get_revenue_summary to_year): rows[2016] là dòng năm 2016 khi đúng một dòng có năm đó
+        # (live bộ N 2026-10-17: mô hình viết rows[2016], app đọc thành dòng thứ 2016 và chặn)
+        by_year = [r for r in res.rows if str(r.get('year')) == sel] if len(sel) == 4 and sel.isdigit() else []
+        if len(by_year) == 1 and 'turning_year' not in by_year[0]:
+            row = by_year[0]
+        elif sel.isdigit() and not (len(sel) == 4 and 'turning_year' in (res.rows[0] if res.rows else {})):
             i = int(sel)
             if i >= len(res.rows):
                 raise ValueError(f'{ref} không có dòng {i}')
@@ -211,6 +245,8 @@ def _fmt(v, fld: str, absolute: bool) -> str:
         return ', '.join(map(str, v))
     if isinstance(v, bool):
         return 'có' if v else 'không'
+    if isinstance(v, _date):             # trained_through, forecast_date: trước đây rơi xuống num() và in ".,2f" (live B3c GM13)
+        return v.strftime('%d/%m/%Y')
     if fld in ('top_up_driver', 'top_down_driver'):
         return DRIVER_LABEL.get(v, str(v))
     if isinstance(v, str):
@@ -223,6 +259,8 @@ def _fmt(v, fld: str, absolute: bool) -> str:
         return num(x, 2) + MONEY_SUFFIX
     if fld in RATE:
         return pct(x, 1, signed)
+    if fld in PCT100:
+        return num(x, 1) + '%'
     if fld in PP:
         return num(x, 1, signed) + ' điểm %'
     if fld in PP_FRAC:
@@ -247,6 +285,7 @@ def allowed_years(results: dict) -> set[str]:
             for k in ('year', 'start_year', 'end_year', 'period_code', 'month', 'turning_year', 'first_year', 'last_year'):
                 if r.get(k) is not None:
                     years.add(str(r[k]))
+            years |= _date_forms(r)
         if res.evidence:
             for k in ('year', 'period_code', 'month'):
                 v = res.evidence.filters_applied.get(k)
@@ -255,6 +294,20 @@ def allowed_years(results: dict) -> set[str]:
                     if k != 'month' and str(v).isdigit():
                         years.add(str(int(v) - 1))
     return years
+
+
+def _date_forms(r: dict) -> set[str]:
+    """Cách viết mốc ngày / tháng của MỘT dòng kết quả có năm–tháng (dự báo, tháng PS1): "tháng 8", "8/2023",
+    "01/08/2023"... để câu văn được nhắc lại kỳ của chính dòng đó, không mở số nào khác."""
+    y, m = r.get('year'), r.get('month')
+    if not (isinstance(y, int) and isinstance(m, int)):
+        return set()
+    out = {f'tháng {m}', f'tháng {m:02d}', f'{m}/{y}', f'{m:02d}/{y}', str(m), f'{m:02d}'}
+    d = r.get('forecast_date')
+    if d is not None and hasattr(d, 'day'):
+        out |= {f'ngày {d.day}', f'ngày {d.day:02d}', f'{d.day}/{m}', f'{d.day:02d}/{m:02d}', f'{d.day}/{m}/{y}',
+                f'{d.day:02d}/{m:02d}/{y}', str(d.day), f'{d.day:02d}'}
+    return out
 
 
 def _numbers(text: str) -> set[str]:
@@ -318,13 +371,22 @@ def _rank_direction(path: str) -> int:
         return -1
     if re.search(r'\.derived\.(?:largest|smallest)_increase', path) or path.endswith('top_up_driver'):
         return 1
+    if '.derived.lowest_' in path:          # B3: lowest_score / lowest_mape_g_thang / lowest_month (phía thấp)
+        return -1
+    if '.derived.highest_' in path:
+        return 1
     return LEVEL_RANK.get(path.rsplit('.', 1)[-1], 0)
 
 
 def _said_metric(seg: str) -> str | None:
     """Chỉ tiêu mà đoạn ngay trước chỗ đặt gọi tên ('R' / 'G'); None nếu không gọi tên hoặc gọi cả hai
     ("R và G lần lượt là {c1} và {c2}": khi đó nhãn của app nói rõ số nào là gì)."""
-    fams = {'G' if h.lower() in ('g', 'tiền hàng', 'doanh thu gộp') else 'R' for h in _METRIC_WORD.findall(seg)}
+    # B3 (RV02, RV08, review Codex 2026-10-15): COGS / giá vốn là chỉ tiêu riêng; "tỷ lệ COGS/G", "COGS/G", "giá vốn
+    # trên doanh thu" là chỉ tiêu TỶ LỆ riêng (bỏ chữ COGS và G bên trong để không đếm thành hai chỉ tiêu)
+    ratio = _RATIO_WORD.search(seg) is not None
+    seg = _RATIO_WORD.sub(' ', seg)
+    fams = {'COGS' if h.lower() in ('cogs', 'giá vốn') else 'G' if h.lower() in ('g', 'tiền hàng', 'doanh thu gộp')
+            else 'R' for h in _METRIC_WORD.findall(seg)} | ({'COGS/G'} if ratio else set())
     return fams.pop() if len(fams) == 1 else None
 
 
@@ -384,6 +446,28 @@ def _row_label_in(row: dict, kind: str, labels) -> bool:
     if kind == 'turns':
         return any(str(x).startswith(f"cuối {row['turning_year']} ") for x in labels)
     return row['dimension_value'] in labels
+
+
+def _verified_backtest_compare(sent: str, by_id: dict) -> bool:
+    """Câu so hai số backtest (live B3c GM14: "bản gộp có MAPE G tháng {c2}, thấp hơn mức {c3} của model chính"): mỗi chữ
+    so sánh phải có chỗ đặt gần nhất phía trước và phía sau cùng một thước backtest, và chiều đúng với giá trị thật.
+    Chỉ cho thước backtest; câu so sánh R/G theo năm vẫn phải dẫn cột thay đổi tool đã tính."""
+    low = sent.lower()
+    hits = [(m.start(), w) for w in _LOWER_WORDS + _HIGHER_WORDS for m in re.finditer(re.escape(w), low)]
+    if not hits or any(w in low for w in COMPARE_WORDS if w not in _LOWER_WORDS + _HIGHER_WORDS):
+        return False                        # "vượt" (mốc sàn...) không có chiều số để kiểm ở đây
+    marks = [(m.start(), m[1]) for m in _PLACEHOLDER.finditer(sent) if m[1] in by_id]
+    for pos, word in hits:
+        before = [cid for p, cid in marks if p < pos]
+        after = [cid for p, cid in marks if p > pos]
+        if not before or not after:
+            return False
+        a, b = by_id[before[-1]], by_id[after[0]]
+        if not (a[2] == b[2] and a[2] in BACKTEST_COMPARABLE and _is_num(a[1]) and _is_num(b[1])):
+            return False
+        if (a[1] < b[1]) != (word in _LOWER_WORDS) or a[1] == b[1]:
+            return False
+    return True
 
 
 def _verified_anaphor_rank(sent: str, prev: str, by_id: dict, results: dict, need: set | None = None) -> bool:
@@ -474,16 +558,30 @@ def _year_of(fld: str, row: dict | None):
     return row.get('year', row.get('end_year'))
 
 
+def _label_parts(fld: str, row: dict | None) -> tuple:
+    """(chỉ tiêu, nhóm, kỳ, phần thêm) do app dựng từ chính ô dữ liệu; chỉ tiêu None nếu cột chưa có nhãn."""
+    row_ = row or {}
+    group = row_.get('dimension_value') or (f"giai đoạn {row_['phase_code']}" if row_.get('phase_code') else None)
+    if row_.get('candidate_label') and (row_.get('is_primary') is False or fld not in FORECAST_FIELDS):
+        # số của ứng viên khác model chính, hoặc số backtest của từng ứng viên: nhãn ghi rõ ứng viên nào
+        group = row_['candidate_label'] + ('' if row_.get('is_primary') else ', không phải model chính')
+    extra = []
+    if fld == 'g_forecast' and _is_num(row_.get('lower_g')) and _is_num(row_.get('upper_g')):
+        extra.append(f"khoảng 80%: {num(row_['lower_g'], 0)} – {num(row_['upper_g'], 0)}{MONEY_SUFFIX}")
+    if fld == 'g_forecast' and _is_num(row_.get('typical_month_error')):
+        extra.append(f"sai số tháng điển hình {num(row_['typical_month_error'], 1)}% (backtest 2020–2022)")
+    if fld in FORECAST_FIELDS and row_.get('is_partial'):
+        extra.append(f"chỉ {row_['n_days']}/{row_['n_days_in_period']} ngày có dự báo")
+    return FIELD_LABEL.get(fld), group, _year_of(fld, row), extra
+
+
 def _label(fld: str, row: dict | None, clause: str) -> str:
     """Nhãn do app dựng từ chính ô dữ liệu: (chỉ tiêu, nhóm, năm). Bỏ nhãn chỉ khi vế câu đã gọi đúng chỉ tiêu,
     nhóm và năm của một số tiền R/G/ΔR."""
-    name = FIELD_LABEL.get(fld)
+    name, group, year, extra = _label_parts(fld, row)
     if name is None:
         return ''
-    row_ = row or {}
-    year = _year_of(fld, row)
-    group = row_.get('dimension_value') or (f"giai đoạn {row_['phase_code']}" if row_.get('phase_code') else None)
-    parts = [name] + [str(x) for x in (group, year) if x is not None]
+    parts = [name] + [str(x) for x in (group, year) if x is not None] + extra
     said = (fld in ('r', 'g', 'r_prior_year', 'delta_r', 'r_start', 'r_end')
             and _said_metric(clause) == METRIC_FAMILY.get(fld)
             and (group is None or str(group).lower() in clause.lower())
@@ -497,10 +595,651 @@ def _group_names(results: dict) -> set[str]:
         if not res.ok:
             continue
         names |= {r['dimension_value'] for r in res.rows if isinstance(r.get('dimension_value'), str)}
+        names |= {r[k] for r in res.rows for k in ('candidate', 'candidate_label') if isinstance(r.get(k), str)}
         for v in res.derived.values():
             if isinstance(v, dict) and isinstance(v.get('groups'), list):
                 names |= {g for g in v['groups'] if isinstance(g, str)}
     return names
+
+
+# B3: họ model viết thẳng trong câu ("LightGBM chính xác nhất") phải gắn với một ô đã dùng có tên họ đó
+# (derived.primary.label, rows[<ứng viên>].candidate_label...); không thì model có thể gán sai số cho sai model.
+# Mốc seasonal naive không nằm trong danh sách: câu giải thích luật chọn hay nhắc tới nó, và số của mốc vẫn qua nhãn app.
+MODEL_FAMILY = {'LightGBM': r'lightgbm|lgbm', 'SARIMAX': r'sarimax', 'ARIMA': r'(?<![a-z])arima(?![a-z])',
+                'bản gộp': r'bản gộp|blend'}
+_LEVEL_PATH = re.compile(r'\.derived\.(?:lowest|highest)_')
+
+# --- B3 (RV01–RV03, review Codex 2026-10-15): ràng buộc câu hỏi → tool → claim cho số dự báo ---
+# Nhãn app tự gắn cạnh số chỉ BỘC LỘ mâu thuẫn; các kiểm dưới đây CHẶN câu sai. Câu hỏi là dữ liệu đầu vào của người
+# dùng (không phải chỉ dẫn): chỉ đọc kỳ, loại số, model, thước xếp hạng được nêu tường minh.
+
+_ACTUAL_Q = re.compile(r'thực tế|thực đạt|đã đạt', re.I)
+_FORECAST_Q = re.compile(r'dự báo|dự kiến|dự đoán|(?<!\w)sẽ(?!\w)', re.I)
+_MAPE_RX = re.compile(r'mape|sai số (?:tổng )?tháng|theo tháng|tổng tháng', re.I)
+_SCORE_RX = re.compile(r'điểm ngày|điểm kết hợp|theo ngày|thước chọn|(?<!\w)mae(?!\w)', re.I)
+_RANK_PATH = re.compile(r'\.derived\.lowest_(score|mape_g_thang)\.')
+_HORIZON_PATH = re.compile(r'\.derived\.(?:horizon_total|highest_month|lowest_month)\.')
+MODEL_CODE = {'LightGBM': 'lgbm', 'SARIMAX': 'sarimax', 'ARIMA': 'arima', 'bản gộp': 'blend'}
+
+
+_MONTH_WORD = {'một': 1, 'giêng': 1, 'hai': 2, 'ba': 3, 'tư': 4, 'bốn': 4, 'năm': 5, 'sáu': 6, 'bảy': 7, 'tám': 8,
+               'chín': 9, 'mười': 10, 'mười một': 11, 'mười hai': 12, 'chạp': 12}
+_ROMAN_Q = {'i': 1, 'ii': 2, 'iii': 3, 'iv': 4}
+
+
+def _month_end_day(y: int, m: int) -> int:
+    import calendar
+    return calendar.monthrange(y, m)[1]
+
+
+def _day(y, m, d):
+    """datetime.date nếu ngày có thật và năm trong vùng hợp lý; None nếu không (RV09: không để ValueError thoát ra)."""
+    import datetime as _dt
+    try:
+        return _dt.date(y, m, d) if 1900 <= y <= 2100 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def question_periods(question: str) -> list[tuple]:
+    """Kỳ nêu tường minh trong câu hỏi. Ba dạng:
+    - (năm, tháng, ngày), None = không nêu: một ngày, một tháng, một năm, hoặc "tháng 9" không năm (follow-up);
+    - ('range', ngày đầu, ngày cuối, nhãn): quý, 6 tháng / nửa đầu, cuối năm, "từ tháng a đến tháng b". Tool không có
+      grain này: chỉ dẫn được số của từng tháng / ngày nằm trọn trong khoảng, và câu phải nêu đúng tháng đó (RV07);
+    - ('invalid', đoạn chữ): kỳ không có thật (quý 5, tháng 13, ngày 31/2, năm 0000) → hỏi lại, không dùng số kỳ khác (RV09).
+    "từ 2019" trong tên model và "2020–2022" (kỳ backtest) không phải kỳ được hỏi. Hàm không ném lỗi với mọi chuỗi."""
+    q = re.sub(r'(?:train\s+)?từ\s+2019|20(?:20|13)\s*[–-]\s*20\d\d', ' ', (question or '').lower())
+    out = []
+
+    def take(rx, conv):
+        nonlocal q
+        for m in re.finditer(rx, q):
+            out.append(conv(m) or ('invalid', m[0].strip()))
+        q = re.sub(rx, ' ', q)
+
+    def one(y, m=None, d=None):
+        # kiểm miền rồi mới trả kỳ; ngày có thật chỉ khi đủ năm/tháng/ngày
+        y, m, d = (int(x) if x is not None else None for x in (y, m, d))
+        if y is not None and not 1900 <= y <= 2100 or m is not None and not 1 <= m <= 12:
+            return None
+        if d is not None and _day(y or 2024, m or 1, d) is None:
+            return None
+        return (y, m, d)
+
+    def span(y, m1, m2, label):
+        y, m1, m2 = int(y), int(m1), int(m2)
+        if not (1900 <= y <= 2100 and 1 <= m1 <= m2 <= 12):
+            return None
+        return ('range', _day(y, m1, 1), _day(y, m2, _month_end_day(y, m2)), label)
+
+    def span2(y1, m1, y2, m2):
+        # khoảng tháng vắt qua năm ("từ tháng 12/2022 đến tháng 2/2023", live B3c GM10): mọi tháng ở giữa đều được hỏi
+        y1, m1, y2, m2 = int(y1), int(m1), int(y2), int(m2)
+        if not (1900 <= y1 <= y2 <= 2100 and 1 <= m1 <= 12 and 1 <= m2 <= 12 and (y1, m1) <= (y2, m2)):
+            return None
+        return ('range', _day(y1, m1, 1), _day(y2, m2, _month_end_day(y2, m2)), f'{m1}/{y1}–{m2}/{y2}')
+
+    words = '|'.join(sorted(map(re.escape, _MONTH_WORD), key=len, reverse=True))
+    # một ngày: 1/8/2023, 2023-08-01, ngày 1 tháng 8 năm 2023
+    take(r'(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)', lambda m: one(m[1], m[2], m[3]))
+    take(r'(?<!\d)(\d{1,2})/(\d{1,2})/(\d{4})(?!\d)', lambda m: one(m[3], m[2], m[1]))
+    take(r'ngày\s+(\d{1,2})\s+tháng\s+(\d{1,2})\s+(?:năm\s+)?(\d{4})', lambda m: one(m[3], m[2], m[1]))
+    take(r'(?:từ\s+)?(?:tháng\s+)?(?<![\d/])(\d{1,2})\s*/\s*(\d{4})\s*(?:đến|tới|→|-|–)\s*(?:hết\s+)?(?:tháng\s+)?'
+         r'(\d{1,2})\s*/\s*(\d{4})(?!\d)', lambda m: span2(m[2], m[1], m[4], m[3]))
+    # "cùng tháng / cùng kỳ năm 2022" là năm 2022, tháng lấy theo ngữ cảnh; không phải "tháng Năm" (tháng 5) 2022
+    # (live B3c GM09). Dạng ('same_month', năm, None, nhãn): khớp số một tháng bất kỳ của năm đó
+    take(r'cùng\s+(?:tháng|kỳ)\s+(?:của\s+)?năm\s+(\d{4})',
+         lambda m: ('same_month', int(m[1]), None, f'cùng tháng năm {m[1]}') if 1900 <= int(m[1]) <= 2100 else None)
+    # khoảng: quý N/yyyy, 6 tháng / nửa đầu, cuối năm, từ tháng a đến (tháng) b/yyyy. Quý viết "Q3/2023", "quý III/2023"
+    # (review Claude 2026-10-17): trước đọc thành tháng 3/2023 / cả năm 2023, nên câu trả lời lặp lại "Q3/2023" kèm số
+    # tháng 3 lọt; phải đứng trước dạng tháng m/yyyy
+    def quarter(m):
+        n = _ROMAN_Q.get(m[1]) or int(m[1])
+        return span(m[2], 3 * n - 2, 3 * n, f'quý {n}/{m[2]}') if 1 <= n <= 4 else None
+
+    take(r'(?:quý\s*|(?<!\w)q\s*)(\d+|(?:iv|i{1,3})(?!\w))\s*(?:/|-|năm)?\s*(\d{4})', quarter)
+    take(r'(?:6 tháng|sáu tháng|nửa)\s+(đầu|cuối)\s+(?:năm\s+)?(\d{4})',
+         lambda m: span(m[2], 1, 6, f'nửa đầu {m[2]}') if m[1] == 'đầu' else span(m[2], 7, 12, f'nửa cuối {m[2]}'))
+    take(r'(?:từ\s+)?tháng\s+(\d{1,2})\s*(?:đến|tới|-|–)\s*(?:tháng\s+)?(\d{1,2})\s*(?:/|năm)?\s*(\d{4})',
+         lambda m: span(m[3], m[1], m[2], f'tháng {int(m[1])}–{int(m[2])}/{m[3]}'))
+    # một tháng: 8/2023, T8/2023, 2023-08, tháng 8 năm 2023, tháng 8 2023, tháng tám năm 2023
+    take(r'(?<!\d)(\d{4})-(\d{1,2})(?![\d-])', lambda m: one(m[1], m[2]))
+    take(r'(?:tháng\s+)?(?<![\d/])(\d{1,2})\s*/\s*(\d{4})(?!\d)', lambda m: one(m[2], m[1]))
+    take(r'tháng\s+(\d{1,2})\s+(?:năm\s+)?(\d{4})', lambda m: one(m[2], m[1]))
+    take(rf'tháng\s+({words})\s+(?:năm\s+)?(\d{{4}})', lambda m: one(m[2], _MONTH_WORD[m[1]]))
+    # một năm; tháng không năm (follow-up)
+    take(r'năm\s+(\d{4})|(?<![\d.,])(20\d\d)(?![\d.,])', lambda m: one(m[1] or m[2]))
+    take(r'tháng\s+(\d{1,2})(?!\d)', lambda m: one(None, m[1]))
+    return out
+
+
+def _spec_label(x: tuple) -> str:
+    if x[0] in ('range', 'same_month'):
+        return x[3]
+    if x[0] == 'invalid':
+        return f'{x[1]} (không hợp lệ)'
+    return '/'.join(str(v) for v in (x[2], x[1], x[0]) if v is not None)
+
+
+def _claim_period(row: dict | None) -> tuple | None:
+    if not row or row.get('year') is None:
+        return None
+    d = row.get('forecast_date')
+    return int(row['year']), row.get('month'), (d.day if d is not None and hasattr(d, 'day') else None)
+
+
+def _period_match(spec: tuple, got: tuple | None) -> bool:
+    if got is None:
+        return False
+    gy, gm, gd = got
+    if spec[0] == 'invalid':
+        return False
+    if spec[0] == 'same_month':
+        return gy == spec[1] and gm is not None and gd is None
+    if spec[0] == 'range':
+        import datetime as _dt
+        if gm is None:
+            return False                     # số cả năm không nằm trọn trong quý / nửa năm
+        first = _dt.date(gy, gm, gd or 1)
+        last = _dt.date(gy, gm, gd or _month_end_day(gy, gm))
+        return spec[1] <= first and last <= spec[2]
+    sy, sm, sd = spec
+    if (sm is None) != (gm is None) or (sd is None) != (gd is None):
+        return False                         # khác grain: hỏi tháng mà dẫn số cả năm (R01) và ngược lại
+    return (sy is None or sy == gy) and (sm is None or sm == gm) and (sd is None or sd == gd)
+
+
+def question_model(question: str) -> dict:
+    """Model / cửa sổ / cách COGS người hỏi nêu đích danh."""
+    q, want = question or '', {}
+    fam = [code for f, code in MODEL_CODE.items() if re.search(MODEL_FAMILY[f], q, re.I)]
+    if len(fam) == 1:
+        want['family'] = fam[0]
+    if re.search(r'toàn chuỗi', q, re.I):
+        want['window'] = 'full'
+    elif re.search(r'(?:train\s+)?từ\s+2019', q, re.I):
+        want['window'] = '2019'
+    if re.search(r'qua tỷ lệ', q, re.I):
+        want['cogs'] = 'ratio'
+    elif re.search(r'(?:cogs|giá vốn)[^.?!]{0,20}trực tiếp|dự báo trực tiếp', q, re.I):
+        want['cogs'] = 'direct'
+    return want
+
+
+def _cand_matches(candidate: str, want: dict) -> bool:
+    model, _, cogs = candidate.partition('/')
+    return ((not want.get('family') or model.startswith(want['family']))
+            and (not want.get('window') or model.endswith('_' + want['window']))
+            and (not want.get('cogs') or cogs == want['cogs']))
+
+
+def _names_period(text: str, row: dict) -> bool:
+    """Câu có nêu đúng kỳ của dòng (tháng / ngày) không: "tháng 8", "8/2023", "01/08/2023"..."""
+    y, m, d = row.get('year'), row.get('month'), row.get('forecast_date')
+    pats = [rf'tháng\s+0?{m}(?!\d)', rf'(?<![\d/])0?{m}\s*/\s*{y}']
+    if d is not None and hasattr(d, 'day'):
+        pats = [rf'(?<!\d)0?{d.day}\s*/\s*0?{m}(?!\d)', rf'ngày\s+0?{d.day}(?!\d)']
+    return any(re.search(p, text, re.I) for p in pats)
+
+
+_AGG_WORD = re.compile(r'tổng|cả quý|toàn quý|cả nửa|cả \d+ tháng|cả kỳ|cộng lại|gộp', re.I)
+_NOT_AGG = re.compile(r'doanh thu gộp|bản gộp', re.I)
+
+
+def invalid_period_errors(question: str, values: dict) -> list[str]:
+    """RV09, RV10: câu hỏi nêu kỳ không có thật (quý 5, tháng 13, ngày 31/2...) thì không trả số của kỳ nào, kể cả tool
+    không phải dự báo. Áp cho MỌI trạng thái có claim số: câu hỏi lại / từ chối kèm số kỳ khác cũng bị chặn (RV10);
+    hỏi lại không dẫn số vẫn được."""
+    if (bad_specs := [x[1] for x in question_periods(question or '') if x[0] == 'invalid']) and values:
+        return [f'câu hỏi nêu kỳ không hợp lệ ({", ".join(bad_specs[:3])}): trả status "needs_clarification" hỏi lại '
+                'kỳ, không dùng số của kỳ khác (kể cả trong câu hỏi lại)']
+    return []
+
+
+# RV12 lượt 2 (2026-10-16): vùng dự báo, chữ gọi vùng dự báo, chữ phủ định kỳ được hỏi, kỳ tương đối, trường số lệch kỳ
+_FC_START, _FC_END = (_date.fromisoformat(d) for d in cat.FORECAST_HORIZON)
+_HORIZON_NAME = re.compile(r'vùng dự báo|kỳ dự báo|cả vùng|toàn (?:bộ )?(?:vùng|kỳ)|18 tháng|548 ngày', re.I)
+# kỳ tương đối ("năm trước đó", "cùng tháng năm trước", "tháng này"): không đối chiếu được bằng chữ số (phát lại live)
+_REL = re.compile(r'năm (?:trước|ngoái)|cùng (?:kỳ|tháng) năm (?:trước|ngoái)|tháng (?:này|trước)|năm nay|kỳ này', re.I)
+_CONJ = re.compile(r'\s(?:và|còn|nhưng|trong khi)\s', re.I)
+# RV12 lượt 5 (PM chọn 2026-10-16): câu trả lời khác ok có số của kỳ khác kỳ được hỏi thì app tự dựng câu dẫn số theo
+# khuôn (reference_answer). Lượt 2–4 kiểm chữ phủ định trong câu mô hình viết; mỗi lượt vá lại dời lỗ sang chỗ khác
+# (review §9.9: 17 câu từ chối đúng bị chặn, 9 câu gán sai vẫn lọt). Câu của mô hình chỉ được giữ khi không có chữ số,
+# chỗ đặt, kỳ tương đối, hay chữ trỏ / dùng / phỏng đoán số; bỏ nhầm một câu chỉ mất lời, không mất số.
+_DATA_START, _DATA_END = _date(2012, 7, 4), _date(2022, 12, 31)          # dữ liệu thực tế (CLAUDE.md §1)
+_MODEL_DROP = re.compile(r'\d|\{c\d+\}|' + _REL.pattern + r'|năm (?:sau|tới|kế)|sang năm'
+                         r'|(?:(?:con\s+)?số|mức|giá trị|tổng|kết quả)\s+(?:này|đó|trên|dưới|kia)(?!\w)'
+                         r'|tương tự|tương đương|tương đồng|xấp xỉ|quanh mức|ước (?:tính|lượng|chừng)|kỳ vọng|giả định'
+                         r'|có lẽ|khả năng|(?<!\w)(?:chắc|sẽ|giống|gần như|na ná)(?!\w)|không khác'
+                         r'|(?<!\w)(?:dùng|lấy|áp dụng|coi)(?!\w)|(?<!\w)thay\s+(?:cho|thế|vào)(?!\w)', re.I)
+_TAIL_SENT = re.compile(r'(?:nếu|bạn có thể|bạn muốn|bạn cần|hãy)(?!\w)', re.I)       # câu hỏi lại / gợi ý: để cuối
+_CONNECTIVE = re.compile(r'(?:ngoài ra|thêm vào đó|hơn nữa|bên cạnh đó|đồng thời|cũng)(?!\w)', re.I)   # câu nối: cần câu mở
+_DIM_WORD = {'category': 'ngành', 'region': 'vùng', 'acquisition_channel': 'kênh'}
+REF_HEADER = 'Số tham khảo, không phải số bạn hỏi:'
+_PRIOR = {'r_prior_year', 'r_same_month_prior_year'}            # số của cùng kỳ năm trước so với dòng
+_CHANGE = re.compile(r'^delta_|yoy|change|contribution|shift')   # so kỳ của dòng với cùng kỳ năm trước: thuộc cả hai kỳ
+_SHIFTED = re.compile(r'before|after|_start$|_end$')            # r_12m_before, r_start...: kỳ không suy được từ dòng
+_REF_DERIVED = re.compile(r'\.derived\.(horizon_total|highest_month|lowest_month)\.')
+
+
+@dataclass(frozen=True)
+class _Ref:
+    """Số tham khảo của kỳ KHÁC kỳ được hỏi: nhãn kỳ thật, các kỳ (năm, tháng, ngày) của số, tổng cả vùng dự báo hay không,
+    có phải số "năm trước" của dòng (r_prior_year...: "năm trước đó là {cX}" được coi là đã ghi kỳ)."""
+    label: str
+    gots: tuple
+    horizon: bool = False
+    kind: str = 'dự báo'
+    prior: bool = False
+
+
+def _value_gots(tool: str, fld: str, row: dict | None) -> tuple:
+    """Các kỳ (năm, tháng, ngày) mà một ô số đo thuộc về, theo metadata của dòng; () nếu không xác định (không kiểm).
+    Ô năm / tháng / số đếm không phải số đo của kỳ ("Hôm nay là năm {c1}", phát lại live H02b)."""
+    got = _claim_period(row)
+    if got is None or tool == 'get_forecast_backtest' or fld not in MONEY | PRICE | RATE | PCT100 | PP | PP_FRAC | INDEX:
+        return ()
+    if tool == 'get_forecast':
+        return (got,) if fld in FORECAST_FIELDS else ()
+    y, m, d = got
+    if fld in _PRIOR:
+        return ((y - 1, m, d),)
+    if _SHIFTED.search(fld):
+        return ()
+    return ((y, m, d), (y - 1, m, d)) if _CHANGE.search(fld) else (got,)
+
+
+def _spec_years(s: tuple) -> set:
+    if s[0] == 'range':
+        return set(range(s[1].year, s[2].year + 1))
+    if s[0] == 'same_month':
+        return {s[1]}
+    return set() if s[0] in (None, 'invalid') else {s[0]}
+
+
+def _years_of(specs: list) -> set:
+    return set().union(*map(_spec_years, specs)) if specs else set()
+
+
+def _overlaps_horizon(s: tuple) -> bool:
+    if s[0] == 'range':
+        return s[1] <= _FC_END and _FC_START <= s[2]
+    if s[0] == 'same_month':
+        return _FC_START.year <= s[1] <= _FC_END.year
+    y, m, d = s
+    if y is None:
+        return False
+    lo = _date(y, m or 1, d or 1)
+    hi = _date(y, m or 12, d or _month_end_day(y, m or 12))
+    return lo <= _FC_END and _FC_START <= hi
+
+
+def _contains(s: tuple, g: tuple) -> bool:
+    """Kỳ ghi s chứa kỳ của số g (năm chứa tháng của nó): luật kỳ ghi sai không đòi đúng grain."""
+    if s[0] in ('range', 'same_month'):
+        return _period_match(s, g)
+    return all(a is None or a == b for a, b in zip(s, g))
+
+
+_YEAR_FIELDS = {'year', 'start_year', 'end_year', 'turning_year', 'first_year', 'last_year'}
+
+
+def _with_years(answer: str, values: dict) -> str:
+    """Chỗ đặt trỏ ô năm ("năm gần nhất có dữ liệu là {c1}: R đạt {c2}") thay bằng chữ "năm YYYY" để luật kỳ đọc được kỳ
+    câu ghi (phát lại live H02b); chỉ dùng để kiểm, không đổi câu hiện ra."""
+    for cid, (path, v, _s) in values.items():
+        if path.rsplit('.', 1)[-1] in _YEAR_FIELDS and isinstance(v, int) and not isinstance(v, bool):
+            answer = (answer or '').replace('{' + cid + '}', f'năm {v}')
+    return answer
+
+
+def _periods(text: str) -> list:
+    return [x for x in question_periods(_PLACEHOLDER.sub(' ', text)) if x[0] != 'invalid']
+
+
+def _positions(clause: str):
+    """Mỗi chỗ đặt trong vế: (id, phần dẫn từ chỗ đặt trước đó, phần đuôi tới chỗ đặt sau / chữ nối, đầu vế, thứ tự)."""
+    ms = list(_PLACEHOLDER.finditer(clause))
+    for k, m in enumerate(ms):
+        lead = clause[ms[k - 1].end() if k else 0:m.start()]
+        tail = _CONJ.split(clause[m.end():ms[k + 1].start() if k + 1 < len(ms) else len(clause)], maxsplit=1)[0]
+        yield m[1], (lead, tail, clause[:m.start()], k)
+
+
+def _said(clauses: list, i: int, pos: tuple, horizon: bool, cross: bool, stop_rel: bool = True) -> tuple:
+    """Kỳ mà câu gán cho một chỗ đặt: (các kỳ ghi, có kỳ tương đối, có chữ gọi vùng dự báo). Tìm lần lượt ở phần dẫn ngay
+    trước chỗ đặt, phần đuôi ngay sau, rồi (cross=True) đầu vế và các vế phía trước; cross=False dừng ở chỗ đặt khác.
+    stop_rel=False: chữ kỳ tương đối không dừng việc tìm ("..., so năm trước giảm {c3}": kỳ của số thay đổi là kỳ ghi
+    phía trước). Tháng không năm lấy năm ghi gần nhất phía trước trong câu ("Riêng năm 2023, tháng 8 là {c1}")."""
+    lead, tail, head, k = pos
+    cands = [lead, tail] + ([head] + clauses[:i][::-1] if cross else [] if k else clauses[:i][::-1])
+    for n, text in enumerate(cands):
+        if n >= 2 and not cross and _PLACEHOLDER.search(text):
+            break
+        said, rel, hz = _periods(text), bool(_REL.search(text)), horizon and bool(_HORIZON_NAME.search(text))
+        if said or (rel and stop_rel) or hz:
+            if any(s[0] is None for s in said):
+                ys = [s[0] for s in _periods(' '.join(clauses[:i] + [head])) if isinstance(s[0], int)]
+                said = [(ys[-1], *s[1:]) if s[0] is None and ys else s for s in said]
+            return said, rel, hz
+    return [], False, False
+
+
+def _ref_named(ref: _Ref, said: list, rel: bool, hz: bool, q_years: set) -> bool:
+    """Câu có ghi đúng kỳ thật của số tham khảo không. Tổng vùng dự báo: có chữ gọi vùng dự báo và mọi kỳ ghi kèm nằm
+    trong vùng. Còn lại: ít nhất một kỳ ghi khớp kỳ của số và không kỳ ghi nào là kỳ được hỏi; tháng không ghi năm
+    ("tháng 8") không đủ khi câu hỏi nêu năm khác năm của số (hỏi 2025, "dự báo tháng 8 là..." đọc thành tháng 8/2025);
+    kỳ tương đối ("năm trước đó") chỉ đủ cho số "năm trước" của dòng."""
+    if ref.horizon:
+        return hz and all(_overlaps_horizon(s) for s in said)
+    if not said:
+        return rel and ref.prior
+    years = {g[0] for g in ref.gots}
+    hits = [s for s in said if any(_period_match(s, g) for g in ref.gots) and not (s[0] is None and q_years - years)]
+    return bool(hits) and not any(s not in hits and _spec_years(s) & q_years for s in said)
+
+
+def reference_refs(question: str, values: dict, results: dict) -> tuple[list, dict]:
+    """RV12: số của kỳ KHÁC kỳ được hỏi (hỏi năm 2025, dẫn số 08/2023): (các kỳ được hỏi, chỗ đặt → _Ref). Số đúng kỳ
+    được hỏi không thuộc luật này. Lượt 2: gồm cả tổng / tháng cao, thấp nhất cả vùng dự báo (derived) và số thực tế có
+    năm. Câu trả lời khác ok: các số này do app dẫn theo khuôn (reference_answer)."""
+    specs = [x for x in question_periods(question or '') if x[0] != 'invalid']
+    q_hz = bool(_HORIZON_NAME.search(question or ''))
+    other = {}
+    for cid, (path, _v, _s) in values.items():
+        res = results.get(path.split('.')[0])
+        if res is None or not res.ok or res.evidence is None:
+            continue
+        try:
+            _, fld, row = _resolve(path, results)
+        except ValueError:
+            continue
+        tool = res.evidence.tool
+        if tool == 'get_forecast' and (m := _REF_DERIVED.search(path)):
+            d = res.derived.get(m[1]) or {}
+            if m[1] == 'horizon_total':
+                if not q_hz and not any(s[0] == 'range' and s[1] <= _FC_START and _FC_END <= s[2] for s in specs):
+                    other[cid] = _Ref(f'vùng dự báo {_FC_START.isoformat()} → {_FC_END.isoformat()}', (), True)
+                continue
+            gots = tuple((int(p[3:]), int(p[:2]), None) for p in d.get('months', []) if re.fullmatch(r'\d\d/\d{4}', p))
+            if gots and not any(_period_match(s, g) for s in specs for g in gots):
+                other[cid] = _Ref(', '.join(d['months']), gots)
+            continue
+        gots = _value_gots(tool, fld, row)
+        if gots and not any(_period_match(s, g) for s in specs for g in gots):
+            fc = tool == 'get_forecast'
+            other[cid] = _Ref(row.get('period') if fc else ' / '.join(map(_spec_label, gots)), gots,
+                              kind='dự báo' if fc else 'thực tế', prior=fld in _PRIOR)
+    return specs, other
+
+
+def _unnamed_period_errors(answer: str, other: dict, specs: list) -> list[str]:
+    """other: chỗ đặt → _Ref của các số KHÔNG thuộc kỳ được hỏi. Câu phải ghi kỳ thật của số ngay ở chỗ đặt (RV12; số của
+    lượt trước trong câu hỏi so sánh, live B3c GM09)."""
+    errs, q_years = [], _years_of(specs)
+    for sent in _SENTENCE.split(answer or ''):
+        clauses = re.split(r'[,:]', sent)
+        for i, clause in enumerate(clauses):
+            for cid, pos in _positions(clause):
+                if cid not in other:
+                    continue
+                ref = other[cid]
+                if not _ref_named(ref, *_said(clauses, i, pos, ref.horizon, cross=True, stop_rel=ref.prior), q_years):
+                    asked = ', '.join(_spec_label(x) for x in specs) or 'không nêu kỳ'
+                    errs.append(f'câu "{sent.strip()[:80]}" dẫn số {ref.kind} của {ref.label} nhưng không ghi rõ kỳ '
+                                f'đó (câu hỏi về {asked}): số kỳ khác chỉ được nêu kèm đúng kỳ của nó, có năm, vd. "riêng '
+                                f'{ref.label}, {ref.kind} G là {{{cid}}}"; không gán cho kỳ được hỏi')
+    return errs
+
+
+def stated_period_errors(values: dict, results: dict, answer: str = '') -> list[str]:
+    """RV12 ("mọi trạng thái có claim số"), áp cả status ok: kỳ câu ghi ngay ở chỗ đặt (phần dẫn / đuôi, hoặc vế phía
+    trước không có chỗ đặt khác) phải chứa kỳ của số theo dòng dữ liệu. "R năm 2019 là {c1}" với số của 2018 bị chặn,
+    thay vì chỉ hiện nhãn (R, 2018) cạnh câu sai. Câu không ghi kỳ, hoặc ghi kỳ tương đối ("tháng này", "năm trước
+    đó"): app vẫn tự gắn nhãn kỳ."""
+    gots_of = {}
+    for cid, (path, _v, _s) in values.items():
+        res = results.get(path.split('.')[0])
+        if res is None or not res.ok or res.evidence is None:
+            continue
+        try:
+            _, fld, row = _resolve(path, results)
+        except ValueError:
+            continue
+        if gots := _value_gots(res.evidence.tool, fld, row):
+            gots_of[cid] = gots
+    errs, answer = [], _with_years(answer, values)
+    for sent in _SENTENCE.split(answer or ''):
+        clauses = re.split(r'[,:]', sent)
+        for i, clause in enumerate(clauses):
+            for cid, pos in _positions(clause):
+                if cid not in gots_of:
+                    continue
+                said, _rel, _hz = _said(clauses, i, pos, False, cross=False)
+                if said and not any(_contains(s, g) for s in said for g in gots_of[cid]):
+                    errs.append(f'câu "{sent.strip()[:80]}" ghi {", ".join(map(_spec_label, said))} cho {{{cid}}} nhưng '
+                                f'số đó là của {" / ".join(map(_spec_label, gots_of[cid]))}: ghi đúng kỳ của số, hoặc '
+                                'gọi tool đúng kỳ được hỏi; không gán số kỳ này cho kỳ khác')
+    return errs
+
+
+def _spec_text(s: tuple) -> str:
+    if s[0] in ('range', 'same_month'):
+        return s[3]
+    y, m, d = s
+    return f'ngày {d}/{m}/{y}' if d else f'tháng {m}/{y}' if m else f'năm {y}'
+
+
+def _spec_span(s: tuple):
+    """(ngày đầu, ngày cuối) của kỳ được hỏi; None nếu không chắc (thiếu năm, "cùng tháng năm X")."""
+    if s[0] == 'range':
+        return s[1], s[2]
+    if not isinstance(s[0], int):
+        return None
+    y, m, d = s
+    return _date(y, m or 1, d or 1), _date(y, m or 12, d or _month_end_day(y, m or 12))
+
+
+def _coverage_line(question: str, specs: list) -> str:
+    """Câu "X nằm ngoài vùng dự báo / dữ liệu thực tế": chỉ khi MỌI kỳ được hỏi đọc chắc và nằm trọn ngoài vùng. Kỳ nằm
+    trong vùng (lý do là grain, nhóm, chỉ tiêu: B02, B03, E08) thì không có câu này."""
+    fc = bool(_FORECAST_Q.search(question or ''))
+    lo, hi = (_FC_START, _FC_END) if fc else (_DATA_START, _DATA_END)
+    spans = [_spec_span(x) for x in specs]
+    if not specs or any(sp is None or (sp[0] <= hi and lo <= sp[1]) for sp in spans):
+        return ''
+    ky = ' và '.join(dict.fromkeys(map(_spec_text, specs)))
+    vung = f'{"vùng dự báo" if fc else "dữ liệu thực tế"} ({lo:%d/%m/%Y} → {hi:%d/%m/%Y})'
+    return (f'{ky[0].upper()}{ky[1:]} nằm ngoài {vung}, nên chưa có {"dự báo" if fc else "số thực tế"} cho '
+            f'{"các kỳ này" if len(specs) > 1 else "kỳ này"}.')
+
+
+def _period_text(p) -> str:
+    t = str(p)
+    if re.fullmatch(r'\d{4}', t):
+        return f'năm {t}'
+    if re.fullmatch(r'\d{1,2}/\d{4}', t):
+        return f'tháng {t}'
+    if m := re.fullmatch(r'(\d{4})-(\d{2})-(\d{2})', t):
+        return f'ngày {m[3]}/{m[2]}/{m[1]}'
+    return t
+
+
+def _ref_line(path: str, v, results: dict) -> str:
+    """Một dòng khuôn "- Kỳ, nhóm: chỉ tiêu là **số** (phần thêm)", nhãn lấy từ dòng dữ liệu; '' nếu ô không phải số đo
+    (năm, tên). Số đo thiếu nhãn chỉ tiêu / kỳ: ValueError (không hiện số không nhãn)."""
+    _, fld, row = _resolve(path, results)
+    if not _is_num(v) or fld in _YEAR_FIELDS or fld == 'month':
+        return ''
+    name, group, year, extra = _label_parts(fld, row)
+    if m := _REF_DERIVED.search(path):
+        d = results[path.split('.')[0]].derived.get(m[1]) or {}
+        if m[1] == 'horizon_total':
+            ky, name = f'cả vùng dự báo {_FC_START:%d/%m/%Y} → {_FC_END:%d/%m/%Y}', name and f'tổng {name}'
+        else:
+            ky = 'tháng ' + ', '.join(d.get('months', [])) if d.get('months') else ''
+            name = name and f'{name}, tháng {"cao" if m[1] == "highest_month" else "thấp"} nhất vùng dự báo'
+    else:
+        ky = _period_text(year) if year is not None else ''
+    if name is None or not ky:
+        raise ValueError(f'{path}: app chưa dựng được nhãn chỉ tiêu / kỳ cho số này nên không dẫn được; bỏ số này')
+    if group is None:
+        group = 'toàn công ty'
+    elif row and row.get('dimension_value') and row.get('dimension_name') in _DIM_WORD:
+        group = f"{_DIM_WORD[row['dimension_name']]} {group}"
+    tail = f' ({"; ".join(extra)})' if extra else ''
+    return f'- {ky[0].upper()}{ky[1:]}, {group}: {name} là **{_fmt(v, fld, False)}**{tail}'
+
+
+def _model_sentences(answer: str) -> tuple[list, list]:
+    """Câu của mô hình được giữ: (câu dẫn, câu hỏi lại / gợi ý). Bỏ mọi câu có chữ số, chỗ đặt, kỳ tương đối, chữ trỏ /
+    dùng / phỏng đoán số (_MODEL_DROP)."""
+    lead, tail = [], []
+    for t in re.findall(r'[^.!?\n]+[.!?]*', (answer or '').replace('**', '')):
+        t = t.strip().lstrip('-*•').strip()
+        if len(re.findall(r'[^\W\d_]+', t)) < 3 or _MODEL_DROP.search(t):        # mẩu cắt câu (").") hoặc câu bị bỏ
+            continue
+        t = t if t[-1] in '.!?' else t + '.'
+        (tail if t.endswith('?') or _TAIL_SENT.match(t) else lead).append(t)
+    return lead, tail
+
+
+def reference_answer(question: str, status: str, answer: str, values: dict, results: dict) -> tuple:
+    """RV12 lượt 5: câu trả lời khác ok có số của kỳ khác kỳ được hỏi → (markdown do app dựng, lỗi); (None, []) nếu không
+    có số kỳ khác. Khuôn: [câu ngoài vùng, nếu chắc] + câu dẫn của mô hình (đã lọc) → "Số tham khảo, không phải số bạn
+    hỏi:" + mỗi số một dòng có kỳ, nhóm, chỉ tiêu do app ghi → câu hỏi lại / gợi ý của mô hình (đã lọc). Mô hình không
+    còn tự viết câu chứa số kỳ khác, nên không gán được số đó cho kỳ được hỏi."""
+    specs, other = reference_refs(question, values, results)
+    if not other:
+        return None, []
+    lines, errs, seen = [], [], set()
+    for cid, (path, v, _s) in values.items():
+        if path in seen:
+            continue
+        seen.add(path)
+        try:
+            if line := _ref_line(path, v, results):
+                lines.append(line)
+        except ValueError as e:
+            errs.append(f'{cid}: {e}')
+    if errs:
+        return None, errs
+    lead, tail = _model_sentences(answer)
+    cover = _coverage_line(question, specs)
+    head = [cover] if cover else lead            # có câu "ngoài vùng" thì câu dẫn của mô hình không thêm gì, chỉ thêm rủi ro
+    if not head or _CONNECTIVE.match(head[0]):            # câu lý do chính có chữ số đã bị bỏ, còn lại câu "Ngoài ra..."
+        head.insert(0, 'Câu hỏi cần nói rõ thêm trước khi có số đúng kỳ.' if status == 'needs_clarification'
+                    else 'Chưa có số đúng như câu hỏi.')
+    if not tail and status == 'needs_clarification':
+        tail = ['Bạn muốn xem kỳ nào?']
+    md = ' '.join(head) + f'\n\n{REF_HEADER}\n\n' + '\n'.join(lines)
+    return md + ('\n\n' + ' '.join(tail) if tail else ''), []
+
+
+_NOFC_Q = re.compile(r'(?:dự báo|dự kiến|dự đoán)\s+(?:\S+\s+){0,2}?(?:số đơn|đơn hàng|số khách|khách hàng|số món|'
+                     r'lợi nhuận|biên lợi nhuận|doanh thu thuần|doanh thu thực nhận|(?-i:R)(?!\w))', re.I)
+_COMPARE_Q = re.compile(r'so với|so sánh|cùng tháng|cùng kỳ|chênh', re.I)
+_BACKTEST_MEASURE = {'score', 'mape_g_thang'}
+
+
+def forecast_question_errors(question: str, values: dict, results: dict, answer: str = '',
+                             context_periods: frozenset = frozenset()) -> list[str]:
+    """Lỗi ràng buộc giữa câu hỏi và các claim của câu trả lời đã qua validate (RV01, RV03, RV07, RV09; live B3c).
+    context_periods: kỳ (năm, tháng, ngày) của các lượt get_forecast ok ở lượt trước; câu hỏi so sánh tiếp nối
+    ("vậy so với cùng tháng năm 2022 thực tế?") được dẫn lại số dự báo của kỳ đó khi vế câu ghi đúng kỳ."""
+    used = []
+    for path, _v, _s in values.values():
+        res = results.get(path.split('.')[0])
+        if res is None or not res.ok or res.evidence is None:
+            continue
+        try:
+            _, fld, row = _resolve(path, results)
+        except ValueError:
+            continue
+        used.append((path, fld, row, res.evidence.tool))
+    fc = [u for u in used if u[3] == 'get_forecast' and (u[1] in FORECAST_FIELDS or _HORIZON_PATH.search(u[0]))]
+    q, errs = question or '', []
+    specs = question_periods(q)
+
+    def in_specs(u) -> bool:
+        """Số dự báo u thuộc kỳ được hỏi. Số cả vùng dự báo (derived) không có kỳ trên dòng (review Claude 2026-10-17:
+        "tổng dự báo 2023–2024", "tháng nào cao nhất từ 2023 đến 2024" luôn bị chặn nhầm): tháng cao / thấp nhất cả vùng
+        thuộc kỳ được hỏi khi mọi tháng đó nằm trong kỳ được hỏi (cao nhất cả vùng cũng là cao nhất của kỳ con chứa nó);
+        tổng cả vùng chỉ khi các năm / khoảng được hỏi phủ trọn vùng dự báo VÀ mọi câu dẫn số gọi tên vùng dự báo (vùng
+        dừng ở 01/07/2024 nên không phải tổng 2023–2024)."""
+        if not (m := _REF_DERIVED.search(u[0])):
+            return any(_period_match(s, _claim_period(u[2])) for s in specs)
+        d = results[u[0].split('.')[0]].derived.get(m[1]) or {}
+        if m[1] != 'horizon_total':
+            gots = [(int(p[3:]), int(p[:2]), None) for p in d.get('months', []) if re.fullmatch(r'\d\d/\d{4}', p)]
+            return bool(gots) and all(any(_contains(s, g) for s in specs) for g in gots)
+        years = {s[0] for s in specs if isinstance(s[0], int) and s[1] is None}
+        cover = (set(range(_FC_START.year, _FC_END.year + 1)) <= years
+                 or any(s[0] == 'range' and s[1] <= _FC_START and _FC_END <= s[2] for s in specs))
+        sents = [x for cid, (p, _v, _s) in values.items() if p == u[0]
+                 for x in _SENTENCE.split(answer or '') if '{' + cid + '}' in x]
+        return cover and bool(sents) and all(_HORIZON_NAME.search(_PLACEHOLDER.sub(' ', x)) for x in sents)
+
+    errs += invalid_period_errors(q, values)
+    if fc and (m := _NOFC_Q.search(q)):
+        errs.append(f'câu hỏi hỏi "{m[0]}": chưa có dự báo chỉ tiêu này (dự báo chỉ có G và COGS toàn công ty); trả status '
+                    '"unsupported", có thể nêu số dự báo G thay thế nhưng ghi rõ đó không phải chỉ tiêu được hỏi')
+    # số dự báo được đưa ra làm số thực tế CỦA KỲ ĐƯỢC HỎI (hoặc câu không nêu kỳ); số dự báo kỳ khác xét ở luật kỳ dưới
+    asked = [u for u in fc if not specs or in_specs(u)]
+    if asked and _ACTUAL_Q.search(q) and not _FORECAST_Q.search(q):
+        errs.append('câu hỏi hỏi số THỰC TẾ nhưng câu trả lời dẫn số DỰ BÁO: không đưa dự báo ra làm số thực tế; kỳ chưa '
+                    'có số thực tế thì trả status "no_data" (có thể nói thêm là có số dự báo)')
+    if fc and specs:
+        bad = sorted({u[0] for u in fc if not in_specs(u)})
+        if bad and _COMPARE_Q.search(q) and context_periods:
+            # câu so sánh tiếp nối: số dự báo của kỳ lượt trước được dẫn lại nếu vế câu ghi đúng kỳ của nó
+            prior = {p for p in bad for u in fc if u[0] == p and _claim_period(u[2]) in context_periods}
+            other = {cid: _Ref(row.get('period'), (_claim_period(row),)) for cid, (p, _v, _s) in values.items()
+                     if p in prior for u in fc if u[0] == p for row in [u[2]]}
+            errs += _unnamed_period_errors(answer, other, specs)
+            bad = [p for p in bad if p not in prior]
+        if bad:
+            nhan = ', '.join(_spec_label(x) for x in specs)
+            errs.append(f'câu hỏi nêu kỳ {nhan} nhưng số dự báo lấy từ kỳ / grain khác ({", ".join(bad[:3])}): gọi '
+                        'get_forecast đúng kỳ được hỏi; kỳ ngoài 2023-01-01 → 2024-07-01 thì trả "no_data", không dùng '
+                        'số kỳ khác' + ('. Tổng cả vùng dự báo (derived.horizon_total) chỉ dùng khi câu hỏi gồm cả năm '
+                                        '2023 và 2024, và câu dẫn số gọi là "cả vùng dự báo", không gọi là tổng năm / '
+                                        'tổng 2023–2024' if any('.derived.horizon_total.' in p for p in bad) else ''))
+    # RV07: câu hỏi là một KHOẢNG (quý, nửa năm, tháng a–b). Tool không có tổng khoảng: số một tháng / ngày trong khoảng
+    # chỉ được dẫn khi câu nêu đúng kỳ của nó, và không được gọi là tổng / cả khoảng
+    ranges = [x for x in specs if x[0] == 'range']
+    if fc and ranges:
+        by_path = {p: (fld, row) for p, fld, row, _ in fc}
+        for sent in _SENTENCE.split(answer or ''):
+            for cid in _PLACEHOLDER.findall(sent):
+                p = values.get(cid, (None,))[0]
+                if p not in by_path or by_path[p][1] is None:
+                    continue
+                row, plain = by_path[p][1], _PLACEHOLDER.sub(' ', sent)
+                lab = ', '.join(x[3] for x in ranges)
+                # "doanh thu gộp" (tên của G), "bản gộp" (tên model) không phải chữ chỉ tổng (live B3c GM10 sau sửa)
+                if _AGG_WORD.search(_NOT_AGG.sub(' ', plain)) or not _names_period(plain, row):
+                    errs.append(f'câu "{sent.strip()[:80]}" dùng số của {row.get("period")} cho câu hỏi về khoảng {lab}: '
+                                'chưa có tổng khoảng; nêu rõ đó là riêng tháng / ngày nào (vd. "riêng tháng 8/2023"), '
+                                'không gọi là tổng quý / nửa năm, hoặc trả "unsupported"')
+    want = question_model(q)
+    if fc and want:
+        cands = {u[2]['candidate'] for u in fc if u[2] and isinstance(u[2].get('candidate'), str)}
+        if not any(_cand_matches(c, want) for c in cands):
+            errs.append(f'câu hỏi nêu đích danh model ({want}) nhưng số dự báo lấy từ {sorted(cands) or "ứng viên khác"}: '
+                        'gọi get_forecast với model / cogs_method được hỏi; không có thì nói không có, không thay model')
+    rk = {m[1] for u in used if (m := _RANK_PATH.search(u[0]))}
+    if rk:
+        need = ({'mape_g_thang'} if _MAPE_RX.search(q) else set()) | ({'score'} if _SCORE_RX.search(q) else set())
+        need = need or {'score', 'mape_g_thang'}          # câu so sánh chung: nêu CẢ hai thước (hợp đồng §7)
+        # đã dẫn thước = chỗ đặt xếp hạng của thước đó HOẶC một ô điểm của chính thước đó (điểm model chính, điểm của
+        # ứng viên được hỏi): live B3c GM12–GM14 bị chặn nhầm khi câu đã dẫn derived.primary.score / rows[..].mape_g_thang
+        cited = rk | {u[1] for u in used if u[3] == 'get_forecast_backtest' and u[1] in _BACKTEST_MEASURE}
+        if miss := need - cited:
+            errs.append(f'câu hỏi về độ chính xác cần thước {sorted(miss)} (derived.lowest_score = điểm ngày kết hợp, thước '
+                        'chọn model; derived.lowest_mape_g_thang = MAPE G tháng, chỉ hiển thị) nhưng câu trả lời không dẫn')
+    return errs
+
 
 
 def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset = frozenset()) -> Checked:
@@ -537,12 +1276,18 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
         if cid not in by_id and not any(e.startswith(f'{cid}:') for e in errors):
             errors.append(f'chỗ đặt {{{cid}}} không có claim hợp lệ')
     errors += check_digits(answer, allowed_years(results) | set(extra_allowed))
+    # ô kiểu NGÀY không phải số ngày: "mỗi fold dự báo {c2} ngày" với c2 = trained_through (live B3c GM13)
+    for m in _PLACEHOLDER.finditer(answer):
+        if m[1] in by_id and isinstance(by_id[m[1]][1], _date) and re.match(r'\s*ngày(?!\w)', answer[m.end():], re.I):
+            errors.append(f'{m[1]}: {by_id[m[1]][0]["path"]} là một ngày (ngày tháng), không phải số ngày; dùng ô đếm '
+                          '(n_days, n_folds) hoặc bỏ số đó')
 
     # câu xếp hạng: chỗ đặt xếp hạng phải nằm trong CHÍNH câu đó và cùng hướng với chữ tăng/giảm của câu; hoặc app tự
     # đối chiếu được (N/U/P viết thẳng, câu nối "Đây là…" trỏ về đối tượng của câu ngay trước)
     pieces = _SENTENCE.split(answer)
     for i, sent in enumerate(pieces):
-        if not any(w in sent.lower() for w in RANK_WORDS):
+        low = _METRIC_NAME_RANK.sub(' ', sent.lower())
+        if not any(w in low for w in RANK_WORDS):
             continue
         prev = next((p for p in reversed(pieces[:i]) if p.strip()), '')
         paths = [by_id[cid][0]['path'] for cid in _PLACEHOLDER.findall(sent) if cid in by_id]
@@ -553,7 +1298,6 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             continue
         if not ranks and _verified_anaphor_rank(sent, prev, by_id, results):
             continue
-        low = sent.lower()
         if (not paths and _RANK_LIMIT.search(low) and not _said_driver(sent)
                 and not _NAMED_SUBJECT.search(_PLACEHOLDER.sub(' ', sent))):
             # câu nói giới hạn của tool / gợi ý hỏi tiếp, không khẳng định chủ thể nào (live D11 sau sửa, F08, F09).
@@ -572,13 +1316,14 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             crit = _criteria(sent) if any(r.ok and _is_phase_result(r) for r in results.values()) else set()
             where = (' hoặc '.join(h for k, h in (('tien', 'derived.largest_*.phases'),
                                                     ('cagr', 'derived.largest_*_cagr.phases')) if k in crit)
-                     or 'derived.largest_* hoặc top_*_driver')
+                     or 'derived.largest_* hoặc top_*_driver (dự báo: derived.lowest_score / lowest_mape_g_thang / '
+                        'highest_month / lowest_month; R / G từng năm: derived.highest_r / lowest_r .years)')
             errors.append(f'câu "{sent.strip()[:80]}" có ý xếp hạng ("nhiều nhất", "chủ yếu"...) nhưng trong câu '
                           f'không có chỗ đặt trỏ vào {where} (xếp hạng trên đủ tập). Đặt chỗ đặt xếp hạng ngay trong '
                           'câu đó, hoặc mở câu bằng "Đây là…" ngay sau câu dẫn số của chính giai đoạn / nhóm ấy')
             continue
         ranked = [p for p in paths if _rank_direction(p) and p.rsplit('.', 1)[-1] not in LEVEL_RANK]
-        if weak and ranked and all('.derived.smallest_' not in p for p in ranked):
+        if weak and ranked and all('.derived.smallest_' not in p and '.derived.lowest_' not in p for p in ranked):
             errors.append(f'câu "{sent.strip()[:80]}" nói "nhỏ nhất / ít nhất" nhưng chỗ đặt là phía lớn nhất (largest_*, '
                           'top_*_driver); nhóm thì dùng derived.smallest_decrease / smallest_increase.groups')
             continue
@@ -591,22 +1336,44 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             errors += crit_errs
             continue
         level = [_rank_direction(by_id[cid][0]['path']) for cid in _PLACEHOLDER.findall(sent)
-                 if cid in by_id and by_id[cid][0]['path'].rsplit('.', 1)[-1] in LEVEL_RANK]
+                 if cid in by_id and (by_id[cid][0]['path'].rsplit('.', 1)[-1] in LEVEL_RANK
+                                      or _LEVEL_PATH.search(by_id[cid][0]['path']))]
         hi, lo = any(w in sent.lower() for w in HIGH_WORDS), any(w in sent.lower() for w in LOW_WORDS)
+        if level and all(_RANK_PATH.search(by_id[cid][0]['path']) for cid in _PLACEHOLDER.findall(sent)
+                         if cid in by_id and _LEVEL_PATH.search(by_id[cid][0]['path'])):
+            # xếp hạng theo SAI SỐ (lowest_score / lowest_mape_g_thang): "dẫn đầu", "đứng đầu" là sai số thấp nhất (live B3c)
+            hi = any(w in sent.lower() for w in HIGH_WORDS if w not in ('dẫn đầu', 'đứng đầu'))
         if level and hi != lo and all(r != (1 if hi else -1) for r in level):
             errors.append(f'câu "{sent.strip()[:80]}" nói "{"cao" if hi else "thấp"} nhất" nhưng chỗ đặt trỏ vào phía '
                           f'{"thấp" if hi else "cao"} (peak/trough, max/min)')
             continue
         d = _direction(_PLACEHOLDER.sub(' ', sent))
-        if d and all(r != d for r in ranks):
+        # xếp hạng MỨC của dự báo (sai số thấp nhất, tháng cao nhất) không có chiều tăng/giảm để đối chiếu
+        ranks = [_rank_direction(p) for p in paths if _rank_direction(p) and not _LEVEL_PATH.search(p)]
+        if d and ranks and all(r != d for r in ranks):
             errors.append(f'câu "{sent.strip()[:80]}" nói "{"tăng" if d > 0 else "giảm"}" nhưng claim xếp hạng là '
                           f'chiều {"tăng" if d < 0 else "giảm"}')
+
+    # B3: câu nói "thực tế" mà dẫn số dự báo; câu nêu thước (MAPE / điểm ngày) mà dẫn xếp hạng của thước kia
+    for sent in _SENTENCE.split(answer):
+        cids = [cid for cid in _PLACEHOLDER.findall(sent) if cid in by_id]
+        low = _PLACEHOLDER.sub(' ', sent).lower()
+        if any(by_id[c][2] in FORECAST_FIELDS for c in cids) and 'thực tế' in low and 'dự báo' not in low:
+            errors.append(f'câu "{sent.strip()[:80]}" gọi số dự báo là "thực tế": số dự báo phải nói rõ là dự báo')
+        ranks_in = {m[1] for c in cids if (m := _RANK_PATH.search(by_id[c][0]['path']))}
+        if ranks_in == {'score'} and _MAPE_RX.search(low) and not _SCORE_RX.search(low):
+            errors.append(f'câu "{sent.strip()[:80]}" nói theo MAPE / sai số tháng nhưng dẫn derived.lowest_score (điểm '
+                          'ngày); dùng derived.lowest_mape_g_thang')
+        if ranks_in == {'mape_g_thang'} and _SCORE_RX.search(low) and not _MAPE_RX.search(low):
+            errors.append(f'câu "{sent.strip()[:80]}" nói theo điểm ngày nhưng dẫn derived.lowest_mape_g_thang; dùng '
+                          'derived.lowest_score')
 
     # câu so sánh phải dẫn ít nhất một số thay đổi do tool tính (delta_r, yoy_rate, *_change_rate...)
     # (câu không có chỗ đặt nào, vd. nhắc lại câu hỏi "tháng 8 năm lẻ có thấp hơn..." khi từ chối, thì không xét)
     for sent in _SENTENCE.split(answer):
         cids = [cid for cid in _PLACEHOLDER.findall(sent) if cid in by_id]
-        if cids and any(w in sent.lower() for w in COMPARE_WORDS) and not any(by_id[c][2] in COMPARED for c in cids):
+        if (cids and any(w in sent.lower() for w in COMPARE_WORDS) and not any(by_id[c][2] in COMPARED for c in cids)
+                and not _verified_backtest_compare(sent, by_id)):
             errors.append(f'câu "{sent.strip()[:80]}" tự so sánh các số (cao hơn / thấp hơn...) mà không dẫn cột thay đổi '
                           'do tool tính; app không kiểm được phép so sánh này')
 
@@ -615,6 +1382,9 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
     for c, v, fld, row in by_id.values():
         if row and isinstance(row.get('dimension_value'), str):
             bound.add(row['dimension_value'])
+        for k in ('candidate', 'candidate_label'):
+            if row and isinstance(row.get(k), str):
+                bound.add(row[k])
         if isinstance(v, str):
             bound.add(v)
         if isinstance(v, list):
@@ -625,6 +1395,12 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
     if loose:
         errors.append(f'câu văn viết thẳng tên nhóm {loose[:3]} mà không gắn với claim nào đã dùng: tên nhóm phải là '
                       'chỗ đặt (derived.largest_*.groups, rows[<nhóm>].dimension_value) hoặc đi cùng claim rows[<nhóm>]')
+    bound_text = ' | '.join(bound).lower()
+    fam = sorted(f for f, rx in MODEL_FAMILY.items()
+                 if re.search(rx, plain_text, re.I) and not re.search(rx, bound_text, re.I))
+    if fam and any(r.ok and r.evidence and r.evidence.tool.startswith('get_forecast') for r in results.values()):
+        errors.append(f'câu văn nêu model {fam} mà không gắn với ô nào của model đó: tên model phải là chỗ đặt '
+                      '(derived.primary.label, rows[<ứng viên>].candidate_label) hoặc đi cùng số của chính model đó')
 
     # chữ "tăng"/"giảm" ngay trước số phải cùng dấu với số thật; vế câu gọi tên R mà số là G (hoặc ngược lại) thì chặn
     # (tương tự với N/U/P: "{c2: giá mỗi món (P)} góp {c3: contrib_u}" là gắn số của U cho P)

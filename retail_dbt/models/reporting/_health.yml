@@ -3,7 +3,7 @@ version: 2
 # Trang Sức khỏe dữ liệu của app (docs/gd2_app_plan.md M5). Kiểm ở tests/assert_rpt_health.sql.
 sources:
   - name: ops
-    schema: ops
+    schema: "{{ ('r_' ~ var('release_id') ~ '_ops') if var('release_id', '') else 'ops' }}"
     description: "Nhật ký chạy dbt trên chính kho này, do hook on-run-start/on-run-end ghi (macros/health_log.sql)."
     tables:
       - name: dbt_invocation
@@ -11,7 +11,7 @@ sources:
       - name: dbt_node_result
         description: "1 dòng / model, seed, test của mỗi lần chạy: trạng thái, số dòng lệch, mô tả test."
   - name: raw_log
-    schema: raw
+    schema: "{{ ('r_' ~ var('release_id') ~ '_raw') if var('release_id', '') else 'raw' }}"
     description: "Có trên Postgres, Snowflake, Databricks (scripts/ingest/ingest_raw.py / ingest_snowflake.py / ingest_databricks.py). Target DuckDB đọc thẳng CSV, không có bảng này."
     tables:
       - name: _ingest_log

@@ -17,6 +17,7 @@ pages = [
     st.Page('views/ps3_nhip_lich.py', title='PS3: Nhịp lịch'),
     st.Page('views/ps4_don_mon_gia.py', title='PS4: Số đơn, số món, giá'),
     st.Page('views/ps5_nhom.py', title='PS5: Nhóm kéo lên/xuống'),
+    st.Page('views/du_bao.py', title='Dự báo'),
     st.Page('views/suc_khoe_du_lieu.py', title='Sức khỏe dữ liệu'),
     st.Page('views/ai_explain.py', title='Hỏi dữ liệu (AI)'),
 ]

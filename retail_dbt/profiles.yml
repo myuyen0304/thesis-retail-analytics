@@ -13,7 +13,7 @@ retail_dbt:
       threads: 4
     duckdb:            # dev nhẹ: 1 file, không cần server/Docker
       type: duckdb
-      path: warehouse/dbt.duckdb   # tương đối từ root repo, đã gitignore
+      path: "{{ env_var('RETAIL_DUCKDB_BUILD_PATH', 'warehouse/dbt.duckdb') }}"   # tương đối từ root repo, đã gitignore
       threads: 4
     databricks:        # lab kiểm chứng DWH/KPI (docs/dwh_roadmap.md), Databricks Free; cần .venv-databricks (dbt-databricks)
       type: databricks

@@ -23,9 +23,10 @@ from itertools import product
 from ai_explain import metric_catalog as cat
 from ai_explain.contracts import Evidence, QueryRecord, ToolCall, ToolResult
 from dwh.connection import describe
+from dwh import releases
 from dwh.guarded import DEFAULT_MAX_ROWS, GuardError, QueryTimeout, RowLimitExceeded, Statement, open_session
 
-TOOL_VERSION = 'v1.4'
+TOOL_VERSION = 'v1.7'   # v1.7: chuỗi từng năm (to_year), ghi chú app (notes) cho đóng góp nhóm / sai số tháng
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
     'reporting.rpt_driver_period', 'reporting.rpt_revenue_segment_yearly', 'reporting.driver_rule',
@@ -34,6 +35,10 @@ ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_revenue_phase', 'reporting.rpt_revenue_turning_point', 'reporting.rpt_august_parity',
     'reporting.rpt_calendar_phase', 'reporting.rpt_calendar_stability',
 })
+# B3 (2026-10-15): được phép đọc nhưng KHÔNG bắt buộc có. rpt_forecast_* chỉ có trong bản dữ liệu của pipeline từ B2b;
+# build thường (chế độ cũ, PostgreSQL) và bản dựng trước B2b không có. Đưa vào ALLOWED_RELATIONS thì guard Databricks đòi
+# quyền trên bảng không tồn tại và khóa cả chat PS1–PS5. Thiếu bảng thì tool dự báo trả no_data, không lấy số nơi khác.
+OPTIONAL_RELATIONS = frozenset({'reporting.rpt_forecast_daily', 'reporting.rpt_forecast_backtest'})
 
 
 # --- schema tham số ---
@@ -93,6 +98,11 @@ def _iso(v):
     return v.isoformat() if isinstance(v, (dt.date, dt.datetime)) else v
 
 
+def _release_evidence():
+    record = releases.current()
+    return {k: record[k] for k in ('release_id', 'snapshot_id', 'code_version', 'run_id')} if record else {}
+
+
 class _Turn:
     """Gói phiên đọc + bằng chứng của một lần gọi tool."""
 
@@ -101,9 +111,10 @@ class _Turn:
         self.queries: list[QueryRecord] = []
 
     def fetch(self, source: str, sql: str, params: tuple = ()):
-        assert source in ALLOWED_RELATIONS, source
+        assert source in ALLOWED_RELATIONS | OPTIONAL_RELATIONS, source
         st = Statement(sql, params)
-        self.queries.append(QueryRecord(source, st.render(self.backend), params))
+        record = releases.current() if releases.enabled(self.backend) else None
+        self.queries.append(QueryRecord(releases.sql_for(source, record), releases.sql_for(st.render(self.backend), record), params))
         return self.sess.fetch(st)
 
     def same_build(self) -> bool:
@@ -141,7 +152,7 @@ class _Turn:
             request_id=uuid.uuid4().hex, tool=self.tool, tool_version=TOOL_VERSION, arguments_applied=dict(self.args),
             filters_applied=filters, grain=grain, metrics=metrics, method=method, backend=self.backend,
             source_description=describe(self.backend),
-            data_version={k: _iso(v) for k, v in self.build.items()},
+            data_version={**{k: _iso(v) for k, v in self.build.items()}, **_release_evidence()},
             quality={k: _iso(v) for k, v in self.health.items()},
             definition_version=cat.definition_version(), read_at_utc=read_at, queries=list(self.queries),
         )
@@ -164,24 +175,49 @@ def _check_year(turn: _Turn, year: int, needs_prior: bool) -> ToolResult | None:
 
 def _summary(turn: _Turn, a: dict) -> ToolResult:
     metric, year, compare = a['metric'], a['year'], a.get('compare_prior_year', False)
+    to_year = a.get('to_year')          # chuỗi từng năm year → to_year (B6, biểu đồ R / G theo năm), mỗi năm một dòng
     if compare and metric != 'R':
         return ToolResult('unsupported', 'So năm trước hiện chỉ có cho R; G năm trước / ΔG chưa có cột đã kiểm. '
                           'Có thể hỏi mức G từng năm.', rejected={'metric': 'G + compare_prior_year chưa mở'})
-    if (r := _check_year(turn, year, needs_prior=compare)):
+    if to_year is not None and to_year <= year:
+        return ToolResult('unsupported', f'to_year ({to_year}) phải lớn hơn year ({year}); một năm thì bỏ to_year.',
+                          rejected={'to_year': f'{to_year} ≤ year {year}'})
+    if (r := _check_year(turn, year, needs_prior=compare)) or (to_year and (r := _check_year(turn, to_year, False))):
         return r
     cols = ['year', 'is_analysis_period']
     cols += {'R': ['r'], 'G': ['g'], 'R_and_G': ['r', 'g']}[metric]
     if compare:
         cols += ['r_prior_year', 'delta_r', 'yoy_rate']
+    where, params = ('year = {p}', (year,)) if to_year is None else ('year >= {p} and year <= {p} order by year',
+                                                                     (year, to_year))
     rows = turn.fetch('reporting.rpt_revenue_yearly',
-                      f"select {', '.join(cols)} from reporting.rpt_revenue_yearly where year = {{p}}", (year,)).records()
+                      f"select {', '.join(cols)} from reporting.rpt_revenue_yearly where {where}", params).records()
     read_at = _now()
     if not rows:
         return ToolResult('no_data', f'Không có dòng năm {year} trong rpt_revenue_yearly.')
+    last = to_year or year
+    if [r['year'] for r in rows] != list(range(year, last + 1)):
+        return ToolResult('query_error', f'rpt_revenue_yearly có {len(rows)} dòng cho {year}–{last}, cần đủ từng năm.')
     mids = {'R': ['R'], 'G': ['G'], 'R_and_G': ['R', 'G']}[metric] + (['delta_r', 'yoy_rate'] if compare else [])
-    note = '' if rows[0]['is_analysis_period'] else f' Năm {year} thiếu tháng (dữ liệu bắt đầu {turn.build["data_start_date"]}): không so ngang năm đủ.'
-    return ToolResult('ok', f'R/G năm {year}, chỉ đọc từ rpt_revenue_yearly.{note}', rows=rows, evidence=turn.evidence(
-        filters={'year': year}, grain='năm (ngày đặt hàng)', metrics=cat.metric_defs(*mids), read_at=read_at))
+    part = [r['year'] for r in rows if not r['is_analysis_period']]
+    note = (f' Năm {", ".join(map(str, part))} thiếu tháng (dữ liệu bắt đầu {turn.build["data_start_date"]}): không so '
+            'ngang năm đủ.' if part else '')
+    derived = {}
+    if to_year is not None:
+        # xếp hạng trên đủ tập năm ĐỦ tháng (năm thiếu tháng không vào xếp hạng)
+        full = [r for r in rows if r['is_analysis_period']]
+        derived['n_years'] = len(rows)
+        for col in ('r', 'g'):
+            if col in cols and full:
+                for key, pick in (('highest', max), ('lowest', min)):
+                    v = pick(r[col] for r in full)
+                    derived[f'{key}_{col}'] = {'years': [str(r['year']) for r in full if r[col] == v], col: v}
+    label = f'năm {year}' if to_year is None else f'từng năm {year}–{to_year}'
+    hint = ('' if to_year is None else ' Một năm: rows[<năm>]. Năm cao / thấp nhất (năm đủ tháng): '
+            'derived.highest_<r|g>.years là NĂM, .r / .g là số của năm đó.')
+    return ToolResult('ok', f'R/G {label}, chỉ đọc từ rpt_revenue_yearly.{note}{hint}', rows=rows, derived=derived,
+                      evidence=turn.evidence(filters={'year': year, **({'to_year': to_year} if to_year else {})},
+                                             grain='năm (ngày đặt hàng)', metrics=cat.metric_defs(*mids), read_at=read_at))
 
 
 _DRIVER_COLS = ['period_type', 'period_code', 'start_year', 'end_year', 'r_start', 'r_end', 'delta_r',
@@ -221,6 +257,9 @@ def _drivers(turn: _Turn, a: dict) -> ToolResult:
                           read_at=read_at))
 
 
+# live B6 V03: mô hình không tự nói câu này, nên app in dưới câu trả lời (như ghi chú N → U → P của trang chat)
+SEGMENT_NOTE = ('Đóng góp của từng nhóm là phân rã số học của ΔR toàn công ty: cho biết thay đổi R nằm ở nhóm nào, không '
+                'chứng minh nguyên nhân.')
 _SEG_COLS = ['dimension_name', 'dimension_value', 'year', 'r', 'r_total', 'share', 'r_prior_year', 'delta_r',
              'yoy_rate', 'share_shift_pp', 'contribution_to_delta', 'n_groups', 'n_groups_up', 'n_groups_down',
              'delta_r_is_small']
@@ -264,8 +303,9 @@ def _segment(turn: _Turn, a: dict) -> ToolResult:
     if rows[0]['delta_r_is_small']:
         derived['small_delta_rule'] = cat.DECISIONS['driver_small_delta_rule']
     return ToolResult('ok', f'R theo {dim} năm {year} so {year - 1}; "kéo giảm nhiều nhất" = ΔR âm nhất; "giảm ít nhất" = '
-                      'ΔR âm gần 0 nhất trong các nhóm giảm (smallest_decrease); tương tự cho chiều tăng.',
-                      rows=rows, derived=derived, evidence=turn.evidence(
+                      'ΔR âm gần 0 nhất trong các nhóm giảm (smallest_decrease); tương tự cho chiều tăng. Đóng góp của '
+                      'nhóm là phân rã số học, không phải nguyên nhân.',
+                      rows=rows, derived=derived, notes=[SEGMENT_NOTE], evidence=turn.evidence(
                           filters={'dimension_name': dim, 'year': year}, grain='một chiều × một nhóm × năm',
                           metrics=cat.metric_defs('R', 'delta_r', 'yoy_rate', 'share', 'share_shift_pp',
                                                   'contribution_to_delta'),
@@ -530,13 +570,424 @@ def _calendar(turn: _Turn, a: dict) -> ToolResult:
                           metrics=cat.metric_defs(*mids), method=decision['text'] if decision else None))
 
 
+# --- B3: đọc dự báo do pipeline ghi (docs/hop_dong_du_bao.md §5–§8, docs/ke_hoach_ai_gd2.md) ---
+# Tool chỉ ĐỌC reporting.rpt_forecast_* của bản dữ liệu đang phục vụ; không train, không chọn model (luật chạy trong
+# pipeline, Q8). Mặc định ứng viên is_primary; ứng viên khác chỉ khi người hỏi nêu đích danh.
+
+FORECAST_START, FORECAST_END = (dt.date.fromisoformat(d) for d in cat.FORECAST_HORIZON)
+NO_FORECAST = ('Bản dữ liệu đang đọc không có bảng dự báo (reporting.rpt_forecast_*). Dự báo chỉ có trong bản dữ liệu do '
+               'pipeline dựng từ bước B2b (chế độ versioned); chế độ cũ, PostgreSQL và bản dựng trước B2b không có. '
+               'Không lấy số ở nguồn khác thay vào.')
+MODEL_LABEL = {
+    'lgbm_full': 'LightGBM, train toàn chuỗi', 'lgbm_2019': 'LightGBM, train từ 2019',
+    'sarimax_full': 'log + SARIMAX, train toàn chuỗi', 'sarimax_2019': 'log + SARIMAX, train từ 2019',
+    'blend_full': 'bản gộp LightGBM + log SARIMAX, train toàn chuỗi', 'arima_2019': 'ARIMA, train từ 2019',
+    'naive2y': 'mốc seasonal naive 2 năm', 'naive1y': 'mốc seasonal naive 1 năm',
+    'baseline_cu': 'mốc baseline cũ (trung bình mùa vụ × tăng trưởng gộp)',
+}
+COGS_LABEL = {'direct': 'COGS dự báo trực tiếp', 'ratio': 'COGS qua tỷ lệ COGS/G', 'copy': 'COGS chép theo mốc'}
+# Lý do do APP viết từ selection_step mà pipeline ghi (luật hợp đồng §5); LLM không tự đặt lý do.
+SELECTION_REASON = {
+    'buoc_1_khong_ung_vien_nao_qua_san': 'Bước 1 của luật chọn: không ứng viên nào thắng mốc seasonal naive 2 năm về '
+                                         'điểm ngày kết hợp ở cả 3 fold backtest, nên dùng mốc làm model chính.',
+    'buoc_2_diem_thap_nhat': 'Bước 2 của luật chọn: trong các ứng viên thắng mốc seasonal naive 2 năm ở cả 3 fold backtest, '
+                             'ứng viên này có điểm ngày kết hợp trung bình thấp nhất.',
+    'buoc_3_hoa_chon_don_gian': 'Bước 3 của luật chọn: các ứng viên có điểm trong vòng 1% của điểm thấp nhất được coi là '
+                                'hòa; ứng viên này đơn giản nhất trong nhóm hòa.',
+}
+BACKTEST_NOTE = ('Sai số backtest 2020–2022 (3 fold, mỗi fold dự báo 548 ngày), không phải độ chính xác trên 2023–2024 '
+                 '(chưa có số thực). Điểm của ứng viên thắng là lạc quan vì được chọn từ nhiều ứng viên trên cùng 3 fold.')
+
+
+class _NoForecast(Exception):
+    pass
+
+
+def _missing_relation(e: Exception) -> bool:
+    """Lỗi 'bảng không tồn tại' của DuckDB / PostgreSQL / Databricks khi đọc rpt_forecast_*."""
+    m = str(e).lower()
+    return 'rpt_forecast' in m and any(k in m for k in ('does not exist', 'not found', 'cannot be found', 'catalog error',
+                                                       'table_or_view_not_found', 'undefined'))
+
+
+def _ffetch(turn: '_Turn', source: str, sql: str, params: tuple = ()) -> list[dict]:
+    try:
+        return turn.fetch(source, sql, params).records()
+    except Exception as e:
+        if _missing_relation(e):
+            raise _NoForecast() from e
+        raise
+
+
+def _cand(model: str, cogs: str) -> str:
+    return f'{model}/{cogs}'
+
+
+def _cand_label(model: str, cogs: str) -> str:
+    return f"{MODEL_LABEL.get(model, model)} · {COGS_LABEL.get(cogs, cogs)}"
+
+
+def _candidates(turn: '_Turn') -> tuple[list[dict] | None, ToolResult | None]:
+    rows = _ffetch(turn, 'reporting.rpt_forecast_daily',
+                   'select model, cogs_method, is_primary, selection_step, model_version, trained_through, run_id, '
+                   'interval_level, count(*) as n_days, min(forecast_date) as first_date, max(forecast_date) as last_date '
+                   'from reporting.rpt_forecast_daily group by model, cogs_method, is_primary, selection_step, '
+                   'model_version, trained_through, run_id, interval_level order by model, cogs_method')
+    prim = [r for r in rows if r['is_primary']]
+    if not rows:
+        return None, ToolResult('no_data', NO_FORECAST)
+    if len(prim) != 1 or len({(r['model'], r['cogs_method']) for r in rows}) != len(rows):
+        return None, ToolResult('query_error', f'rpt_forecast_daily có {len(prim)} ứng viên is_primary (cần đúng 1) hoặc '
+                                'ứng viên trùng metadata; không trả số.')
+    return rows, None
+
+
+def _primary_info(p: dict) -> dict:
+    return {'candidate': _cand(p['model'], p['cogs_method']), 'label': _cand_label(p['model'], p['cogs_method']),
+            'selection_step': p['selection_step'],
+            'selection_reason': SELECTION_REASON.get(p['selection_step'], f"bước {p['selection_step']} (chưa có mô tả)"),
+            'model_version': p['model_version'], 'trained_through': p['trained_through']}
+
+
+# tên họ model người hỏi hay dùng → tiền tố mã ứng viên (live B3c GM11: model='lightgbm'; GM15: "theo SARIMAX")
+FAMILY = {'lgbm': 'lgbm', 'lightgbm': 'lgbm', 'sarimax': 'sarimax', 'log sarimax': 'sarimax', 'arima': 'arima',
+          'blend': 'blend', 'bản gộp': 'blend', 'ban gop': 'blend', 'ensemble': 'blend'}
+
+
+def _family(model, rows: list[dict]) -> str | None:
+    """Tiền tố họ nếu `model` là TÊN HỌ (không trùng mã ứng viên nào); None nếu là mã ứng viên hoặc tên lạ."""
+    if any(r['model'] == model for r in rows):
+        return None
+    return FAMILY.get(' '.join(str(model).replace('_', ' ').replace('+', ' ').lower().split()))
+
+
+def _pick(rows: list[dict], a: dict, g_only: bool = False) -> tuple[dict | None, ToolResult | None]:
+    """Ứng viên được đọc: mặc định is_primary. Có model / cogs_method thì đúng ứng viên đó, không thay bằng ứng viên khác.
+    model là tên họ có nhiều biến thể (cửa sổ train) thì hỏi lại. g_only (chỉ hỏi G): không đòi chọn cách COGS, vì
+    G của một model không phụ thuộc cách COGS (_forecast kiểm lại trên dữ liệu trước khi trả số)."""
+    prim = next(r for r in rows if r['is_primary'])
+    model, cogs = a.get('model'), a.get('cogs_method')
+    if model is None and cogs is None:
+        return prim, None
+    model = model or prim['model']
+    if fam := _family(model, rows):
+        models = sorted({r['model'] for r in rows if r['model'].startswith(fam + '_')})
+        if len(models) > 1:
+            return None, ToolResult('needs_clarification', f'Họ model "{model}" có {len(models)} biến thể trong bản dữ liệu: '
+                                    + ', '.join(f'{m} ({MODEL_LABEL.get(m, m)})' for m in models)
+                                    + '. Cần chọn một biến thể; không tự chọn, không thay bằng model chính.',
+                                    missing=['model'])
+        model = models[0] if models else model
+    hit = [r for r in rows if r['model'] == model and (cogs is None or r['cogs_method'] == cogs)]
+    have = ', '.join(_cand(r['model'], r['cogs_method']) for r in rows)
+    if not hit:
+        return None, ToolResult('no_data', f'Bản dữ liệu không có ứng viên {_cand(model, cogs or "*")}. Các ứng viên có: '
+                                f'{have}. Không thay bằng model khác.', rejected={'model': 'không có trong bản dữ liệu'})
+    if len(hit) > 1 and g_only:
+        return sorted(hit, key=lambda r: (not r['is_primary'], r['cogs_method']))[0], None
+    if len(hit) > 1:
+        return None, ToolResult('needs_clarification', f'Model {model} có {len(hit)} cách tính COGS: '
+                                + ', '.join(f"{r['cogs_method']} ({COGS_LABEL.get(r['cogs_method'], '')})" for r in hit)
+                                + '. Cần chọn cogs_method.', missing=['cogs_method'])
+    return hit[0], None
+
+
+def _month_end(y: int, m: int) -> dt.date:
+    return (dt.date(y + m // 12, m % 12 + 1, 1) - dt.timedelta(days=1))
+
+
+def _window(a: dict) -> tuple[tuple | None, ToolResult | None]:
+    """(nhãn kỳ, ngày đầu, ngày cuối của kỳ được hỏi) hoặc lỗi. Kiểm kỳ so với kỳ dự báo ở hàm gọi."""
+    p, y, m, d = a['period'], a.get('year'), a.get('month'), a.get('day')
+    need = {'day': ['year', 'month', 'day'], 'month': ['year', 'month'], 'year': ['year'], 'horizon': []}[p]
+    if (miss := [k for k in need if a.get(k) is None]):
+        return None, ToolResult('needs_clarification', f'Cần làm rõ: {", ".join(miss)} của kỳ dự báo.', missing=miss)
+    if (extra := [k for k in ('year', 'month', 'day') if k not in need and a.get(k) is not None]):
+        return None, ToolResult('unsupported', f'period = {p} không đi kèm {", ".join(extra)}.',
+                                rejected={k: f'không dùng với period {p}' for k in extra})
+    try:
+        if p == 'day':
+            start = end = dt.date(y, m, d)
+            return (f'{d:02d}/{m:02d}/{y}', start, end), None
+        if p == 'month':
+            if not 1 <= m <= 12:
+                raise ValueError
+            return (f'{m:02d}/{y}', dt.date(y, m, 1), _month_end(y, m)), None
+        if p == 'year':
+            return (str(y), dt.date(y, 1, 1), dt.date(y, 12, 31)), None
+    except ValueError:
+        return None, ToolResult('unsupported', 'Ngày / tháng không hợp lệ.', rejected={'period': 'ngày không có thật'})
+    return ('2023-01-01 → 2024-07-01', FORECAST_START, FORECAST_END), None
+
+
+def _outside(label: str, start: dt.date, end: dt.date) -> ToolResult | None:
+    if end < FORECAST_START:
+        return ToolResult('unsupported', f'Kỳ {label} nằm trong dữ liệu thực tế (tới 2022-12-31): không có dự báo cho kỳ '
+                          'đã qua. Hỏi số thực tế thì dùng các tool số liệu lịch sử. Không đưa dự báo ra làm thực tế.',
+                          rejected={'period': 'trước kỳ dự báo'})
+    if start > FORECAST_END:
+        return ToolResult('no_data', f'Kỳ {label} nằm ngoài kỳ dự báo 2023-01-01 → 2024-07-01 (548 ngày). Không có số dự '
+                          'báo cho kỳ này; không ngoại suy thêm.')
+    if start < FORECAST_START:
+        return ToolResult('unsupported', f'Kỳ {label} có phần trước 2023-01-01 là dữ liệu thực tế: hỏi riêng phần thực tế '
+                          'và phần dự báo, không cộng chung.', rejected={'period': 'trộn thực tế và dự báo'})
+    return None
+
+
+def _typical_month_error(turn: '_Turn', c: dict):
+    rows = _ffetch(turn, 'reporting.rpt_forecast_backtest',
+                   "select fold_origin, value from reporting.rpt_forecast_backtest where model = {p} and cogs_method = {p} "
+                   "and metric = 'mape_g_thang' and grain = 'thang'", (c['model'], c['cogs_method']))
+    vals = [r['value'] for r in rows if r['value'] is not None]
+    return sum(vals) / len(vals) if len(vals) == 3 else None
+
+
+def _month_metric_note(turn: '_Turn', c: dict) -> list[str]:
+    """Câu hỏi dự báo theo tháng / năm: model chính chọn theo điểm NGÀY (Q1, Q8). PM giữ một model chính (2026-10-15) và
+    muốn agent nói kèm khi thước tháng xếp model khác tốt hơn. App in ghi chú từ rpt_forecast_backtest (không viết sẵn
+    tên model, không chọn lại model); không có khi model chính cũng có MAPE G tháng thấp nhất. G không phụ thuộc cách
+    COGS nên so theo model."""
+    rows = _ffetch(turn, 'reporting.rpt_forecast_backtest',
+                   "select model, cogs_method, avg(value) as value, count(*) as n from reporting.rpt_forecast_backtest "
+                   "where role = 'candidate' and metric = 'mape_g_thang' and grain = 'thang' group by model, cogs_method")
+    by = {}
+    for r in rows:
+        if r['value'] is not None and r['n'] == 3:
+            by[r['model']] = min(by.get(r['model'], r['value']), r['value'])
+    if c['model'] not in by:
+        return []
+    best = min(by.values())
+    hit = sorted(m for m, v in by.items() if v == best)
+    if c['model'] in hit:
+        return []
+    return [f'Theo sai số tháng (MAPE G tháng, backtest 2020–2022), {" / ".join(MODEL_LABEL.get(m, m) for m in hit)} '
+            f'sai ít hơn model chính: {_pct1(best)} so với {_pct1(by[c["model"]])}. Model chính được chọn theo điểm ngày '
+            'kết hợp (luật chọn chốt trước khi chấm); hỏi "so sánh các model" để xem đủ hai thước.']
+
+
+def _pct1(v) -> str:
+    return f'{float(v):.1f}'.replace('.', ',') + '%'
+
+
+def _fields(metric: str, g, cogs) -> dict:
+    out = {}
+    if metric in ('G', 'G_and_COGS'):
+        out['g_forecast'] = g
+    if metric in ('COGS', 'G_and_COGS'):
+        out['cogs_forecast'] = cogs
+    if metric == 'G_and_COGS' and g:
+        out['cogs_ratio'] = cogs / g
+    return out
+
+
+def _forecast(turn: '_Turn', a: dict) -> ToolResult:
+    w, err = _window(a)
+    if err:
+        return err
+    label, start, end = w
+    if (err := _outside(label, start, end)):
+        return err
+    try:
+        cands, err = _candidates(turn)
+        if err:
+            return err
+        c, err = _pick(cands, a, g_only=a['metric'] == 'G')
+        if err:
+            return err
+        prim = next(r for r in cands if r['is_primary'])
+        key = (c['model'], c['cogs_method'])
+        any_cogs = (a.get('model') is not None and a.get('cogs_method') is None
+                    and sum(r['model'] == c['model'] for r in cands) > 1)     # chỉ hỏi G, model có nhiều cách COGS
+        head = {'candidate': _cand(*key),
+                'candidate_label': MODEL_LABEL.get(c['model'], c['model']) if any_cogs else _cand_label(*key),
+                'is_primary': c['is_primary'], 'model_version': c['model_version'], 'trained_through': c['trained_through']}
+        metric, p = a['metric'], a['period']
+        last = min(end, FORECAST_END)
+        if any_cogs:
+            diff = _ffetch(turn, 'reporting.rpt_forecast_daily',
+                           'select count(*) as n from (select forecast_date, max(yhat) - min(yhat) as d '
+                           'from reporting.rpt_forecast_daily where model = {p} and forecast_date >= {p} '
+                           'and forecast_date <= {p} group by forecast_date) x where d > 0.000001', (c['model'], start, last))
+            if diff[0]['n']:
+                return ToolResult('needs_clarification', f'G của {c["model"]} khác nhau giữa các cách tính COGS ở '
+                                  f'{diff[0]["n"]} ngày: cần chọn cogs_method.', missing=['cogs_method'])
+        derived = {'primary': _primary_info(prim), 'selected_is_primary': bool(c['is_primary']),
+                   'horizon': '2023-01-01 → 2024-07-01'}
+        if any_cogs:
+            derived['cogs_method_not_needed'] = 'G của model này như nhau ở mọi cách tính COGS (đã kiểm trên kỳ được hỏi)'
+        notes = []
+        if p == 'day':
+            r = _ffetch(turn, 'reporting.rpt_forecast_daily',
+                        'select forecast_date, yhat, lower, upper, cogs_yhat from reporting.rpt_forecast_daily '
+                        'where model = {p} and cogs_method = {p} and forecast_date = {p}', (*key, start))
+            if len(r) != 1:
+                return ToolResult('query_error', f'Ngày {label}: {len(r)} dòng dự báo cho ứng viên, cần 1.')
+            r = r[0]
+            row = {'period': label, 'year': start.year, 'month': start.month, 'forecast_date': start, **head,
+                   **_fields(metric, r['yhat'], r['cogs_yhat'])}
+            if 'g_forecast' in row:
+                row['lower_g'], row['upper_g'] = r['lower'], r['upper']
+            rows = [row]
+        else:
+            group = p == 'horizon'
+            sel = ('extract(year from forecast_date) as y, extract(month from forecast_date) as m, ' if group else '')
+            r = _ffetch(turn, 'reporting.rpt_forecast_daily',
+                        f'select {sel}count(*) as n_days, sum(yhat) as g, sum(cogs_yhat) as cogs '
+                        'from reporting.rpt_forecast_daily where model = {p} and cogs_method = {p} '
+                        'and forecast_date >= {p} and forecast_date <= {p}'
+                        + (' group by extract(year from forecast_date), extract(month from forecast_date) '
+                           'order by y, m' if group else ''), (*key, start, last))
+            tme = _typical_month_error(turn, c) if metric != 'COGS' and p in ('month', 'horizon') else None
+            notes = _month_metric_note(turn, c) if metric != 'COGS' and c['is_primary'] else []
+            rows = []
+            for x in r:
+                if group:
+                    y, m = int(x['y']), int(x['m'])
+                    lab, n_all = f'{m:02d}/{y}', _month_end(y, m).day
+                    extra = {'year': y, 'month': m}
+                else:
+                    lab, n_all = label, (end - start).days + 1
+                    extra = {'year': start.year, **({'month': start.month} if p == 'month' else {})}
+                row = {'period': lab, **extra, **head, **_fields(metric, x['g'], x['cogs']), 'n_days': int(x['n_days']),
+                       'n_days_in_period': n_all, 'is_partial': int(x['n_days']) < n_all}
+                if tme is not None:
+                    row['typical_month_error'] = tme
+                rows.append(row)
+            expect = (last - start).days + 1
+            if sum(x['n_days'] for x in rows) != expect:
+                return ToolResult('query_error', f'Kỳ {label}: có {sum(x["n_days"] for x in rows)} ngày dự báo, cần '
+                                  f'{expect}; không trả tổng thiếu ngày.')
+            if end > FORECAST_END:
+                # cụm danh từ (live B3c GM05: câu cũ là cả mệnh đề nên câu trả lời lặp "nằm ngoài kỳ dự báo")
+                derived['missing_part'] = (f'{(FORECAST_END + dt.timedelta(days=1)).isoformat()} → {end.isoformat()} '
+                                           f'({(end - FORECAST_END).days} ngày)')
+            if group:
+                tot = {'n_days': sum(x['n_days'] for x in rows)}
+                tot.update(_fields(metric, sum(x['g'] for x in r), sum(x['cogs'] for x in r)))
+                derived['horizon_total'] = tot
+                full = [x for x in rows if not x['is_partial'] and 'g_forecast' in x]
+                if full:
+                    hi, lo = max(x['g_forecast'] for x in full), min(x['g_forecast'] for x in full)
+                    derived['highest_month'] = {'months': [x['period'] for x in full if x['g_forecast'] == hi],
+                                                'g_forecast': hi}
+                    derived['lowest_month'] = {'months': [x['period'] for x in full if x['g_forecast'] == lo],
+                                               'g_forecast': lo}
+    except _NoForecast:
+        return ToolResult('no_data', NO_FORECAST)
+    read_at = _now()
+    pi = derived['primary']
+    derived['forecast_label'] = (f"Dự báo, {cat.G_LABEL}. Ứng viên: {head['candidate_label']}"
+                                 + ('' if c['is_primary'] else ' (không phải model chính)')
+                                 + f" · model_version {c['model_version']} · train tới {_iso(c['trained_through'])}"
+                                 + (' · khoảng 80% theo ngày' if p == 'day' else
+                                    ' · tháng / năm không có khoảng dự báo (Q7), xem sai số tháng điển hình'))
+    note = ('' if c['is_primary'] else f" Ứng viên này KHÔNG phải model chính; model chính là {pi['label']}.")
+    mids = {'G': ['G_forecast'], 'COGS': ['COGS_forecast'], 'G_and_COGS': ['G_forecast', 'COGS_forecast']}[metric]
+    mids += ['forecast_interval'] if p == 'day' and metric != 'COGS' else (['mape_g_thang'] if metric != 'COGS' else [])
+    return ToolResult('ok', f'Dự báo ({cat.G_LABEL}) kỳ {label}, đọc từ rpt_forecast_daily của bản dữ liệu đang phục vụ. '
+                      'Kỳ dự báo 2023-01-01 → 2024-07-01; số thực tế dừng ở 2022-12-31. Đây là DỰ BÁO, không phải số '
+                      'thực tế; không cộng hay so trực tiếp với R thực tế.'
+                      + (' Theo ngày có khoảng 80%.' if p == 'day' else ' Tháng / năm không có khoảng dự báo; '
+                         'typical_month_error là sai số tháng điển hình (MAPE G tháng, backtest 2020–2022).')
+                      + note + f" Lý do chọn model chính: {pi['selection_reason']}",
+                      rows=rows, derived=derived, notes=notes, evidence=turn.evidence(
+                          filters={'period': p, **{k: a[k] for k in ('year', 'month', 'day') if a.get(k) is not None},
+                                   'candidate': head['candidate'], 'forecast_window': f'{start} → {last}'},
+                          grain={'day': 'ngày', 'month': 'tháng (cộng các ngày)', 'year': 'năm (cộng các ngày)',
+                                 'horizon': 'tháng trong kỳ dự báo (cộng các ngày)'}[p],
+                          metrics=cat.metric_defs(*mids), read_at=read_at,
+                          method=cat.DECISIONS['forecast_selection_rule']['text']))
+
+
+_BT_METRICS = ('score', 'mae_g', 'mae_cogs', 'rmse_g', 'r2_g', 'mape_g_thang', 'coverage_80', 'tai_tao_bien_do')
+
+
+def _forecast_backtest(turn: '_Turn', a: dict) -> ToolResult:
+    try:
+        cands, err = _candidates(turn)
+        if err:
+            return err
+        agg = _ffetch(turn, 'reporting.rpt_forecast_backtest',
+                      'select model, cogs_method, role, candidate_rank, metric, avg(value) as value, count(*) as n_folds '
+                      'from reporting.rpt_forecast_backtest where metric in ('
+                      + ', '.join('{p}' for _ in _BT_METRICS) + ') group by model, cogs_method, role, candidate_rank, metric',
+                      _BT_METRICS)
+        folds = _ffetch(turn, 'reporting.rpt_forecast_backtest',
+                        "select model, cogs_method, role, fold_origin, value from reporting.rpt_forecast_backtest "
+                        "where metric = 'score' order by fold_origin")
+        sel, fam = None, None
+        if a.get('model') is not None and (fam := _family(a['model'], cands)):
+            pass                     # tên họ: trả cả bảng, kèm danh sách biến thể của họ (so sánh họ model, live B3c GM11)
+        elif a.get('model') is not None or a.get('cogs_method') is not None:
+            sel, err = _pick(cands, a)
+            if err:
+                return err
+    except _NoForecast:
+        return ToolResult('no_data', NO_FORECAST)
+    read_at = _now()
+    floor = {f['fold_origin']: f['value'] for f in folds if f['role'] == 'floor'}
+    if len(floor) != 3:
+        return ToolResult('query_error', f'rpt_forecast_backtest có {len(floor)} fold của mốc sàn, cần 3.')
+    prim = next(r for r in cands if r['is_primary'])
+    by: dict = {}
+    for x in agg:
+        k = (x['model'], x['cogs_method'])
+        row = by.setdefault(k, {'candidate': _cand(*k), 'candidate_label': _cand_label(*k), 'role': x['role'],
+                                'candidate_rank': x['candidate_rank'], 'is_primary': k == (prim['model'], prim['cogs_method'])})
+        row[x['metric']] = x['value']
+        if x['metric'] == 'score':
+            row['n_folds'] = int(x['n_folds'])
+    for k, row in by.items():
+        mine = {f['fold_origin']: f['value'] for f in folds if (f['model'], f['cogs_method']) == k}
+        row['beats_floor_all_folds'] = (row['role'] != 'floor' and set(mine) == set(floor)
+                                        and all(mine[o] < floor[o] for o in floor))
+    rows = sorted(by.values(), key=lambda r: (r.get('score') is None, r.get('score')))
+    if any(r.get('n_folds') != 3 or r.get('score') is None for r in rows):
+        return ToolResult('query_error', 'rpt_forecast_backtest thiếu điểm của ứng viên ở một fold; không xếp hạng trên tập thiếu.')
+    cand_rows = [r for r in rows if r['role'] == 'candidate']
+
+    def lowest(metric):
+        vals = [r for r in cand_rows if r.get(metric) is not None]
+        best = min(r[metric] for r in vals)
+        hit = [r['candidate_label'] for r in vals if r[metric] == best]
+        return {'candidates': hit, metric: best, 'tie': len(hit) > 1}
+    floor_row = next(r for r in rows if r['role'] == 'floor')
+    pr = by[(prim['model'], prim['cogs_method'])]
+    derived = {
+        'primary': {**_primary_info(prim), 'score': pr['score'], 'mape_g_thang': pr.get('mape_g_thang')},
+        'floor': {'label': floor_row['candidate_label'], 'score': floor_row['score']},
+        'improvement_vs_floor': 1 - pr['score'] / floor_row['score'],
+        'lowest_score': lowest('score'), 'lowest_mape_g_thang': lowest('mape_g_thang'),
+        'n_candidates': len(cand_rows), 'n_pass_floor': sum(r['beats_floor_all_folds'] for r in cand_rows),
+        'tie_rule': 'trong vòng 1% của điểm thấp nhất thì coi là hòa và chọn ứng viên đơn giản hơn',
+        'backtest_note': BACKTEST_NOTE,
+    }
+    derived['rankings_differ'] = set(derived['lowest_score']['candidates']) != set(derived['lowest_mape_g_thang']['candidates'])
+    derived['n_folds'] = len(floor)
+    if sel is not None:
+        derived['selected'] = by[(sel['model'], sel['cogs_method'])]
+    if fam is not None:
+        derived['family'] = {'name': a['model'],
+                             'candidates': [r['candidate_label'] for r in rows if r['candidate'].startswith(fam + '_')]}
+    return ToolResult('ok', 'So sánh ứng viên dự báo trên backtest, đọc từ rpt_forecast_backtest. Thước CHỌN model là điểm '
+                      'ngày kết hợp (MAE G + MAE COGS) / 2, trung bình 3 fold; MAPE G tháng chỉ để hiển thị, có thể xếp '
+                      f'hạng khác. {BACKTEST_NOTE} Model chính: {derived["primary"]["label"]}. '
+                      f'{derived["primary"]["selection_reason"]}',
+                      rows=rows, derived=derived, evidence=turn.evidence(
+                          filters={'backtest': '3 fold, origin 2020-06-30 / 2020-12-31 / 2021-06-30'},
+                          grain='ứng viên (trung bình 3 fold)', read_at=read_at,
+                          metrics=cat.metric_defs('forecast_score', 'mape_g_thang'),
+                          method=cat.DECISIONS['forecast_selection_rule']['text']))
+
+
 _YEAR = Param('int', 'năm theo ngày đặt hàng, vd. 2019')
 _METRIC_RG = Param('enum', 'R (đơn delivered, sau chiết khấu) hay G (mọi đơn, chưa trừ chiết khấu)', ('R', 'G'))
 
 TOOLS = {s.name: s for s in [
-    ToolSpec('get_revenue_summary', 'Mức R/G của một năm; với R có thể kèm so năm trước.', {
+    ToolSpec('get_revenue_summary', 'Mức R/G của một năm, hoặc từng năm year → to_year; R có thể kèm so năm trước.', {
         'metric': Param('enum', 'R, G hay cả hai (R_and_G)', ('R', 'G', 'R_and_G')),
         'year': _YEAR,
+        'to_year': Param('int', 'năm cuối, khi hỏi từng năm', required=False),
         'compare_prior_year': Param('bool', 'kèm R năm trước, ΔR, % đổi', required=False, default=False),
     }, _summary),
     ToolSpec('get_revenue_drivers', 'Phân rã ΔR một năm so năm trước theo N → U → P (phân rã số học).', {
@@ -573,6 +1024,29 @@ TOOLS = {s.name: s for s in [
              'cuoi_thang (dồn về cuối tháng), thang_8 (tháng 8 năm lẻ so năm chẵn).', {
         'pattern': Param('enum', 'mua_vu / cuoi_thang / thang_8', ('mua_vu', 'cuoi_thang', 'thang_8')),
     }, _calendar),
+    ToolSpec('get_forecast', 'DỰ BÁO G (doanh thu gộp, gồm cả đơn hủy) và COGS toàn công ty trong kỳ 2023-01-01 → '
+             '2024-07-01, đọc từ kết quả pipeline. Mặc định model chính; model khác chỉ khi người hỏi nêu đích danh. '
+             'Không có dự báo R, không có dự báo theo ngành / vùng / kênh.', {
+        'metric': Param('enum', 'G (doanh thu gộp, gồm cả đơn hủy), COGS hay cả hai; R chưa có dự báo',
+                        ('G', 'COGS', 'G_and_COGS', 'R')),
+        'period': Param('enum', 'day (một ngày), month (một tháng), year (một năm), horizon (cả kỳ dự báo, theo tháng)',
+                        tuple(cat.FORECAST_GRAINS)),
+        'year': Param('int', 'năm, với period day / month / year', required=False),
+        'month': Param('int', 'tháng 1–12, với period day / month', required=False),
+        'day': Param('int', 'ngày trong tháng, với period day', required=False),
+        'model': Param('str', 'chỉ khi người hỏi nêu đích danh model khác model chính: mã <họ>_<full|2019> (họ lgbm, '
+                       'sarimax, arima, blend), hoặc chỉ tên họ nếu người hỏi không nêu cửa sổ train', required=False,
+                       max_len=40),
+        'cogs_method': Param('enum', 'chỉ khi người hỏi nêu cách tính COGS: ratio (qua tỷ lệ) hoặc direct (trực tiếp); '
+                             'hỏi riêng G thì không cần', ('ratio', 'direct', 'copy'), required=False),
+    }, _forecast),
+    ToolSpec('get_forecast_backtest', 'So sánh các model dự báo trên backtest 2020–2022: điểm ngày kết hợp (thước chọn '
+             'model), MAPE G tháng (hiển thị), sàn seasonal naive 2 năm, model chính và lý do chọn. Dùng cho "model nào '
+             'chính xác nhất", "vì sao chọn model này", "model X sai số bao nhiêu".', {
+        'model': Param('str', 'tùy chọn: mã ứng viên hoặc tên họ được hỏi; so hai họ thì không truyền', required=False,
+                       max_len=40),
+        'cogs_method': Param('enum', 'tùy chọn: ratio / direct / copy', ('ratio', 'direct', 'copy'), required=False),
+    }, _forecast_backtest),
 ]}
 
 
@@ -580,6 +1054,7 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')
 
 
+@releases.pinned_read
 def run(call: ToolCall | dict, backend: str, *, timeout_s: float | None = None,
         max_rows: int = DEFAULT_MAX_ROWS) -> ToolResult:
     if isinstance(call, dict):
@@ -595,7 +1070,8 @@ def run(call: ToolCall | dict, backend: str, *, timeout_s: float | None = None,
         return ToolResult('unsupported', 'Catalog chưa mở khả năng này: ' + '; '.join(blockers) + '.',
                           rejected={'capability': '; '.join(blockers)})
     try:
-        sess = open_session(backend, ALLOWED_RELATIONS, timeout_s=timeout_s, max_rows=max_rows)
+        sess = open_session(backend, ALLOWED_RELATIONS, timeout_s=timeout_s, max_rows=max_rows,
+                            optional_relations=OPTIONAL_RELATIONS)
     except GuardError as e:
         return ToolResult('query_error', f'Kết nối AI không đạt điều kiện chỉ đọc: {e}. Không đọc dữ liệu.')
     except Exception as e:

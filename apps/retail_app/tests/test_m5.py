@@ -47,6 +47,17 @@ def _the(at) -> dict:
 
 # ---------------- trạng thái thật sau dbt build ----------------
 
+def _singular_build_thuong() -> list[str]:
+    """Test nghiệp vụ phải chạy ở build thường: mọi file assert_*.sql, trừ test chỉ bật trong pipeline có dự báo
+    (config enabled theo var forecast_path trong tests/_singular_tests.yml, B2b 2026-10-15)."""
+    import yaml
+    tests = Path(__file__).resolve().parents[3] / 'retail_dbt' / 'tests'
+    cfg = yaml.safe_load((tests / '_singular_tests.yml').read_text(encoding='utf-8'))
+    pipeline_only = {d['name'] for d in cfg.get('data_tests', cfg.get('tests', []))
+                     if 'forecast_path' in str((d.get('config') or {}).get('enabled', ''))}
+    return [f.stem for f in tests.glob('assert_*.sql') if f.stem not in pipeline_only]
+
+
 @pytest.mark.parametrize('backend', ['postgres', 'duckdb'])
 def test_kho_dat_sau_build(monkeypatch, backend):
     s = queries.health_summary(backend).iloc[0]
@@ -54,8 +65,7 @@ def test_kho_dat_sau_build(monkeypatch, backend):
     assert s['status_code'] == 'tot', s['status_code']
     assert s['test_command'] == 'build' and s['tests_started_at_utc'] == s['built_at_utc']
     assert s['n_tests_run'] == s['n_tests_in_project'] == s['n_tests_pass'] and s['n_tests_not_pass'] == 0
-    assert s['n_singular_run'] == len(list((Path(__file__).resolve().parents[3] / 'retail_dbt' / 'tests')
-                                          .glob('assert_*.sql')))   # mọi file test nghiệp vụ đều đã chạy
+    assert s['n_singular_run'] == len(_singular_build_thuong())   # mọi file test nghiệp vụ đều đã chạy
     at = _open(monkeypatch, backend)
     assert not at.error
     n = num(s['n_tests_run'])

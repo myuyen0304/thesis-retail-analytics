@@ -7,12 +7,16 @@ version: 2
 #   nạp cùng snapshot Parquet của scripts/ingest/snapshot.py, _src_row đánh ở máy theo thứ tự record CSV
 sources:
   - name: raw
-    schema: raw
+    schema: "{{ ('r_' ~ var('release_id') ~ '_raw') if var('release_id', '') else 'raw' }}"
     config:
       meta:
         external_location: >-
+          {% if var('snapshot_path', '') %}
+          read_parquet('{{ var("snapshot_path") }}/{name}.parquet')
+          {% else %}
           (select *, row_number() over () as _src_row
            from read_csv('data/{name}.csv', header = true, all_varchar = true))
+          {% endif %}
     tables:
       - name: customers
       - name: geography
@@ -28,3 +32,16 @@ sources:
       - name: web_traffic
       - name: sales
       - name: sample_submission
+
+  # Kết quả stage dự báo của pipeline (scripts/forecast/stage.py). Chỉ dùng khi pipeline truyền var forecast_path
+  # (models reporting/rpt_forecast_* tắt khi không có var này, nên build cũ không đổi).
+  # - target duckdb    : đọc thẳng parquet trong thư mục run
+  # - target databricks: bảng r_<id>_raw.forecast_* do scripts/pipeline/runtime.py ingest_forecast nạp
+  - name: forecast
+    schema: "{{ ('r_' ~ var('release_id') ~ '_raw') if var('release_id', '') else 'raw' }}"
+    config:
+      meta:
+        external_location: "read_parquet('{{ var(\"forecast_path\", \"\") }}/{name}.parquet')"
+    tables:
+      - name: forecast_daily
+      - name: forecast_backtest

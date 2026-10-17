@@ -53,11 +53,14 @@ class ToolResult:
     derived: dict = field(default_factory=dict)     # chọn/xếp hạng tính từ ĐỦ tập rows (vd. nhóm giảm mạnh nhất)
     missing: list[str] = field(default_factory=list)   # needs_clarification: trường còn thiếu
     rejected: dict = field(default_factory=dict)       # unsupported: trường/giá trị bị từ chối → lý do
+    # ghi chú APP in dưới câu trả lời (vd. "phân rã số học, không phải nguyên nhân"); không gửi cho mô hình, không
+    # phụ thuộc câu văn của mô hình (live B6 V03). Số trong ghi chú (nếu có) do tool lấy từ chính các dòng nó đã đọc
+    notes: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         assert self.status in TOOL_STATUSES, self.status
         if self.status != 'ok':
-            assert not self.rows and not self.derived, 'trạng thái lỗi không được kèm số'
+            assert not self.rows and not self.derived and not self.notes, 'trạng thái lỗi không được kèm số'
 
     @property
     def ok(self) -> bool:

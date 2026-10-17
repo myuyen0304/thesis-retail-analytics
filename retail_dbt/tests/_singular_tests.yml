@@ -47,3 +47,11 @@ data_tests:
     description: "PS4/PS5: phần góp theo năm và giai đoạn khớp, cộng về mức đổi R; kéo lên/xuống; hạng nhóm."
   - name: assert_rpt_health
     description: "Sức khỏe dữ liệu: số đếm test, trạng thái chung và log nạp nguồn khớp nhật ký và bảng raw."
+  - name: assert_rpt_forecast
+    config:
+      enabled: "{{ var('forecast_path', '') != '' }}"
+    description: "Dự báo: mỗi ứng viên đủ 548 ngày, khoảng dự báo đúng thứ tự, đúng một ứng viên chính khớp luật chọn tính lại từ backtest, COGS/G trong khoảng lịch sử, tháng 8/2023 sụt và COGS > G. Chỉ chạy trong pipeline."
+  - name: assert_rpt_forecast_actual
+    config:
+      enabled: "{{ var('forecast_path', '') != '' }}"
+    description: "Số thực tế G, COGS theo ngày của trang Dự báo khớp sales.csv từng ngày, mỗi ngày một dòng, dừng đúng ngày model train tới và dự báo bắt đầu ngay hôm sau. Chỉ chạy trong pipeline."

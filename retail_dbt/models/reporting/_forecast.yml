@@ -1,0 +1,18 @@
+version: 2
+
+# Kho dự báo B2b (docs/hop_dong_du_bao.md §7). Ba model chỉ bật khi pipeline truyền var forecast_path
+# (scripts/pipeline/cli.py), nên `dbt build` thường trên duckdb/postgres không đổi. rpt_forecast_actual (B3b,
+# 2026-10-15) là số thực tế để trang Dự báo vẽ cạnh dự báo, cùng điều kiện bật.
+# Không khai báo test cột ở đây: dbt vẫn đăng ký test YAML của model bị tắt, làm hỏng build thường.
+# Mọi kiểm (kể cả not_null, giá trị hợp lệ) nằm trong tests/assert_rpt_forecast*.sql, các test đó tắt cùng model.
+# Ba bảng là bảng TÙY CHỌN: chat đọc hai bảng dự báo qua ai_optional_relations; trang Dự báo đọc cả ba qua
+# apps/retail_app/dwh/forecast_queries.py, quyền app qua app_optional_relations (RV11). Không thêm vào
+# ai_readonly_relations / app_read_relations (bảng bắt buộc):
+# làm hỏng rollback về bản cũ, xem .agents/skills/retail-ai-explain/references/agent_levels.md.
+models:
+  - name: rpt_forecast_daily
+    description: "Dự báo G (doanh thu gộp, gồm cả đơn hủy) và COGS theo ngày 2023-01-01 → 2024-07-01, một dòng = ngày × ứng viên. Đúng một ứng viên is_primary do luật chọn quyết."
+  - name: rpt_forecast_backtest
+    description: "Sai số backtest 2020–2022 của mọi mốc và ứng viên, theo fold × chỉ số. Nguồn để kiểm và giải thích việc chọn ứng viên chính."
+  - name: rpt_forecast_actual
+    description: "G (doanh thu gộp, gồm cả đơn hủy) và COGS THỰC TẾ theo ngày 2012-07-04 → 2022-12-31, một dòng = một ngày. Trang Dự báo vẽ cạnh dự báo; cùng bản dữ liệu với rpt_forecast_daily."

@@ -5,8 +5,10 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
+from dwh import forecast_queries
 from dwh import queries
-from dwh.connection import default_backend, describe, enabled_backends
+from dwh import releases
+from dwh.connection import default_backend, describe, enabled_backends, release_for_read
 from ui.fmt import num, pct, ty
 
 BACKEND_LABEL = {'postgres': 'PostgreSQL (Docker)', 'duckdb': 'DuckDB (file, dự phòng)',
@@ -22,16 +24,19 @@ def backend() -> str:
 
 
 def sidebar() -> None:
+    releases.reset()
     backend()
     st.session_state._reads = {}          # bảng đã đọc trong lượt chạy này (report_reads liệt kê lại)
     st.sidebar.radio('Nguồn dữ liệu', enabled_backends(), key='backend', format_func=BACKEND_LABEL.get)
+    if st.session_state.get('ai_backend') != backend():
+        st.session_state.ai_turns, st.session_state.ai_tokens, st.session_state.ai_backend = [], 0, backend()
     if st.sidebar.button('Đọc lại dữ liệu'):
         st.cache_data.clear()
         st.session_state.reloaded = True   # report_reads sẽ báo thành công sau khi trang đọc xong
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def load(query_name: str, backend_name: str) -> tuple[pd.DataFrame, dt.datetime]:
+def load(query_name: str, backend_name: str, release_id: str = '') -> tuple[pd.DataFrame, dt.datetime]:
     # backend_name là tham số tường minh → cache tách riêng từng backend.
     # Trả kèm thời điểm truy vấn DB thật (không phải lúc lấy từ cache).
     return getattr(queries, query_name)(backend_name), dt.datetime.now()
@@ -42,7 +47,8 @@ def load_or_stop(query_name: str, allow_empty: bool = False) -> pd.DataFrame:
     allow_empty=True cho bảng được phép rỗng (vd. log nạp trên DuckDB), trang tự xử lý."""
     b = backend()
     try:
-        df, read_at = load(query_name, b)
+        record = release_for_read(b)
+        df, read_at = load(query_name, b, record['release_id'] if record else '')
     except Exception as e:  # lỗi kết nối: báo rõ để người demo chuyển backend
         st.session_state.pop('reloaded', None)
         st.error(f'Không đọc được `{query_name}` từ {BACKEND_LABEL[b]}: {type(e).__name__}.')
@@ -101,7 +107,8 @@ def report_reads(top) -> None:
     if not reads:
         return
     b = backend()
-    tables = ', '.join(f'`{queries.SOURCE[q]}` ({num(n)} dòng)' for q, (n, _) in reads.items())
+    source = {**queries.SOURCE, **forecast_queries.SOURCE}      # trang Dự báo đọc thêm bảng tùy chọn
+    tables = ', '.join(f'`{source[q]}` ({num(n)} dòng)' for q, (n, _) in reads.items())
     times = [t for _, t in reads.values()]
     if st.session_state.pop('reloaded', False):
         when = max(times).strftime('%H:%M:%S %d/%m/%Y')
@@ -129,7 +136,7 @@ def info_strip() -> None:
         st.markdown(
             f'**Kỳ phân tích:** {i["analysis_start_year"]}–{i["analysis_end_year"]}{ref}; '
             f'tăng trưởng năm tính từ {i["growth_start_year"]}.  \n'
-            '**R** = tiền thực nhận: chỉ đơn đã giao, đã trừ chiết khấu. '
+            '**R** = doanh thu đơn đã giao, sau chiết khấu; không phải dòng tiền theo ngày thanh toán. '
             '**G** = tiền hàng của mọi đơn (kể cả hủy, trả, chưa giao), chưa trừ chiết khấu; G chính là `sales.csv`. '
             'Mọi số gom theo ngày đặt hàng.  \n'
             '**Tiền:** VND (PM chốt ngày 05/10/2026; dữ liệu nguồn không ghi đơn vị). "tỷ" là tỷ đồng, '
@@ -193,8 +200,8 @@ def kpi_revenue(row: pd.Series) -> None:
     c1, c2, c3 = st.columns(3)
     kpi(c1, 'G: tiền hàng mọi đơn', ty(row['g'], 2),
         f'Mọi đơn, chưa trừ chiết khấu (= sales.csv). Số đầy đủ: {num(row["g"], 2)}.')
-    kpi(c2, 'R: tiền thực nhận', ty(row['r'], 2), f'Chỉ đơn đã giao, đã trừ chiết khấu. Số đầy đủ: {num(row["r"], 2)}.')
-    kpi(c3, 'Tỷ lệ thực nhận R/G', pct(row['capture_rate'], 1), 'Càng gần 100% càng ít thất thoát.')
+    kpi(c2, 'R: doanh thu đơn đã giao', ty(row['r'], 2), f'Chỉ đơn đã giao, sau chiết khấu, theo ngày đặt hàng. Số đầy đủ: {num(row["r"], 2)}.')
+    kpi(c3, 'Tỷ lệ R/G', pct(row['capture_rate'], 1), 'Tỷ lệ R trên G cùng kỳ; chênh G−R không đồng nhất với thất thoát.')
 
 
 def notes(cach_doc: list[str], gioi_han: list[str]) -> None:

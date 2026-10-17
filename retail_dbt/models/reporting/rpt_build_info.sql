@@ -2,6 +2,9 @@
 -- built_at_utc = lúc lệnh dbt build/run bắt đầu (giờ UTC, không kèm múi giờ để hai backend cùng kiểu).
 -- Cột này khác nhau giữa các lần build và giữa hai backend; test so hai backend bỏ riêng cột này.
 select
+    '{{ var("release_id", "") }}' as release_id,
+    '{{ var("snapshot_id", "") }}' as snapshot_id,
+    '{{ var("code_version", "") }}' as code_version,
     cast('{{ run_started_at.strftime("%Y-%m-%d %H:%M:%S") }}' as timestamp) as built_at_utc,
     min(order_date)   as data_start_date,       -- đơn đầu tiên
     max(order_date)   as data_end_date,         -- đơn cuối cùng = lúc trích dữ liệu (trạng thái đơn chốt ở đây)
