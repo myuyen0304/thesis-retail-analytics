@@ -17,3 +17,7 @@ databricks-sql-connector==4.4.0  # app đọc DWH Databricks lab (backend 'datab
 databricks-sdk==0.117.0           # lấy token từ profile Databricks CLI cho app + scripts/parity
 openai==3.24.0          # AI Explain: client chuẩn OpenAI, dev gọi DeepSeek (apps/retail_app/ai_explain/provider.py)
 pytest==9.1.1          # test của app: .venv/Scripts/python.exe -m pytest apps/retail_app
+statsmodels==0.15.0    # dự báo B2: ARIMA, log + SARIMAX (notebooks/04_forecasting/so_sanh_model.ipynb), cài 2026-10-14
+lightgbm==4.7.0        # dự báo B2: LightGBM trên biến lịch
+holidays==0.106        # dự báo B2: ngày Tết Việt Nam cho biến lịch
+scipy==1.18.1          # statsmodels dùng bộ tối ưu của scipy; pin để hai máy ra cùng số
