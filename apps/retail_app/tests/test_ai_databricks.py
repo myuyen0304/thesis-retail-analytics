@@ -161,6 +161,27 @@ def test_known_groups_khong_nho_loi(monkeypatch):
     assert 'duckdb' in tools._KNOWN_GROUPS
 
 
+def test_moi_phien_cua_chat_cung_pham_vi_quyen(monkeypatch):
+    """Sự cố public 2026-10-17: tool dự báo đọc được bản pipeline, nhưng known_groups mở phiên KHÔNG kèm OPTIONAL_RELATIONS,
+    nên quyền đọc rpt_forecast_* mà pipeline cấp cho SP AI bị guard coi là thừa (GuardError) → mọi câu có số đều query_error.
+    Mọi phiên chat mở (tool + danh sách nhóm) phải cùng (allowed, optional) với run()."""
+    from ai_explain import service
+    from tests.test_ai_chat import FakeProvider, call, final
+    monkeypatch.setattr(tools, '_KNOWN_GROUPS', {})
+    real, scopes = tools.open_session, []
+
+    def ghi(backend, allowed, *a, **k):
+        scopes.append((frozenset(allowed), frozenset(k.get('optional_relations', frozenset()))))
+        return real(backend, allowed, *a, **k)
+
+    monkeypatch.setattr(tools, 'open_session', ghi)
+    t = service.run_turn('R 2019?', [], 'duckdb', FakeProvider(
+        call('get_revenue_summary', metric='R', year=2019), final('ok', 'R 2019 là {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].r'}])))
+    assert t.status == 'ok', t.message
+    assert len(scopes) == 2                                 # một phiên tool, một phiên danh sách nhóm
+    assert set(scopes) == {(tools.ALLOWED_RELATIONS, tools.OPTIONAL_RELATIONS)}, scopes
+
+
 class _Cursor:
     """Cursor giả: trả lần lượt kết quả cho 3 câu của _check_dbx_identity."""
 
