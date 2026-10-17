@@ -1102,7 +1102,8 @@ def known_groups(backend: str) -> frozenset:
     rỗng: tập rỗng nghĩa là "câu hỏi không lọc nhóm" và sẽ tắt ngầm phép kiểm bỏ bộ lọc (lỗi chặn AI3, A08). Trên
     Databricks lỗi thoáng qua (warehouse nguội, token) dễ xảy ra, nên không được nhớ lỗi suốt đời process."""
     if backend not in _KNOWN_GROUPS:
-        sess = open_session(backend, ALLOWED_RELATIONS)
+        # cùng phạm vi quyền với run(): thiếu optional thì quyền đọc rpt_forecast_* của bản pipeline bị coi là thừa (GuardError)
+        sess = open_session(backend, ALLOWED_RELATIONS, optional_relations=OPTIONAL_RELATIONS)
         try:
             rows = sess.fetch(Statement('select distinct dimension_value from reporting.rpt_revenue_segment_yearly')).records()
         finally:
