@@ -2220,3 +2220,15 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   thay vì một câu rõ ràng. Sửa mất một dòng code. Bạn muốn mình sửa không?
 - **Chưa thử:** cố ý làm hỏng một lần chạy trên Databricks để thấy app giữ bản cũ. Phần này mới có test trên máy.
 - **Airflow vẫn đang mở** ở `http://127.0.0.1:8080` để bạn xem. Muốn tắt: `docker compose -f docker-compose.airflow.yml stop`.
+
+### 2026-10-17: lệnh rollback báo rõ khi gõ nhầm mã bản
+
+- **Trước:** gõ nhầm mã bản thì lệnh rollback vẫn từ chối, không đổi gì, nhưng in ra lỗi kỹ thuật `KeyError` rất khó đọc.
+- **Bây giờ:** lệnh in một câu rõ: "không có phiên bản … trong registry; các bản rollback được: …", tức là nêu luôn các mã
+  bạn có thể chọn. Bản đang phục vụ vẫn không bị đổi.
+- **Vì sao tin được:** có test mới. Test này báo lỗi khi chạy với code cũ và đạt với code mới. Toàn bộ 16 test của pipeline
+  đạt. Mình cũng chạy thử lệnh thật trên một registry tạm ở máy.
+- **Chưa làm:** chưa chạy lại lệnh này trên Databricks. Lần chạy pipeline sau sẽ dựng một bản dữ liệu mới, vì code pipeline đã
+  đổi; đó là hành vi đúng, không phải lỗi.
+- **Airflow:** bạn đã tắt lúc 22:50 (`stop`); bật lại bằng `docker compose -f docker-compose.airflow.yml start`.
+- **Commit:** `2c067ac` (code), `b5aa37c` (test).
