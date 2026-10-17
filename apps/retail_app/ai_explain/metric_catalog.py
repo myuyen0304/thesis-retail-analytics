@@ -12,7 +12,7 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG_VERSION = 'ai3-2026-10-05'
+CATALOG_VERSION = 'b6-2026-10-17'   # mở chuỗi R / G từng năm (get_revenue_summary to_year)
 MONEY_UNIT = 'VND'
 
 # SQL quyết định định nghĩa các metric đang mở. Hash = nội dung các file này trong CHECKOUT hiện tại.
@@ -34,6 +34,9 @@ DEFINITION_FILES = (
     'retail_dbt/models/reporting/rpt_calendar_phase_month.sql',
     'retail_dbt/models/reporting/rpt_calendar_phase.sql',
     'retail_dbt/models/reporting/rpt_calendar_stability.sql',
+    # B3 (2026-10-15): đọc kết quả dự báo do pipeline ghi (luật chọn, khoảng 80%: scripts/forecast/core.py)
+    'retail_dbt/models/reporting/rpt_forecast_daily.sql',
+    'retail_dbt/models/reporting/rpt_forecast_backtest.sql',
 )
 
 
@@ -63,9 +66,13 @@ _TP = 'reporting.rpt_revenue_turning_point'
 _AP = 'reporting.rpt_august_parity'
 _CP = 'reporting.rpt_calendar_phase'
 _CS = 'reporting.rpt_calendar_stability'
+_FD = 'reporting.rpt_forecast_daily'
+_FB = 'reporting.rpt_forecast_backtest'
+G_LABEL = 'G — doanh thu gộp, gồm cả đơn hủy'        # hợp đồng dự báo §8: chốt 2026-10-11, dùng chung cho số thực tế và dự báo
+FORECAST_HORIZON = ('2023-01-01', '2024-07-01')       # hợp đồng §2: 548 ngày; ngoài kỳ này không có dự báo
 
 METRICS = {m['metric_id']: m for m in [
-    _m('G', 'G — doanh thu gộp', ['doanh thu gộp', 'tiền hàng mọi đơn'], MONEY_UNIT,
+    _m('G', G_LABEL, ['doanh thu gộp', 'tiền hàng mọi đơn'], MONEY_UNIT,
        'SUM(quantity × unit_price), mọi trạng thái đơn, theo ngày đặt hàng', 'cộng qua tập dòng không giao nhau',
        note='Đối chứng sales.csv.Revenue. Không phải R.', sources=[_Y]),
     _m('R', 'R — doanh thu đơn đã giao', ['doanh thu thuần', 'doanh thu đơn đã giao', 'tiền thực nhận'], MONEY_UNIT,
@@ -126,6 +133,29 @@ METRICS = {m['metric_id']: m for m in [
     _m('august_odd_vs_even', 'Chênh tháng 8 năm lẻ / năm chẵn', ['tháng 8 năm lẻ', 'Urban Blowout'], 'tỷ lệ',
        'TB chỉ số tháng 8 các năm lẻ ÷ TB các năm chẵn − 1 (2013–2022)', 'không cộng',
        note='Mô tả lịch sử 2013–2022, không phải dự báo cho năm sau 2022.', sources=[_AP, _CS]),
+    # --- B3 (2026-10-15): đọc dự báo do pipeline ghi (docs/hop_dong_du_bao.md §2, §5–§8) ---
+    _m('G_forecast', f'Dự báo {G_LABEL}', ['dự báo doanh thu', 'doanh thu dự kiến'], MONEY_UNIT,
+       'yhat theo ngày của ứng viên is_primary (luật chọn chạy trong pipeline); tháng / năm = cộng các ngày có dự báo',
+       'cộng các ngày của CÙNG một ứng viên; không cộng, không so trực tiếp với R thực tế (khác tập đơn)',
+       note='Dự báo, không phải số thực tế. Kỳ dự báo 2023-01-01 → 2024-07-01 (548 ngày); dữ liệu thực tế dừng ở '
+            '2022-12-31. Dự báo R chưa làm (PM chốt 2026-10-11).', sources=[_FD]),
+    _m('COGS_forecast', 'Dự báo COGS — giá vốn', ['dự báo giá vốn'], MONEY_UNIT,
+       'cogs_yhat theo ngày của ứng viên is_primary; COGS/G = tổng COGS ÷ tổng G của cùng kỳ',
+       'cộng các ngày của cùng một ứng viên',
+       note='Cách tính COGS (qua tỷ lệ hay dự báo trực tiếp) do backtest chọn (Q10). Tháng 8 năm lẻ COGS/G có thể > 1.',
+       sources=[_FD]),
+    _m('forecast_interval', 'Khoảng dự báo 80%', ['khoảng dự báo', 'cận trên', 'cận dưới'], MONEY_UNIT,
+       'quantile 10% và 90% của phần dư log trên backtest, nhân vào yhat; chỉ theo NGÀY',
+       'không cộng thành khoảng tháng: tháng chỉ hiển thị sai số tháng điển hình (Q7)', decision_status='de_xuat',
+       note='Mức 80% PM chốt (Q6); cách tính là đề xuất của dev (hợp đồng §6).', sources=[_FD]),
+    _m('forecast_score', 'Điểm ngày kết hợp (backtest)', ['sai số dự báo', 'độ chính xác model'], MONEY_UNIT,
+       '(MAE G + MAE COGS) / 2 theo ngày, trung bình 3 fold backtest 2020–2022', 'không cộng',
+       note='Thước CHỌN model (Q1). Sai số backtest 2020–2022, không phải độ chính xác trên 2023–2024 (chưa có số thực). '
+            'Điểm của ứng viên thắng là lạc quan vì được chọn từ nhiều ứng viên trên cùng 3 fold.', sources=[_FB]),
+    _m('mape_g_thang', 'Sai số tháng điển hình (MAPE G tháng)', ['sai số tháng', 'MAPE'], '% (đã nhân 100)',
+       'trung bình |G tháng dự báo − G tháng thực tế| ÷ G tháng thực tế, các tháng đủ ngày, trung bình 3 fold',
+       'không cộng', note='Chỉ để HIỂN THỊ, không dùng chọn model (Q1). Xếp hạng theo thước này có thể khác điểm ngày.',
+       sources=[_FB]),
 ]}
 
 # Quy ước còn chờ PM/BA chốt mà kết quả tool có thể chạm tới
@@ -147,6 +177,19 @@ DECISIONS = {
                 'B 2017–2018, C 2019, D 2020–2022), khác cách PS2 dùng chung năm ranh giới. Quy ước dev, chờ BA chốt.',
         'source': 'retail_dbt/models/reporting/rpt_calendar_phase.sql',
     },
+    'forecast_selection_rule': {
+        'decision_status': 'chot',
+        'text': 'Luật chọn chạy trong pipeline (Q8, PM chốt 2026-10-14), LLM không tự chọn: (1) sàn: thắng seasonal naive 2 '
+                'năm về điểm ngày kết hợp ở cả 3 fold; (2) điểm trung bình 3 fold thấp nhất; (3) trong vòng 1% thì chọn '
+                'ứng viên đơn giản hơn. Đúng một ứng viên is_primary mỗi bản dữ liệu.',
+        'source': 'docs/hop_dong_du_bao.md §5, §7',
+    },
+    'forecast_interval_method': {
+        'decision_status': 'de_xuat',
+        'text': 'Khoảng 80% (mức PM chốt Q6) = quantile 10%/90% phần dư log trên backtest, nhân vào yhat; cách tính là '
+                'đề xuất của dev. Không hiển thị khoảng tháng (Q7, chốt): tháng chỉ có sai số tháng điển hình.',
+        'source': 'docs/hop_dong_du_bao.md §6',
+    },
     'currency_vnd': {
         'decision_status': 'chot',
         'text': 'Mọi số tiền (R, G, ΔR, phần góp, P) ghi bằng VND (đồng). Dữ liệu nguồn không ghi đơn vị; PM chốt '
@@ -167,6 +210,9 @@ CAPABILITIES = [
     ('get_revenue_summary', 'R', 'year', 'năm', None, 'open', 'mức R; so năm trước từ 2014'),
     ('get_revenue_summary', 'R', 'year_vs_prior', 'năm', None, 'open', 'so năm trước từ 2014'),
     ('get_revenue_summary', 'G', 'year', 'năm', None, 'open', 'chỉ mức G; G so năm trước chưa có cột đã kiểm'),
+    # B6 (2026-10-17): chuỗi từng năm year → to_year, mỗi năm một dòng (không cộng qua năm)
+    ('get_revenue_summary', 'R', 'years', 'năm', None, 'open', 'R từng năm, mỗi năm một dòng'),
+    ('get_revenue_summary', 'G', 'years', 'năm', None, 'open', 'G từng năm, mỗi năm một dòng'),
     ('get_revenue_drivers', 'R', 'year', 'năm', None, 'open', 'phân rã N → U → P, từ 2014'),
     ('get_segment_contribution', 'R', 'year', 'chiều × nhóm × năm', 'category', 'open', 'ΔR, tỷ trọng, % đóng góp'),
     ('get_segment_contribution', 'R', 'year', 'chiều × nhóm × năm', 'region', 'open', 'như category'),
@@ -207,12 +253,26 @@ CAPABILITIES += [
 ]
 
 
+# B3 (2026-10-15): đọc dự báo do pipeline ghi. Chỉ tổng toàn công ty (hợp đồng §1); dự báo R chưa làm (PM chốt 2026-10-11).
+FORECAST_GRAINS = {'day': 'ngày', 'month': 'tháng', 'year': 'năm', 'horizon': 'cả kỳ dự báo theo tháng'}
+CAPABILITIES += [('get_forecast', m, p, g, None, 'open', 'dự báo trong kỳ 2023-01-01 → 2024-07-01')
+                 for m in ('G', 'COGS') for p, g in FORECAST_GRAINS.items()]
+CAPABILITIES += [('get_forecast', 'R', p, g, None, 'closed', 'dự báo R chưa làm (PM chốt 2026-10-11); chỉ có dự báo G '
+                  '(doanh thu gộp, gồm cả đơn hủy) và COGS') for p, g in FORECAST_GRAINS.items()]
+CAPABILITIES += [
+    ('get_forecast_backtest', 'G_and_COGS', 'backtest 2020-2022', 'ứng viên × fold', None, 'open',
+     'so sánh ứng viên: điểm ngày kết hợp (thước chọn) và MAPE G tháng (hiển thị)'),
+    ('get_forecast', '*', '*', '*', 'category / region / acquisition_channel', 'closed',
+     'dự báo chỉ có tổng toàn công ty (hợp đồng §1)'),
+]
+
+
 def _capability_key(tool: str, arguments: dict) -> tuple[str | None, tuple, list]:
     """(grain, các metric, các kỳ) của một lời gọi, để tra CAPABILITIES. grain None = tool chưa có trong catalog."""
     a = arguments
     if tool == 'get_revenue_summary':
         periods = ['year'] + (['year_vs_prior'] if a.get('compare_prior_year', False) else [])
-        return 'năm', _metrics(a.get('metric')), periods
+        return 'năm', _metrics(a.get('metric')), periods + (['years'] if a.get('to_year') is not None else [])
     if tool == 'get_revenue_drivers':
         phase = a.get('period_type', 'year') == 'phase'
         return ('giai đoạn PS2' if phase else 'năm'), _metrics(a.get('metric')), [a.get('period_type', 'year')]
@@ -228,6 +288,11 @@ def _capability_key(tool: str, arguments: dict) -> tuple[str | None, tuple, list
         return 'giai đoạn PS2', ('R',), [a.get('view')]
     if tool == 'get_calendar_pattern':
         return 'nhịp lịch', ('R',), [a.get('pattern')]
+    if tool == 'get_forecast':
+        p = a.get('period')
+        return FORECAST_GRAINS.get(p), (('G', 'COGS') if a.get('metric') == 'G_and_COGS' else (a.get('metric'),)), [p]
+    if tool == 'get_forecast_backtest':
+        return 'ứng viên × fold', ('G_and_COGS',), ['backtest 2020-2022']
     return None, (), []
 
 
