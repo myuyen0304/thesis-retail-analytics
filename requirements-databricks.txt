@@ -1,0 +1,25 @@
+# Môi trường .venv-databricks (Python 3.13, tạo bằng uv), tách khỏi .venv của app.
+# Dùng khi chạy tay trên máy các bước ghi / đối chiếu Databricks:
+# - dbt target databricks: scripts/databricks/run_dbt.py;
+# - nạp snapshot lên Databricks: scripts/ingest/ingest_databricks.py;
+# - so DuckDB với Databricks: scripts/parity/compare_dwh.py databricks;
+# - pipeline --target databricks chạy bằng .venv, nhưng gọi dbt của môi trường này:
+#   đặt RETAIL_DBT_EXECUTABLE=.venv-databricks/Scripts/dbt.exe (docs/automation_batch.md, mục Databricks).
+#
+# Lý do tách môi trường: cài dbt-databricks vào .venv sẽ hạ dbt-common, pydantic, packaging của app
+# (thử khô bằng uv 2026-10-17).
+# Pipeline dựng DuckDB đối chứng rồi mới dựng Databricks, bằng cùng một dbt, nên môi trường này cần cả hai adapter.
+# Ghim đúng phiên bản đang chạy pipeline lần đầu trên Databricks 2026-10-17 (release cfe19211211e420abdfcabb3).
+#
+# Cài:
+#   uv venv .venv-databricks --python 3.13
+#   uv pip install --python .venv-databricks/Scripts/python.exe -r requirements-databricks.txt
+
+dbt-core==1.12.5
+dbt-databricks==1.12.6
+dbt-duckdb==1.11.0              # adapter thứ hai cho bản DuckDB đối chứng của pipeline
+duckdb==1.5.6                   # compare_dwh.py; .venv đang dùng 1.5.5
+databricks-sdk==0.117.0         # token từ profile Databricks CLI
+databricks-sql-connector==4.4.0
+pyarrow==25.0.1                 # scripts/ingest/snapshot.py
+psycopg[binary]==3.3.6          # compare_dwh.py khi so với PostgreSQL
