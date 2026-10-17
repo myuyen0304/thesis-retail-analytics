@@ -1,7 +1,7 @@
 import altair as alt
 import streamlit as st
 
-from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, notes, page_header
+from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, notes, page_header, url_choice
 from ui.fmt import AXIS_TRIEU, num, pct, trieu
 
 page_header('PS4: Số đơn, số món, giá', 'Doanh thu đổi vì số đơn (N), số món mỗi đơn (U) hay giá mỗi món (P)?')
@@ -24,7 +24,8 @@ ten_of = dict(zip(dp['period_code'], dp['ten']))
 
 # --- Chọn kỳ: 4 giai đoạn PS2 + từng năm 2014–2022 (mặc định 2019, năm sập) ---
 codes = list(dp['period_code'])
-code = st.selectbox('Kỳ', codes, index=codes.index('2019') if '2019' in codes else 0, format_func=ten_of.get)
+code = st.selectbox('Kỳ', codes, index=url_choice('ky', codes, codes.index('2019') if '2019' in codes else 0, 'kỳ'),
+                    format_func=ten_of.get)
 row = dp.set_index('period_code').loc[code]
 s0, s1 = int(row['start_year']), int(row['end_year'])
 

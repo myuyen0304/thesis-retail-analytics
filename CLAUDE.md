@@ -13,6 +13,9 @@ không bỏ ngầm bộ lọc, không lấy số từ trí nhớ hoặc coi phâ
 Kiểm quyền chỉ đọc, phiên bản dữ liệu và bằng chứng trước khi nối API. Quy ước còn chờ BA chốt
 phải giữ nhãn đề xuất; nghiệm thu app không tự biến mọi quy ước thành đã chốt.
 
+Khi làm **dự báo hoặc AI agent GĐ2** (B2–B7), đọc [`docs/ke_hoach_ai_gd2.md`](docs/ke_hoach_ai_gd2.md) trước:
+sổ quyết định (§2) và nhật ký (§8). Tài liệu khác lệch với sổ quyết định thì sổ quyết định thắng.
+
 ---
 
 ## 0. Ngôn ngữ
@@ -38,14 +41,29 @@ Nộp bài: file dạng `data/sample_submission.csv` — cột `Date, Revenue, C
 5 problem statement doanh thu** (`docs/star_schema.md`). Các bước tiếp theo, theo thứ tự:
 - app phân tích bằng code;
 - production trên **Databricks** (đổi ngày 2026-10-05, xem dưới);
-- Kafka.
+- Kafka (từ 2026-10-11: **hoãn**, xem dưới).
 
 **Đổi ngày 2026-10-05 (PM chốt):** **Databricks là đích production**, gồm DWH, app phân tích và chat AI Explain;
 không còn là "lab". Snowflake thôi là bước mặc định; các script Snowflake đã viết giữ nguyên, chưa chạy cloud.
 Cách làm: dev và test ở local (DuckDB/PostgreSQL) trước, đạt rồi mới deploy lên Databricks. Chi tiết: `docs/dwh_roadmap.md`.
 
-Dự báo/SHAP là **phần mở rộng riêng**, không còn là bước mặc định. Power BI không bắt buộc.
-Các kết luận về dữ liệu ở §5 vẫn đúng và vẫn dùng khi làm phần dự báo.
+**Đổi ngày 2026-10-11 (thầy hướng dẫn giao GĐ2, PM/BA chốt):** dự báo trở lại thành **lõi của GĐ2**.
+Theo sơ đồ `docs/references/pipeline-gd2.jpg`, thứ tự ưu tiên là:
+- ① dự báo time series (ARIMA, log + SARIMAX, LSTM là model **thầy gợi ý, không bắt buộc**; PM xác nhận 2026-10-13 được dùng model khác, chọn bằng backtest, xem `docs/chon_model_du_bao.md`);
+- ② dashboard dùng như tool của chat;
+- ③ query (đã có).
+
+Các điểm đã chốt:
+- **Target:** `Revenue` = G theo ngày (`sales.csv`). COGS: chốt qua tỷ lệ ngày 2026-10-11; PM mở lại ngày 2026-10-14,
+  backtest quyết giữa qua tỷ lệ và dự báo trực tiếp (`docs/hop_dong_du_bao.md` Q10).
+- **Điều phối:** Airflow chạy trong Docker local.
+- **Kafka: hoãn**, ngoài phạm vi đợt hạn 2026-10-25, có thể không làm. Pipeline chạy batch theo lịch Airflow.
+  Đừng tự dựng Kafka khi chưa được yêu cầu. Lý do hoãn: `docs/kien_truc_pipeline_tong.md` §4.
+- **Hạn tiến độ:** 2026-10-25 giữ nguyên.
+
+Thiết kế và hiện trạng: `docs/kien_truc_pipeline_tong.md`.
+(Lịch sử, trước 2026-10-11: "Dự báo/SHAP là phần mở rộng riêng, không còn là bước mặc định".)
+Power BI không bắt buộc. Các kết luận về dữ liệu ở §5 vẫn đúng và là ràng buộc khi thiết kế phần dự báo.
 
 ---
 
@@ -124,12 +142,15 @@ bất kỳ điểm nào, phải chỉ ra cell nào sai trước.
 3. **Mùa vụ theo tháng rất mạnh và ổn định** — đỉnh T4–T6, đáy T12–T1.
 
 4. **Hiệu ứng ngày-trong-tháng rất lớn** — dốc tăng dần về cuối tháng. Đây là tín hiệu baseline bỏ sót nhiều nhất.
+   *Bổ sung 2026-10-15 (`notebooks/04_forecasting/so_sanh_model.ipynb` §2.3):* ngày 1 và ngày 2 của tháng cũng cao hơn hẳn, sau khi đã tính mùa vụ, cuối tháng và khuyến mãi.
 
 5. **Thứ trong tuần gần như vô nghĩa** (R² = 0,008) — baseline bỏ qua nó là đúng.
 
 6. **Tháng 8 có chu kỳ 2 năm rất mạnh**: năm **lẻ** có siêu khuyến mãi *"Urban Blowout"*
    làm doanh thu **−37%** và **COGS > Revenue** (tỷ lệ ~1,36).
    → **2023 là năm lẻ, và tháng 8/2023 nằm trong vùng dự báo.** Bỏ qua điểm này là hỏng bài.
+   *Bổ sung 2026-10-15 (`notebooks/04_forecasting/so_sanh_model.ipynb` §2.4):* ~1,36 là **trung bình tỷ lệ ngày** của các tháng 8 năm lẻ;
+   tính theo **tỷ lệ của tổng** (ΣCOGS/ΣRevenue) thì ≈ 1,34, đúng số `docs/problem_statement.md` ghi.
 
 7. **`COGS/Revenue` nên mô hình hoá như một TỶ LỆ**, không phải hai mức độc lập.
 

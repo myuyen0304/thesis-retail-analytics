@@ -1,7 +1,7 @@
 import altair as alt
 import streamlit as st
 
-from ui.common import GIOI_HAN_CHUNG, kpi, kpi_revenue, load_or_stop, notes, page_header, period_label, pick
+from ui.common import GIOI_HAN_CHUNG, kpi, kpi_revenue, load_or_stop, notes, page_header, period_label, pick, url_choice
 from ui.fmt import AXIS_PCT1, AXIS_TRIEU, AXIS_TY, num, pct, pp, trieu, ty
 
 page_header('PS1: Đo đúng doanh thu', 'Mỗi tháng, mỗi năm công ty thực nhận bao nhiêu tiền?')
@@ -15,7 +15,7 @@ monthly = load_or_stop('revenue_monthly')
 periods = bridge.drop_duplicates('period_code')
 labels = {r.period_code: period_label(r.period_code, r.period_type, bool(r.is_analysis_period))
           for r in periods.itertuples()}
-code = st.selectbox('Kỳ', list(labels), format_func=labels.get)
+code = st.selectbox('Kỳ', list(labels), index=url_choice('ky', list(labels), 0, 'kỳ'), format_func=labels.get)
 kind = periods.set_index('period_code').loc[code, 'period_type']
 row = (pick(total, code, 'revenue_total', f'của kỳ {code}') if kind == 'total'
        else pick(yearly.set_index(yearly['year'].astype(str)), code, 'revenue_yearly', f'của năm {code}'))

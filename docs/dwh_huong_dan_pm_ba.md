@@ -1737,3 +1737,486 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   PS1, PS4, PS5 và smoke trên DuckDB đạt; bật Docker chạy lại mọi test PostgreSQL (gồm 8 trang smoke, trang PS4, PS5): 124/124 đạt.
 - **PM xem:** chạy lại app (sửa ở `ui/common.py` cần tắt app rồi bật lại, không chỉ tải lại trang).
 - **Chưa commit.**
+- **Lên bản public (cùng tối):** PR #2, #3 đã merge vào `main`. Push không làm bản public tự cập nhật; PM bấm **Reboot** trên
+  Streamlit Cloud thì bản public lấy code mới. Đã kiểm trên https://retail-analytics-ps.streamlit.app/ (đọc Databricks): nhãn
+  "Số đơn đổi (2018→2019)" đủ chữ ở 1280px; ở 1024px nhãn xuống 2 dòng, 3 số thẳng hàng. Chưa gửi câu chat lên bản public.
+
+### 2026-10-11 → 12: pipeline tự động theo bản dữ liệu + sửa lỗi khóa chat khi chuyển đổi (dev xong ở local, chưa lên cloud)
+
+- **Làm gì (Codex viết ngày 2026-10-11, Claude rà soát ngày 2026-10-12):**
+  - Mỗi lần chạy pipeline tạo một **bản dữ liệu** riêng: chụp 14 CSV → dựng kho bằng dbt vào chỗ riêng của bản đó →
+    kiểm chất lượng → đạt thì đánh dấu là bản đang phục vụ. Không đạt thì app vẫn đọc bản trước.
+  - Quay về bản trước (rollback) bằng một lệnh.
+  - Airflow chạy trong Docker trên laptop, điều phối 4 bước. Lịch tự động đang tắt, chạy bằng tay từ giao diện Airflow.
+  - App mặc định vẫn đọc kho như cũ. Chế độ đọc theo bản chỉ bật khi đặt `RETAIL_RELEASE_MODE=versioned`.
+- **Vì sao:**
+  - Sơ đồ thầy có "automation pipeline + monitor (Airflow)" (`references/pipeline.jpg`) và "Airflow DAG → EDW" (`references/pipeline-gd2.jpg`).
+  - Số dự báo sau này cần một đường lên bản public mà không ghi đè kho đang phục vụ.
+- **Trả lời PS nào:** không thêm PS mới. Đây là phần vận hành, phục vụ cả 5 PS và phần dự báo.
+- **Sửa thêm (Claude, 2026-10-12):** nếu chạy pipeline lên Databricks khi bản public còn chế độ cũ thì chat public bị khóa.
+  Đã sửa bộ kiểm quyền của chat và thứ tự cấp quyền của pipeline. Thứ tự chuyển bản public bắt buộc làm theo
+  `automation_batch.md`, mục "Thứ tự chuyển bản public…".
+- **Kiểm (chỉ ở local, DuckDB):**
+  - dbt 217/217 bước;
+  - G/COGS khớp `sales.csv` đủ 3.833 ngày, 33 bảng nghiệp vụ được kiểm;
+  - rollback qua lại hai bản;
+  - test pipeline, release và kiểm quyền Databricks: 63 đạt, 83 bỏ qua vì cần cloud.
+  - **Chưa chạy:** Databricks, và bộ test PostgreSQL (container đang tắt).
+- **Hướng dẫn chạy, xem lỗi, rollback, chuyển bản public:** [automation_batch.md](automation_batch.md).
+- **Cùng đợt, Codex sửa giao diện:**
+  - FB07: đổi nguồn dữ liệu thì xóa lịch sử chat; test đạt.
+  - FB01: đổi nhãn R thành "doanh thu đơn đã giao". Còn sót chữ "thực nhận" ở trang Tổng quan và PS1.
+- **PM cần quyết:**
+  - duyệt nhãn R mới;
+  - tạo writer service principal cho pipeline;
+  - có chuyển bản public sang chế độ versioned trước 2026-10-25 không.
+- **Chưa commit.** Danh sách việc còn lại: [checklist_sdlc_gd2.md](checklist_sdlc_gd2.md).
+
+### 2026-10-14: dự báo B2a — notebook so sánh model chạy xong (dev xong ở local, chờ PM xem)
+
+- **Làm gì:**
+  - PM chốt hợp đồng dự báo (`hop_dong_du_bao.md` §0). Tài liệu vào cửa mới cho mọi phiên làm phần AI: [ke_hoach_ai_gd2.md](ke_hoach_ai_gd2.md).
+  - Notebook `notebooks/04_forecasting/so_sanh_model.ipynb` thi 12 ứng viên (log + SARIMAX, LightGBM, bản gộp, ARIMA; hai cửa sổ train; hai cách tính COGS) với 3 mốc,
+    trên 3 lần thi thử 2020–2022. Luật chọn viết trước khi xem điểm, rồi tự chọn.
+- **Kết quả (đọc ở notebook §6–§9):**
+  - Ứng viên được chọn: **LightGBM, train toàn chuỗi, COGS dự báo trực tiếp**. Sai số ngày thấp hơn mốc "lặp lại cùng ngày 2 năm trước" khoảng 20%.
+    Đây là sai số trên số quá khứ, không phải độ chính xác 2023–2024, và hơi lạc quan.
+  - Dự báo COGS trực tiếp nhỉnh hơn cách qua tỷ lệ (theo tháng × Urban Blowout) ở mọi model, nhưng chỉ chênh khoảng 1%. Cách tỷ lệ tính theo mọi đợt khuyến mãi chưa thử.
+  - Theo tổng tháng (thước người lập kế hoạch nhìn), log + SARIMAX và bản gộp sai ít hơn LightGBM. Thước chọn đã chốt là theo ngày (Q1), nên ứng viên chính không đổi; PM nên biết điểm này.
+  - Tháng 8/2023: doanh thu sụt, COGS > doanh thu. Đạt kiểm.
+  - File nộp: `data/submission_b2.csv` (không commit).
+- **Lỗi đã gặp và sửa:** lần chạy đầu, log + SARIMAX không hội tụ nên điểm sai. Đã sửa bộ tối ưu, chạy lại; luật chọn không đổi. Ghi ở notebook §5.
+- **PM cần quyết / xem:**
+  - Q11: nhóm còn nộp muộn lên Kaggle được không — **PM trả lời 2026-10-15: không làm gì liên quan tới Kaggle**;
+  - cho thêm chú thích vào `CLAUDE.md` §5.6 (1,36 là trung bình tỷ lệ ngày; tỷ lệ của tổng là 1,34) và §5.4 (ngày 1–2 đầu tháng cao), có cell ở notebook §2 — **PM đồng ý 2026-10-15, đã thêm**;
+  - báo thầy việc dùng LightGBM, ngoài ba model thầy gợi ý.
+- **Việc kế:** B2b, đưa luật chọn vào stage pipeline để app và chat đọc được dự báo. **Chưa commit.**
+
+### 2026-10-15: dự báo B2b — pipeline tự dự báo và chọn model cho từng bản dữ liệu (dev xong ở local, chưa lên cloud)
+
+- **Làm gì:**
+  - Mỗi lần pipeline dựng một bản dữ liệu, nó tự train lại các model dự báo từ đúng snapshot của bản đó, thi thử trên 2020–2022,
+    áp luật chọn, rồi ghi hai bảng vào bản dữ liệu: `rpt_forecast_daily` (dự báo từng ngày của mọi ứng viên, đánh dấu ứng viên chính)
+    và `rpt_forecast_backtest` (điểm thi thử của từng ứng viên).
+  - Bản dữ liệu chỉ được công bố khi kiểm dự báo đạt: đủ 548 ngày, khoảng dự báo đúng thứ tự, đúng một ứng viên chính
+    **và ứng viên đó đúng là ứng viên luật chọn ra**, tháng 8/2023 sụt và COGS > doanh thu.
+  - Code model chuyển từ notebook sang `scripts/forecast/`; notebook và pipeline dùng chung, nên ra cùng số.
+- **Kiểm (chỉ ở local, DuckDB):**
+  - pipeline chạy hết 4 bước, 220/220 bước dbt đạt; ứng viên chính vẫn là LightGBM, COGS dự báo trực tiếp, khớp notebook;
+  - thử cố ý gắn tay sai ứng viên chính: bước kiểm báo lỗi, bản dữ liệu không được công bố;
+  - quay về bản dữ liệu cũ rồi trở lại bản mới: chạy được.
+  - **Chưa chạy:** Databricks, và Airflow trong Docker (image cần cài thêm thư viện, chưa build lại).
+- **PM cần quyết:** app public và chat đọc dự báo trước 25/10 bằng đường nào. Dự báo chỉ có trong bản dữ liệu của pipeline;
+  app public đang ở chế độ đọc cũ và pipeline lên Databricks cần writer service principal chưa tạo.
+  Hai lựa chọn: tạo writer SP và chuyển app public sang chế độ đọc theo bản dữ liệu, hoặc demo trên local.
+- **Việc kế:** B3, trang Dự báo và tool chat `get_forecast`. **Chưa commit.**
+
+### 2026-10-15: chat AI đọc được dự báo (B3a, dev xong ở local, chờ Codex kiểm lại và PM xem)
+
+- **Làm được:** hỏi "dự báo doanh thu tháng 8/2023", "dự báo cả năm 2024", "model dự báo nào chính xác nhất", "vì sao chọn
+  model này". Số lấy từ bảng dự báo pipeline đã dựng; chat không tự train hay tự chọn model.
+- **Nhãn do app gắn cạnh mỗi số:** "dự báo G" (G là doanh thu gộp, gồm cả đơn hủy), khoảng 80% nếu hỏi theo ngày, sai số
+  tháng điển hình nếu hỏi tháng / năm, "không phải model chính" nếu bạn hỏi đích danh model khác. Dưới câu trả lời có dòng
+  ghi model, phiên bản, ngày train tới và câu "sai số backtest 2020–2022, không phải độ chính xác 2023–2024".
+- **Từ chối đúng:** năm 2025 (ngoài kỳ dự báo), năm đã có số thực tế, dự báo R, dự báo theo ngành / vùng / kênh; hỏi "cả năm
+  2024" chỉ trả tới 01/07/2024 và nói phần thiếu.
+- **Codex review và đã sửa:** 6 lỗi (RV01–RV06), ví dụ hỏi tháng mà dẫn số cả năm, hỏi số thực tế mà đưa số dự báo, nhầm G với
+  COGS, nói "theo MAPE" mà dẫn xếp hạng điểm ngày. Nay các câu đó bị chặn; ca tái hiện của Codex chạy lại đều bị chặn đúng.
+  Chờ Codex kiểm lại (`docs/review_codex_ai_gd2_20261015.md` §6).
+- **Xem thử (local):** đặt `RETAIL_RELEASE_MODE=versioned`, `RETAIL_BACKEND=duckdb`,
+  `RETAIL_RELEASE_STATE=D:/retail-analytics/warehouse/pipeline/state.json` rồi chạy app (`docs/automation_batch.md`), vào trang
+  Hỏi dữ liệu (AI). Bản public hiện ở chế độ cũ nên **chưa có dự báo** (chat báo "bản dữ liệu chưa có dự báo").
+- **Chưa làm:** chạy bộ câu G* với model thật (B3c), trang Dự báo (B3b), PostgreSQL / Databricks. **Chưa commit.**
+- **PM vẫn cần quyết:** app public đọc dự báo bằng đường nào (`docs/ke_hoach_ai_gd2.md` §2, "Còn chờ PM").
+
+
+### 2026-10-15: trang Dự báo (B3b, dev xong ở local, chờ PM xem)
+
+- **Làm gì:** thêm trang **Dự báo** ở thanh bên, giữa PS5 và Sức khỏe dữ liệu. Trang đọc hai bảng dự báo mà pipeline đã dựng
+  trong bản dữ liệu đang phục vụ (`rpt_forecast_daily`, `rpt_forecast_backtest`). Trang không tự train hay chọn model.
+  Nhãn model, cách tính COGS và lý do chọn dùng chung với chat, nên trang và chat nói cùng một câu.
+- **Trên trang có gì** (từ trên xuống):
+  - **Khung nhãn:** "đây là số dự báo, không phải số thực tế", chỉ tiêu "G — doanh thu gộp, gồm cả đơn hủy" và COGS, model chính
+    kèm lý do chọn (bước nào của luật), `model_version`, `trained_through` (ngày cuối của số thực tế dùng để train), `run_id`,
+    và câu "sai số backtest 2020–2022, không phải độ chính xác 2023–2024".
+  - **4 thẻ:** G và COGS dự báo cộng cả 548 ngày, tỷ lệ COGS/G cả kỳ, và **sai số tháng điển hình**.
+  - **Hai biểu đồ theo ngày**, một cho G, một cho COGS: đường xám là số thực tế 2021–2022, đường cam là dự báo từ 01/01/2023,
+    vạch đứt đánh dấu chỗ bắt đầu dự báo. Dải cam nhạt quanh G là khoảng 80% theo ngày. COGS không có dải, vì bảng dự báo
+    chỉ có khoảng cho G.
+  - **Bảng tổng tháng** 01/2023 → 07/2024: G, COGS, COGS/G (tổng COGS ÷ tổng G của tháng), số ngày có dự báo.
+    Tháng 07/2024 chỉ có ngày 01/07 nên ghi "tháng thiếu, không so với tháng đủ". Theo quyết định Q7, tháng **không có khoảng
+    dự báo**; dưới bảng ghi sai số tháng điển hình thay vào. Số đầy đủ 2 chữ số thập phân nằm trong phần mở rộng ngay dưới bảng.
+  - **Bảng các model đã thi:** 15 dòng (ứng viên và mốc), xếp theo điểm ngày, cột "thắng mốc sàn cả 3 fold", MAPE G tháng
+    và hạng theo MAPE. Dấu ★ là model chính; chú thích dưới bảng ghi bước luật đã chọn. Bản hiện tại: model có MAPE G tháng
+    thấp nhất không phải model chính, và trang nói rõ điều này. Phần mở rộng "Điểm ngày kết hợp từng fold" cho thấy điểm của
+    từng lần thi.
+- **Thuật ngữ:**
+  - **Backtest:** giả vờ đứng ở một ngày trong quá khứ, chỉ dùng số trước ngày đó để dự báo 548 ngày tiếp theo, rồi so với số
+    thật đã có.
+  - **Fold:** mỗi lần thi như vậy. Có 3 fold, đứng ở 30/06/2020, 31/12/2020 và 30/06/2021.
+  - **Điểm ngày kết hợp:** sai lệch trung bình mỗi ngày của G và của COGS, cộng lại chia đôi. Thấp hơn là tốt hơn. Đây là thước
+    chọn model (Q1).
+  - **Mốc sàn:** cách đoán ngây thơ "lấy số cùng ngày 2 năm trước". Model chỉ được chọn nếu thắng mốc này ở cả 3 fold.
+  - **MAPE G tháng (sai số tháng điển hình):** G tháng dự báo lệch trung bình bao nhiêu phần trăm so với G tháng thực tế trên
+    backtest. Chỉ để tham khảo, không dùng chọn model.
+  - **Khoảng 80%:** theo ngày, số thực tế được kỳ vọng rơi vào dải này khoảng 8 trên 10 ngày. Dưới biểu đồ ghi tỷ lệ thực đo
+    trên backtest.
+- **Xem thử (local).** Mở PowerShell ở thư mục repo:
+
+  ```powershell
+  $env:RETAIL_RELEASE_MODE = 'versioned'
+  $env:RETAIL_BACKEND = 'duckdb'
+  $env:RETAIL_RELEASE_STATE = 'D:/retail-analytics/warehouse/pipeline/state.json'
+  .venv/Scripts/python.exe -m streamlit run apps/retail_app/app.py --server.port 8502
+  ```
+
+  Mở `http://localhost:8502`, chọn **Dự báo** ở thanh bên. Cổng 8502 để không đụng app 8501 đang mở.
+  Chạy app không đặt ba biến trên (chế độ cũ) thì trang báo "Chưa có dự báo để hiện" và nói lý do, không hiện số nào (đã kiểm với
+  DuckDB và PostgreSQL ngày 15/10).
+- **Kiểm (local DuckDB):**
+  - trang chạy được ở 3 trạng thái: chế độ cũ, bản dữ liệu trước B2b (đều báo chưa có dự báo) và bản đang phục vụ (có số);
+  - tổng tháng trên trang khớp câu truy vấn đối chứng mở thẳng file dữ liệu của bản, và khớp file kết quả của bước dự báo;
+  - số thực tế trên biểu đồ là G (khớp `sales.csv` và G tháng của trang PS), không phải R;
+  - sửa một số dự báo trong bản sao dữ liệu thì trang đổi theo đúng số đó;
+  - đã chụp ảnh trang trên Chrome để kiểm bố cục;
+  - toàn bộ test của app, có cả PostgreSQL (bật lại ngày 15/10): 646 đạt, không test nào trượt.
+- **Số thực tế trên biểu đồ** (PM duyệt cùng ngày): lấy từ bảng mới `reporting.rpt_forecast_actual` (ngày, G, COGS thực tế),
+  dựng cùng bản dữ liệu với hai bảng dự báo. Trang chỉ đọc tầng reporting, không đọc marts.
+  - Bảng có bước kiểm riêng trong quality gate: khớp `sales.csv` từng ngày, mỗi ngày một dòng, ngày thực tế cuối đúng bằng
+    ngày model train tới, và dự báo bắt đầu ngay hôm sau.
+  - Bản dữ liệu dựng trước khi có bảng này (bản `4a117159…`, lần chạy `b2b-01`) vẫn hiện dự báo, kèm dòng báo "chưa có bảng số
+    thực tế", và biểu đồ chỉ có phần dự báo.
+  - `dbt build` thường (không có dự báo) không đổi gì.
+- **Databricks (kiểm chỉ đọc 15/10, profile `retail-dev`, kho `retail_lab`):** trang báo "Chưa có dự báo để hiện", không lỗi.
+  Kho cloud chưa có bảng dự báo vì pipeline chưa chạy trên Databricks. App public cũng đọc kho này ở chế độ cũ, nên cũng sẽ báo
+  chưa có dự báo. Muốn có số trên cloud thì cần quyết định đang chờ PM (`docs/ke_hoach_ai_gd2.md` §2, "Còn chờ PM"). **Chưa commit.**
+
+### 2026-10-15: PM chốt đưa dự báo lên production trước 25/10 — Bước 0 (writer SP) đã xong
+
+- **Cập nhật cùng ngày:** PM đồng ý để dev tạo writer SP bằng CLI thay cho các bước bấm tay bên dưới. Đã xong: SP
+  `retail-pipeline-writer`, secret lưu trong `.env.airflow.local` (không hiện ra màn hình), quyền dùng warehouse và quyền trên catalog
+  `retail_lab`; writer đăng nhập được. **Secret hết hạn ngày 13/01/2027**: trước ngày đó phải tạo secret mới, nếu không pipeline
+  lên Databricks sẽ báo lỗi đăng nhập. Các bước bấm tay bên dưới giữ lại để tham khảo khi cần làm lại.
+
+- **Đã chốt:** số dự báo và các bảng dự báo nằm trên Databricks; app public đọc từ đó. Model vẫn train ở nơi chạy pipeline
+  (Airflow trong Docker, hoặc lệnh trên máy), chỉ kết quả được đưa lên Databricks. Bỏ phương án demo trên local.
+  Ghi ở `docs/ke_hoach_ai_gd2.md` §2.
+- **Writer service principal là gì:** một "tài khoản máy" riêng để pipeline **ghi** dữ liệu lên Databricks. Nó tách khỏi hai tài
+  khoản chỉ đọc đang có: của bản public (`retail-web-ro`) và của chat (`retail-ai-ro`). Không dùng tài khoản đăng nhập của bạn.
+- **Các bước** (workspace `dbc-ba612f22-93b5`; tên nút theo tài liệu Databricks cập nhật 12/10/2026):
+  1. **Tạo SP:** bấm tên bạn ở góc trên → **Settings** → tab **Identity and access** → cạnh **Service principals** bấm
+     **Manage** → **Add service principal** → **Add new**, đặt tên `retail-pipeline-writer`.
+  2. **Tạo secret:** chọn SP vừa tạo → tab **Secrets** → **Generate secret** → đặt thời hạn (tối đa 730 ngày; đề xuất 90 ngày)
+     → **Generate**. Chép **Client ID** và **Secret** ngay: secret **chỉ hiện một lần**.
+  3. **Cho dùng warehouse:** **SQL Warehouses** → `Serverless Starter Warehouse` → **Permissions** → thêm `retail-pipeline-writer`
+     với quyền **Can use**.
+  4. **Cho quyền trên catalog:** mở **SQL Editor**, chạy (thay `<Client ID>` bằng số vừa chép):
+
+     ```sql
+     GRANT USE CATALOG, CREATE SCHEMA, MANAGE ON CATALOG retail_lab TO `<Client ID>`;
+     ```
+
+     `MANAGE` để pipeline tự cấp quyền đọc cho `retail-web-ro` và `retail-ai-ro` sau mỗi bản dữ liệu. Quyền này chưa thử trên bản
+     Free; nếu câu lệnh báo lỗi, gửi mình nguyên văn lỗi.
+  5. **Điền hai dòng** `RETAIL_PIPELINE_CLIENT_ID=` và `RETAIL_PIPELINE_CLIENT_SECRET=` trong file `.env.airflow.local` ở thư mục
+     repo. Các dòng khác dev đã điền sẵn từ file cấu hình có trên máy. **Không dán secret vào chat.**
+- **Sau đó dev làm** (theo `docs/automation_batch.md`, "Thứ tự chuyển bản public"):
+  - chạy pipeline lên Databricks (tốn quota bản Free, mỗi lần train khoảng 7–16 phút) và kiểm số, quyền đọc;
+  - merge code đọc theo bản dữ liệu vào `main` qua PR (teammate review), rồi **Reboot** bản public;
+  - hỏi thử chat public, sau đó bật chế độ versioned cho bản public.
+
+### 2026-10-15: B3c — thử chat dự báo với AI thật (chạy ở local, đề xuất sửa chờ PM)
+
+- **Đã làm gì:** hỏi chat 15 câu dự báo **mới**, mỗi câu 3 lần (45 lượt), dùng mô hình AI thật (DeepSeek). Câu mới nghĩa là chưa dùng lúc
+  viết code, để kết quả không bị "học tủ". Bộ câu và cách chấm được ghi lại và khóa bằng một mã băm **trước** khi hỏi lần đầu.
+  Tốn khoảng 0,38 USD (ước theo giá niêm yết; số thật xem trang billing của DeepSeek).
+- **Kết quả:** 27/45 lượt đạt khi chấm cả bằng máy lẫn đọc tay.
+
+  | Nhóm câu | Đạt | Ví dụ |
+  |---|---|---|
+  | Số dự báo có nhãn đúng | 12/12 | "Doanh thu gộp dự kiến tháng 3/2024?" → 118.649.475 VND, ghi rõ là dự báo G |
+  | Hỏi ngoài kỳ dự báo | 8/9 | "Tháng 10/2024?" → nói không có dự báo, không đoán bừa |
+  | Không nhầm số thật với số dự báo | 3/9 | "Năm 2024 công ty đã bán được bao nhiêu?" → nói chưa có số thật, đề nghị số dự báo |
+  | Giải thích vì sao chọn model | 4/15 | "LightGBM có chính xác hơn SARIMAX không?" → đưa cả hai thước đo, nói rõ hai thước xếp hạng khác nhau |
+
+- **Điều quan trọng nhất:** trong 45 lượt, chat **không bịa con số nào** và **không gọi số dự báo là số thật**.
+- **Vì sao trượt nhiều ở hai nhóm cuối:** phần lớn là **bộ kiểm số của app chặn nhầm** câu trả lời đúng. Khi bị chặn, người dùng chỉ thấy
+  bảng số kèm dòng "câu diễn giải không qua bước kiểm số". Ví dụ:
+  - hỏi "từ tháng 12/2022 đến tháng 2/2023", app chỉ hiểu hai tháng đầu mút nên chặn số tháng 1/2023;
+  - "cùng tháng năm 2022" bị app đọc thành "tháng Năm (tháng 5) 2022";
+  - luật kiểm viết cho câu "model nào chính xác nhất" bị áp cả cho câu "vì sao không chọn bản gộp".
+
+  Ngoài ra còn ba lỗi thật:
+  - một lỗi hiển thị: ô ngày in ra chữ ".,2f";
+  - chat nói sai rằng "G dự báo và G thực tế là hai tập đơn khác nhau";
+  - khi hỏi "theo SARIMAX", chat chưa hỏi lại đúng chỗ.
+- **Bạn đã duyệt sửa cả 7 đề xuất (2026-10-16)**, xem mục kế tiếp. (Câu hỏi cũ: có sửa 7 đề xuất trong `docs/ai_eval_b3c_du_bao.md` mục 3.2 không.) Mỗi đề xuất đã ghi rõ lỗi của app, của tool hay
+  của AI. Sau khi sửa, lần nghiệm thu sau phải dùng một bộ câu mới khác (bộ này đã dùng rồi).
+- **Xem chi tiết:** `docs/ai_eval_b3c_du_bao.md` (bộ câu, tiêu chí, từng lượt trượt). Log từng câu trả lời: `warehouse/ai_eval/live_20261015T161752Z_gm_2920.jsonl`.
+
+### 2026-10-15: pipeline dự báo chạy được trong Airflow Docker (local, chưa lên cloud)
+
+- **Đã làm gì:** dựng lại "hộp" Airflow (image Docker, Python 3.12) có thư viện dự báo, rồi cho Airflow chạy cả pipeline một lần:
+  chụp dữ liệu → train và chọn model → dựng kho → kiểm chất lượng → công bố. Đây là bước diễn tập trước khi chạy lên Databricks.
+- **Lần đầu lỗi, đã sửa:** thư viện ngày lễ trả tên Tết bằng tiếng Việt trong Docker (vì cài đặt ngôn ngữ của hộp khác máy bạn), nên code
+  dự báo không tìm thấy Tết. Đã sửa cho luôn dùng tên tiếng Anh; model, tham số và luật chọn **không đổi**.
+- **Lần hai đạt:** cả 4 bước xanh; phần train và chọn model mất khoảng 5 phút.
+- **So với bản chạy trên máy bạn:** cùng model chính (LightGBM, COGS dự báo trực tiếp). Số dự báo của model chính **giống hệt từng đồng**,
+  ví dụ tháng 8/2023 đều là 74.151.832. Chỉ lệch rất nhỏ ở hai chỗ:
+  - điểm backtest (tối đa 0,15%);
+  - biên khoảng 80% (tối đa khoảng 11 nghìn đồng mỗi ngày, trên mức dự báo cỡ 1–5 triệu một ngày).
+
+  Nguyên nhân là hai môi trường làm tròn số thực khác nhau một chút. Không model nào tiến sát ngưỡng hòa 1%, nên luật chọn chắc chắn ra cùng
+  kết quả.
+- **Ý nghĩa:** khi chạy lên Databricks bằng Airflow, số dự báo của model chính sẽ khớp bản local. Biên khoảng 80% có thể lệch vài nghìn đồng.
+- **Bước kế** (cần bạn đồng ý vì tốn quota Databricks bản Free): chạy pipeline với target Databricks. Phần train vẫn chạy trên máy, chỉ phần
+  dựng kho chạy trên Databricks.
+
+### 2026-10-16: sửa 7 lỗi chat dự báo tìm được ở B3c (dev xong ở local, chờ Codex kiểm lại)
+
+- **Đã sửa gì, nói gọn:** chat bớt "chặn nhầm" câu trả lời đúng, và chặn thêm vài kiểu sai.
+  - Hiểu đúng "từ tháng 12/2022 đến tháng 2/2023" (khoảng tháng sang năm mới) và "cùng tháng năm 2022" (là năm 2022, không phải tháng 5).
+  - Hỏi tiếp "vậy so với cùng tháng năm 2022 thực tế?": chat đưa hai số cạnh nhau, mỗi số ghi rõ là dự báo hay thực tế,
+    không tính chênh lệch. G dự báo và G thực tế cùng định nghĩa nên được đặt cạnh nhau (trước đây chat nói sai là khác nhau).
+  - Câu về độ chính xác model (so mốc sàn, vì sao không chọn bản gộp) không còn bị chặn khi đã dẫn đúng số; câu "A thấp hơn B"
+    được phép khi app kiểm được A thật sự thấp hơn B.
+  - Hỏi "theo SARIMAX" mà không nói bản nào: chat hỏi lại "bản train toàn chuỗi hay bản từ 2019", không tự chọn và không gợi ý
+    dùng model chính thay. Hỏi riêng G thì không bắt chọn cách tính giá vốn nữa.
+  - Hỏi "dự báo số đơn hàng": chat nói chưa có dự báo này (chỉ có G và giá vốn), có thể đưa G kèm ghi chú.
+  - Ô ngày không còn in ra chữ ".,2f".
+- **Không đổi:** model, luật chọn model, cách đo sai số, quyết định dự báo.
+- **Kết quả kiểm:** test không gọi AI đều đạt (510 test). Hỏi lại 15 câu cũ với AI thật: 14/15 đạt ngay, câu còn lại đã sửa tiếp.
+  Lưu ý: 15 câu này đã dùng để tìm lỗi nên **không tính là nghiệm thu**; nghiệm thu chính thức cần bộ câu mới (bước B7).
+- **Xem:** `docs/ai_eval_b3c_du_bao.md` §4 (bảng sửa), `docs/review_codex_ai_gd2_20261015.md` §9.2 (để Codex kiểm).
+
+### 2026-10-16: B6 — chat vẽ biểu đồ (dev xong ở local, chờ Codex kiểm lại)
+
+- **Dùng thế nào:** ở trang **Hỏi dữ liệu (AI)**, hỏi bằng chữ "vẽ…" hoặc "biểu đồ…". Ví dụ:
+  - "Cho mình xem đường dự báo doanh thu gộp theo từng tháng";
+  - "Vẽ biểu đồ so sánh các model dự báo theo sai số tháng";
+  - "Vẽ biểu đồ đóng góp của từng kênh vào thay đổi R năm 2019";
+  - "Vẽ R đầu và cuối của các giai đoạn doanh thu".
+
+  Biểu đồ hiện ngay dưới câu trả lời.
+- **Vì sao tin được số trên biểu đồ:** AI chỉ được nói "vẽ cột nào của bảng nào". App lấy số từ đúng bảng trong phần **Bằng chứng** của câu
+  đó và tự viết tiêu đề, chú thích. AI không có cách nào đưa con số tự nghĩ ra vào biểu đồ.
+- **Với biểu đồ dự báo:** tiêu đề ghi rõ là dự báo, model nào, train tới ngày nào. Tháng 07/2024 **không vẽ**, vì chỉ có 1 ngày dự báo; vẽ vào
+  sẽ trông như doanh thu tụt hẳn. Theo tháng không có khoảng dự báo (quyết định Q7), nên chú thích ghi sai số tháng điển hình.
+- **Chưa làm được:**
+  - Vẽ R hay G theo **từng năm** hoặc từng tháng của một năm: chưa có công cụ trả cả chuỗi, AI sẽ nói rõ là chưa hỗ trợ.
+  - Nút mở trang tương ứng kèm bộ lọc.
+- **Thử với AI thật:** 7 câu mới, mỗi câu 3 lần (khoảng 0,32 USD). 15/21 lượt đạt khi chấm cả máy lẫn đọc tay. Không lượt nào vẽ số sai.
+  Hai chỗ chưa đạt:
+  - Câu mùa vụ: tên chỉ tiêu "tháng cao nhất so với tháng thấp nhất" bị bộ kiểm chặn nhầm, nên câu trả lời không hiện.
+  - Câu đóng góp theo kênh: AI chưa nói "đây là đóng góp số học, không phải nguyên nhân".
+- **Cần bạn quyết:** có sửa hai chỗ trên không (đề xuất trong `docs/ai_eval_b6_bieu_do.md` mục 4.1).
+- **Lưu ý kỹ thuật:** prompt của chat đã gần chạm hạn mức token của một phiên (200.000 token cho trường hợp xấu nhất 3 câu). Thêm tính năng chat
+  sau này phải rút gọn chữ, hoặc bạn quyết nâng hạn mức.
+
+### 2026-10-16: Sửa tiếp RV12 — chat không gọi số của kỳ này là số của kỳ khác (chờ Codex kiểm lại)
+
+- **Lỗi là gì:** hỏi "dự báo doanh thu năm 2025" (chưa có dự báo cho năm này), AI có thể lấy số tháng 8/2023 rồi viết như thể đó là dự báo
+  năm 2025.
+- **Lượt sửa trước:** chặn được cách viết thẳng "Dự báo năm 2025 là …".
+- **Lượt này:** mình thử thêm 15 cách viết sai, thấy 10 cách vẫn lọt:
+  - viết "tháng 8" mà không ghi năm;
+  - ghi đúng "tháng 8/2023" rồi viết thêm ", áp dụng cho năm 2025";
+  - lấy tổng cả vùng dự báo gọi là "năm 2025";
+  - lấy doanh thu **thực tế** năm 2022 gọi là "dự báo năm 2025";
+  - gán số cho năm 2025 rồi thêm câu "(không phải số thực tế)". Bản sửa đầu coi chữ "không" trong câu này là phủ định nên cho qua; nay
+    đã chặn.
+
+  Ngoài phần dự báo cũng có lỗi cùng loại: "R năm 2019 là …" nhưng số thật là của 2018. Trước đây app chỉ ghi nhãn "(R, 2018)" bên cạnh,
+  câu sai vẫn hiện.
+- **Nay:** các câu trên bị chặn. Khi bị chặn, trang hiện bảng số lấy thẳng từ kho thay cho câu văn. Câu tham khảo viết đúng vẫn hiện, ví
+  dụ "Chưa có dự báo năm 2025. Riêng tháng 8/2023, dự báo G là …".
+- **Có chặn nhầm câu đúng không:** mình cho 1.246 câu trả lời thật của AI ở các lần thử trước chạy lại qua bước kiểm mới.
+  - Bản sửa đầu chặn nhầm 9 câu đúng, ví dụ "năm 2022 R là …, năm trước đó là …".
+  - Mình đã sửa. Nay không câu đúng nào bị chặn thêm.
+- **Ảnh hưởng ngoài phần dự báo:** chat PS1–PS5 cũng chặt hơn. Câu ghi sai năm cho một số bị chặn, thay vì hiện kèm nhãn năm đúng như
+  trước. Bản web public chỉ đổi khi deploy lại.
+- **Chưa làm:** chưa thử lại với AI thật sau khi sửa. Codex sẽ kiểm lại theo `docs/review_codex_ai_gd2_20261015.md` mục 9.4.
+
+### 2026-10-16: RV12 lượt 3 — câu "chưa có dự báo năm 2025 nhưng số này là dự báo năm 2025" (chờ Codex kiểm lại)
+
+- **Lỗi Codex tìm thêm:** sau lượt 2, Codex thử hai câu tự mâu thuẫn: "Năm 2025 chưa có dự báo nhưng số này là dự báo năm 2025" và
+  "… nhưng có thể dùng số này làm dự báo năm 2025". Cả hai vẫn hiện. Lý do: bước kiểm thấy chữ "chưa" là cho qua cả vế, không xét lần
+  nhắc "năm 2025" thứ hai.
+- **Báo cáo trước nói sai:** lượt 2 mình báo "RV12 bây giờ mới thật sự đóng". Câu đó sai; RV12 chỉ đóng khi Codex kiểm lại đạt.
+- **Lượt này:** trước khi sửa, mình chốt sẵn 155 câu thử và ghi mã băm. Trong đó có 136 câu sai viết theo nhiều kiểu nối ("nhưng", "mà",
+  "nên", "chứ", không có chữ nối…), câu đảo thứ tự, câu "có thể dùng số này" không nhắc lại năm, và 19 câu đúng. Trước sửa chỉ 13/136 câu
+  sai bị chặn.
+- **Nay:** mỗi lần câu trả lời nhắc tới năm được hỏi phải có chữ phủ định của riêng nó ("chưa có", "nằm ngoài vùng dự báo"…). Câu đề nghị
+  "dùng số này" cho kỳ chưa có dự báo cũng bị chặn, trừ khi nói rõ là để so sánh / tham khảo. Cả 155 câu thử cho kết quả đúng.
+- **Có chặn nhầm câu đúng không:** phát lại 1.246 câu trả lời thật cũ. Bản đầu chặn nhầm 3 câu kiểu "chưa hỗ trợ khoảng ngày tùy ý
+  (15/3–10/6/2019)"; đã sửa. Bản cuối cho kết quả giống hệt lượt trước.
+- **Giới hạn:** bước kiểm đọc chữ, nên vẫn còn cách viết lọt được; mình đã thử và thấy ví dụ phủ định kép "không có lý do gì để không coi
+  đây là dự báo năm 2025" vẫn hiện. Câu viết dạng câu hỏi cũng lọt, ví dụ "Bạn có muốn dùng số này làm dự báo năm 2025?". Cách kín hơn: app tự viết câu dẫn số tham khảo theo khuôn, thay cho chữ tự do của AI. Chưa làm, chờ PM
+  quyết.
+- **Ảnh hưởng ngoài phần dự báo:** luật mới áp cho cả chat PS1–PS5 khi AI từ chối và dẫn số của kỳ khác (ví dụ hỏi quý, trả số cả năm).
+  Phát lại câu cũ (phần lớn là câu PS) không đổi kết quả câu nào. Bản web public chỉ đổi khi deploy lại.
+- **Chưa làm:** chưa thử lại với AI thật. Chưa commit, chưa deploy. Codex kiểm lại theo `docs/review_codex_ai_gd2_20261015.md` mục 9.6.
+
+### 2026-10-16: RV12 lượt 4 — Codex sửa, Claude kiểm lại (RV12 vẫn mở)
+
+- **Codex sửa gì:** câu hỏi có dấu "?" không còn được miễn kiểm nếu nhắc tới "số này". Danh sách chữ phủ định cũng hẹp lại: chữ "chưa"
+  đứng một mình không còn che được câu gán sai như "Số này là dự báo năm 2025 chưa điều chỉnh". Câu "dùng số này làm mốc tham khảo" vẫn
+  được hiện.
+- **Claude kiểm lại:** chạy lại mọi bài kiểm Codex nêu, cùng hai bộ thử cũ (25 và 155 câu) và 1.246 câu trả lời thật cũ: đều khớp.
+  Toàn bộ test app: 776 passed, 110 skipped (Databricks), 0 failed.
+- **Bộ thử mới 37 câu (chốt mã băm trước khi chạy):** chỉ 8 câu cho kết quả đúng.
+  - 17 câu từ chối đúng bị chặn nhầm, ví dụ "Dự báo năm 2025 chưa được hỗ trợ", "Tôi không thể đưa ra dự báo năm 2025", "Còn năm 2025 thì
+    chưa có". Trong đó 10 câu là do lượt này mới gây ra. Với AI thật, app cho AI sửa một lần kèm lời báo lỗi, nên thường chỉ tốn thêm
+    một lượt gọi. Người dùng chỉ thấy báo lỗi khi lần sửa cũng trượt.
+  - 9 câu gán sai vẫn hiện, ví dụ "Số này là dự báo năm 2025 chưa có số thực tế": chữ "chưa có số" ở đây nói về số thực tế, nhưng bước
+    kiểm hiểu thành "năm 2025 chưa có số". Thêm 3 câu phỏng đoán không kèm số ("có lẽ cũng quanh mức tháng 8/2023") cũng hiện.
+- **Nghĩa là:** bốn lượt sửa bằng cách thêm hoặc bớt cụm chữ đều chỉ dời lỗ sang chỗ khác. Hướng chắc hơn là không để AI tự viết câu chứa số
+  của kỳ khác: app dựng câu theo khuôn, hoặc chỉ hiện số đó ở khung bằng chứng. **Chờ PM quyết.**
+- **Chưa làm:** chưa sửa code, chưa chạy với AI thật, chưa commit, chưa deploy. Chi tiết: `docs/review_codex_ai_gd2_20261015.md` mục 9.9.
+
+### 2026-10-17: RV12 lượt 5 — app tự viết câu dẫn số của kỳ khác (chờ Codex kiểm)
+
+- **Bạn chọn:** khi AI không trả lời được đúng kỳ bạn hỏi mà vẫn muốn đưa số của kỳ khác để tham khảo, app tự viết phần có số; AI không
+  còn tự viết câu chứa số đó.
+- **Câu trả lời bây giờ trông thế nào:** ví dụ hỏi "Dự báo doanh thu năm 2025?":
+
+  > Năm 2025 nằm ngoài vùng dự báo (01/01/2023 → 01/07/2024), nên chưa có dự báo cho kỳ này.
+  >
+  > Số tham khảo, không phải số bạn hỏi:
+  >
+  > - Tháng 08/2023, toàn công ty: dự báo G là **74.151.832 VND** (sai số tháng điển hình 11,4% (backtest 2020–2022))
+
+  Câu "nằm ngoài vùng" chỉ xuất hiện khi app chắc chắn kỳ bạn hỏi nằm ngoài vùng có số. Nếu lý do là thứ khác (hỏi theo quý, theo vùng ×
+  tháng...), app giữ câu giải thích của AI, với điều kiện câu đó không có chữ số và không trỏ tới số.
+- **Đổi được gì:** mọi câu sai kiểu "số này là dự báo năm 2025" đã tìm ra qua bốn lượt (231 câu) không còn xuất hiện, vì AI không còn
+  được viết câu quanh số. Các câu từ chối đúng từng bị chặn nhầm nay đều hiện.
+- **Mất gì:** câu giải thích nào của AI có chữ số thì bị bỏ, kể cả câu nêu lý do. Trên 16 câu trả lời thật cũ, 8 câu chỉ còn câu mở chung
+  "Chưa có số đúng như câu hỏi.". Ví dụ câu hỏi theo khoảng ngày 15/3–10/6/2019 mất lời giải thích "chưa hỗ trợ khoảng ngày tùy ý".
+  Bảng trước/sau: `warehouse/reviews/ai_gd2_20261015/claude_rv12e_truoc_sau.md`.
+- **Phạm vi:** mọi câu trả lời khác `ok` có số của kỳ khác, gồm cả chat PS1–PS5. Câu trả lời `ok` không đổi.
+- **Chưa làm:** chưa chạy với AI thật, chưa commit, chưa deploy. Bộ test toàn app chưa chạy trọn, vì máy thiếu bộ nhớ; bộ hồi quy AI /
+  dự báo / pipeline đạt 611/611. Ba script kiểm của Codex còn dùng tiêu chí cũ "phải chặn" nên báo hỏng, chờ Codex đổi.
+
+### 2026-10-17: làm hết các việc đang chờ — sửa B6, ghi chú thước tháng, R / G từng năm (dev xong ở local, chờ Codex kiểm)
+
+- **Đã làm theo yêu cầu "làm hết":**
+  - **Câu mùa vụ** ("tháng cao nhất so với tháng thấp nhất"): bộ kiểm không còn chặn nhầm. Câu xếp hạng thật vẫn bị kiểm như cũ.
+  - **Câu đóng góp theo nhóm:** dưới câu trả lời luôn có dòng "Đóng góp của từng nhóm là phân rã số học…, không chứng minh nguyên
+    nhân". Dòng này do app in, nên không phụ thuộc AI có nhớ viết hay không.
+  - **"Đo theo tháng thì model khác chính xác hơn":** khi bạn hỏi dự báo G theo tháng, theo năm hay cả vùng, app tự in thêm một dòng
+    ghi chú. Bản dữ liệu hiện tại in:
+
+    > Theo sai số tháng (MAPE G tháng, backtest 2020–2022), log + SARIMAX, train toàn chuỗi sai ít hơn model chính: 8,2% so với 11,4%.
+    > Model chính được chọn theo điểm ngày kết hợp (luật chọn chốt trước khi chấm); hỏi "so sánh các model" để xem đủ hai thước.
+
+    Model chính vẫn như cũ. Tên model và hai con số lấy từ bản dữ liệu đang phục vụ. Nếu ở một bản sau, model chính cũng sai ít nhất
+    theo tháng, dòng này tự biến mất. Hỏi theo ngày, chỉ hỏi COGS, hoặc hỏi đích danh một model thì không có dòng này.
+  - **R / G từng năm:** nay hỏi được, ví dụ "Vẽ doanh thu gộp G từng năm từ 2015 đến 2021" hay "R năm nào cao nhất trong giai đoạn
+    2013–2022?". Kết quả vẽ được thành đường. Năm 2012 chỉ có số từ 04/07, nên không được vẽ cạnh các năm đủ tháng và không được tính
+    khi xếp năm cao / thấp nhất; chú thích của biểu đồ ghi rõ điều này.
+  - **Câu giải thích khi không trả lời đúng kỳ bạn hỏi:** AI được dặn viết lý do không kèm chữ số, ví dụ "chưa hỗ trợ khoảng ngày tùy
+    ý". Lý do: khi AI đưa số của kỳ khác, app bỏ mọi câu có chữ số (lượt RV12 trước). Thử lại 6 câu từng mất lý do, mỗi câu 3 lần: cả 18
+    lượt đều còn câu lý do. **Nhưng** lần này AI không đưa số của kỳ khác ở lượt nào, chỉ đề nghị "nếu muốn, tôi có thể…", nên app
+    không cần bỏ câu nào, và khối "Số tham khảo, không phải số bạn hỏi" cũng không hiện. Vì vậy chưa biết câu dặn mới có tác dụng
+    không: phần app tự viết câu dẫn số (lượt RV12 trước) vẫn chưa được thử với AI thật.
+  - **Hạn mức token:** vẫn 200.000 token mỗi phiên như bạn chốt. Mình hạ mức chữ tối đa AI được viết trong một lần trả lời từ 2048
+    xuống 1536 token. Trong 1.277 lượt thật từ 05/10 đến nay, lượt dài nhất chỉ dùng 1.116 token. Với trường hợp xấu nhất 3 câu, phần
+    dư tăng từ 371 lên 1.547 token, nên còn chỗ cho tính năng sau.
+- **Thử với AI thật** (khoảng 0,50 USD, ước theo giá niêm yết):
+  - Bộ câu dự báo (GM): 15/15 lượt đạt khi chấm máy. Lần đầu, sau khi mình rút gọn prompt, 4 câu về độ chính xác không còn nhắc
+    "điểm của model thắng là lạc quan". Mình trả câu này lại vào prompt; chạy lại thì 4/4 câu đều nhắc.
+  - Bộ câu biểu đồ (V): 12/14. Hai lượt trượt đều ở câu V06. Lý do: chat nay vẽ được R 10 năm, số đúng (cao nhất 2016, thấp nhất
+    2021), trong khi tiêu chí khóa ngày 16/10 chỉ nhận biểu đồ giai đoạn. Mình không sửa tiêu chí sau khi đã chấm.
+  - Bộ câu mới (N, 5 câu, chốt trước khi chạy): 4/5. Câu "R năm nào cao nhất" bị chặn. Mình sửa, chạy lại câu đó và câu vẽ G từng
+    năm: 2/2.
+- **Giới hạn bạn nên biết:**
+  - Dòng ghi chú thước tháng hiện dưới **mọi** câu dự báo G theo tháng / năm, nên hỏi nhiều câu liền sẽ thấy lặp.
+  - Hỏi về "miền Tây": AI truyền tên vùng bằng tiếng Việt, nên 2/3 lượt không có số. **Cần bạn quyết** có cho công cụ nhận tên vùng
+    tiếng Việt không.
+  - Một câu so sánh model in chữ "(có)" hơi lủng củng, chưa sửa.
+- **Commit, push, Databricks:**
+  - Code đã commit **từng file** như bạn dặn: 50 commit, mỗi commit một dòng ngắn. Tài liệu (`docs/`, `CLAUDE.md`…) chưa commit, chờ
+    bạn quyết.
+  - **Chưa push:** chế độ tự động của Claude Code chặn lệnh đẩy code lên GitHub. Bạn tự gõ `! git push origin app/myuyen` trong khung
+    chat.
+  - **Chưa chạy Databricks.** Thứ tự an toàn:
+    1. bạn push;
+    2. bạn **Reboot** bản public trên share.streamlit.io, vì push không tự cập nhật app;
+    3. bạn báo mình, mình chạy pipeline lên Databricks;
+    4. bạn hỏi thử chat public xem còn ra số không.
+
+    Lý do phải theo thứ tự này: bản public đang chạy code cũ. Code cũ coi quyền đọc các bảng dự báo mới là "quyền thừa" và sẽ khóa
+    chat nếu pipeline chạy trước.
+  - Code chưa được Codex kiểm (review §9.10, §9.11).
+
+### 2026-10-17: dự báo đã lên Databricks (pipeline chạy đạt, chờ bạn thử chat public và bật versioned)
+
+- **Đã làm:** sau khi bạn push và Reboot, mình chạy pipeline lên Databricks từ máy, theo từng bước:
+  1. chuẩn bị;
+  2. dựng: train dự báo, đẩy dữ liệu lên, dựng kho;
+  3. kiểm;
+  4. công bố.
+
+  Mất khoảng 35 phút, chưa tính bước kiểm thêm ở dưới. Bản dữ liệu mới trên Databricks có mã `cfe19211211e420abdfcabb3`.
+- **Vì sao tin được:**
+  - Kho dựng trên Databricks qua đủ 222/222 bước kiểm, giống bản trên máy.
+  - G và COGS của cả 3.833 ngày khớp dữ liệu gốc.
+  - 36 bảng trên Databricks khớp từng dòng với bản dựng trên máy.
+  - Dự báo trên cloud giống bản local: model chính vẫn LightGBM, tổng G dự báo tháng 8/2023 vẫn là 74.151.832.
+- **Chat public có bị khóa không:** trước khi công bố, mình chạy lại toàn bộ test chat trên Databricks bằng đúng tài khoản chat, kết quả
+  124/124 đạt. **Nhưng** bộ test này chỉ chạy tool, không chạy trọn một câu chat, nên chat public vẫn hỏng. Xem mục ngay dưới.
+- **Bạn làm tiếp:**
+  1. **Hỏi thử chat public** một câu PS, ví dụ "R năm 2019 là bao nhiêu?". Còn ra số là đạt. Lúc này hỏi dự báo thì chat sẽ báo lỗi
+     đọc dữ liệu: bản public vẫn đọc kho cũ, mà kho cũ không có bảng dự báo. Trước bước 2, lỗi này là bình thường.
+  2. **Bật chế độ đọc theo bản dữ liệu:** trên share.streamlit.io, mở app → **Settings → Secrets**, thêm một dòng
+     `RETAIL_RELEASE_MODE = "versioned"` rồi Save; app tự khởi động lại. Sau đó trang Dự báo có số, chat trả lời được câu dự báo, và
+     phần **Bằng chứng** của câu trả lời ghi mã bản `cfe19211…`.
+  3. Nếu sau bước 2 có gì hỏng: xóa dòng đó trong Secrets, app quay về đọc kho cũ như trước.
+- **Lưu ý kỹ thuật:** máy cần một bộ dbt có cả hai loại kết nối (máy và Databricks). Mình cài thêm một gói vào môi trường
+  `.venv-databricks`; môi trường chính của app không đổi.
+- **Chưa làm:** thử quay về bản cũ trên Databricks (rollback); chạy lần cloud qua Airflow Docker.
+
+### 2026-10-17: sửa lỗi chat public báo "Không đọc được danh sách nhóm (GuardError)" sau khi bật versioned
+
+- **Bạn thấy gì:** hỏi "Dự báo doanh thu tháng 8/2023 là bao nhiêu?" thì chat báo "Truy vấn lỗi. Không đọc được danh sách nhóm…
+  (GuardError)", dù phần dưới vẫn có nhãn dự báo và ghi chú. Câu PS như "R năm 2019" cũng hỏng như vậy.
+- **Vì sao:** mỗi câu trả lời, chat đọc dữ liệu hai lần: một lần lấy số, một lần lấy danh sách ngành / vùng / kênh để kiểm câu trả lời
+  có bỏ ngầm bộ lọc nhóm không. Lần thứ hai quên khai báo các bảng dự báo. Vì vậy quyền đọc bảng dự báo mà pipeline vừa cấp bị bộ
+  kiểm coi là "quyền thừa", và kết nối bị chặn. Lỗi do code của mình, không do bạn bật versioned. Ở chế độ cũ chat cũng hỏng như vậy.
+- **Vì sao mình không thấy trước:** bộ test 124 ca chỉ chạy lần đọc thứ nhất. Mình đã báo "chat không bị khóa" khi chưa thử một câu
+  chat trọn vẹn. Từ nay, sau mỗi lần đổi quyền, mình thử một câu chat trọn vẹn trên Databricks trước khi báo xong.
+- **Đã sửa:** một dòng trong `ai_explain/tools.py`, kèm một test bắt lỗi này. Thử trên Databricks, chế độ versioned: câu dự báo
+  tháng 8/2023 ra 74.151.832 VND, câu R năm 2019 ra 864.329.802 VND. Bạn đã push (`6335164`). Không cần chạy lại pipeline.
+- **Bạn kiểm:** Reboot bản public rồi hỏi lại hai câu trên. Mở phần Bằng chứng thì sẽ thấy mã bản `cfe19211…`.
+- **Kết quả (19:42):** sau khi Reboot, chat public trả lời câu dự báo tháng 8/2023 là 74.151.832 VND, có nhãn dự báo và đọc Databricks.
+  Câu PS "R năm 2019" ra 864.329.802 VND, đúng. Chế độ versioned đã bật xong. Một lỗi lời nhỏ: AI nhắc lại "sai số tháng điển hình 11,4%" ngay sau phần app đã ghi số đó.
+
+### 2026-10-17: chat có nút mở trang kèm bộ lọc (L2 deep link)
+
+- **Bạn thấy gì:** dưới câu trả lời của chat (chỉ khi câu trả lời qua bước kiểm) có nút "Mở trang …". Ví dụ hỏi "Khu vực nào
+  kéo giảm R năm 2019?" thì có nút "Mở trang PS5: Nhóm kéo lên/xuống · khu vực, năm 2019". Bấm vào, trang PS5 mở sẵn chiều Khu
+  vực và năm 2019, bạn không phải chọn lại.
+- **Vì sao tin được:** nút do app dựng từ đúng câu hỏi dữ liệu mà chat đã chạy (năm, chiều, kỳ), không do AI viết ra. Trang
+  nào không giữ được đúng bộ lọc thì không có nút. Ví dụ hỏi "R từng năm 2013–2022" thì không có nút, vì trang PS1 chỉ chọn một
+  kỳ. Hỏi dự báo bằng một model không phải model chính cũng không có nút, vì trang Dự báo chỉ vẽ model chính.
+- **Lưu ý:** trang đọc bản dữ liệu đang phục vụ lúc bạn mở trang. Nếu pipeline vừa công bố bản mới, số trên trang có thể là
+  của bản mới hơn bản mà câu trả lời đã dùng.
+- **Bạn kiểm:** push (`! git push origin app/myuyen`), Reboot bản public, rồi hỏi hai câu trên. Ghi chú đầy đủ cho người kiểm:
+  `docs/ghi_chu_l2_airflow_rollback_20261017.md`.
+
+### 2026-10-17: Airflow đã chạy pipeline lên Databricks, và đã thử quay về bản trước (rollback)
+
+- **Đã làm:** Airflow (chạy trong Docker trên máy) chạy đủ 4 bước của pipeline lên Databricks trong khoảng 23 phút và công bố
+  bản dữ liệu mới `b25b3e47…`. Bản này dùng cùng dữ liệu nguồn với bản `cfe19211…` sáng nay. Số PS và số dự báo không đổi:
+  R năm 2019 là 864.329.802 VND, dự báo tháng 8/2023 là 74.151.832 VND. Trên trang Dự báo, điểm backtest và khoảng dự báo lệch
+  rất nhỏ (tối đa khoảng 1%) vì lần này model chạy trên Linux trong Docker; model chính và thứ hạng các model không đổi.
+- **Nút mở trang chưa lên public:** bản dữ liệu mới không mang theo code app. Nút mở trang chỉ hiện sau khi bạn push và Reboot.
+- **Rollback là gì:** khi bản mới có vấn đề, ta trỏ app về bản cũ đã qua kiểm, không phải dựng lại. Mình đã thử thật trên
+  Databricks: chuyển về `cfe19211…`, rồi chuyển lại `b25b3e47…`. Sau mỗi lần chuyển, mình kiểm bằng đúng tài khoản của bản
+  public: trang đọc đúng bản, chat trả lời đúng hai câu và ghi đúng mã bản trong phần Bằng chứng.
+- **Bản public có bị ảnh hưởng không:** app tự đọc bản đang phục vụ, không cần Reboot. Từ 20:47 tới 20:56, mã bản trong phần
+  Bằng chứng có thể đổi qua lại; số PS và dự báo không đổi. Bây giờ bản public đang đọc `b25b3e47…`.
+- **Một điểm nhỏ cần bạn quyết:** gõ nhầm mã bản thì lệnh rollback vẫn từ chối đúng, nhưng báo lỗi kỹ thuật khó đọc (`KeyError`)
+  thay vì một câu rõ ràng. Sửa mất một dòng code. Bạn muốn mình sửa không?
+- **Chưa thử:** cố ý làm hỏng một lần chạy trên Databricks để thấy app giữ bản cũ. Phần này mới có test trên máy.
+- **Airflow vẫn đang mở** ở `http://127.0.0.1:8080` để bạn xem. Muốn tắt: `docker compose -f docker-compose.airflow.yml stop`.

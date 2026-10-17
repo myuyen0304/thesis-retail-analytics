@@ -9,7 +9,8 @@ ipykernel==7.3.0     # để chạy notebook trong VS Code / Jupyter
 duckdb==1.5.5        # Data Warehouse (star schema) — scripts/build/build_gold.py
 dbt-core==1.12.5       # dbt: retail_dbt/ (staging -> marts star schema)
 dbt-duckdb==1.11.0      # target dev
-dbt-snowflake==1.12.1   # target production
+dbt-snowflake==1.12.1   # target snowflake: script đã viết, chưa chạy cloud. Production là Databricks từ 2026-10-05,
+                        # dbt-databricks nằm ở môi trường riêng .venv-databricks (requirements-databricks.txt)
 dbt-postgres==1.11.0    # target dev chính (PostgreSQL local, docker-compose.yml)
 psycopg[binary]==3.3.6  # scripts/ingest/ingest_raw.py
 streamlit==1.64.0       # app phân tích GĐ 2: apps/retail_app/ (docs/gd2_app_plan.md)

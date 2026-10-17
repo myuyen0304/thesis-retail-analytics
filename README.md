@@ -3,8 +3,11 @@
 Datathon 2026 Round 1 — dự báo `Revenue` và `COGS` theo ngày cho **2023-01-01 → 2024-07-01** (548 ngày),
 dựa trên lịch sử **2012-07-04 → 2022-12-31** (3.833 ngày).
 
-Giai đoạn hiện tại trên `main`: **khám phá dữ liệu + hiểu cấu trúc + thiết kế mô hình dữ liệu (ERD)**.
-Chưa có preprocessing pipeline hay model — phần đó làm trên nhánh riêng.
+Checkout hiện có **DWH dbt, app Streamlit PS1–PS5 và AI hỏi dữ liệu**. Pipeline batch có snapshot bất biến,
+build theo phiên bản, quality gate và rollback; Airflow điều phối trong Docker local.
+Hướng dẫn chạy và phạm vi kiểm chứng: [automation_batch.md](docs/automation_batch.md).
+Databricks là đích DWH production; phần automation cloud cần writer service principal riêng và nghiệm thu trên workspace.
+Dự báo ARIMA/SARIMAX/LSTM và Kafka là các mốc tiếp theo; mẫu nộp bài chưa phải kết quả dự báo.
 
 ---
 
@@ -20,6 +23,8 @@ pip install -r requirements.txt
 ```
 
 > Dùng **pandas 3.x** (đúng như `requirements.txt`), không phải 2.x — hành vi dtype chuỗi khác nhau.
+
+> Chạy tay dbt / pipeline trên Databricks cần thêm môi trường riêng `.venv-databricks`: cách cài ở đầu `requirements-databricks.txt`.
 
 ## Tải data
 
@@ -118,7 +123,7 @@ Mỗi khẳng định trong `.md` có một cell tương ứng trong notebook. S
 
 | Người | Notebook phụ trách |
 |---|---|
-| myuyen | `notebooks/01_exploration/eda.ipynb`, `notebooks/02_design/data_model.ipynb`, `notebooks/02_design/normalization.ipynb`, `notebooks/04_forecasting/baseline.ipynb` |
+| myuyen | `notebooks/01_exploration/eda.ipynb`, `notebooks/02_design/data_model.ipynb`, `notebooks/02_design/normalization.ipynb`, `notebooks/04_forecasting/baseline.ipynb`, `notebooks/04_forecasting/so_sanh_model.ipynb` |
 | *(bạn cùng nhóm)* | *(điền khi nhận việc)* |
 
 ### Vòng lặp hằng ngày

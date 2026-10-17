@@ -2,7 +2,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, need_keys, notes, page_header, pick
+from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, need_keys, notes, page_header, pick, url_choice
 from ui.fmt import AXIS_PCT1, AXIS_TRIEU, num, pct, pp, trieu
 
 page_header('PS5: Nhóm kéo lên/xuống', 'Ngành hàng, khu vực, kênh nào kéo doanh thu lên hoặc xuống?')
@@ -21,10 +21,12 @@ st.warning('**Mỗi chiều (ngành hàng, khu vực, kênh) là một cách chi
 
 DIM = {'category': 'Ngành hàng', 'region': 'Khu vực', 'acquisition_channel': 'Kênh thu hút khách'}
 c_dim, c_nam = st.columns([2, 1])
-dim = c_dim.radio('Chiều (mỗi lần xem một chiều)', [d for d in DIM if d in set(seg['dimension_name'])],
+dims = [d for d in DIM if d in set(seg['dimension_name'])]
+dim = c_dim.radio('Chiều (mỗi lần xem một chiều)', dims, index=url_choice('chieu', dims, 0, 'chiều'),
                   format_func=DIM.get, horizontal=True)
 nams = sorted(seg.loc[seg['delta_r_rank'].notna(), 'year'].unique().tolist())
-nam = c_nam.selectbox('Năm (so với năm trước)', nams, index=nams.index(2019) if 2019 in nams else len(nams) - 1)
+nam = c_nam.selectbox('Năm (so với năm trước)', nams,
+                      index=url_choice('nam', nams, nams.index(2019) if 2019 in nams else len(nams) - 1, 'năm'))
 ten_chieu = DIM[dim].lower()
 y = pick(yearly.set_index('year'), nam, 'revenue_yearly', f'của năm {nam}')
 s = need(seg[(seg['dimension_name'] == dim) & (seg['year'] == nam)], 'segment_yearly',
