@@ -27,7 +27,7 @@ from dwh.releases import checked, allowed_versions, CONTROL_RELATION
 def code_version():
     h = hashlib.sha256()
     for folder in ('retail_dbt/models', 'retail_dbt/macros', 'retail_dbt/tests', 'retail_dbt/seeds',
-                   'scripts/pipeline', 'scripts/ingest', 'scripts/parity', 'apps/retail_app'):
+                   'scripts/pipeline', 'scripts/ingest', 'scripts/parity', 'scripts/forecast', 'apps/retail_app'):
         for p in sorted((ROOT / folder).rglob('*')):
             if p.suffix in ('.py', '.sql', '.yml', '.csv') and '__pycache__' not in p.parts:
                 h.update(p.relative_to(ROOT).as_posix().encode())
@@ -41,6 +41,8 @@ def dbt_build(context, target, cloud=None):
     folder = Path(context['directory']) / target
     folder.mkdir(parents=True, exist_ok=True)
     vars_ = {k: context[k] for k in ('release_id', 'snapshot_id', 'code_version', 'snapshot_path')}
+    if context.get('forecast_path'):   # bật rpt_forecast_* và test của chúng (retail_dbt/models/reporting/_forecast.yml)
+        vars_['forecast_path'] = context['forecast_path']
     dbt = os.getenv('RETAIL_DBT_EXECUTABLE') or str(Path(sys.executable).with_name('dbt.exe' if os.name == 'nt' else 'dbt'))
     env = {**os.environ, 'PYTHONUTF8': '1', 'RETAIL_DUCKDB_BUILD_PATH': context['duckdb_path']}
     if cloud:
@@ -81,6 +83,15 @@ def verify_artifacts(folder, context, target):
     return manifest
 
 
+def forecast_stage(context):
+    """Train, backtest và chọn ứng viên dự báo từ snapshot (scripts/forecast/stage.py); dbt đọc kết quả thành rpt_forecast_*.
+    Retry cùng run dùng lại kết quả đã có. ValueError (không hội tụ, hỏng kiểm tháng 8/2023) dừng pipeline, không retry."""
+    from scripts.forecast import stage
+    out = Path(context['directory']) / 'forecast'
+    meta = stage.run(context['snapshot_path'], out, run_id=context['run_id'], snapshot_id=context['snapshot_id'])
+    return out.as_posix(), {k: meta[k] for k in ('model_version', 'primary', 'selection_step', 'fits', 'seconds')}
+
+
 def validate_data(context, cloud=None):
     import duckdb
     rid = context['release_id']
@@ -116,10 +127,30 @@ def validate_data(context, cloud=None):
         baseline.close()
 
 
-def consumers():
+def _vars():
     import yaml
-    cfg = yaml.safe_load((ROOT / 'retail_dbt/dbt_project.yml').read_text(encoding='utf-8'))['vars']
-    return cfg['app_read_relations'], cfg['ai_readonly_relations']
+    return yaml.safe_load((ROOT / 'retail_dbt/dbt_project.yml').read_text(encoding='utf-8'))['vars']
+
+
+def consumers():
+    """(bảng của app, bảng của AI), mỗi bên gồm cả bảng tùy chọn: AI có ai_optional_relations (rpt_forecast_*, B3
+    2026-10-15), app có app_optional_relations (ba bảng trang Dự báo, RV11). Lúc cấp quyền / kiểm reader chỉ lấy bảng
+    tùy chọn có thật trong bản đang kiểm (present)."""
+    cfg = _vars()
+    return (cfg['app_read_relations'] + cfg.get('app_optional_relations', []),
+            cfg['ai_readonly_relations'] + cfg.get('ai_optional_relations', []))
+
+
+def optional_relations():
+    cfg = _vars()
+    return frozenset(cfg.get('ai_optional_relations', [])) | frozenset(cfg.get('app_optional_relations', []))
+
+
+def present(logical, schema, exists):
+    """Bảng bắt buộc giữ nguyên; bảng tùy chọn chỉ giữ khi có trong schema của bản (RV04, review Codex 2026-10-15):
+    bản mới có dự báo thì được cấp quyền và thử đọc, bản trước B2b (rollback) không bị đòi bảng không tồn tại."""
+    optional = optional_relations()
+    return [r for r in logical if r not in optional or exists(schema, r.split('.')[1])]
 
 
 def reader_grants(catalog, client, schema, logical):
@@ -140,13 +171,21 @@ def verify_consumers(context, registry, cloud=None):
         import duckdb
         path = registry.path.parent / context['artifact_path'] if context.get('artifact_path') else Path(context['duckdb_path'])
         with duckdb.connect(str(path), read_only=True) as con:
-            for rel in set(app + ai):
+            def exists(schema, name):
+                return con.execute('select count(*) from information_schema.tables where table_schema = ? '
+                                   'and table_name = ?', [schema, name]).fetchone()[0] > 0
+            for rel in set(present(app + ai, context['schema'], exists)):
                 con.execute(f"select * from {context['schema']}.{rel.split('.')[1]} limit 1").fetchall()
         return
     from databricks import sql
     from databricks.sdk.core import Config
     from dwh.guarded import _check_dbx_identity
-    for kind, logical in [('APP', app), ('AI', ai)]:
+    def exists(schema, name):
+        _, rows = cloud.query(f'select count(*) from {cloud.catalog}.information_schema.tables '
+                              'where table_schema = ? and table_name = ?', (schema, name))
+        return rows[0][0] > 0
+    for kind, full in [('APP', app), ('AI', ai)]:
+        logical = present(full, context['schema'], exists)
         client = os.getenv(f'RETAIL_{kind}_DBX_CLIENT_ID')
         secret = os.getenv(f'RETAIL_{kind}_DBX_CLIENT_SECRET')
         if not client or not secret or not re.fullmatch(r'[a-fA-F0-9-]{36}', client):
@@ -161,7 +200,7 @@ def verify_consumers(context, registry, cloud=None):
                          http_path=f"/sql/1.0/warehouses/{os.environ['DATABRICKS_WAREHOUSE_ID']}",
                          credentials_provider=lambda: auth.authenticate, catalog=cloud.catalog,
                          session_configuration={'STATEMENT_TIMEOUT': '120'}) as con, con.cursor() as cur:
-            allowed = allowed_versions(registry.read()['payload'], logical)
+            allowed = allowed_versions(registry.read()['payload'], full)    # quyền dự báo của bản khác không thừa
             _check_dbx_identity(cur, client, allowed, cloud.catalog, frozenset(qualified))
             for rel in qualified:
                 cur.execute(f'select * from {rel} limit 1')
@@ -225,8 +264,10 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
                     return context
                 if context['release_id'] in registry.read()['payload']['releases']:
                     raise ValueError('Không được dựng lại phiên bản ready')
+                context['forecast_path'], context['forecast'] = forecast_stage(context)
                 if cloud:
                     cloud.ingest(context, manifest)
+                    cloud.ingest_forecast(context)
                 dbt_build(context, 'duckdb')
                 if cloud:
                     dbt_build(context, 'databricks', cloud)
