@@ -10,7 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from ai_explain import metric_catalog as cat
-from ai_explain import provider, service, tools
+from ai_explain import charts, provider, service, tools
 from dwh.guarded import ai_databricks_principal
 from ui.common import BACKEND_LABEL, backend, notes, page_header
 from ui.fmt import arrow_safe, num
@@ -22,6 +22,7 @@ GOI_Y = {q: q for q in [
     'Tháng 8 năm lẻ có luôn thấp hơn năm chẵn không?',               # PS3
     'Vì sao R năm 2019 giảm?',                                         # PS4
     'Ngành hàng nào kéo giảm R nhiều nhất năm 2019?',                  # PS5
+    'Dự báo doanh thu tháng 8/2023 là bao nhiêu?',                    # dự báo (B3, cần bản dữ liệu có dự báo)
 ]}
 TRANG_THAI = {
     'needs_clarification': ('info', 'Cần làm rõ'), 'unsupported': ('info', 'Chưa hỗ trợ'),
@@ -90,6 +91,23 @@ def _turn(t: service.TurnResult) -> None:
             getattr(st, kind)(f'**{nhan}.** {_md(text)}')
         if any(tool == 'get_revenue_drivers' and t.results[r].ok for r, tool, _ in t.calls):
             st.caption('Phần góp N → U → P là phân rã số học, cho biết ΔR "nằm ở đâu", không chứng minh nguyên nhân.')
+        # B3: nhãn dự báo do APP in từ kết quả tool (hợp đồng dự báo §8), không phụ thuộc câu văn của mô hình
+        for r, tool, _ in t.calls:
+            res = t.results[r]
+            if tool == 'get_forecast' and res.ok:
+                st.caption(res.derived['forecast_label'] + '. ' + tools.BACKTEST_NOTE)
+            elif tool == 'get_forecast_backtest' and res.ok:
+                st.caption(tools.BACKTEST_NOTE)
+        # ghi chú app gắn theo tool (đóng góp nhóm là phân rã số học; thước tháng xếp model khác tốt hơn model chính)
+        for n in getattr(t, 'app_notes', ()):
+            st.caption(_md(n))
+        # B6: biểu đồ vẽ từ đúng kết quả tool đã lưu của lượt (rerun không gọi lại mô hình); chỉ khi câu trả lời qua kiểm
+        if t.status == 'ok':
+            for spec in getattr(t, 'charts', []):
+                st.altair_chart(charts.chart(spec, charts.frame(spec, t.results)), width='stretch')
+                for c in spec.captions:
+                    st.caption(_md(c))
+                st.caption(f'Biểu đồ vẽ từ kết quả {spec.ref} ({spec.n_points} điểm), xem trong **Bằng chứng {spec.ref}**.')
         if t.values:
             with st.expander('Các con số trong câu trả lời lấy từ đâu'):
                 st.dataframe(_values_df(t.values), hide_index=True)
@@ -145,6 +163,8 @@ notes(
         'kết quả truy vấn của chính câu đó, app tra giá trị thật rồi mới hiện. Mở **Bằng chứng** để xem bảng, câu SQL, '
         'bộ lọc, định nghĩa và bản kho đã đọc.',
         'Câu hỏi tiếp nối ("còn theo khu vực?") giữ năm/chỉ tiêu của câu trước và đọc kho lại; không dùng lại số cũ.',
+        'Muốn xem biểu đồ thì hỏi "vẽ ...": dự báo từng tháng, so sánh model dự báo, R theo nhóm của một năm, các giai '
+        'đoạn, mùa vụ. Biểu đồ vẽ từ đúng bảng số trong phần Bằng chứng của câu đó.',
         'Đang mở: PS1 G → R theo năm hoặc cả kỳ 2013–2022, R/G một tháng; PS2 bốn giai đoạn và ba điểm đổi hướng; '
         'PS3 mùa vụ, dồn cuối tháng, tháng 8 năm lẻ/chẵn; PS4 R so năm trước và phân rã N → U → P (từ 2014); '
         f'PS5 R theo một chiều ({", ".join(cat.DIMENSIONS)}) × năm.',
@@ -155,6 +175,8 @@ notes(
         'Số PS3 theo giai đoạn dùng cách gom năm ranh giới đề xuất (chờ BA chốt); số cả kỳ 2013–2022 không phụ thuộc '
         'quy ước này.',
         'Phân rã là số học, không phải nguyên nhân (marketing, churn, tồn kho... không có trong dữ liệu).',
+        'Biểu đồ chưa vẽ được R / G theo từng năm hay từng tháng của một năm (chưa có công cụ trả cả chuỗi), và chưa có '
+        'nút mở trang tương ứng kèm bộ lọc.',
         'Câu diễn giải không qua bước kiểm số thì không hiện; khi đó chỉ hiện bảng số lấy thẳng từ kho.',
         'Tiền ghi VND: dữ liệu nguồn không ghi đơn vị tiền tệ, PM chốt dùng VND ngày 2026-10-05.',
     ],
