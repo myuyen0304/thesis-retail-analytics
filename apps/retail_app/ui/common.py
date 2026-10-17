@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
+from dwh import forecast_queries
 from dwh import queries
 from dwh import releases
 from dwh.connection import default_backend, describe, enabled_backends, release_for_read
@@ -106,7 +107,8 @@ def report_reads(top) -> None:
     if not reads:
         return
     b = backend()
-    tables = ', '.join(f'`{queries.SOURCE[q]}` ({num(n)} dòng)' for q, (n, _) in reads.items())
+    source = {**queries.SOURCE, **forecast_queries.SOURCE}      # trang Dự báo đọc thêm bảng tùy chọn
+    tables = ', '.join(f'`{source[q]}` ({num(n)} dòng)' for q, (n, _) in reads.items())
     times = [t for _, t in reads.values()]
     if st.session_state.pop('reloaded', False):
         when = max(times).strftime('%H:%M:%S %d/%m/%Y')
