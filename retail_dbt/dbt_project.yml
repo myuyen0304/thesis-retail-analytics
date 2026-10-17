@@ -35,6 +35,17 @@ vars:
     - reporting.rpt_revenue_total
     - reporting.rpt_revenue_turning_point
     - reporting.rpt_revenue_yearly
+  # B3 (2026-10-15): bảng dự báo chat ĐƯỢC đọc nhưng không bắt buộc có (= ai_explain.tools.OPTIONAL_RELATIONS).
+  # Chỉ bản dữ liệu của pipeline có hai bảng này; macro bỏ qua bảng chưa có, guard không đòi quyền trên chúng.
+  ai_optional_relations:
+    - reporting.rpt_forecast_backtest
+    - reporting.rpt_forecast_daily
+  # Bảng trang Dự báo đọc (= apps/retail_app/dwh/forecast_queries.SOURCE), cùng kiểu TÙY CHỌN (RV11, review Codex 2026-10-15):
+  # pipeline cấp quyền / thử đọc cho app reader khi bản có bảng, không đòi ở bản trước B2b (rollback vẫn chạy).
+  app_optional_relations:
+    - reporting.rpt_forecast_actual
+    - reporting.rpt_forecast_backtest
+    - reporting.rpt_forecast_daily
   # Bảng các trang app đọc (= apps/retail_app/dwh/queries.SOURCE): hook cấp SELECT cho SP của app trên Databricks Apps
   app_read_relations:
     - reporting.driver_rule
