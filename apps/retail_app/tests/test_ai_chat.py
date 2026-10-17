@@ -213,8 +213,8 @@ def test_cau_tra_loi_bi_cat_khi_goi_tool_thi_khong_chay_tool():
 def test_can_tren_prompt_ghi_lai_moi_lan_goi():
     fake = FakeProvider(call('get_revenue_drivers', metric='R', year=2019), E04_OK)
     t = turn(fake)
-    assert [b for b, _ in t.prompt_bounds] == [service.prompt_bound(m, provider.openai_tools(tools.tool_schemas()))
-                                               for m in fake.seen]
+    assert [b for b, _ in t.prompt_bounds] == [service.prompt_bound(m, service.chat_schemas()) for m in fake.seen]
+    assert 'show_chart' in json.dumps(service.chat_schemas())                  # B6: schema biểu đồ nằm trong cận trên
     assert [a for _, a in t.prompt_bounds] == [100, 200]
 
 
