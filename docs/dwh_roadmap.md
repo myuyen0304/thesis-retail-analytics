@@ -1,4 +1,31 @@
-# Lộ trình DWH: PS1–PS5 → app code → Databricks production → Kafka
+# Lộ trình DWH: PS1–PS5 → app code → Databricks production → Kafka (hoãn từ 2026-10-11)
+
+## Đổi hướng đã chốt 2026-10-11: GĐ2 theo sơ đồ thầy hướng dẫn
+
+Ngày 2026-10-10 thầy hướng dẫn giao làm tiếp theo hai sơ đồ: `references/pipeline.jpg` (DE) và
+`references/pipeline-gd2.jpg` (AI agent 4 level). Thiết kế đầy đủ và bảng hiện trạng nằm ở
+[kien_truc_pipeline_tong.md](kien_truc_pipeline_tong.md).
+
+PM/BA chốt ngày 2026-10-11:
+
+- **Dự báo thành lõi của GĐ2**, không còn là phần mở rộng. Lý do: trên sơ đồ GĐ2, các số khoanh ①②③ là thứ tự
+  ưu tiên thầy giao:
+  - ① dự báo time series (ARIMA, log + SARIMAX, LSTM);
+  - ② dashboard dùng như tool của chat;
+  - ③ query, đã có.
+- **Target dự báo:** G theo ngày (`sales.csv`, đúng đề Datathon); COGS suy qua tỷ lệ COGS/G. Dự báo R để sau.
+- **Airflow chạy trong Docker local**, điều phối cả local lẫn Databricks. Phải ghi rõ lịch chạy nằm trên laptop.
+- **Thứ tự làm:**
+  1. Airflow + publish gate (tách stage/prod), làm trước để dự báo lên prod an toàn;
+  2. dự báo;
+  3. dashboard dùng như tool;
+  4. sau đó mới đến phần giải thích dự báo và RAG.
+- **Kafka hoãn**, ngoài phạm vi đợt hạn 2026-10-25, có thể không làm. Pipeline chạy batch theo lịch Airflow.
+  Thiết kế replay giữ sẵn làm hướng phát triển; lý do hoãn ghi ở
+  [kien_truc_pipeline_tong.md](kien_truc_pipeline_tong.md) §4.
+- **Hạn tiến độ 2026-10-25 giữ nguyên.**
+
+Câu "Forecast/SHAP là extension riêng" ở các mục bên dưới là **lịch sử** và không còn hiệu lực.
 
 ## Đổi hướng đã chốt 2026-10-05: Databricks là production
 
@@ -29,10 +56,12 @@ Các trạng thái và số test trong phần lịch sử bên dưới thuộc l
 
 | Giai đoạn | Kết quả cần có | Trạng thái |
 |---|---|---|
-| 1. Lõi local và KPI PS1–PS5 | Fact grain đúng, conformed dimensions, reporting, kiểm chứng độc lập | Đã có local, đủ KPI 5 PS; bảng giai đoạn/điểm đổi hướng PS2 dựng ngày 2026-09-27 (155/155 PASS) |
-| 2. Sản phẩm phân tích bằng code | Đọc reporting; drill-down đúng grain; giải thích số và giới hạn suy luận | Chưa triển khai trong đợt này |
-| 3. Databricks production (đổi từ Snowflake ngày 2026-10-05) | Deploy pipeline + app + chat AI, quản trị quyền/chi phí, lịch chạy, publish gate, phục hồi | DWH đã lên `retail_lab` (216/216, đối soát 33/33, 2026-10-03); app đọc Databricks (2026-10-04); chat AI và host app **chưa** |
-| 4. Kafka end-to-end | Event source/replay, incremental có khóa bền vững và xử lý late events | Sau pipeline chính, chưa triển khai |
+| 1. Lõi local và KPI PS1–PS5 | Fact grain đúng, conformed dimensions, reporting, kiểm chứng độc lập | Đã có local, đủ KPI 5 PS; bảng giai đoạn/điểm đổi hướng PS2 dựng ngày 2026-09-27 (155/155 PASS). Hiện tại: 53 model, dbt 217/217 trên DuckDB và Databricks (2026-10-06) |
+| 2. Sản phẩm phân tích bằng code | Đọc reporting; drill-down đúng grain; giải thích số và giới hạn suy luận | Đã có: Streamlit 8 trang và chat AI Explain (AI0–AI3, 8 tool chỉ-đọc). Bản public chạy trên Streamlit Cloud, đọc Databricks (2026-10-09) |
+| 3. Databricks production (đổi từ Snowflake ngày 2026-10-05) | Deploy pipeline + app + chat AI, quản trị quyền/chi phí, lịch chạy, publish gate, phục hồi | **Đã có:** DWH trên `retail_lab` (217/217 ngày 2026-10-06, đối soát 33/33); app và chat đọc Databricks qua SP chỉ-đọc; app chạy trên Databricks Apps (2026-10-07). **Chưa có:** lịch chạy, tách stage/prod, publish gate |
+| 3b. Tự động hóa DE (thêm 2026-10-11) | Airflow Docker local điều phối ingest → dbt → test → parity → promote; data contract; giám sát lần chạy | Chưa triển khai; xem [kien_truc_pipeline_tong.md](kien_truc_pipeline_tong.md) §5, A1–A4 |
+| 4. Kafka end-to-end | Event source/replay, incremental có khóa bền vững và xử lý late events | **Hoãn** (PM chốt 2026-10-11): ngoài phạm vi đợt hạn 2026-10-25, có thể không làm. Thiết kế replay trong môi trường riêng, không đụng prod, giữ sẵn ở A5 |
+| 5. Dự báo + AI agent 4 level (thêm 2026-10-11) | Dự báo G/COGS theo ngày (ARIMA, log + SARIMAX, LSTM) có backtest; trang Dự báo; tool `get_forecast`, tool biểu đồ, giải thích dự báo, RAG tri thức | Chưa triển khai; xem [kien_truc_pipeline_tong.md](kien_truc_pipeline_tong.md) §5, B1–B7 |
 
 `PostgreSQL` là dev local hiện tại; `DuckDB` là snapshot kiểm chứng gọn; `Databricks` là đích production (từ 2026-10-05; trước đó là Snowflake).
 Project dbt có cấu hình đa target; có cấu hình **không đồng nghĩa** đã chạy thành công trên cloud.
