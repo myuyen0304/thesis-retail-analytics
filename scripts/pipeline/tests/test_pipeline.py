@@ -250,3 +250,20 @@ def test_dbt_network_error_is_retryable(tmp_path, monkeypatch):
     context = {**record(), 'directory': str(tmp_path), 'snapshot_path': '/snap'}
     with pytest.raises(ConnectionError):
         cli.dbt_build(context, 'duckdb')
+
+
+def test_rollback_ma_ban_khong_co_bao_ro_va_khong_doi_registry(tmp_path, monkeypatch, capsys):
+    store = Registry(tmp_path)
+    store.initialize()
+    store.register(record('a'))
+    store.publish('a' * 24, None)
+    before = store.read()
+    monkeypatch.setattr(sys, 'argv', ['cli.py', 'rollback', '--run-id', 'rb1', '--root', str(tmp_path),
+                                      '--release-id', 'b' * 24])
+    with pytest.raises(SystemExit) as stop:
+        cli.main()
+    assert stop.value.code == 2                        # lỗi đầu vào: Airflow không thử lại
+    err = capsys.readouterr().err
+    assert 'b' * 24 in err and 'a' * 24 in err         # nêu mã gõ sai và các bản rollback được
+    assert store.read() == before
+    assert not (tmp_path / 'rollbacks').exists()
