@@ -151,7 +151,7 @@ Airflow dùng `warehouse/pipeline/docker` để tách state khỏi chạy CLI Wi
   - `b25b3e47…` → `cfe19211…` → `b25b3e47…`; sau mỗi lần đổi, app (SP `retail-web-ro`) và chat (SP `retail-ai-ro`, một lượt
     `service.run_turn` trọn vẹn) đọc đúng bản; R 2019 và G dự báo 08/2023 không đổi.
   - Chạy lại cùng lệnh rollback thì version của registry không đổi.
-  - Mã bản không có trong registry thì bị từ chối, nhưng báo `KeyError` thô với exit 1 (đề xuất sửa, chờ PM).
+  - Mã bản không có trong registry thì bị từ chối. Lúc chạy cloud lệnh báo `KeyError` thô, exit 1; đã sửa 2026-10-17 (`2c067ac`, test `b5aa37c`): giờ lệnh báo một câu rõ, nêu mã gõ sai và các bản rollback được, exit 2, registry không đổi.
   - Chi tiết từng lệnh: [ghi_chu_l2_airflow_rollback_20261017.md](ghi_chu_l2_airflow_rollback_20261017.md).
 - Chưa làm: cố ý làm hỏng quality gate trên cloud để thấy bản đang phục vụ được giữ (mới có test local); bật lịch Airflow.
 
