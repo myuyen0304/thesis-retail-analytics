@@ -4,13 +4,16 @@ Quyết định ngày **2026-09-29**: bộ skill dùng chung cho Codex và Claud
 
 ## Kiến trúc và phạm vi đã chốt
 
-- Local PostgreSQL/DuckDB: phát triển và tạo đối chứng.
-- Databricks: **lab kiểm chứng DWH và KPI**, cùng snapshot với local; không phải production thứ hai, chưa bao gồm host app/chat.
-- Snowflake: đích production sau này; có profile không đồng nghĩa đã deploy.
-- AI Explain: **chat hỏi dữ liệu PS1–PS5**, có query/bằng chứng và giới hạn suy luận; mở rộng phạm vi bằng metric/model/test khi có yêu cầu mới.
-- Kafka/Airflow: thêm khi có nhu cầu sự kiện/vận hành cụ thể. CSV replay phải ghi rõ là mô phỏng.
+Cập nhật 2026-10-11 theo `CLAUDE.md` §1 và [kien_truc_pipeline_tong.md](kien_truc_pipeline_tong.md):
 
-Đợt xây skill chưa deploy cloud, chưa xây runtime chat và chưa chọn LLM provider. Không dùng mốc PASS trong tài liệu cũ để chứng minh trạng thái hiện tại.
+- Local PostgreSQL/DuckDB: phát triển và tạo đối chứng.
+- Databricks: **production** từ 2026-10-05, gồm DWH, app và chat. Trước đó là lab kiểm chứng. Snowflake không còn là bước mặc định; có profile không đồng nghĩa đã deploy.
+- AI Explain: **chat hỏi dữ liệu PS1–PS5** (L1), có query, bằng chứng và giới hạn suy luận. Từ 2026-10-11 mở rộng thành agent 4 level của GĐ2: L2 biểu đồ, L3 đọc dự báo, L4 giải thích, RAG tri thức không cấp số.
+- Dự báo: từ 2026-10-11 là lõi của GĐ2. Target là G theo ngày, COGS suy qua tỷ lệ. Dùng skill `retail-forecasting`.
+- Airflow: chạy trong Docker local, điều phối batch (chốt 2026-10-11).
+- Kafka: hoãn, có thể không làm. Nếu sau này làm, CSV replay phải ghi rõ là mô phỏng.
+
+Lần xây skill đầu (2026-09-29) chưa deploy cloud, chưa xây runtime chat và chưa chọn LLM provider. Không dùng mốc PASS trong tài liệu cũ để chứng minh trạng thái hiện tại.
 
 ## Nguồn chuẩn và cách đọc
 
@@ -24,6 +27,7 @@ Mọi đường dẫn trong skill dạng `docs/`, `retail_dbt/`, `apps/` tính t
 | Bằng chứng kết luận dữ liệu | Notebook tương ứng trong `notebooks/`; CSV/snapshot dùng để đối chứng |
 | App, trạng thái và nghiệm thu | [gd2_app_plan.md](gd2_app_plan.md), code và test trong `apps/retail_app/` |
 | Cloud và thứ tự phát triển | [dwh_roadmap.md](dwh_roadmap.md); bản Databricks archive chỉ tham khảo |
+| Kiến trúc GĐ2: pipeline, dự báo, agent 4 level | [kien_truc_pipeline_tong.md](kien_truc_pipeline_tong.md); các mục A/B trong đó là thiết kế đề xuất |
 
 Nếu tài liệu và code không khớp, chỉ ra chỗ lệch và kiểm nguồn/test trước khi sửa; không tự chọn con số thuận tiện. Không sao chép toàn bộ định nghĩa KPI vào từng skill.
 
@@ -37,8 +41,9 @@ Tài liệu giữ mốc lịch sử và ghi chú sửa sau đó: đọc quyết 
 | `retail-data-analysis` | DA | Notebook chạy lại được, bằng chứng và giới hạn kết luận |
 | `retail-analytics-engineering` | AE | Model dbt, test grain/join/reconciliation và báo cáo chạy |
 | `retail-bi-product` | BI | Trang/biểu đồ/bộ lọc, số liệu khớp nguồn, test rendering và trạng thái lỗi |
-| `retail-ai-explain` | BI, AE | Luồng chat có kiểm soát, evidence và eval; code khi được giao xây tính năng |
+| `retail-ai-explain` | BI, AE | Luồng chat/agent có kiểm soát (L1–L4, RAG), evidence và eval; code khi được giao xây tính năng |
 | `retail-platform-validation` | AE, DE | Kiểm tương thích, chạy/đối soát nền tảng, bằng chứng publish gate |
+| `retail-forecasting` | DA, DS | Hợp đồng dự báo, notebook so sánh model + backtest, bảng `reporting.rpt_forecast_*` trong bản dữ liệu của pipeline kèm test, file nộp. Ranh giới với `retail-ai-explain` là các bảng `rpt_forecast_*` |
 
 Chọn tập skill nhỏ nhất đủ cho yêu cầu. Thay đổi nhãn UI không phải đi lại toàn bộ thiết kế DWH; thêm KPI mới cần định nghĩa trước model và consumer. Đọc reference theo nhiệm vụ, không nạp tất cả.
 
@@ -55,9 +60,10 @@ $retail-analytics-engineering Thêm bộ lọc category cho số khách, không 
 $retail-bi-product Thêm trang so sánh R theo năm, giữ nguồn và kỳ phân tích rõ ràng.
 $retail-ai-explain Thiết kế chat PS1–PS5 với query chỉ đọc và bộ eval cho câu hỏi ngoài phạm vi.
 $retail-platform-validation Lập kế hoạch lab Databricks đối soát DWH/KPI với snapshot local.
+$retail-forecasting Lập backtest rolling-origin cho log + SARIMAX, có sai số riêng tháng 8 năm lẻ.
 ```
 
-Claude Code dùng cùng yêu cầu với `/retail-metric-design`, `/retail-data-analysis`, `/retail-analytics-engineering`, `/retail-bi-product`, `/retail-ai-explain`, `/retail-platform-validation`.
+Claude Code dùng cùng yêu cầu với `/retail-metric-design`, `/retail-data-analysis`, `/retail-analytics-engineering`, `/retail-bi-product`, `/retail-ai-explain`, `/retail-platform-validation`, `/retail-forecasting`.
 
 Agent phải tự tìm thông tin có trong repo trước khi hỏi. Khi câu hỏi thật sự mơ hồ (ví dụ doanh thu R/G) thì làm rõ; không biến skill thành quy trình hỏi xác nhận cho mọi bước đã được giao. Skill không mở rộng quyền deploy hay thay đổi dữ liệu ngoài yêu cầu.
 
@@ -82,9 +88,9 @@ Chạy từ root:
 .venv/Scripts/python.exe -m pytest scripts/skills/tests -q
 ```
 
-`--check` chỉ đọc: exit 0 = khớp, 1 = cần đồng bộ, 2 = xung đột/lỗi. `--write` chỉ quản lý sáu skill trong bảng; chuẩn hóa CRLF/LF và ghi manifest hash. File bị sửa thủ công ở bản Claude làm preflight dừng trước khi ghi. Khi có xung đột, đối chiếu nội dung và hợp nhất thay đổi có chủ đích vào source; khôi phục bản generated đã biết trước khi sync, không xóa manifest để bỏ qua kiểm tra.
+`--check` chỉ đọc: exit 0 = khớp, 1 = cần đồng bộ, 2 = xung đột/lỗi. `--write` chỉ quản lý các skill trong bảng (danh sách `SKILLS` trong `scripts/skills/sync_skills.py`). Thêm skill mới: thêm tên vào cuối `SKILLS` rồi chạy `--write`. Bớt skill khỏi danh sách thì script dừng, phải xử lý manifest có chủ đích; chuẩn hóa CRLF/LF và ghi manifest hash. File bị sửa thủ công ở bản Claude làm preflight dừng trước khi ghi. Khi có xung đột, đối chiếu nội dung và hợp nhất thay đổi có chủ đích vào source; khôi phục bản generated đã biết trước khi sync, không xóa manifest để bỏ qua kiểm tra.
 
-Script không xóa skill ngoài danh sách; file reference bị bỏ ở source chỉ bị xóa khỏi bản Claude nếu thuộc manifest và chưa bị sửa. Nếu ghi bị gián đoạn, kiểm file/manifest và phục hồi bản đã biết trước khi chạy lại; đây không phải giao dịch filesystem nguyên tử. Không hỗ trợ symlink/junction hay file nhị phân trong sáu skill.
+Script không xóa skill ngoài danh sách; file reference bị bỏ ở source chỉ bị xóa khỏi bản Claude nếu thuộc manifest và chưa bị sửa. Nếu ghi bị gián đoạn, kiểm file/manifest và phục hồi bản đã biết trước khi chạy lại; đây không phải giao dịch filesystem nguyên tử. Không hỗ trợ symlink/junction hay file nhị phân trong các skill được quản lý.
 
 `AGENTS.md` giữ nguyên trong đợt này. Skill kỹ thuật Streamlit/Databricks cài sẵn có thể hỗ trợ, nhưng máy thiếu chúng vẫn có đường tra tài liệu chính thức. Không cần tạo subagent hoặc cài plugin để dùng bộ skill.
 
