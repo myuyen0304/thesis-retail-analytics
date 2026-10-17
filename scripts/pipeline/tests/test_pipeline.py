@@ -163,6 +163,76 @@ def test_reader_grant_registry_before_release_tables():
     assert registry == [1, 2] and max(registry) < min(i for i, s in enumerate(statements) if schema in s)
 
 
+def test_ai_reader_gom_bang_du_bao_chi_khi_ban_co():
+    # RV04 (review Codex 2026-10-15): pipeline cấp quyền / thử đọc bảng dự báo cho AI reader ở bản có dự báo,
+    # nhưng không đòi bảng đó ở bản trước B2b (rollback)
+    app, ai = cli.consumers()
+    opt = cli.optional_relations()
+    ai_opt = {'reporting.rpt_forecast_daily', 'reporting.rpt_forecast_backtest'}
+    assert ai_opt <= opt and ai_opt <= set(ai)
+    assert 'reporting.rpt_forecast_actual' not in ai                     # chat không đọc bảng số thực tế của trang
+    schema = 'r_' + 'a' * 24 + '_reporting'
+    co = cli.present(ai, schema, lambda s, n: True)
+    khong = cli.present(ai, schema, lambda s, n: False)
+    assert set(co) == set(ai) and set(khong) == set(ai) - opt
+    qualified, statements = cli.reader_grants('retail_lab', 'sp', schema, co)
+    assert f'{schema}.rpt_forecast_daily' in qualified
+    assert f'grant select on table retail_lab.{schema}.rpt_forecast_backtest to `sp`' in statements
+    assert not any('rpt_forecast' in s for s in cli.reader_grants('retail_lab', 'sp', schema, khong)[1])
+
+
+TRANG_DU_BAO = {'reporting.rpt_forecast_daily', 'reporting.rpt_forecast_backtest', 'reporting.rpt_forecast_actual'}
+
+
+def test_app_reader_gom_ba_bang_trang_du_bao_chi_khi_ban_co():
+    # RV11 (review Codex 2026-10-15 §8): app reader được cấp quyền / thử đọc ba bảng trang Dự báo ở bản có chúng,
+    # không đòi ở bản trước B2b; ba bảng không vào danh sách BẮT BUỘC app_read_relations
+    import yaml
+    cfg = yaml.safe_load((ROOT / 'retail_dbt/dbt_project.yml').read_text(encoding='utf-8'))['vars']
+    sys.path.insert(0, str(ROOT / 'apps/retail_app'))
+    from dwh import forecast_queries
+    assert set(cfg['app_optional_relations']) == set(forecast_queries.SOURCE.values()) == TRANG_DU_BAO
+    assert not TRANG_DU_BAO & set(cfg['app_read_relations'])
+    app, _ = cli.consumers()
+    assert TRANG_DU_BAO <= set(app) and TRANG_DU_BAO <= cli.optional_relations()
+    schema = 'r_' + 'b' * 24 + '_reporting'
+    co = cli.present(app, schema, lambda s, n: True)
+    khong = cli.present(app, schema, lambda s, n: False)
+    assert set(co) == set(app) and set(khong) == set(cfg['app_read_relations'])
+    statements = cli.reader_grants('retail_lab', 'app_sp', schema, co)[1]
+    for t in TRANG_DU_BAO:
+        assert f"grant select on table retail_lab.{schema}.{t.split('.')[1]} to `app_sp`" in statements
+    assert not any('rpt_forecast' in s for s in cli.reader_grants('retail_lab', 'app_sp', schema, khong)[1])
+    # whitelist quyền: bảng tùy chọn của mọi bản ready đều hợp lệ (quyền bản mới không bị coi là thừa khi rollback)
+    state = {'active': 'b' * 24, 'releases': {x * 24: record(x) for x in 'ab'}}
+    allowed = releases.allowed_versions(state, app)
+    assert all(f"r_{x * 24}_reporting.{t.split('.')[1]}" in allowed for x in 'ab' for t in TRANG_DU_BAO)
+
+
+def test_verify_consumers_local_moi_ban_ready():
+    # Kiểm reader local trên các bản đã publish thật: bản trước B2b (không có bảng dự báo) vẫn qua (rollback được);
+    # bản có dự báo thì đọc được mọi bảng trang Dự báo đang có
+    from types import SimpleNamespace
+    import duckdb
+    state_path = ROOT / 'warehouse/pipeline/state.json'
+    if not state_path.exists():
+        pytest.skip('chưa có bản dữ liệu do pipeline publish')
+    payload = json.loads(state_path.read_text(encoding='utf-8'))['payload']
+    seen = {}
+    for rec in payload['releases'].values():
+        path = state_path.parent / rec.get('artifact_path', '')
+        if rec.get('artifact_path') and path.exists():
+            with duckdb.connect(str(path), read_only=True) as con:
+                seen[rec['release_id']] = (rec, {f'reporting.{r[0]}' for r in con.execute(
+                    'select table_name from information_schema.tables where table_schema = ?', [rec['schema']]).fetchall()}
+                    & TRANG_DU_BAO)
+    if not any(t for _, t in seen.values()) or all(t for _, t in seen.values()):
+        pytest.skip('registry local cần cả bản có và bản không có bảng trang Dự báo')
+    for rec, _ in seen.values():                 # không ném lỗi: bảng tùy chọn vắng thì không bị đòi
+        cli.verify_consumers({'schema': rec['schema'], 'artifact_path': rec['artifact_path']}, SimpleNamespace(path=state_path))
+    assert any(t == TRANG_DU_BAO for _, t in seen.values())             # có bản đủ ba bảng: đã thử đọc cả ba
+
+
 def test_competing_writer_is_rejected(tmp_path):
     with writer_lock(tmp_path):
         with pytest.raises(OSError):
