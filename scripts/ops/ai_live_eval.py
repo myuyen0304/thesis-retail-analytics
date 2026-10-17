@@ -19,6 +19,7 @@ Kết quả của script này là live-model eval; KHÔNG trộn với test mock
 """
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -30,7 +31,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'apps' / 'retail_app'))
 
-from ai_explain import evidence, provider, service, tools   # noqa: E402
+from ai_explain import charts, evidence, provider, service, tools   # noqa: E402
+from ai_explain import metric_catalog as cat               # noqa: E402
+from dwh import releases                                    # noqa: E402
 
 OUT = ROOT / 'warehouse' / 'ai_eval'
 # Giá deepseek-flash giờ cao điểm, USD / 1 triệu token, kiểm trên api-docs.deepseek.com ngày 2026-10-05.
@@ -40,20 +43,26 @@ PRICE_IN, PRICE_OUT = 0.30, 1.20
 SUM, DRV, SEG = 'get_revenue_summary', 'get_revenue_drivers', 'get_segment_contribution'
 DEF = 'get_metric_definition'
 GAP, MON, TRD, CAL = 'get_revenue_gap', 'get_revenue_monthly', 'get_revenue_trend', 'get_calendar_pattern'
+FC, FB = 'get_forecast', 'get_forecast_backtest'
 # "N kéo giảm nhiều nhất": hoặc chỗ đặt top_down_driver, hoặc viết thẳng "số đơn" + số góp của N; cách sau được
 # evidence._verified_driver_rank đối chiếu với top_down_driver của kho (đổi ngày 2026-10-05, prompt ai2-…-05d).
 DRIVER_N = ('.top_down_driver', '.contrib_n')
 
 
-def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None, if_ok=None, must_neg=()):
+def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None, if_ok=None, must_neg=(), group=None, hand='',
+      chart=None):
     """tools: các lời gọi chấp nhận [(tên, tham số con)] (rỗng = không bắt buộc gọi tool);
     paths: mỗi phần tử (tập tên tool, hậu tố path hoặc tuple hậu tố thay thế) phải khớp ít nhất một claim đã hiện, và claim đó phải trỏ vào
     kết quả của CHÍNH lời gọi khớp `tools` (đúng tool + tham số), không chỉ cùng tên tool;
     if_ok: (tools, paths) bổ sung chỉ áp khi lượt trả `ok` (vd. E02 trả lời luôn thì phải nêu cả R và G);
     must_neg: số ÂM phải có trong câu và MỌI lần xuất hiện phải đọc ra được là âm: có dấu "−" ngay trước, hoặc chữ
-    giảm/sụt/âm đứng sát trước (≤ 3 chữ). "must" chỉ kiểm chuỗi nên "6,4%" và "−6,4%" đều qua (lỗi B06 lọt rubric)."""
+    giảm/sụt/âm đứng sát trước (≤ 3 chữ). "must" chỉ kiểm chuỗi nên "6,4%" và "−6,4%" đều qua (lỗi B06 lọt rubric).
+    group: nhóm báo cáo (bộ GM); hand: tiêu chí đọc tay answer_md, ghi TRƯỚC lượt chạy đầu (không đặt sau khi đọc kết quả).
+    chart (B6): {'tools': tập tool nguồn được phép, 'y': tập cột được phép hoặc None, 'min': số điểm tối thiểu,
+    'required': phải có biểu đồ khi status ok}. Chỉ chấm khi status ok (lượt khác ok không vẽ)."""
     return {'id': cid, 'q': q, 'status': set(status), 'tools': list(tools), 'paths': list(paths), 'must': list(must),
-            'banned': list(banned), 'after': after, 'if_ok': if_ok, 'must_neg': list(must_neg)}
+            'banned': list(banned), 'after': after, 'if_ok': if_ok, 'must_neg': list(must_neg), 'group': group, 'hand': hand,
+            'chart': chart}
 
 
 _NEG_BEFORE = re.compile(r'(?:giảm|sụt|kéo xuống|âm)\s+(?:[^\s,;:.()\[\]—–→]+\s+){0,3}$')   # không qua dấu câu
@@ -385,8 +394,157 @@ ACCEPT_F = [
     C('F10', 'Năm 2021 kênh nào tăng ít nhất?', {'ok', 'no_data', 'unsupported'},
       if_ok=([(SEG, {'metric': 'R', 'dimension': 'acquisition_channel', 'year': 2021})], [])),
 ]
+# Bộ G* (B3a, soạn 2026-10-15, CHƯA chạy live): dự báo theo bảng "Eval bổ sung" của agent_levels.md. Cần chế độ versioned:
+# RETAIL_RELEASE_MODE=versioned, RETAIL_RELEASE_STATE=warehouse/pipeline/state.json. Không nằm trong tat_ca (chế độ cũ
+# không có dự báo). Chốt và commit TRƯỚC lượt gọi model đầu (B3c).
+_G8 = [(FC, {'metric': 'G', 'period': 'month', 'year': 2023, 'month': 8})]
+ACCEPT_G = [
+    C('G01', 'Dự báo doanh thu tháng 8/2023 là bao nhiêu?', {'ok'}, _G8, [({FC}, '.g_forecast')], ['74.151.832']),
+    C('G02', 'Tháng 8/2023 dự báo giá vốn bao nhiêu, COGS/G thế nào?', {'ok'},
+      [(FC, {'metric': 'G_and_COGS', 'period': 'month', 'year': 2023, 'month': 8})], [({FC}, '.cogs_ratio')], ['1,35']),
+    C('G03', 'Dự báo doanh thu cả năm 2024', {'ok'}, [(FC, {'metric': 'G', 'period': 'year', 'year': 2024})], [({FC}, '.g_forecast')]),
+    C('G04', 'Model dự báo nào chính xác nhất?', {'ok'}, [(FB, {})],
+      [({FB}, '.derived.lowest_score.candidates'), ({FB}, '.derived.lowest_mape_g_thang.candidates')]),
+    C('G05', 'Dùng SARIMAX toàn chuỗi, COGS qua tỷ lệ, dự báo tháng 8/2023', {'ok'},
+      [(FC, {'metric': 'G', 'period': 'month', 'year': 2023, 'month': 8, 'model': 'sarimax_full', 'cogs_method': 'ratio'})],
+      [({FC}, '.g_forecast')]),     # nhãn 'không phải model chính' do app gắn: đọc tay trong answer_md
+    C('G06', 'Doanh thu thực tế năm 2023 là bao nhiêu?', {'no_data'}),
+    C('G07', 'Dự báo doanh thu năm 2025?', {'no_data'}),
+    C('G08', 'Dự báo doanh thu ngành Streetwear tháng 8/2023?', {'unsupported'}),
+    C('G09', 'Dự báo R năm 2023 bao nhiêu?', {'unsupported', 'needs_clarification'}),
+    C('G10', 'Vì sao chọn model dự báo hiện tại?', {'ok'}, [(FB, {})], [({FB}, '.derived.primary.selection_reason')]),
+    C('G11', 'Dùng XGBoost dự báo tháng 1/2024', {'no_data', 'unsupported'}),
+    C('G12', 'Trong kỳ dự báo, tháng nào doanh thu thấp nhất?', {'ok'}, [(FC, {'metric': 'G', 'period': 'horizon'})],
+      [({FC}, '.derived.lowest_month.months')], ['12/2023']),
+]
+# Bộ GM (B3c, soạn 2026-10-15, chốt TRƯỚC lượt gọi model đầu; mã băm in ra ở mỗi lần chạy, ghi vào docs/ai_eval_b3c_du_bao.md).
+# Mới cả về kỳ lẫn ý so với ACCEPT_G, tests/test_ai_forecast.py và scripts/review/: không dùng tháng 8/2023, cả năm 2024,
+# quý, "model nào chính xác nhất". Số phải có lấy từ parquet của stage dự báo (warehouse/pipeline/runs/b3b-01/forecast/),
+# không qua dbt hay tool; G thực tế từ data/sales.csv. Bộ G* ở trên là bộ PHÁT TRIỂN (câu đã dùng trong test), không nghiệm thu.
+_NHAN, _KY, _TT, _MODEL = 'nhan_du_bao', 'ngoai_ky', 'thuc_te_vs_du_bao', 'chon_model'
+
+
+def _fc(metrics, **k):
+    return [(FC, {'metric': m, **k}) for m in metrics]
+
+
+_SAR12 = [(FC, {'metric': m, 'period': 'month', 'year': 2023, 'month': 12, 'model': s, 'cogs_method': cm})
+          for m in ('G', 'G_and_COGS') for s in ('sarimax_full', 'sarimax_2019') for cm in ('direct', 'ratio')]
+ACCEPT_GM = [
+    C('GM01', 'Doanh thu gộp dự kiến của tháng 3 năm 2024 là bao nhiêu?', {'ok'},
+      _fc(('G', 'G_and_COGS'), period='month', year=2024, month=3), [({FC}, '.g_forecast')], ['118.649.475'], ['USD'],
+      group=_NHAN, hand='gọi là dự báo; không gọi là R hay doanh thu thực nhận; không tự đặt khoảng cho số tháng'),
+    C('GM02', 'Ngày 29/02/2024 công ty dự kiến bán được bao nhiêu, tính theo doanh thu gộp?', {'ok'},
+      _fc(('G', 'G_and_COGS'), period='day', year=2024, month=2, day=29), [({FC}, '.g_forecast')],
+      ['1.600.408'], ['USD'], group=_NHAN,
+      hand='khoảng 80% (1.114.447 – 2.237.503, app gắn) đi cùng số ngày; không nói số đó là chắc chắn'),
+    C('GM03', 'Theo mô hình, giá vốn tháng 11/2023 sẽ khoảng bao nhiêu?', {'ok'},
+      _fc(('COGS', 'G_and_COGS'), period='month', year=2023, month=11), [({FC}, '.cogs_forecast')], ['45.033.956'], ['USD'],
+      group=_NHAN, hand='nói là dự báo giá vốn (COGS), không gọi số đó là doanh thu'),
+    C('GM04', 'Tổng doanh thu gộp dự báo cho năm 2023 là bao nhiêu?', {'ok'},
+      _fc(('G', 'G_and_COGS'), period='year', year=2023), [({FC}, '.g_forecast')], ['1.063.819.301'], ['USD'],
+      group=_NHAN, hand='một số cả năm có nhãn dự báo; không cộng hay so với số thực tế 2022'),
+    C('GM05', 'Tháng 7/2024 dự báo doanh thu bao nhiêu?', {'ok'},
+      _fc(('G', 'G_and_COGS'), period='month', year=2024, month=7), [({FC}, '.g_forecast')], ['4.578.009'],
+      ['USD'], group=_KY,
+      hand='nói rõ chỉ ngày 01/07/2024 có dự báo, phần còn lại của tháng ngoài kỳ (app gắn "chỉ 1/31 ngày có dự báo"); '
+           'không gọi số đó là doanh thu cả tháng'),
+    C('GM06', 'Có dự báo doanh thu cho tháng 10/2024 không?', {'no_data'}, group=_KY,
+      hand='nói kỳ dự báo chỉ tới 2024-07-01; không đưa số nào, không ngoại suy'),
+    C('GM07', 'Dự báo số đơn hàng tháng 5/2023 là bao nhiêu?', {'unsupported'}, group=_KY,
+      hand='nói chưa có dự báo số đơn (dự báo chỉ có G và COGS); không đưa số G thay cho số đơn'),
+    C('GM08', 'Năm 2024 công ty đã bán được tổng cộng bao nhiêu tiền?', {'no_data', 'ok', 'needs_clarification'},
+      if_ok=(_fc(('G', 'G_and_COGS'), period='year', year=2024), [({FC}, '.g_forecast')]), group=_TT,
+      hand='nói không có số thực tế 2024 (dữ liệu thực dừng ở 2022-12-31); nếu đưa số thì phải là dự báo có nhãn, chỉ tới '
+           '2024-07-01, không viết số đó là "đã bán" hay "thực tế"'),
+    C('GM09', 'Vậy so với cùng tháng năm 2022 thực tế thì thế nào?', {'ok', 'needs_clarification', 'unsupported'},
+      after='GM01', group=_TT,
+      if_ok=([(MON, {'metric': 'G', 'year': 2022, 'month': 3}), (MON, {'metric': 'R_and_G', 'year': 2022, 'month': 3})],
+             [({MON}, '.g')]),
+      hand='nếu trả lời: hai phần riêng, G thực tế 3/2022 (137.537.949) có nhãn thực tế, G dự báo 3/2024 có nhãn dự báo; '
+           'không tính chênh lệch hay % giữa dự báo và thực tế; không lấy R thực tế để so với G dự báo'),
+    C('GM10', 'Dự báo G từ tháng 12/2022 đến tháng 2/2023', {'ok', 'needs_clarification', 'unsupported'}, group=_TT,
+      hand='12/2022 là số thực tế (không lấy từ get_forecast), 01/2023 và 02/2023 là dự báo; mỗi phần một nhãn; '
+           'không cộng thành một tổng chung'),
+    C('GM11', 'LightGBM có chính xác hơn SARIMAX không?', {'ok'}, [(FB, {})],
+      [({FB}, '.score'), ({FB}, '.mape_g_thang')], group=_MODEL,
+      hand='nêu cả hai thước: điểm ngày kết hợp (thước chọn; LightGBM tốt hơn) và MAPE G tháng (SARIMAX tốt hơn); nói là '
+           'backtest 2020–2022; không kết luận một chiều'),
+    C('GM12', 'Model đang dùng có hơn hẳn cách lấy lại số cùng kỳ hai năm trước không?', {'ok'}, [(FB, {})],
+      [({FB}, ('.improvement_vs_floor', '.floor.score', '.beats_floor_all_folds', '.n_pass_floor'))], group=_MODEL,
+      hand='so với mốc seasonal naive 2 năm bằng số backtest (điểm ngày thấp hơn khoảng 20%); nói là backtest 2020–2022 và '
+           'điểm của model thắng là lạc quan; không nói "hơn hẳn" nếu không có số'),
+    C('GM13', 'Sai số backtest của model chính là bao nhiêu, đo trên giai đoạn nào?', {'ok'}, [(FB, {})],
+      [({FB}, ('.primary.score', '.primary.mape_g_thang', '.score', '.mape_g_thang'))], group=_MODEL,
+      hand='nêu điểm ngày kết hợp và/hoặc MAPE G tháng của model chính; nói đo trên backtest 2020–2022, không phải độ chính '
+           'xác 2023–2024'),
+    C('GM14', 'Tại sao không chọn model gộp làm model chính, trong khi sai số tháng của nó thấp hơn LightGBM?', {'ok'},
+      [(FB, {})], [({FB}, ('.selection_reason', '.score'))], group=_MODEL,
+      hand='lý do lấy từ luật (bước 2: điểm ngày kết hợp thấp nhất) và điểm của hai model; MAPE tháng chỉ để hiển thị; '
+           'không bịa lý do khác (độ phức tạp, tốc độ, dễ giải thích...)'),
+    C('GM15', 'Cho mình xem dự báo tháng 12/2023 theo SARIMAX', {'ok', 'needs_clarification'},
+      if_ok=(_SAR12, [({FC}, '.g_forecast')]), group=_MODEL,
+      hand='nếu trả số: ghi rõ không phải model chính và là biến thể SARIMAX nào (toàn chuỗi 46.937.419 / từ 2019 '
+           '43.528.034); nếu hỏi lại: nêu các biến thể có trong bản dữ liệu; không trả số của model chính thay vào'),
+]
+# Bộ V (B6, soạn 2026-10-16, chốt bằng mã băm TRƯỚC lượt gọi model đầu; ghi ở docs/ai_eval_b6_bieu_do.md): câu "vẽ…".
+# Câu mới, khác câu trong tests/test_ai_charts.py. Cần chế độ versioned (có câu dự báo).
+def _CH(tools_, y=None, n=2, required=True):
+    return {'tools': set(tools_), 'y': set(y) if y else None, 'min': n, 'required': required}
+
+
+ACCEPT_V = [
+    C('V01', 'Cho mình xem đường dự báo doanh thu gộp theo từng tháng', {'ok'},
+      [(FC, {'metric': 'G', 'period': 'horizon'}), (FC, {'metric': 'G_and_COGS', 'period': 'horizon'})],
+      chart=_CH({FC}, {'g_forecast'}, 18), group='du_bao',
+      hand='nói đây là dự báo G; 07/2024 không vẽ như cả tháng (chú thích app); không gọi là số thực tế'),
+    C('V02', 'Vẽ biểu đồ so sánh các model dự báo theo sai số tháng', {'ok'}, [(FB, {})],
+      chart=_CH({FB}, {'mape_g_thang'}, 10), group='chon_model',
+      hand='nói là sai số backtest 2020–2022; nhắc thước chọn model là điểm ngày (khác thước được vẽ)'),
+    C('V03', 'Vẽ biểu đồ đóng góp của từng kênh vào thay đổi R năm 2019', {'ok'},
+      [(SEG, {'metric': 'R', 'dimension': 'acquisition_channel', 'year': 2019})],
+      chart=_CH({SEG}, {'contribution_to_delta', 'delta_r'}, 2), group='ps',
+      hand='nói đây là phân rã / đóng góp số học, không phải nguyên nhân'),
+    C('V04', 'Vẽ R đầu và cuối của các giai đoạn doanh thu', {'ok'}, [(TRD, {'view': 'phases'})],
+      chart=_CH({TRD}, {'r_start', 'r_end'}, 4), group='ps', hand='không gọi giai đoạn là nguyên nhân'),
+    C('V05', 'Vẽ biểu đồ mùa vụ: tỷ lệ tháng cao nhất so với tháng thấp nhất qua các giai đoạn', {'ok'},
+      [(CAL, {'pattern': 'mua_vu'})], chart=_CH({CAL}, {'season_peak_trough_ratio'}, 4), group='ps',
+      hand='nói rõ dòng 2013–2022 là cả kỳ, các dòng còn lại là từng giai đoạn'),
+    C('V06', 'Vẽ R theo từng năm từ 2013 đến 2022', {'unsupported', 'needs_clarification', 'ok'},
+      chart=_CH({TRD}, None, 2, required=False), group='gioi_han',
+      hand='nói chưa có chuỗi R theo từng năm; nếu vẽ thì chỉ là các giai đoạn và nói rõ không phải từng năm; không ghép nhiều '
+           'lần gọi một năm'),
+    C('V07', 'Vẽ biểu đồ dự báo doanh thu năm 2025', {'no_data'}, group='gioi_han',
+      hand='nói không có dự báo 2025; không vẽ gì'),
+]
+SUM, SEGC = 'get_revenue_summary', 'get_segment_contribution'
+# Bộ N (2026-10-17, chốt mã băm trước lượt gọi đầu): chuỗi R / G từng năm (to_year) và ghi chú do app gắn
+# (ToolResult.notes, đọc ở cột app_notes của log). Câu mới, khác câu trong test_ai_chuoi_nam_ghi_chu.py.
+ACCEPT_N = [
+    C('N01', 'Vẽ doanh thu gộp G từng năm từ 2015 đến 2021', {'ok'},
+      [(SUM, {'metric': 'G', 'year': 2015, 'to_year': 2021}), (SUM, {'metric': 'R_and_G', 'year': 2015, 'to_year': 2021})],
+      chart=_CH({SUM}, {'g'}, 7), group='chuoi_nam',
+      hand='một lần gọi tool cho cả chuỗi, không ghép nhiều lần gọi một năm; gọi đúng là G, không gọi là R'),
+    C('N02', 'R năm nào cao nhất trong giai đoạn 2013–2022?', {'ok'},
+      [(SUM, {'metric': 'R', 'year': 2013, 'to_year': 2022}), (SUM, {'metric': 'R_and_G', 'year': 2013, 'to_year': 2022})],
+      [({SUM}, '.derived.highest_r.years')], ['2016'], group='chuoi_nam',
+      hand='năm R cao nhất là 2016, dẫn ô xếp hạng của tool; không nói nguyên nhân'),
+    C('N03', 'Cho mình R của từng năm 2012–2014', {'ok'}, [(SUM, {'metric': 'R', 'year': 2012, 'to_year': 2014})],
+      [({SUM}, '.r')], group='chuoi_nam',
+      hand='nói 2012 thiếu tháng (dữ liệu bắt đầu 04/07/2012), không so ngang 2012 với năm đủ'),
+    C('N04', 'Dự báo doanh thu gộp tháng 6/2023 là bao nhiêu?', {'ok'},
+      _fc(('G', 'G_and_COGS'), period='month', year=2023, month=6), [({FC}, '.g_forecast')], ['129.404.273'], ['USD'],
+      group='ghi_chu',
+      hand='số có nhãn dự báo; app_notes có ghi chú "theo sai số tháng ... sai ít hơn model chính"; câu văn không '
+           'mâu thuẫn ghi chú (không nói model chính chính xác nhất theo tháng)'),
+    C('N05', 'Vẽ đóng góp của từng vùng vào thay đổi R năm 2020', {'ok'},
+      [(SEGC, {'metric': 'R', 'dimension': 'region', 'year': 2020})],
+      chart=_CH({SEGC}, {'contribution_to_delta', 'delta_r'}, 3), group='ghi_chu',
+      hand='không nói nguyên nhân; "phân rã / đóng góp số học, không phải nguyên nhân" có trong câu văn hoặc app_notes'),
+]
 SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D,
-        'f': ACCEPT_F}
+        'f': ACCEPT_F, 'g': ACCEPT_G, 'gm': ACCEPT_GM, 'v': ACCEPT_V, 'n': ACCEPT_N}
+FORECAST_SETS = ('g', 'gm', 'v', 'n')      # cần chế độ versioned và bản dữ liệu có dự báo (xem _forecast_ready)
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -420,8 +578,22 @@ def grade(case, t: service.TurnResult) -> dict:
         'must_contain': all(m in text for m in case['must']) and all(neg_shown(text, m) for m in case['must_neg']),
         'not_banned': not any(b.lower() in text.lower() for b in case['banned'])
                       and not re.search(r'(?<![\d.])[12]\.\d{3}(?![\d.,]| VND)', text),   # năm có dấu nghìn ("2.019")
+        'bieu_do': _chart_ok(case, t),
     }
     return {'case_id': case['id'], 'pass': all(checks.values()), 'checks': checks}
+
+
+def _chart_ok(case, t: service.TurnResult) -> bool:
+    """B6: biểu đồ của lượt ok đúng tool nguồn / cột / số điểm, và dữ liệu vẽ = các dòng bằng chứng của ref đó."""
+    want, specs = case.get('chart'), getattr(t, 'charts', [])
+    if t.status != 'ok':
+        return True                          # lượt khác ok không vẽ (trang chỉ vẽ khi qua kiểm)
+    if want is None:
+        return not specs
+    tool_of = {r: tool for r, tool, _ in t.calls}
+    good = [s for s in specs if tool_of.get(s.ref) in want['tools'] and (want['y'] is None or set(s.y) <= want['y'])
+            and s.n_points >= want['min'] and len(charts.frame(s, t.results)) == s.n_points * len(s.y)]
+    return len(good) == len(specs) and (bool(good) or not want['required'])
 
 
 def check_rubric(cases, backend: str) -> int:
@@ -456,6 +628,10 @@ def check_rubric(cases, backend: str) -> int:
                 shown += vals
             # chữ tool trả (tên giai đoạn, ghi chú đổi hướng...) được viết thẳng, không qua chỗ đặt
             shown += [v for r in res.rows for v in r.values() if isinstance(v, str)]
+            if (want := case.get('chart')) and want['required'] and name in want['tools']:
+                spec, out = charts.build({'ref': 'T1', 'y': sorted(want['y'])[0]}, {'T1': res}, [('T1', name, args)])
+                if spec is None or spec.n_points < want['min']:
+                    errs.append(f'{name} {args}: không dựng được biểu đồ ({out.message[:80]})')
         if not all(m in ' | '.join(shown) for m in case['must']):
             errs.append(f"chuỗi phải có {case['must']} không nằm trong {shown}")
         if not all('−' + m in ' | '.join(shown) for m in case['must_neg']):     # số thật phải đúng là số âm
@@ -476,19 +652,68 @@ def _git_rev() -> str:
         return 'khong-ro'
 
 
+def _set_hash(cases) -> str:
+    """Mã băm nội dung bộ câu (câu hỏi, tiêu chí chấm, tiêu chí đọc tay): chốt bộ khi chưa được commit."""
+    def canon(v):          # tập hợp lồng nhau (tiêu chí biểu đồ) phải ra cùng một chuỗi ở mọi lần chạy
+        if isinstance(v, (set, frozenset)):
+            return sorted(canon(x) for x in v)
+        if isinstance(v, dict):
+            return {k: canon(x) for k, x in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [canon(x) for x in v]
+        return v
+    body = json.dumps([canon(c) for c in cases], ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(body.encode('utf-8')).hexdigest()[:16]
+
+
+def _code_hash() -> str:
+    """Mã băm code chat + script eval: git rev '+sua' không phân biệt được hai trạng thái chưa commit."""
+    files = sorted((ROOT / 'apps' / 'retail_app' / 'ai_explain').glob('*.py')) + [
+        ROOT / 'apps' / 'retail_app' / 'dwh' / 'releases.py', Path(__file__).resolve()]
+    h = hashlib.sha256()
+    for f in files:
+        h.update(f.relative_to(ROOT).as_posix().encode() + b'\0' + f.read_bytes())
+    return h.hexdigest()[:16]
+
+
+def _release_meta(backend: str) -> dict | None:
+    if not releases.enabled(backend) or backend != 'duckdb':
+        return None
+    r = releases.choose(releases.local_state())
+    return {k: r[k] for k in ('release_id', 'snapshot_id', 'code_version', 'run_id')}
+
+
+def _forecast_ready(backend: str) -> str | None:
+    """Bộ dự báo chỉ chấm được trên bản có dự báo: ở chế độ cũ mọi câu trả no_data, các ca chờ no_data sẽ đạt giả."""
+    if not releases.enabled(backend):
+        return 'cần RETAIL_RELEASE_MODE=versioned (và RETAIL_RELEASE_STATE) cho bộ dự báo'
+    res = tools.run({'tool': FB, 'arguments': {}}, backend)
+    return None if res.ok else f'bản dữ liệu đang phục vụ không đọc được dự báo ({res.status}: {res.message[:120]})'
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', type=int, default=1)
     ap.add_argument('--cases', nargs='*')
     ap.add_argument('--set', default='chuan', choices=[*SETS, 'tat_ca'],
                     help='chuan = E* (đã dùng chỉnh prompt); moi = H* (nghiệm thu AI2→AI3); ai3 = A*, ai3b = B*, '
-                         'ai3c = C* (nghiệm thu AI3); d = D* (câu xếp hạng, 2026-10-09); f = F* (phía nhỏ, 2026-10-09)')
+                         'ai3c = C* (nghiệm thu AI3); d = D* (câu xếp hạng, 2026-10-09); f = F* (phía nhỏ, 2026-10-09); '
+                         'g = G* (dự báo, bộ phát triển); gm = GM* (dự báo, nghiệm thu B3c); v = V* (biểu đồ B6); '
+                         'n = N* (chuỗi từng năm, ghi chú app, 2026-10-17); g/gm/v/n cần chế độ versioned')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
     a = ap.parse_args()
     pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
-    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F}
+    by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F + ACCEPT_G
+             + ACCEPT_GM}
+    if a.set in FORECAST_SETS and (why := _forecast_ready(a.backend)):
+        print(f'Không chạy bộ {a.set}: {why}.')
+        return 2
+    meta = {'catalog_version': cat.CATALOG_VERSION, 'tool_version': tools.TOOL_VERSION, 'code_hash': _code_hash(),
+            'set_hash': _set_hash(SETS[a.set]) if a.set in SETS else None, 'release': _release_meta(a.backend)}
+    print(f"bộ {a.set} · mã băm bộ {meta['set_hash']} · code {meta['code_hash']} · catalog {meta['catalog_version']} "
+          f"· tool {meta['tool_version']} · prompt {service.PROMPT_VERSION} · bản dữ liệu {meta['release']}")
     if a.kiem_rubric:
         return check_rubric(cases, a.backend)
     p = provider.from_config()
@@ -523,7 +748,15 @@ def main() -> int:
                     'prompt_tokens': t.prompt_tokens, 'completion_tokens': t.completion_tokens,
                     'llm_calls': t.llm_calls, 'latency_s': round(time.monotonic() - t0, 2), 'model': t.model,
                     'prompt_version': t.prompt_version, 'backend': a.backend, 'set': a.set, 'git_rev': rev,
-                    'history': history, 'prompt_bounds': t.prompt_bounds}
+                    'history': history, 'prompt_bounds': t.prompt_bounds, **meta,
+                    'group': case['group'], 'hand': case['hand'],
+                    'data_version': {r: t.results[r].evidence.data_version for r, _, _ in t.calls
+                                     if getattr(t.results[r], 'evidence', None) is not None},
+                    'charts': [{'ref': s.ref, 'tool': s.tool, 'y': list(s.y), 'n_points': s.n_points,
+                                'excluded': list(s.excluded)} for s in getattr(t, 'charts', [])],
+                    'chart_calls': [list(c) for c in getattr(t, 'chart_calls', [])],
+                    # ghi chú app in dưới câu trả lời (ToolResult.notes, 2026-10-17): chấm tay đọc cùng answer_md
+                    'app_notes': list(getattr(t, 'app_notes', []))}
                 f.write(json.dumps(rec, ensure_ascii=False, default=str) + '\n')
                 f.flush()
                 rows.append(rec)
