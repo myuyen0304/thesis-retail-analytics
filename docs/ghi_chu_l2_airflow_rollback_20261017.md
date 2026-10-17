@@ -206,12 +206,18 @@ release): `docker cp warehouse/pipeline/doc_registry.py retail-analytics-airflow
 Bản public (versioned) đọc registry mỗi lần chạy trang, nên tự theo con trỏ, không cần Reboot. Trong lúc thử (20:47 → 20:56),
 người mở app có thể đã thấy mã bản đổi qua lại trong phần Bằng chứng; số PS và dự báo điểm không đổi, điểm backtest / cận khoảng dự báo trên trang Dự báo lệch ở chữ số nhỏ (mục 2.3).
 
-### 3.3 Phát hiện, chưa sửa
+### 3.3 Phát hiện, đã sửa sau đó
 
 - **Rollback về mã bản không có trong registry:** lệnh vẫn từ chối đúng và không ghi gì. Nhưng nó báo bằng traceback `KeyError`,
   exit 1, trong khi quy ước của CLI là sai hợp đồng thì exit 2 kèm câu báo rõ (`main()` chỉ bắt `ValueError` /
   `FileNotFoundError`). Trong Airflow, exit 1 bị coi là "lỗi tạm thời" và sẽ retry. Hiện rollback không chạy qua DAG nên chưa gây
   hại. Sửa đề xuất, một dòng: kiểm `release_id` có trong `state['releases']` trước, không có thì `ValueError`. Chờ PM quyết.
+- **Đã sửa** (PM đồng ý, tối 2026-10-17): `2c067ac` kiểm mã bản trước khi đọc record, không có thì `ap.error` giống lỗi định
+  dạng mã ngay trên: in câu "không có phiên bản … trong registry; các bản rollback được: …", exit 2. Test `b5aa37c`: registry
+  có bản `a…`, rollback về `b…` → exit 2, câu báo nêu cả hai mã, registry và thư mục `rollbacks/` không đổi. Test này trượt
+  với `KeyError` trước khi sửa. `scripts/pipeline/tests` 16/16. Thử CLI thật trên một registry tạm ở máy: đúng câu báo, exit 2.
+  **Chưa chạy lại trên Databricks.** Lưu ý: `scripts/pipeline` nằm trong `code_version`, nên lần chạy pipeline sau sẽ dựng bản mới
+  thay vì coi là không đổi.
 
 ### 3.4 Chưa kiểm
 
