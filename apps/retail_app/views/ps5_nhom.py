@@ -2,6 +2,8 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from ai_explain import page_explain
+from ui.ai_panel import ai_panel
 from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, need_keys, pick, url_choice
 from ui.fmt import AXIS_PCT1, AXIS_TRIEU, num, pct, trieu
 
@@ -132,6 +134,8 @@ with left:
         st.info('R toàn công ty không đổi; % đóng góp không xác định vì mẫu số bằng 0. Đọc số tiền từng nhóm.')
     elif nho:
         st.info(f'R cả công ty đổi dưới {nguong} R năm trước; % đóng góp không ổn định. Đọc số tiền của từng nhóm.')
+    # deck slide 12 (plan §3, tiêu chí 4): luôn hiện ngay dưới biểu đồ, không chỉ trong phần mở rộng
+    st.caption('Mức đổi của từng nhóm là phần chia số học của cùng mức đổi R, chưa phải nguyên nhân.')
     if dim == 'region':
         st.caption('Central / East / West chỉ là nhãn khu vực mô phỏng, không phải tỉnh/thành thực.')
     elif dim == 'acquisition_channel':
@@ -144,8 +148,8 @@ with left:
                    'có thể âm hoặc trên 100% khi các nhóm bù trừ. Mức đổi toàn công ty bằng 0 thì tỷ lệ không xác định.')
 with side:
     with st.container(border=True):
-        st.markdown('**Giải thích kết quả**')
-        st.caption('Tóm tắt theo quy tắc từ bảng reporting')
+        st.markdown('**Tóm tắt từ số liệu**')
+        st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
         if y['delta_r'] == 0:
             st.markdown(f'- **R toàn công ty không đổi** từ {nam - 1} đến {nam}.')
         else:
@@ -173,6 +177,7 @@ with side:
             st.markdown('- **Giới hạn:** mức đổi R nhỏ làm % đóng góp không ổn định; ưu tiên số tiền.')
         else:
             st.markdown('- **Giới hạn:** đây là phần đóng góp số học, chưa chứng minh nguyên nhân.')
+    ai_panel(page_explain.request_ps5(dim, nam))
 
 # Bảng đầy đủ chỉ xuất hiện một lần; bảng ngắn ở trên là căn cứ trực tiếp cho biểu đồ.
 tb = s[['delta_r_rank', 'Nhóm']].rename(columns={'delta_r_rank': 'Hạng'})
@@ -236,7 +241,8 @@ with tab_cf:
     chu = alt.Chart(w).transform_calculate(top='max(datum.bar_start, datum.bar_end)').mark_text(
         dy=-8, fontSize=12).encode(x=x, y='top:Q', text='Số đơn:N')
     st.altair_chart((thac + chu).properties(height=320), width='stretch')
-    st.caption('N = C × F. C là số khách có đơn đã giao trong năm; C giảm chưa đủ kết luận khách hàng rời bỏ.')
+    st.caption('N = C × F. C là số khách có đơn đã giao trong năm; C giảm chưa đủ kết luận khách hàng rời bỏ. '
+               'Tách số đơn thành số khách và tần suất là phép chia số học, chưa phải nguyên nhân.')
     yr = dp[dp['period_type'] == 'year'].copy()
     yy = yearly.set_index('year')
     need_keys(yr['end_year'], yy, 'revenue_yearly', 'của năm có trong bảng C/F')
