@@ -2329,9 +2329,17 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   - Hai lỗi lời cần sửa:
     - PS1 gọi R/G là "tỷ lệ thực nhận" và G − R là "hụt doanh thu";
     - PS2 thêm một nhận định không có số đi kèm.
+  - Đã thêm hai dòng vào lời dặn AI để sửa hai lỗi này (prompt trang `b8-2026-10-18b`).
+- **AI thật ở local** (bạn duyệt, 3 lượt mỗi PS, bản local mới có đủ cột):
+  - 12/15 lượt đạt khi đọc tay. Không câu nào sai số, không còn "thực nhận" hay "hụt".
+  - Ba lượt chưa đạt:
+    - PS2 vẫn một lần thêm nhận định không có số ("phần lớn mức xuống của cả kỳ…");
+    - PS3 một lần nói quá ("không phải dao động ngẫu nhiên", trong khi chưa có kiểm định);
+    - PS5 một lần bị bước kiểm chặn cả hai lần, khung báo "chưa tạo được lời diễn giải", không hiện câu sai.
+  - Có thể siết thêm lời dặn AI (cấm từ xếp hạng khi không dẫn số xếp hạng, cấm kết luận thống kê) rồi đo lại, nếu bạn
+    muốn.
 - **Chưa làm:**
-  - Chưa chạy 15 lượt AI thật ở local (chờ S2 dựng xong bản dữ liệu mới).
-  - Chưa chạy trên Databricks. Bản public chỉ có cột mới sau lần chạy pipeline ở S6; trước đó trang ẩn thẻ G − R và tên
+  - Bản public chỉ có cột mới sau lần chạy pipeline ở S6; trước đó trang ẩn thẻ G − R và tên
     tháng, không lỗi.
 - **Lưu ý:** mỗi lần bấm tốn hạn mức token của phiên, dùng chung với chat. Bấm nhiều thì chat có thể báo hết hạn mức sớm
   hơn; bấm **Xóa hội thoại** ở trang chat để đặt lại.
@@ -2346,3 +2354,35 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   - ~~cho commit không~~: bạn đã cho commit (qua phiên Head of AI), 22 commit `8d89b22`…`4ef1b24`;
   - có viết lại bằng lời thường các chú thích dưới biểu đồ còn ghi công thức không (PS3 "R tháng ÷ …", PS5 "Tỷ trọng = …").
     Tooltip và khung "Cách đọc & phương pháp" vẫn giữ công thức.
+
+### 2026-10-18: dự báo là một bước riêng của pipeline (S2, chạy local đạt, chưa commit)
+
+- **Làm gì:**
+  - Pipeline nay có năm bước, đúng dòng DAG trên sơ đồ kiến trúc: chuẩn bị snapshot → **dự báo (`forecast_train_score`)** →
+    dựng DWH bằng dbt → kiểm chất lượng và quyền đọc → công bố.
+  - Trước đây dự báo chạy lẫn trong bước dựng DWH. Nay bước dựng DWH không train nữa, chỉ dùng kết quả dự báo đã kiểm hash.
+- **Vì sao:** sơ đồ kiến trúc vẽ dự báo là một task riêng. Tách ra thì xem được riêng thời gian và lỗi của dự báo trên Airflow.
+  - Lỗi hợp đồng dự báo dừng ngay ở bước dự báo, Airflow không thử lại.
+  - Lỗi tạm thời thì bước dự báo được thử lại mà không động tới dbt.
+- **Trả lời PS nào:** không đổi số nào của PS1–PS5 hay dự báo; chỉ đổi cách pipeline chạy.
+- **Kiểm (2026-10-18):**
+  - 9 test mới cho pipeline, 1 test dự báo viết lại theo thiết kế mới; 46/46 đạt.
+  - Bạn tự chạy pipeline trong một cửa sổ PowerShell riêng (`s2-20261018-02`), vì Claude Code hai lần tự dừng lần chạy của nó khi
+    máy gần hết RAM. Lần chạy bị dừng đầu tiên (`s2-20261018-01`) để nguyên, không dùng.
+  - Năm bước đều đạt; dbt 223/223.
+  - Dự báo trùng tuyệt đối với lần chạy cũ cùng phiên bản model (`dbx-20261017-01`): mọi model, mọi ngày, lệch 0.
+  - Bản mới có đủ các cột B8 cần.
+- **Bản dữ liệu local đang phục vụ đổi:** từ `fc14b8a2f5a24ff99a434d7c` sang **`06f157ee26ce43639051ad35`**.
+  - Điểm nghiệm thu chat B7 ở local được chấm trên bản cũ `fc14b8a2…`. Hai bản có cùng số dự báo vì cùng snapshot; bản mới có
+    thêm các cột của B8.
+  - Muốn quay về bản cũ:
+    `.venv/Scripts/python.exe -m scripts.pipeline.cli rollback --run-id rb-s2 --release-id fc14b8a2f5a24ff99a434d7c`.
+- **Đã sửa file chung:** `docs/automation_batch.md` (mục Stage dự báo, Airflow Docker, Kiểm chứng), ô trạng thái S2 ở
+  `docs/giao_viec_theo_so_do.md`, mục này.
+  - Code: `scripts/pipeline/cli.py`, `scripts/pipeline/tests/test_pipeline.py`, `scripts/forecast/tests/test_forecast.py`,
+    `deploy/airflow/dags/retail_batch_pipeline.py`.
+  - Không đụng app, dbt, model dự báo.
+- **Cần bạn quyết / lưu ý:**
+  - cho commit code và docs của bước này không;
+  - lần chạy vừa rồi băm cả code S2 chưa commit, nên bản cloud (S6) phải dựng lại từ commit sạch;
+  - image Docker đang có là bản cũ (bốn task): phải build lại trước khi chạy DAG (S6).
