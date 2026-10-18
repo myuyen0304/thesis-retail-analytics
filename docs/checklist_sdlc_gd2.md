@@ -148,8 +148,8 @@ Giả định D1 = 2026-10-11, D14 = 2026-10-24; hạn cứng 2026-10-25. Hôm n
   - FB05 (phạm vi AI): `/retail-ai-explain`;
   - FB06 (quy ước còn là đề xuất): `/retail-metric-design`.
 - [ ] **Tài liệu lệch code** · Dev · Must · một phần.
-  - Header `retail_dbt/dbt_project.yml` vẫn ghi Snowflake là production. Skill: `/retail-analytics-engineering`.
-  - Header `retail_dbt/profiles.yml` vẫn ghi Snowflake / GitHub Actions. Skill: `/retail-analytics-engineering`.
+  - ~~Header `retail_dbt/dbt_project.yml` vẫn ghi Snowflake là production.~~ Đã sửa 2026-10-18: ghi Databricks production, Snowflake đã bỏ.
+  - ~~Header `retail_dbt/profiles.yml` vẫn ghi Snowflake / GitHub Actions.~~ Đã sửa 2026-10-18 (commit `d3249a1`).
   - `databricks_readiness_review.md` chưa sửa. Skill: `/retail-platform-validation`.
   - `dwh_huong_dan_pm_ba.md`: dòng 127 vẫn có câu "một lệnh"; dòng 397 vẫn ghi kết quả mong đợi là `PASS=216`, nay là 217. Không cần skill.
   - README vẫn ghi Kafka là "mốc tiếp theo", ngược với quyết định hoãn. Không cần skill.
