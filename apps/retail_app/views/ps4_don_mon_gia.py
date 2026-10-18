@@ -1,6 +1,8 @@
 import altair as alt
 import streamlit as st
 
+from ai_explain import page_explain
+from ui.ai_panel import ai_panel
 from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, url_choice
 from ui.fmt import AXIS_TRIEU, num, pct, trieu
 
@@ -114,8 +116,8 @@ with left:
         st.caption('Cột đóng góp nhỏ vẫn có nhãn; số gốc xem qua tooltip. Số làm tròn có thể lệch 0,1 triệu.')
 with side:
     with st.container(border=True):
-        st.markdown('**Giải thích kết quả**')
-        st.caption('Tóm tắt theo quy tắc từ số liệu kỳ đang chọn')
+        st.markdown('**Tóm tắt từ số liệu**')
+        st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
         st.markdown(f'- **R {"tăng" if row["delta_r"] > 0 else "giảm"}:** '
                     f'{trieu(abs(row["delta_r"]), 1)} ({pct(row["r_change_rate"], 1, signed=True)}), '
                     f'từ {trieu(row["r_start"], 1)} đến {trieu(row["r_end"], 1)}.')
@@ -129,6 +131,7 @@ with side:
         else:
             st.markdown('- **Giới hạn:** thứ tự N → U → P ảnh hưởng phần góp; P còn thay đổi theo '
                         'chiết khấu và cơ cấu hàng bán.')
+    ai_panel(page_explain.request_ps4(code, row['period_type'], s0, s1, ten_of[code]))
 
 # --- Phân tích sâu: dữ liệu và cách cộng phần góp giữ theo reporting hiện có ---
 tab_year, tab_phase, tab_indices = st.tabs(['So sánh theo năm', 'So sánh theo giai đoạn', 'Chỉ số N/U/P/AOV'])
