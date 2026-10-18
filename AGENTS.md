@@ -48,4 +48,4 @@ Dùng nhánh `<loại>/<tên>`, ví dụ `docs/erd-fix`; PR về `main` để th
 
 ## Dữ liệu và cấu hình
 
-Không commit `data/`, `.venv/`, database, output hoặc secrets. Dùng biến môi trường `PG_*`, `SNOWFLAKE_*`; không ghi mật khẩu production vào code.
+Không commit `data/`, `.venv/`, database, output hoặc secrets. Dùng biến môi trường `PG_*`, `DATABRICKS_*`, `RETAIL_*`, nạp từ các file `.env.*.local` đã gitignore; không ghi mật khẩu, token hay secret production vào code.
