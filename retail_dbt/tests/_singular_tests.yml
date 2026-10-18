@@ -29,6 +29,8 @@ data_tests:
     description: "Cờ Urban Blowout tính theo lịch trùng đúng các ngày khuyến mãi 2012–2022."
   - name: assert_rpt_total
     description: "PS1: toàn kỳ = cộng các năm; số khách đếm phân biệt đúng; thác G → R; số khóa deck slide 4."
+  - name: assert_rpt_gap_peak
+    description: "B8: gap_g_minus_r (PS1) = G − R = cộng 4 khoản chênh; peak_month / trough_month (PS3 mua_vu) là tháng R gộp cả kỳ cao / thấp nhất."
   - name: assert_rpt_reconciles
     description: "PS1/PS4: số tầng reporting đối soát từng tháng, từng năm với nguồn độc lập (đơn, thanh toán, doanh thu ngày)."
   - name: assert_rpt_deck_numbers
