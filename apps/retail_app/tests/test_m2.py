@@ -5,6 +5,7 @@ Tiêu chí: CAGR A–D và độ lớn 3 điểm đổi hướng trên app = s�
 Giai đoạn đọc từ rpt_revenue_phase / rpt_revenue_turning_point (plan §3, tiêu chí 5): đổi bảng thì app đổi theo,
 kiểm ở test_khong_hardcode.py.
 """
+import json
 from pathlib import Path
 
 import pytest
@@ -33,23 +34,24 @@ def _ps2(monkeypatch, backend):
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_the_kpi_la_cagr_da_chot(monkeypatch, backend):
     at = _ps2(monkeypatch, backend)
-    # feedback 2026-10-01 (F02): nhãn chỉ giữ tên giai đoạn (nhãn dài bị cắt mất năm ở 1280 px), năm chuyển xuống dòng phụ
     assert [(m.label, m.value) for m in at.metric] == [
-        ('A. Tăng trưởng', '+8,75%'), ('B. Chững, giảm nhẹ', '−6,39%'),
-        ('C. Sập', '−39,10%'), ('D. Đi ngang mức thấp', '−0,14%')]
-    # feedback 2026-10-01 (F02): CAGR (%/năm) ghi ngay trên hàng thẻ; dòng màu là tổng thay đổi cả giai đoạn, nhãn riêng
-    assert any(m.value.startswith('**CAGR: tăng trưởng trung bình mỗi năm của R** (số lớn, **%/năm**)') for m in at.markdown)
+        ('A. Tăng trưởng (2013→2016)', '+8,75%/năm'),
+        ('B. Chững/giảm nhẹ (2016→2018)', '−6,39%/năm'),
+        ('C. Giảm mạnh (2018→2019)', '−39,10%/năm'),
+        ('D. Đi ngang mức thấp (2019→2022)', '−0,14%/năm')]
+    assert at.title[0].value == 'PS2 · Xu hướng doanh thu'
+    assert any('Số lớn: CAGR (%/năm)' in c.value for c in at.caption)
     src = queries.revenue_phase(backend)
     phu = [(m.proto.delta, m.proto.delta_description) for m in at.metric]
     assert [a for a, _ in phu] == [pct(v, 1, signed=True) for v in src['total_change_rate']]
-    assert phu == [('+28,6%', 'tổng 2013→2016'), ('−12,4%', 'tổng 2016→2018'),
-                   ('−39,1%', 'tổng 2018→2019'), ('−0,4%', 'tổng 2019→2022')]
-    assert all(f'({n} năm)' in m.help for m, n in zip(at.metric, src['n_years']))   # tooltip vẫn ghi số năm của CAGR
+    assert phu == [(rate, 'Thay đổi toàn giai đoạn') for rate in ['+28,6%', '−12,4%', '−39,1%', '−0,4%']]
+    assert all(f'({n} năm)' in m.help for m, n in zip(at.metric, src['n_years']))
+    assert [t.label for t in at.tabs] == ['Điểm đổi hướng', 'Tăng trưởng năm / tháng', 'So sánh giai đoạn']
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_bang_giai_doan_doc_tu_rpt_revenue_phase(monkeypatch, backend):
-    tb = _ps2(monkeypatch, backend).dataframe[1].value
+    tb = _ps2(monkeypatch, backend).dataframe[2].value
     assert tb['CAGR'].tolist() == CAGR_CHOT
     src = queries.revenue_phase(backend)
     # feedback PM 2026-10-02: mức R ghi gọn theo tỷ, mức chênh theo triệu (cùng số với PS4)
@@ -62,7 +64,7 @@ def test_bang_giai_doan_doc_tu_rpt_revenue_phase(monkeypatch, backend):
 
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_ba_diem_doi_huong_dung_so_chot(monkeypatch, backend):
-    td = _ps2(monkeypatch, backend).dataframe[2].value
+    td = _ps2(monkeypatch, backend).dataframe[3].value
     assert td['Điểm'].tolist() == ['Cuối 2016', 'Cuối 2018', 'Cuối 2019']
     assert td['Độ lớn'].tolist() == DO_LON_CHOT
     # BA 2026-09-27: cuối 2019 "đổi nhịp"; PM 2026-09-28: cuối 2018 "giảm tăng tốc"
@@ -81,13 +83,14 @@ def test_cach_doc_theo_quy_tac_ps2(monkeypatch):
     assert '−4,1' not in text and '−4,14' not in text   # quy tắc 6: không có một con số cho cả 10 năm
     assert 'PS4' in text and 'PS5' in text              # quy tắc 7: giai đoạn không phải nguyên nhân
     cap = ' '.join(c.value for c in at.caption)
-    assert 'Đường bắt đầu từ 07/2013' in cap and 'đoạn trước 12/2013 không thuộc giai đoạn nào' in cap
+    assert 'Đường bắt đầu từ 07/2013' in cap and 'đoạn trước 12/2013 không thuộc giai đoạn BA nào' in cap
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_du_lieu_tu_tim_thang_doi_huong(monkeypatch, backend):
     # góp ý M2 (2026-09-28), deck slide 6 yêu cầu 4: tìm tháng đường R 12 tháng đổi hướng, hướng mới có kéo dài không
-    tc = _ps2(monkeypatch, backend).dataframe[0].value
+    at = _ps2(monkeypatch, backend)
+    tc = at.dataframe[1].value
     assert tc['Khoảng so'].tolist() == ['3 tháng', '3 tháng', '6 tháng (chính)', '6 tháng (chính)', '9 tháng', '9 tháng']
     assert tc['Chuyển'].tolist() == ['lên → xuống', 'xuống → lên'] * 3
     assert tc['Đỉnh / đáy R 12 tháng'].tolist() == ['đỉnh 08/2016', 'đáy 10/2021'] * 3    # không đổi theo khoảng so
@@ -96,12 +99,37 @@ def test_du_lieu_tu_tim_thang_doi_huong(monkeypatch, backend):
                                             '11 tháng (tới hết dữ liệu)', '60 tháng', '8 tháng (tới hết dữ liệu)']
     src = queries.direction_change(backend)
     assert tc['R 12 tháng tại đó'].tolist() == [ty(v, 2) for v in src['extreme_r_12m']]
+    summary = at.dataframe[0].value
+    assert summary['Khoảng so'].tolist() == ['3 tháng', '6 tháng (chính)', '9 tháng']
+    assert summary['Đỉnh → phát hiện'].tolist() == ['08/2016 → 11/2016', '08/2016 → 02/2017', '08/2016 → 05/2017']
+    assert any('không phải tín hiệu đã biết ngay tại đỉnh/đáy' in c.value for c in at.caption)
 
 
 def test_yoy_thang_co_tren_ps2(monkeypatch):
-    # góp ý M2: tăng trưởng tháng so cùng tháng năm trước đưa thẳng vào PS2 (trước đây chỉ ở bảng tháng của PS1)
     at = _ps2(monkeypatch, 'duckdb')
-    assert any(s.value == 'Tăng trưởng R theo tháng, so với cùng tháng năm trước' for s in at.subheader)
+    assert any(s.value == 'Tăng trưởng R theo năm so với năm trước' for s in at.subheader)
+    year_chart = json.loads(at.get('vega_lite_chart')[1].proto.spec)
+    assert year_chart['layer'][0]['encoding']['x']['field'] == 'nam'
+    at.segmented_control[0].set_value('Cùng tháng năm trước').run()
+    assert not at.exception
+    assert any(s.value == 'Tăng trưởng R theo tháng so với cùng tháng năm trước' for s in at.subheader)
+    month_chart = json.loads(at.get('vega_lite_chart')[1].proto.spec)
+    assert any(layer.get('encoding', {}).get('x', {}).get('field') == 'month_start_date'
+               for layer in month_chart['layer'])
     assert any('từ 08/2013' in c.value for c in at.caption)
+    assert any('không phải tháng liền trước' in c.value for c in at.caption)
+    assert not any(s.value == 'Tăng trưởng R theo năm so với năm trước' for s in at.subheader)
     gioi_han = ' '.join(m.value for m in at.markdown)
-    assert 'ps2_direction_rule' in gioi_han and 'đổi **tốc độ**' in gioi_han
+    assert 'ps2_direction_rule' in gioi_han and 'đổi tốc độ' in gioi_han
+
+
+def test_lop_danh_dau_tren_bieu_do_co_the_tat(monkeypatch):
+    at = _ps2(monkeypatch, 'duckdb')
+    main_chart = json.loads(at.get('vega_lite_chart')[0].proto.spec)
+    assert len(main_chart['layer']) == 5  # nền BA, đường R, vạch BA, chấm BA, đỉnh/đáy
+
+    at.multiselect[0].set_value([]).run()
+    assert not at.exception and not at.error
+    main_chart = json.loads(at.get('vega_lite_chart')[0].proto.spec)
+    assert len(main_chart['layer']) == 2  # chỉ còn nền BA và đường R
+    assert not any('nét đứt và chấm đỏ = mốc BA' in c.value for c in at.caption)
