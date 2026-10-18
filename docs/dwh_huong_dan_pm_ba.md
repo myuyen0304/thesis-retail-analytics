@@ -73,7 +73,7 @@ Trong project, mỗi khối ứng với các phần sau:
                          │     │                                                                            │
  ③' DWH (lớp phục vụ)    │  schema reporting      KPI của 5 PS, tính sẵn theo quy ước R                 ◀── PM / BA
                          └─────┼──────────────────────────────────────────────────────────────────────────┘
-                               │ cùng project dbt dựng được trên: DuckDB (file), Databricks Free (lab), Snowflake (demo)
+                               │ cùng project dbt dựng được trên: DuckDB (file), Databricks Free (production)
                                ▼
  ④ Phân tích / BI           app code / BI (GĐ 2)                             PM, BA, giảng viên
  ⑤ Sản phẩm + AI Explained  phân tích PS1–PS5; AI giải thích có đối chứng nếu triển khai
@@ -82,9 +82,10 @@ Trong project, mỗi khối ứng với các phần sau:
 **Nói gọn:** DWH là **một database** (`retail`), chạy chính trên PostgreSQL local. Cùng một project dbt dựng được:
 
 - bản DuckDB (file `warehouse/dbt.duckdb`), dùng dự phòng khi không bật Docker;
-- bản **Databricks Free** (catalog `retail_lab`), là lab trên cloud. Bản này đã dựng, khớp local từng dòng, app đọc được
-  (nhật ký §9, mục 2026-10-03 và 2026-10-04);
-- bản **Snowflake**, là đích demo tháng 12/2026 (GĐ 3). Script đã có nhưng chưa chạy trên cloud (mục 2026-10-02).
+- bản **Databricks Free** (catalog `retail_lab`), là **production** từ 2026-10-05: pipeline công bố bản dữ liệu lên đây,
+  app và chat bản public đọc bản đang phục vụ (nhật ký §9, mục 2026-10-03, 2026-10-04 và 2026-10-17);
+- Snowflake: **bỏ hẳn** ngày 2026-10-18 (PM chốt). Trước đó là đích demo tháng 12/2026 (GĐ 3); script đã viết nhưng chưa
+  từng chạy trên cloud (mục 2026-10-02).
 
 Kafka làm sau pipeline chính (GĐ 4).
 Bên trong database có 5 "ngăn" (schema). **Lõi của DWH là schema `marts`**, và **PM/BA đọc schema `reporting`**.
@@ -398,7 +399,8 @@ Kết quả mong đợi là dòng cuối có `PASS=216 ... ERROR=0` (53 model + 
 Sức khỏe dữ liệu; số ngày 2026-09-29 sau M5. Sau M4 là 202, lúc GĐ1 xong là 155).
 
 Lệnh trên dựng Postgres (target mặc định). Muốn dựng bản DuckDB (`warehouse/dbt.duckdb`) thì thêm `--target duckdb`.
-Dựng trên Databricks: nhật ký §9, mục 2026-10-03. Dựng trên Snowflake: mục 2026-10-02.
+Dựng trên Databricks: nay chạy qua pipeline `--target databricks` ([automation_batch.md](automation_batch.md)); lần dựng tay
+đầu tiên ở nhật ký §9, mục 2026-10-03. Snowflake đã bỏ hẳn (mục 2026-10-18).
 
 ### 8.1. Mở app phân tích (Streamlit)
 
@@ -2232,3 +2234,61 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   đổi; đó là hành vi đúng, không phải lỗi.
 - **Airflow:** bạn đã tắt lúc 22:50 (`stop`); bật lại bằng `docker compose -f docker-compose.airflow.yml start`.
 - **Commit:** `2c067ac` (code), `b5aa37c` (test).
+
+### 2026-10-18: bỏ hẳn Snowflake, Databricks là nền tảng duy nhất
+
+- **Bạn chốt:** không làm Snowflake nữa. Databricks là nền tảng cloud duy nhất cho DWH, pipeline, app và chat.
+- **Đã sửa tài liệu (chưa commit):**
+  - `CLAUDE.md` §1 và `AGENTS.md`;
+  - `docs/dwh_roadmap.md`: thêm mục đầu ghi quyết định; checklist "GĐ 3 Snowflake" giữ lại nhưng đánh dấu lịch sử;
+  - `docs/star_schema.md`, `agent_workflows.md`, `ai_explain_plan.md` (mốc AI5 đổi thành Databricks), `gd2_app_plan.md`,
+    `star_schema_tu_ps.md`, `docs/README.md`, `checklist_sdlc_gd2.md`, `kien_truc_pipeline_tong.md`, phụ lục
+    `star_schema_snapshot_reference.md` §10;
+  - mục "Nói gọn" ở đầu file này và câu "Dựng trên Databricks / Snowflake" ở §8;
+  - ghi chú đầu `retail_dbt/dbt_project.yml`;
+  - ba skill: `retail-platform-validation`, `retail-analytics-engineering`, `retail-bi-product`.
+- **Không đổi:**
+  - các mục nhật ký cũ có ngày, kể cả mục 2026-10-02 về script Snowflake: đó là lịch sử;
+  - chữ "snowflake schema" (kiểu mô hình dữ liệu, so với star schema) và các notebook.
+- **Vì sao tin được:** chỉ đổi chữ. dbt đọc lại `dbt_project.yml` ra cấu hình giống hệt bản cũ; bảy skill đồng bộ đủ,
+  kiểm cấu trúc skill đạt, 18 test của bộ skill đạt.
+- **Còn chờ bạn quyết:** code Snowflake vẫn còn trong repo, không chạy, không bảo trì: `scripts/snowflake/`,
+  `scripts/ingest/ingest_snowflake.py`, chế độ `snowflake` của `scripts/parity/compare_dwh.py`, target `snowflake` trong
+  `retail_dbt/profiles.yml`, gói `dbt-snowflake` trong `requirements.txt`, macro `snowflake__*`, nhánh `'snowflake'` của các
+  model sức khỏe dữ liệu, và hai test app. Xóa hay giữ.
+
+### 2026-10-18: chat biết chọn tool theo loại câu hỏi và tách câu trộn thực tế / dự báo (B7, dev xong ở local, chưa commit)
+
+- **Làm gì:**
+  - Thêm vào lời dặn của chat một mục "chọn tool" (router). Hỏi số đã qua thì dùng tool số liệu lịch sử, hỏi dự báo
+    thì dùng tool dự báo, xin vẽ thì vẽ. Câu hỏi ngoài phạm vi thì từ chối, câu mơ hồ thì hỏi lại.
+  - Câu hỏi trộn kiểu "2022 thực tế bao nhiêu, 2023 dự báo bao nhiêu": chat trả hai câu riêng. App tự gắn nhãn
+    "thực tế" / "dự báo" cạnh từng số, và chặn câu nào cộng, trừ hay so hai loại số.
+- **Vì sao:** đây là việc Must của GĐ2 (B7, mốc AI4).
+  - Trước khi sửa, một luật kiểm của app chặn nhầm mọi câu trộn có chữ "dự báo". Ví dụ "G thực tế tháng 12/2021 và dự
+    báo tháng 12/2023" bị trả là "không có dữ liệu".
+  - Nay kỳ đã qua có số thực tế thì được trả bằng số thực tế. Kỳ sau tháng 7/2024 (ví dụ năm 2025) vẫn bị từ chối như cũ.
+- **Trả lời PS nào:** không thêm PS mới; chat trả lời đúng hơn các câu PS1–PS5 và câu dự báo.
+- **Kiểm (2026-10-18):**
+  - 20 test mới với mô hình giả; cả bộ test chat đạt (722 đạt, 83 bỏ qua).
+  - Phát lại 1.335 câu trả lời thật cũ qua luật mới: không câu nào đổi kết quả.
+  - Bộ 24 câu mới, chốt mã băm trước khi gọi mô hình. Đạt cả chấm máy lẫn đọc tay:
+    - local DuckDB, 3 lần: 64/72;
+    - Databricks (bản đang phục vụ `b25b3e47…`, quyền chỉ đọc của chat), 1 lần: 21/24.
+  - Chi phí API ước khoảng 0,77 USD.
+- **Còn chưa đạt** (chi tiết và đề xuất sửa ở [ai_eval_b7_nghiem_thu.md](ai_eval_b7_nghiem_thu.md) §7):
+  - "Từ 2016 đến 2018 R giảm tổng cộng bao nhiêu %": chat không nhận ra đây là giai đoạn B nên không đưa ra số.
+  - "Cộng G thực tế 2021 với G dự báo 2024": chat từ chối cộng là đúng, nhưng khuôn dẫn số của app ghi nhầm hai số được hỏi
+    là "không phải số bạn hỏi".
+  - "Dự báo tháng 4": chat tự chọn 4/2023, không hỏi lại năm.
+- **Đã sửa file chung:** `docs/ke_hoach_ai_gd2.md` (§4 dòng B7, hai dòng §8), `docs/giao_viec_theo_so_do.md` (ô trạng
+  thái S1), file mới `docs/ai_eval_b7_nghiem_thu.md`, mục này. Code: `ai_explain/service.py`, `ai_explain/evidence.py`,
+  `tests/test_ai_router.py` (mới), `scripts/ops/ai_live_eval.py`. Không đụng trang PS, `CLAUDE.md`, `requirements.txt`
+  hay skill.
+- **Cần bạn quyết:**
+  - cho commit code và docs của bước này không;
+  - có sửa 4 câu chưa đạt trước S2 không. Sửa xong phải đo bằng bộ câu mới, không chạy lại bộ `b7` rồi báo là đạt.
+- **Lưu ý cho S7, S8:**
+  - Hạn mức 200 nghìn token mỗi phiên gần chạm trần. B7 phải hạ trần token ra mỗi lần gọi từ 1.536 xuống 1.408 thì 3 câu
+    tốn nhất mới vừa.
+  - Thêm tool mới sẽ cần tính lại hạn mức.
