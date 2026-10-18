@@ -95,7 +95,7 @@ flowchart TD
     C --> D[Python kiểm schema, phạm vi, quyền]
     D -->|Hợp lệ| E[Query đã kiểm chứng]
     D -->|Thiếu hoặc ngoài phạm vi| H[Hỏi rõ hoặc báo giới hạn]
-    E --> F[DWH: PostgreSQL / DuckDB / Snowflake]
+    E --> F[DWH: PostgreSQL / DuckDB / Databricks]
     F --> G[Kết quả tổng hợp và bằng chứng]
     G --> I[LLM diễn giải kết quả]
     I --> J[Kiểm câu trả lời và nguồn số]
@@ -177,9 +177,9 @@ Lưu ít nhất: `request_id`, tool và tham số hợp lệ, metric/version đ�
 | AI2 — Lát cắt đầu tiên | Chọn provider/model, nối API; thử PS4 năm 2019 và follow-up PS5 theo ngành hàng | Luồng hỏi → tool → DB → diễn giải → bằng chứng chạy thật; theo dõi chi phí và thời gian |
 | AI3 — Giao diện và đủ 5 PS | Trang chat, lịch sử/context, bằng chứng, trạng thái hỏi rõ/lỗi; mở các tool còn lại | Bao phủ PS1–PS5, follow-up thay kỳ/chiều không lấy nhầm số cũ |
 | AI4 — Eval và bàn giao | Bộ câu hỏi chuẩn, câu mơ hồ, câu ngoài phạm vi và tình huống lỗi; chạy lặp với model thật | Có báo cáo riêng cho query tests, AppTest và live-model eval; sửa các lỗi chặn nghiệm thu |
-| AI5 — Snowflake | Dùng adapter Snowflake sau khi DWH/cloud connection đã đối soát | Cùng bộ câu hỏi và snapshot cho số khớp local; bằng chứng ghi đúng backend |
+| AI5 — Databricks (đổi từ Snowflake; bỏ hẳn Snowflake 2026-10-18) | Dùng đường đọc Databricks (service principal chỉ-đọc, có từ 2026-10-06) sau khi DWH trên cloud đã đối soát | Cùng bộ câu hỏi và snapshot cho số khớp local; bằng chứng ghi đúng backend |
 
-AI0–AI4 có thể phát triển trên local. Nếu Snowflake đã sẵn sàng thì dùng nó ngay sau khi quyền đọc và số liệu được kiểm chứng. AI5 là tiêu chí tương đương nền tảng, không bắt buộc đợi cuối mới nghĩ tới kết nối cloud.
+AI0–AI4 có thể phát triển trên local. Nếu Databricks đã sẵn sàng thì dùng nó ngay sau khi quyền đọc và số liệu được kiểm chứng. AI5 là tiêu chí tương đương nền tảng, không bắt buộc đợi cuối mới nghĩ tới kết nối cloud.
 
 M6 là phụ thuộc của câu hỏi có filters động, không phải phụ thuộc của mọi câu hỏi AI. Chỉ mở tính năng được backend hỗ trợ thật.
 
