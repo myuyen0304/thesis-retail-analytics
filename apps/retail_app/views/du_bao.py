@@ -1,3 +1,4 @@
+
 """Trang Dự báo (B3b, docs/ke_hoach_ai_gd2.md; hợp đồng docs/hop_dong_du_bao.md §2.2, §6–§8).
 
 Đọc reporting.rpt_forecast_daily / rpt_forecast_backtest của bản dữ liệu đang phục vụ. Trang không train, không chọn
