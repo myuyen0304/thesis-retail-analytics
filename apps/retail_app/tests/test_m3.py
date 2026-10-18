@@ -28,12 +28,16 @@ def _ps3(monkeypatch, backend):
 
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_the_kpi_dung_tieu_chi_m3(monkeypatch, backend):
-    the = [(m.label, m.value) for m in _ps3(monkeypatch, backend).metric]
-    # PM 2026-09-28: thẻ 2 cũ ("−39,1% đến −36,2%") bị cắt chữ → mỗi thẻ một số ngắn, khoảng bỏ-từng-năm vào ô "?"
-    assert the == [('Tháng 8 năm lẻ / chẵn (2013–2022)', '−37,7%'),
-                   ('Chênh mùa cao / thấp (2013–2022)', '3,39 lần'),
-                   ('Mức dồn về cuối tháng (2013–2022)', '+7,2 điểm %')]
+    at = _ps3(monkeypatch, backend)
+    the = [(m.label, m.value) for m in at.metric]
+    assert at.title[0].value == 'PS3 · Nhịp lịch doanh thu'
+    assert the == [('Chênh chỉ số T8: lẻ / chẵn (2013–2022)', '−37,7%'),
+                   ('Tỷ số tháng cao / thấp (2013–2022)', '3,39 lần'),
+                   ('Mức dồn cuối tháng (2013–2022)', '+7,2 điểm %')]
     assert all(len(v) <= 12 for _, v in the)                     # số ngắn, không bị cắt ở màn hình hẹp
+    assert 'không phải chênh doanh thu VND' in at.metric[0].help
+    assert 'không phải tốc độ tăng R' in at.metric[2].help
+    assert [t.label for t in at.tabs] == ['Độ lặp lại', 'So sánh giai đoạn', 'Bảng theo năm']
     assert the[1][1] == num(queries.calendar_stability(backend).set_index('rhythm_code').loc['mua_vu', 'metric_value'],
                             2) + ' lần'
     ky = queries.revenue_total(backend).set_index('period_code').loc['2013-2022']
@@ -43,7 +47,7 @@ def test_the_kpi_dung_tieu_chi_m3(monkeypatch, backend):
 
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_bang_nam_doc_tu_rpt(monkeypatch, backend):
-    tb = _ps3(monkeypatch, backend).dataframe[2].value      # [0] độ ổn định, [1] giai đoạn, [2] theo năm
+    tb = _ps3(monkeypatch, backend).dataframe[3].value      # tóm tắt, độ ổn định đủ, giai đoạn, theo năm
     assert tb['Năm'].tolist() == list(range(2013, 2023))
     # PM 2026-09-28: ghi giai đoạn PS2 cạnh mỗi năm; năm ranh giới thuộc cả hai giai đoạn
     assert tb['Giai đoạn'].tolist() == ['A', 'A', 'A', 'A/B', 'B', 'B/C', 'C/D', 'D', 'D', 'D']
@@ -59,33 +63,42 @@ def test_bang_nam_doc_tu_rpt(monkeypatch, backend):
 
 
 def test_thang_8_nam_le_luon_thap_hon(monkeypatch):
-    cap = ' '.join(c.value for c in _ps3(monkeypatch, 'duckdb').caption)
-    assert 'Năm lẻ cao nhất 0,89, năm chẵn thấp nhất 1,21: năm lẻ nào cũng thấp hơn mọi năm chẵn.' in cap
+    at = _ps3(monkeypatch, 'duckdb')
+    at.segmented_control[0].set_value('Tháng 8: năm lẻ / chẵn').run()
+    assert not at.exception and not at.error
+    text = ' '.join(m.value for m in at.markdown)
+    assert 'năm lẻ cao nhất 0,89, năm chẵn thấp nhất 1,21: năm lẻ nào cũng thấp hơn mọi năm chẵn.' in text
+    assert '5 năm lẻ, 5 năm chẵn' in text
+    assert any(s.value == 'Tháng 8 năm lẻ / chẵn: có khác biệt không?' for s in at.subheader)
 
 
 def test_bang_nhiet_co_nhan_giai_doan(monkeypatch):
     at = _ps3(monkeypatch, 'duckdb')
-    assert any('Cạnh mỗi năm là giai đoạn ở trang PS2' in c.value for c in at.caption)
+    assert any('Cạnh mỗi năm là mã giai đoạn ở PS2' in c.value and 'A/B' in c.value for c in at.caption)
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_do_on_dinh_ca_ba_nhip(monkeypatch, backend):
     # góp ý M3 (2026-09-28): kiểm độ ổn định cho cả 3 nhịp, không chỉ tháng 8
-    ts = _ps3(monkeypatch, backend).dataframe[0].value
+    at = _ps3(monkeypatch, backend)
+    ts = at.dataframe[1].value
     assert ts['Cả 10 năm'].tolist() == ['3,39 lần', '+7,2 điểm %', '−37,7%']
     assert ts['Bỏ lần lượt từng năm'].tolist() == ['3,22 lần đến 3,49 lần', '+7,1 điểm % đến +7,3 điểm %',
                                                    '−39,1% đến −36,2%']
     assert ts['Số năm tự có nhịp'].tolist() == ['10/10'] * 3
     s = queries.calendar_stability(backend)
     assert ts['Cả 10 năm'].tolist()[1] == pp(s['metric_value'][1])
+    compact = at.dataframe[0].value
+    assert compact['Số năm tự có nhịp'].tolist() == ['10/10'] * 3
+    assert compact['Bỏ lần lượt từng năm'].tolist() == ts['Bỏ lần lượt từng năm'].tolist()
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_so_sanh_giai_doan(monkeypatch, backend):
     # góp ý M3: so sánh nhịp giữa các giai đoạn, năm ranh giới tính cho giai đoạn kết thúc ở năm đó
     at = _ps3(monkeypatch, backend)
-    tp = at.dataframe[1].value
-    assert tp['Giai đoạn'].tolist() == ['A. Tăng trưởng (2013–2016)', 'B. Chững, giảm nhẹ (2017–2018)', 'C. Sập (2019)',
+    tp = at.dataframe[2].value
+    assert tp['Giai đoạn'].tolist() == ['A. Tăng trưởng (2013–2016)', 'B. Chững/giảm nhẹ (2017–2018)', 'C. Giảm mạnh (2019)',
                                         'D. Đi ngang mức thấp (2020–2022)']
     assert tp['Chênh mùa cao / thấp'].tolist() == ['2,91 lần', '4,52 lần', '3,71 lần', '3,54 lần']
     assert tp['Chênh T8 lẻ / chẵn'].tolist() == ['−37,3%', '−43,0%', '–', '−37,6%']
@@ -136,5 +149,27 @@ def test_hai_bang_nhiet_chi_so_thang_chung_thang_mau(monkeypatch, backend):
     cap = ' '.join(c.value for c in at.caption)
     assert '**dùng chung một thang màu**' in cap and '1 = TB tháng của cả giai đoạn' in cap
     # bảng mức dồn cuối tháng: thang riêng theo điểm %, tâm 0
+    at.segmented_control[0].set_value('Dồn cuối tháng').run()
+    assert not at.exception and not at.error
     (eom,) = _thang_mau(at, 'eom_excess')
     assert eom['scale'] == {'domainMid': 0, 'scheme': 'redblue'} and 'điểm %' in eom['legend']['title']
+
+
+def test_chuyen_nhip_doi_bieu_do_va_giai_thich(monkeypatch):
+    at = _ps3(monkeypatch, 'duckdb')
+    assert len(at.get('vega_lite_chart')) == 2  # một biểu đồ chính, một bảng nhiệt trong tab giai đoạn
+    assert any(s.value == 'Tháng nào cao, tháng nào thấp?' for s in at.subheader)
+    assert _thang_mau(at, 'month_index')
+    assert not _thang_mau(at, 'eom_excess')
+
+    at.segmented_control[0].set_value('Dồn cuối tháng').run()
+    assert len(at.get('vega_lite_chart')) == 2
+    assert any(s.value == 'Doanh thu có dồn cuối tháng không?' for s in at.subheader)
+    assert _thang_mau(at, 'eom_excess')
+    assert 'mốc rải đều là' in ' '.join(m.value for m in at.markdown)
+
+    at.segmented_control[0].set_value('Tháng 8: năm lẻ / chẵn').run()
+    assert len(at.get('vega_lite_chart')) == 2
+    assert any(s.value == 'Tháng 8 năm lẻ / chẵn: có khác biệt không?' for s in at.subheader)
+    assert not _thang_mau(at, 'eom_excess')
+    assert 'đây là chênh chỉ số chuẩn hóa' in ' '.join(m.value for m in at.markdown).lower()
