@@ -98,7 +98,7 @@ def test_so_sanh_giai_doan(monkeypatch, backend):
     # góp ý M3: so sánh nhịp giữa các giai đoạn, năm ranh giới tính cho giai đoạn kết thúc ở năm đó
     at = _ps3(monkeypatch, backend)
     tp = at.dataframe[2].value
-    assert tp['Giai đoạn'].tolist() == ['A. Tăng trưởng (2013–2016)', 'B. Chững/giảm nhẹ (2017–2018)', 'C. Giảm mạnh (2019)',
+    assert tp['Giai đoạn'].tolist() == ['A. Tăng trưởng (2013–2016)', 'B. Chững, giảm nhẹ (2017–2018)', 'C. Sập (2019)',
                                         'D. Đi ngang mức thấp (2020–2022)']
     assert tp['Chênh mùa cao / thấp'].tolist() == ['2,91 lần', '4,52 lần', '3,71 lần', '3,54 lần']
     assert tp['Chênh T8 lẻ / chẵn'].tolist() == ['−37,3%', '−43,0%', '–', '−37,6%']
