@@ -195,7 +195,7 @@ Nguồn: tài liệu chính thức *Free Edition limitations*, kiểm ngày 2026
 1. **FB07:** test `test_trang_chat_doi_backend_xoa_hoi_thoai` đang đỏ. Nguyên nhân: `page_header()` chạy trước bước reset hội thoại (`apps/retail_app/views/ai_explain.py`). Các mục FB01–FB06 trong `feedback_ps1_ps5_streamlit_ai_20261010.md` chưa xử lý.
 2. **Tài liệu lệch code:**
    - `databricks_readiness_review.md` (ngày 2026-10-02);
-   - header `retail_dbt/dbt_project.yml` và `profiles.yml` còn ghi Snowflake production / Databricks lab / GitHub Actions;
+   - header `retail_dbt/dbt_project.yml` và `profiles.yml` còn ghi Snowflake production / Databricks lab / GitHub Actions (đã sửa 2026-10-18; Snowflake bỏ hẳn cùng ngày);
    - số test 216 so với 217;
    - câu "chạy tự động trong một lệnh" ở `dwh_huong_dan_pm_ba.md`.
 3. **Git:**

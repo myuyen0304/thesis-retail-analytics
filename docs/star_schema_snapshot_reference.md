@@ -677,6 +677,9 @@ Mất khoảng 15 giây. File `warehouse/` đã gitignore giống `silver/`, ai 
 
 ## 10. Platform: Snowflake + dbt (production), DuckDB (dev)
 
+> **Lịch sử, không còn hiệu lực:** production đổi sang Databricks ngày 2026-10-05; PM bỏ hẳn Snowflake ngày 2026-10-18
+> ([dwh_roadmap.md](dwh_roadmap.md)).
+
 Chốt ngày 2026-09-26. Khóa luận phải deploy lên production, và nhóm đi theo hướng **analytics engineer**,
 nên phần transform viết bằng **dbt**: project `retail_dbt/`. Cùng một bộ model chạy trên ba target (lộ trình 4 giai đoạn: `dwh_roadmap.md`):
 

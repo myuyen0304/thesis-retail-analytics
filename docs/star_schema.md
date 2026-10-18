@@ -27,7 +27,8 @@ Nghiệp vụ mới có grain khác sẽ có fact riêng, tái sử dụng dimen
 | Reporting: 1 view chi tiết + 4 rpt_* | Định nghĩa KPI dùng chung cho app/BI | Có trong dbt/local |
 | 6 fact còn lại + promotion/bridge | Nghiệp vụ khác hoặc dữ liệu tham chiếu | Có trong dbt/local; không xóa vì ngoài PS |
 | CAGR theo giai đoạn, bảng điểm đổi hướng PS2 | Kết quả phân tích có tham số | Chưa triển khai/chưa chốt ranh giới |
-| Snowflake production, app code, Kafka | Đích phát triển | Không được coi là đã deploy |
+| Databricks production, app code | Pipeline công bố bản dữ liệu lên Databricks; app và chat đọc bản đang phục vụ | Đã chạy: Databricks production từ 2026-10-05, lần publish đầu qua pipeline 2026-10-17 ([automation_batch.md](automation_batch.md)). Snowflake bỏ hẳn 2026-10-18 |
+| Kafka | Nguồn sự kiện | Hoãn (2026-10-11) |
 
 Đợt sửa này chỉ thay thiết kế, sơ đồ và bằng chứng; không đổi model dbt, không rebuild warehouse.
 Chi tiết DDL và kiểm chứng lịch sử được giữ tại [phụ lục snapshot](star_schema_snapshot_reference.md);
@@ -219,7 +220,7 @@ Một dimension chung không tự làm hai fact khác grain nối an toàn.
 | R theo order_date | Dùng trạng thái extract để phân loại dòng quá khứ | Đổi trạng thái phải tính lại ngày/tháng đặt gốc; không ghi delta sai sang ngày event |
 | Tái hiện deck | CSV hiện tại | Freeze version/hash nguồn + phiên bản code/KPI + snapshot báo cáo |
 | Publish | dbt build/test local | Gate chất lượng + atomic/versioned promotion; test FAIL không tự bảo đảm dashboard không thấy bảng dở |
-| Triển khai | Local PostgreSQL/DuckDB | Snowflake: staging/test/prod, quyền tối thiểu, secrets, scheduler, cost guardrails, phục hồi/replay |
+| Triển khai | Local PostgreSQL/DuckDB; Databricks production theo bản dữ liệu ([automation_batch.md](automation_batch.md)) | Databricks: staging/test/prod, quyền tối thiểu, secrets, scheduler, cost guardrails, phục hồi/replay |
 
 Thêm Kafka sau khi pipeline chính ổn định. CSV tĩnh có thể replay để demo kỹ thuật nhưng phải ghi là
 **mô phỏng**, không gọi đó là dữ liệu kinh doanh realtime thật.
@@ -253,4 +254,4 @@ Chạy từ repo root (kernel dùng môi trường .venv):
 .venv\Scripts\python.exe scripts/docs_gen/build_star_diagram.py
 ```
 
-Mở notebook và Run All để kiểm dữ liệu. Không cần tài khoản Snowflake; notebook này không kiểm deployment.
+Mở notebook và Run All để kiểm dữ liệu. Không cần tài khoản Databricks; notebook này không kiểm deployment.

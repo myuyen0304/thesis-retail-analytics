@@ -16,7 +16,7 @@ Thư mục này tập trung toàn bộ tài liệu Markdown về business, EDA, 
 | Xem mô hình chiều | [`star_schema.md`](star_schema.md) |
 | Truy vết PS1–PS5 tới mô hình chiều | [`star_schema_tu_ps.md`](star_schema_tu_ps.md) |
 | Tra DDL và kiểm chứng lịch sử (không phải thiết kế chuẩn) | [`star_schema_snapshot_reference.md`](star_schema_snapshot_reference.md) |
-| Lộ trình app code → Snowflake → Kafka | [`dwh_roadmap.md`](dwh_roadmap.md) |
+| Lộ trình app code → Databricks production → Kafka (hoãn) | [`dwh_roadmap.md`](dwh_roadmap.md) |
 | Hiểu lý do thiết kế database | [`database_design_explanation.md`](database_design_explanation.md) |
 | Ôn câu hỏi phản biện | [`defense_notes.md`](defense_notes.md) |
 | Tra các thắc mắc cụ thể của dataset | [`thac_mac_dataset.md`](thac_mac_dataset.md) |

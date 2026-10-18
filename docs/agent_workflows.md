@@ -7,7 +7,7 @@ Quyết định ngày **2026-09-29**: bộ skill dùng chung cho Codex và Claud
 Cập nhật 2026-10-11 theo `CLAUDE.md` §1 và [kien_truc_pipeline_tong.md](kien_truc_pipeline_tong.md):
 
 - Local PostgreSQL/DuckDB: phát triển và tạo đối chứng.
-- Databricks: **production** từ 2026-10-05, gồm DWH, app và chat. Trước đó là lab kiểm chứng. Snowflake không còn là bước mặc định; có profile không đồng nghĩa đã deploy.
+- Databricks: **production** từ 2026-10-05, gồm DWH, app và chat. Trước đó là lab kiểm chứng. Snowflake: **bỏ hẳn** từ 2026-10-18 (PM chốt), không làm gì thêm.
 - AI Explain: **chat hỏi dữ liệu PS1–PS5** (L1), có query, bằng chứng và giới hạn suy luận. Từ 2026-10-11 mở rộng thành agent 4 level của GĐ2: L2 biểu đồ, L3 đọc dự báo, L4 giải thích, RAG tri thức không cấp số.
 - Dự báo: từ 2026-10-11 là lõi của GĐ2. Target là G theo ngày, COGS suy qua tỷ lệ. Dùng skill `retail-forecasting`.
 - Airflow: chạy trong Docker local, điều phối batch (chốt 2026-10-11).

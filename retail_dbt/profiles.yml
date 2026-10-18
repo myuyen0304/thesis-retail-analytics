@@ -1,4 +1,6 @@
-# Không chứa bí mật: thông tin Snowflake đọc từ biến môi trường (máy cá nhân hoặc GitHub Actions secrets).
+# Không chứa bí mật: thông tin kết nối Databricks / Snowflake đọc từ biến môi trường, nạp từ các file .env.*.local
+# đã gitignore (.env.airflow.local cho pipeline, .env.databricks.local cho scripts/databricks/run_dbt.py).
+# Repo không có GitHub Actions; chạy tự động bằng Airflow (docs/automation_batch.md).
 retail_dbt:
   target: postgres
   outputs:
@@ -15,15 +17,18 @@ retail_dbt:
       type: duckdb
       path: "{{ env_var('RETAIL_DUCKDB_BUILD_PATH', 'warehouse/dbt.duckdb') }}"   # tương đối từ root repo, đã gitignore
       threads: 4
-    databricks:        # lab kiểm chứng DWH/KPI (docs/dwh_roadmap.md), Databricks Free; cần .venv-databricks (dbt-databricks)
+    databricks:        # production từ 2026-10-05 (docs/dwh_roadmap.md), Databricks Free; chạy qua pipeline --target databricks
+                       # hoặc scripts/databricks/run_dbt.py; cần .venv-databricks (requirements-databricks.txt)
       type: databricks
       host: "{{ env_var('DATABRICKS_HOST', '') }}"            # không có https://
       http_path: "{{ env_var('DATABRICKS_HTTP_PATH', '') }}"  # /sql/1.0/warehouses/<id>
-      token: "{{ env_var('DATABRICKS_TOKEN', '') }}"          # access token OAuth lấy từ `databricks auth token`, không dùng PAT
+      token: "{{ env_var('DATABRICKS_TOKEN', '') }}"          # token OAuth, không dùng PAT: pipeline lấy bằng writer SP (M2M),
+                                                              # run_dbt.py lấy từ profile Databricks CLI
       catalog: "{{ env_var('DATABRICKS_CATALOG', 'retail_lab') }}"
       schema: dbt
       threads: 4
-    snowflake:         # production / demo khóa luận; chạy qua scripts/snowflake/run_dbt.py (đọc .env.snowflake.local)
+    snowflake:         # phương án cũ: script đã viết, chưa chạy cloud (production chuyển sang Databricks 2026-10-05);
+                       # chạy qua scripts/snowflake/run_dbt.py (đọc .env.snowflake.local)
       type: snowflake
       account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
       user: "{{ env_var('SNOWFLAKE_USER', 'RETAIL_DBT') }}"   # user TYPE=SERVICE, scripts/snowflake/bootstrap.sql

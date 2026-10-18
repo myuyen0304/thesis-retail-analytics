@@ -27,6 +27,7 @@ def sidebar() -> None:
     releases.reset()
     backend()
     st.session_state._reads = {}          # bảng đã đọc trong lượt chạy này (report_reads liệt kê lại)
+    st.session_state._collapse_source = False
     st.sidebar.radio('Nguồn dữ liệu', enabled_backends(), key='backend', format_func=BACKEND_LABEL.get)
     if st.session_state.get('ai_backend') != backend():
         st.session_state.ai_turns, st.session_state.ai_tokens, st.session_state.ai_backend = [], 0, backend()
@@ -117,6 +118,15 @@ def need_keys(keys, df: pd.DataFrame, query_name: str, what: str) -> None:
 
 def report_reads(top) -> None:
     """Gọi sau khi trang chạy xong (app.py). Bấm "Đọc lại" → thông báo thành công ở đầu trang; không bấm → dòng nguồn ở cuối."""
+    if st.session_state.get('_collapse_source'):
+        with st.expander('Nguồn dữ liệu & kết nối'):
+            info_strip()
+            _report_reads(top)
+        return
+    _report_reads(top)
+
+
+def _report_reads(top) -> None:
     reads = st.session_state.get('_reads', {})
     if not reads:
         return

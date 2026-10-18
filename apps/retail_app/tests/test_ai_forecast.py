@@ -698,6 +698,18 @@ def test_b3c_gm10_khoang_thang_vat_qua_nam(versioned):
         assert (t.status == 'ok') == ok, (answer, t.validation_errors)
 
 
+@pytest.mark.parametrize('answer,ok', [
+    ('Số DỰ BÁO G là {c1} cho tháng 01/2023 và {c2} cho tháng 02/2023.', True),
+    ('Số DỰ BÁO G là {c1} cho tháng 02/2023 và {c2} cho tháng 01/2023.', False),
+])
+def test_b3c_gm10_ky_sau_cho_tung_so(versioned, answer, ok):
+    # Live GM10: kỳ sau {c2} thuộc chính {c2}, không thuộc số {c1} ở trước chữ "và".
+    rep = final(answer=answer, claims=[{'id': 'c1', 'path': 'T1.rows[0].g_forecast'},
+                                       {'id': 'c2', 'path': 'T2.rows[0].g_forecast'}])
+    t = _turn('Dự báo G từ tháng 12/2022 đến tháng 2/2023', _m(2023, 1), _m(2023, 2), rep, rep)
+    assert (t.status == 'ok') == ok, (answer, t.status, t.validation_errors)
+
+
 def test_b3c_gm09_cung_thang_nam_va_so_sanh_tiep_noi(versioned):
     assert evidence.question_periods('Vậy so với cùng tháng năm 2022 thực tế thì thế nào?') == [
         ('same_month', 2022, None, 'cùng tháng năm 2022')]
@@ -1085,6 +1097,62 @@ def test_rv12e_ky_khong_hop_le_van_khong_dan_so(versioned):
     rep = final('no_data', _REF, [{'id': 'c1', 'path': _ROW}])
     t = _turn('Dự báo doanh thu quý 5/2025?', call(*_M8[:1], **_M8[1]), rep, rep)
     assert t.status == 'answer_validation_failed' and not t.answer_md, (t.status, t.answer_md)
+
+
+# RV12 lượt kiểm Codex 2026-10-17: câu hỏi tự nêu cả kỳ thiếu số lẫn kỳ tham khảo.
+@pytest.mark.parametrize('answer', [
+    'Năm 2025 chưa có dự báo. Riêng tháng 8/2023, dự báo G là {c1}; số này chỉ để tham khảo.',
+    'Năm 2025 chưa có dự báo. Riêng tháng 8/2023, dự báo G là {c1}. Số này là dự báo năm 2025.',
+    'Riêng tháng 8/2023, dự báo G là {c1}. Bạn có thể dùng số đó làm dự báo năm 2025.',
+])
+def test_rv12f_hai_ky_trong_cau_hoi_van_dung_khuon(versioned, answer):
+    q = 'Dự báo G năm 2025 có không? Nếu chưa có, cho thêm số tháng 8/2023 làm mốc tham khảo.'
+    rep = final('no_data', answer, [{'id': 'c1', 'path': _ROW}])
+    t = _turn(q, call(*_M8[:1], **_M8[1]), rep, rep)
+    _khuon(t, 'no_data', asked='2025', ky=('08/2023',))
+    assert t.answer_md.startswith('Năm 2025 nằm ngoài vùng dự báo (01/01/2023 → 01/07/2024)'), t.answer_md
+    assert 'Số này là dự báo năm 2025' not in t.answer_md
+    assert 'làm dự báo năm 2025' not in t.answer_md
+
+
+def test_rv12f_cau_hoi_co_tong_vung_va_nam_2025_van_dung_khuon(versioned):
+    q = 'Dự báo G năm 2025 có không? Nếu không, cho tổng cả vùng dự báo làm mốc tham khảo.'
+    rep = final('no_data', 'Tổng cả vùng dự báo là {c1}. Đây là dự báo năm 2025.',
+                [{'id': 'c1', 'path': 'T1.derived.horizon_total.g_forecast'}])
+    t = _turn(q, call('get_forecast', metric='G', period='horizon'), rep, rep)
+    _khuon(t, 'no_data', asked='2025', ky=('Cả vùng dự báo',))
+    assert t.answer_md.startswith('Năm 2025 nằm ngoài vùng dự báo (01/01/2023 → 01/07/2024)'), t.answer_md
+    assert 'Đây là dự báo năm 2025' not in t.answer_md
+
+
+@pytest.mark.parametrize('answer', [
+    'Năm 2025 chưa có dự báo. Riêng tháng 8/2023, dự báo G là {c1}. Số này là dự báo năm 2025.',
+    'Năm 2025 chưa có dự báo. Riêng tháng 8/2023, dự báo G là {c1}; số này chỉ để tham khảo.',
+])
+def test_rv12f_ok_khong_duoc_bo_qua_ky_thieu_du_bao(versioned, answer):
+    q = 'Dự báo G năm 2025 có không? Nếu chưa có, cho thêm số tháng 8/2023 làm mốc tham khảo.'
+    rep = final('ok', answer, [{'id': 'c1', 'path': _ROW}])
+    t = _turn(q, call(*_M8[:1], **_M8[1]), rep, rep)
+    assert t.status == 'answer_validation_failed' and not t.answer_md, (t.status, t.answer_md)
+
+
+def test_rv12f_ok_ky_tham_khao_2024_chi_co_mot_phan(versioned):
+    q = 'Dự báo G năm 2025 có không? Cho thêm số năm 2024 làm mốc tham khảo.'
+    rep = final('ok', 'Năm 2024 dự báo G là {c1}. Số này là dự báo năm 2025.',
+                [{'id': 'c1', 'path': _ROW}])
+    t = _turn(q, call('get_forecast', metric='G', period='year', year=2024), rep, rep)
+    assert t.status == 'answer_validation_failed' and not t.answer_md, (t.status, t.answer_md)
+
+
+def test_rv12f_sua_status_cho_ky_2024_thieu_mot_phan(versioned):
+    q = 'Dự báo G năm 2025 có không? Cho thêm số năm 2024 làm mốc tham khảo.'
+    claim = [{'id': 'c1', 'path': _ROW}]
+    wrong = final('ok', 'Năm 2024 dự báo G là {c1}. Số này là dự báo năm 2025.', claim)
+    fixed = final('no_data', 'Năm 2025 chưa có dự báo. Riêng năm 2024, dự báo G là {c1}.', claim)
+    t = _turn(q, call('get_forecast', metric='G', period='year', year=2024), wrong, fixed)
+    assert t.status == 'no_data' and t.answer_md, (t.status, t.validation_errors)
+    assert t.answer_md.startswith('Năm 2025 nằm ngoài vùng dự báo'), t.answer_md
+    assert 'Năm 2024, toàn công ty' in t.answer_md and 'Số này là dự báo năm 2025' not in t.answer_md
 
 
 # --- review Claude 2026-10-17: quý viết "Q3/2023" / "quý III/2023"; số cả vùng dự báo cho câu hỏi nêu năm ---

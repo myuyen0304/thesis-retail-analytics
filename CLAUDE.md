@@ -44,8 +44,12 @@ Nộp bài: file dạng `data/sample_submission.csv` — cột `Date, Revenue, C
 - Kafka (từ 2026-10-11: **hoãn**, xem dưới).
 
 **Đổi ngày 2026-10-05 (PM chốt):** **Databricks là đích production**, gồm DWH, app phân tích và chat AI Explain;
-không còn là "lab". Snowflake thôi là bước mặc định; các script Snowflake đã viết giữ nguyên, chưa chạy cloud.
+không còn là "lab". Snowflake thôi là bước mặc định (từ 2026-10-18: bỏ hẳn, xem dòng dưới).
 Cách làm: dev và test ở local (DuckDB/PostgreSQL) trước, đạt rồi mới deploy lên Databricks. Chi tiết: `docs/dwh_roadmap.md`.
+
+**Đổi ngày 2026-10-18 (PM chốt):** **bỏ hẳn Snowflake**; Databricks là nền tảng cloud duy nhất. Không làm thêm gì cho Snowflake:
+không chạy cloud, không sửa hay đối soát nhánh Snowflake. Tài liệu cũ gọi Snowflake là production / đích demo GĐ3 là lịch sử.
+Chữ "snowflake schema" (kiểu mô hình dữ liệu, `docs/star_schema.md`) là chuyện khác, không đổi.
 
 **Đổi ngày 2026-10-11 (thầy hướng dẫn giao GĐ2, PM/BA chốt):** dự báo trở lại thành **lõi của GĐ2**.
 Theo sơ đồ `docs/references/pipeline-gd2.jpg`, thứ tự ưu tiên là:

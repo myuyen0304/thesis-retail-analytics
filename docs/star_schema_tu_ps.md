@@ -76,6 +76,6 @@ Notebook mới kiểm trực tiếp snapshot DuckDB đang có, không chạy l�
 **Đã làm (2026-09-27):** bảng CAGR theo giai đoạn (`rpt_revenue_phase`) và điểm đổi hướng (`rpt_revenue_turning_point`) PS2; mốc 4 giai đoạn A–D ở seed `ps2_phases` (`dwh_huong_dan_pm_ba.md` §4); 2026-09-28 thêm tháng đổi hướng do dữ liệu tự tìm (`rpt_revenue_direction_change`, seed `ps2_direction_rule`). Giữ tham số giai đoạn/version phân tích;
 không tự quyết ranh giới hoặc thêm dim giai đoạn chỉ để đáp ứng một báo cáo.
 
-**Mở rộng sau:** app code phục vụ PS; triển khai Snowflake có quality/publish gate; sau đó Kafka với
+**Mở rộng sau:** app code phục vụ PS; triển khai Databricks có quality/publish gate (Snowflake bỏ hẳn 2026-10-18); sau đó Kafka với
 idempotency, khóa bền vững và cập nhật lại kỳ order_date khi trạng thái đổi.
 Forecast/SHAP là đề tài mở rộng riêng nếu được chọn, không là điều kiện mặc định để hoàn thành PS1–PS5.

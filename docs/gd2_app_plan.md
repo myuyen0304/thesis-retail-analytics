@@ -8,7 +8,7 @@ Nguồn nghiệp vụ: deck `docs/presentations/revenue_performance_problem_stat
 
 Người dùng đã chọn bổ sung **chat hỏi dữ liệu PS1–PS5**, trả lời bằng query chỉ đọc có kiểm soát, metric/kỳ lọc rõ và bằng chứng số liệu/snapshot. Đây là hướng mới thay quyết định “không làm AI” ngày 2026-09-27; các ghi chú cũ bên dưới được giữ như lịch sử của GĐ 2. Chưa triển khai runtime chat, chưa chọn provider và không ghi các mốc app hiện tại thành nghiệm thu AI.
 
-Đợt đầu xây [bộ skill Codex + Claude Code](agent_workflows.md). Sau này chat phải phân biệt R/G, distinct/tỷ lệ, quan sát và nguyên nhân; câu ngoài PS1–PS5 phải báo rõ. Databricks chỉ là lab DWH/KPI; Snowflake vẫn là đích production. Tiêu chí chat và bộ tình huống nằm trong skill `retail-ai-explain`; feature chat được thực hiện ở đợt riêng.
+Đợt đầu xây [bộ skill Codex + Claude Code](agent_workflows.md). Sau này chat phải phân biệt R/G, distinct/tỷ lệ, quan sát và nguyên nhân; câu ngoài PS1–PS5 phải báo rõ. Databricks chỉ là lab DWH/KPI; Snowflake vẫn là đích production *(lịch sử: Databricks production từ 2026-10-05, Snowflake bỏ hẳn 2026-10-18)*. Tiêu chí chat và bộ tình huống nằm trong skill `retail-ai-explain`; feature chat được thực hiện ở đợt riêng.
 
 > PM đã quyết ở §9 (2026-09-27). **M0 xong, PM đã nghiệm thu** (32/32 test PASS, ảnh ở `docs/screenshots/streamlit/`). **M1 xong, PM đã nghiệm thu 2026-09-28** (58/58 test app, dbt 166/166). **M2 xong, PM đã nghiệm thu 2026-09-28** (68/68). Sau đó bổ sung 2 góp ý cho PS2 (tháng đổi hướng do dữ liệu tự tìm,
 tăng trưởng tháng), nhãn giai đoạn và 3 góp ý PS3 (so sánh giai đoạn, độ ổn định, chú thích): 96/96 test app, dbt 192/192. **M3 (PS3) xong, PM đã nghiệm thu 2026-09-29.** **M4 (PS4 + PS5) xong, PM đã nghiệm thu 2026-09-29** sau góp ý vòng 1 (121/121 test app, dbt 202/202). **M5 (Sức khỏe dữ liệu + hoàn thiện) dev xong 2026-09-29, chờ PM nghiệm thu** (152/152 test app sau review ngoài, dbt 216/216). **2026-10-01: sửa thẻ và bảng nhiệt PS2–PS5 theo `streamlit_ps1_ps5_ui_feedback.md` (F01–F04), chờ PM xem**; bộ test app nay 157 test, lần chạy ngày này mới kiểm trên DuckDB. Mỗi mốc làm xong ghi nhật ký ở `dwh_huong_dan_pm_ba.md` §9.
@@ -33,7 +33,7 @@ Người xem không cần biết SQL. Mỗi con số trên màn hình phải có
    phân rã… bằng pandas.
 2. **Thiếu KPI thì thêm vào dbt, kèm test.** Không vá bằng code trong app.
 3. Nhờ vậy, **các test của DWH (155 lúc lập plan, 166 sau M1, 169 sau M2, 180 sau góp ý M2, 192 sau góp ý M3, 202 sau M4, 216 sau M5 tính cả 2 hook ghi nhật ký) chính là bảo đảm đúng số của app**. Sang GĐ 3, logic đã nằm sẵn trong dbt nên chuyển lên
-   Snowflake không phải viết lại.
+   Databricks không phải viết lại (đích cloud đổi từ Snowflake sang Databricks 2026-10-05; Snowflake bỏ hẳn 2026-10-18).
 4. **Ngoại lệ duy nhất là bộ lọc động** (khoảng ngày tùy chọn, lọc nhiều chiều cùng lúc). Phần này phải tính lại N, C bằng
    *đếm phân biệt* trên dòng hàng, không được cộng từ bảng tháng/năm. Vì vậy bộ lọc động để sang mốc riêng (M6), có test riêng.
 
@@ -67,8 +67,8 @@ Mỗi trang có cùng bố cục: **câu hỏi PS → thẻ KPI → biểu đồ
 **Sửa 2026-09-29 (M5):** bản đầu của plan đọc `retail_dbt/target/run_results.json`. Đổi sang nhật ký trong kho vì file đó
 chỉ có một bản, lần build sau ghi đè: build DuckDB sau Postgres thì trang Postgres sẽ hiện kết quả test của DuckDB. Hook
 `on-run-end` của dbt (`retail_dbt/macros/health_log.sql`) ghi kết quả vào chính kho đang build, nên mỗi backend có kết quả
-riêng. Cách này được thiết kế để mang sang Snowflake ở GĐ 3 (không cần file trên máy), nhưng **chưa chạy thử**; log nạp
-trên Snowflake (COPY INTO) còn phải xử lý riêng.
+riêng. Cách này không cần file trên máy nên mang lên cloud được; target `databricks` đọc `raw._ingest_log` do bước nạp
+ghi (pipeline: `scripts/pipeline/runtime.py`; chạy tay: `scripts/ingest/ingest_databricks.py`).
 
 Chữ "Giới hạn" lấy từ slide 15, ví dụ:
 
@@ -80,12 +80,12 @@ Chữ "Giới hạn" lấy từ slide 15, ví dụ:
 ## 5. Kiến trúc
 
 ```text
-retail_dbt  ──dbt build──▶  schema reporting (Postgres local | DuckDB | Databricks lab | Snowflake ở GĐ 3)
+retail_dbt  ──dbt build──▶  schema reporting (Postgres local | DuckDB | Databricks production)
                                         │  chỉ đọc
 apps/retail_app/
   app.py                 điểm vào, điều hướng giữa các trang
   views/                 7 trang ở §4 (không đặt tên pages/: Streamlit coi đó là kiểu nhiều trang cũ)
-  dwh/connection.py      1 chỗ duy nhất chọn backend: postgres (mặc định) | duckdb | databricks (lab) | snowflake (GĐ 3)
+  dwh/connection.py      1 chỗ duy nhất chọn backend: postgres (mặc định) | duckdb | databricks (production)
   dwh/queries.py         mỗi hàm = 1 câu SELECT từ một bảng rpt_*; không tính toán
   ui/                    dải thông tin chung, thẻ KPI, định dạng số kiểu Việt (1.234,5)
   tests/                 test số liệu + smoke test mọi trang
@@ -94,7 +94,7 @@ apps/retail_app/
 **Những khác biệt giữa các backend đã biết trước:**
 
 - Target DuckDB không có `raw._ingest_log`, nên trang Sức khỏe dữ liệu phải hiện "không có log" chứ không báo lỗi.
-- Snowflake viết hoa tên cột không đặt trong ngoặc kép, nên `queries.py` phải đổi tên cột về chữ thường sau khi đọc.
+- *(Lịch sử, Snowflake đã bỏ 2026-10-18)* Snowflake viết hoa tên cột không đặt trong ngoặc kép, nên `queries.py` phải đổi tên cột về chữ thường sau khi đọc.
 - DuckDB khóa file. Đã kiểm ở M0: app mở rồi đóng kết nối chỉ-đọc sau mỗi câu, nên `dbt build --target duckdb` vẫn PASS.
   Chiều ngược lại, trong lúc dbt ghi file thì app đọc bị lỗi (27/107 lần), vì vậy không build DuckDB trong lúc đang demo.
 - Thư mục con của app không được trùng mẫu trong `.gitignore` (`data/`, `build/`, `lib/`, `target/`…). Vì thế dùng `dwh/`, không dùng `data/`.
@@ -133,7 +133,7 @@ Mỗi mốc có tiêu chí xong riêng. Xong mốc nào ghi nhật ký mốc đ�
 **Không làm trong GĐ 2:**
 
 - dự báo / SHAP (phần mở rộng riêng, CLAUDE.md §1);
-- deploy Snowflake và host app trên cloud (GĐ 3);
+- deploy Snowflake và host app trên cloud (GĐ 3); *nay: Databricks production, Snowflake bỏ hẳn 2026-10-18*;
 - Kafka (GĐ 4);
 - đăng nhập, phân quyền người dùng.
 
@@ -153,7 +153,7 @@ Bảng dưới giữ lại để ghi lý do lúc đề xuất.
 
 | Câu hỏi | Đề xuất của dev | Vì sao |
 |---|---|---|
-| **Framework nào?** | **Streamlit** | Toàn bộ vẫn là Python, không cần học thêm frontend; mỗi trang là một file, hợp với 7 trang ở §4. Việc host Streamlit ngay trên Snowflake sẽ **kiểm lại ở đầu GĐ 3**, hiện chưa khẳng định. Phương án khác: Dash (linh hoạt hơn, nhiều code hơn), hoặc FastAPI + React (đẹp nhất nhưng tốn gấp mấy lần công) |
+| **Framework nào?** | **Streamlit** | Toàn bộ vẫn là Python, không cần học thêm frontend; mỗi trang là một file, hợp với 7 trang ở §4. Việc host Streamlit ngay trên Snowflake sẽ **kiểm lại ở đầu GĐ 3**, hiện chưa khẳng định *(lịch sử: Snowflake bỏ hẳn 2026-10-18; app chạy trên Streamlit Cloud và Databricks Apps)*. Phương án khác: Dash (linh hoạt hơn, nhiều code hơn), hoặc FastAPI + React (đẹp nhất nhưng tốn gấp mấy lần công) |
 | **App dùng cho ai?** | Demo trước hội đồng | Nếu chỉ để demo thì bỏ M6 (bộ lọc động), app gọn và chắc số hơn. Nếu BA dùng hằng ngày thì làm M6 |
 | **Có AI giải thích số không?** | Chưa làm ở GĐ 2 | Muốn làm đúng thì mọi câu trả lời phải dẫn về câu query đã kiểm, phân biệt quan sát và giả thuyết. Nên để sau khi 5 trang PS chạy ổn |
 | **Giao diện tiếng Việt?** | Có | Khớp deck và tài liệu (CLAUDE.md §0); tên cột kỹ thuật vẫn giữ tiếng Anh |

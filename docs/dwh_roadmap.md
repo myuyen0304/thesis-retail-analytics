@@ -1,5 +1,14 @@
 # Lộ trình DWH: PS1–PS5 → app code → Databricks production → Kafka (hoãn từ 2026-10-11)
 
+## Đổi hướng đã chốt 2026-10-18: bỏ hẳn Snowflake
+
+- PM chốt **không làm Snowflake nữa**. Databricks là nền tảng cloud duy nhất cho DWH, pipeline, app và chat.
+- Mọi chỗ bên dưới gọi Snowflake là production, đích demo tháng 12/2026 hay "GĐ 3 Snowflake" là **lịch sử**.
+- Code Snowflake vẫn còn trong repo: `scripts/snowflake/`, `scripts/ingest/ingest_snowflake.py`, chế độ `snowflake`
+  của `scripts/parity/compare_dwh.py`, target `snowflake` trong `retail_dbt/profiles.yml`, macro `snowflake__*` và
+  nhánh `'snowflake'` của các model sức khỏe dữ liệu. Không bảo trì, không chạy. Xóa hay giữ: chờ PM quyết.
+- "Snowflake schema" (kiểu mô hình dữ liệu, [star_schema.md](star_schema.md)) là chuyện khác, không đổi.
+
 ## Đổi hướng đã chốt 2026-10-11: GĐ2 theo sơ đồ thầy hướng dẫn
 
 Ngày 2026-10-10 thầy hướng dẫn giao làm tiếp theo hai sơ đồ: `references/pipeline.jpg` (DE) và
@@ -34,7 +43,7 @@ Câu "Forecast/SHAP là extension riêng" ở các mục bên dưới là **lị
 - Quy trình: dev và test ở local (DuckDB / PostgreSQL), đạt các cổng kiểm (test số, test model thật) rồi mới deploy
   lên Databricks; trên Databricks chạy lại cùng bộ kiểm trước khi công bố.
 - Snowflake: script đã viết (`scripts/snowflake/`, `scripts/ingest/ingest_snowflake.py`) giữ nguyên, chưa chạy cloud,
-  không còn là bước mặc định.
+  không còn là bước mặc định. *2026-10-18: bỏ hẳn, xem mục đầu.*
 - Workspace hiện tại là Databricks **Free Edition**; giới hạn của bản Free (app, gọi ra internet, service principal,
   lịch chạy) phải kiểm trên tài liệu chính thức và workspace thật trước khi cam kết từng hạng mục.
 
@@ -63,7 +72,7 @@ Các trạng thái và số test trong phần lịch sử bên dưới thuộc l
 | 4. Kafka end-to-end | Event source/replay, incremental có khóa bền vững và xử lý late events | **Hoãn** (PM chốt 2026-10-11): ngoài phạm vi đợt hạn 2026-10-25, có thể không làm. Thiết kế replay trong môi trường riêng, không đụng prod, giữ sẵn ở A5 |
 | 5. Dự báo + AI agent 4 level (thêm 2026-10-11) | Dự báo G/COGS theo ngày (ARIMA, log + SARIMAX, LSTM) có backtest; trang Dự báo; tool `get_forecast`, tool biểu đồ, giải thích dự báo, RAG tri thức | Chưa triển khai; xem [kien_truc_pipeline_tong.md](kien_truc_pipeline_tong.md) §5, B1–B7 |
 
-`PostgreSQL` là dev local hiện tại; `DuckDB` là snapshot kiểm chứng gọn; `Databricks` là đích production (từ 2026-10-05; trước đó là Snowflake).
+`PostgreSQL` là dev local hiện tại; `DuckDB` là snapshot kiểm chứng gọn; `Databricks` là nền tảng production duy nhất (từ 2026-10-05; Snowflake bỏ hẳn ngày 2026-10-18).
 Project dbt có cấu hình đa target; có cấu hình **không đồng nghĩa** đã chạy thành công trên cloud.
 Python phục vụ ingest/phân tích/app; dbt phục vụ transform và test. BI là consumer tùy chọn, không bắt buộc
 Power BI thay cho hướng code đã chọn. Forecast/SHAP là extension riêng, không còn là bước mặc định của PS1–PS5.
@@ -167,7 +176,11 @@ Test (`retail_dbt/tests/assert_rpt_*.sql`):
 - Chọn framework và cách host khi triển khai app; chưa tạo app trong đợt thiết kế này.
 - Nếu thêm AI giải thích: câu trả lời phải dẫn về số liệu/query có kiểm chứng, phân biệt quan sát/giả thuyết.
 
-## GĐ 3: Snowflake production — checklist trước triển khai
+## GĐ 3: Snowflake production — checklist cũ (đã bỏ 2026-10-18)
+
+**Lịch sử.** PM bỏ hẳn Snowflake ngày 2026-10-18 (mục đầu file); mục này giữ lại, không làm theo. Các yêu cầu chung
+(bản dữ liệu có version, quality gate trước khi publish, quyền tối thiểu, lịch chạy, rollback) nay làm trên Databricks:
+[automation_batch.md](automation_batch.md).
 
 Đây là yêu cầu nghiệm thu tương lai, không là bằng chứng deploy hay hướng dẫn dịch vụ đã được xác minh trực tiếp.
 
