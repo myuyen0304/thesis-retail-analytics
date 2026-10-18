@@ -21,6 +21,9 @@ from scripts.parity.compare_dwh import compare, SKIP
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'apps' / 'retail_app'))
+# Thứ tự stage = thứ tự task của DAG: prepare_snapshot → forecast_train_score → ingest_and_dbt_build
+# → quality_and_reader_gate → publish_release (S2, 2026-10-18: dự báo tách khỏi build thành stage riêng)
+STAGES = ('prepare', 'forecast', 'build', 'validate', 'publish')
 from dwh.releases import checked, allowed_versions, CONTROL_RELATION
 
 
@@ -84,12 +87,32 @@ def verify_artifacts(folder, context, target):
 
 
 def forecast_stage(context):
-    """Train, backtest và chọn ứng viên dự báo từ snapshot (scripts/forecast/stage.py); dbt đọc kết quả thành rpt_forecast_*.
-    Retry cùng run dùng lại kết quả đã có. ValueError (không hội tụ, hỏng kiểm tháng 8/2023) dừng pipeline, không retry."""
+    """Stage `forecast` (task Airflow forecast_train_score, S2 2026-10-18): train, backtest và chọn ứng viên dự báo từ
+    snapshot (scripts/forecast/stage.py); dbt ở stage build đọc kết quả thành rpt_forecast_*. Retry cùng run dùng lại kết
+    quả đã có. ValueError (không hội tụ, hỏng kiểm tháng 8/2023) dừng pipeline, không retry."""
     from scripts.forecast import stage
     out = Path(context['directory']) / 'forecast'
     meta = stage.run(context['snapshot_path'], out, run_id=context['run_id'], snapshot_id=context['snapshot_id'])
     return out.as_posix(), {k: meta[k] for k in ('model_version', 'primary', 'selection_step', 'fits', 'seconds')}
+
+
+def check_forecast(context):
+    """Trước dbt: kết quả của stage forecast còn nguyên (cùng snapshot, cùng code dự báo, đúng hash file). Không train lại
+    ở build; hỏng thì báo chạy lại stage forecast."""
+    from scripts.forecast import stage
+    out = Path(context.get('forecast_path') or '')
+    meta_path = out / 'forecast_meta.json'
+    if not context.get('forecast_path') or not meta_path.exists():
+        raise ValueError('Chưa có kết quả stage forecast; chạy stage forecast trước build')
+    meta = json.loads(meta_path.read_text(encoding='utf-8'))
+    for f in stage.FILES:
+        if not (out / f).exists():
+            raise ValueError(f'Kết quả stage forecast thiếu {f}; chạy lại stage forecast')
+        with (out / f).open('rb') as handle:
+            if hashlib.file_digest(handle, 'sha256').hexdigest() != meta['sha256'][f]:
+                raise ValueError(f'Kết quả stage forecast đổi sau khi ghi ({f}); chạy lại stage forecast')
+    if meta.get('snapshot_id') != context['snapshot_id'] or meta.get('model_version') != stage.model_version():
+        raise ValueError('Kết quả stage forecast không khớp snapshot / code dự báo của run; chạy lại stage forecast')
 
 
 def validate_data(context, cloud=None):
@@ -256,6 +279,16 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
             if context['code_version'] != code_version():
                 raise ValueError('Code đổi giữa các stage; tạo run_id mới')
             manifest = snapshot.validate(context['snapshot_path'])
+            if stage == 'forecast':
+                # task riêng forecast_train_score (S2): không cần cloud hay registry; chỉ đọc snapshot, ghi runs/<id>/forecast
+                if context['stage'] in ('forecasted', 'built', 'validated'):
+                    return context
+                if context['stage'] != 'prepared':
+                    raise ValueError(f"Stage forecast cần run ở trạng thái prepared, đang là {context['stage']}")
+                context['forecast_path'], context['forecast'] = forecast_stage(context)
+                context['stage'] = 'forecasted'
+                atomic_json(context_path, context)
+                return context
             if target == 'databricks':
                 cloud = Databricks()
             registry = Registry(root, cloud.query if cloud else None)
@@ -264,7 +297,10 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
                     return context
                 if context['release_id'] in registry.read()['payload']['releases']:
                     raise ValueError('Không được dựng lại phiên bản ready')
-                context['forecast_path'], context['forecast'] = forecast_stage(context)
+                if context['stage'] != 'forecasted':
+                    raise ValueError('Chưa chạy stage forecast cho run này: chạy forecast trước build '
+                                     '(DAG có task forecast_train_score giữa prepare_snapshot và ingest_and_dbt_build)')
+                check_forecast(context)
                 if cloud:
                     cloud.ingest(context, manifest)
                     cloud.ingest_forecast(context)
@@ -306,7 +342,7 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('stage', choices=('prepare', 'build', 'validate', 'publish', 'run', 'rollback'))
+    ap.add_argument('stage', choices=(*STAGES, 'run', 'rollback'))
     ap.add_argument('--run-id', required=True)
     ap.add_argument('--target', choices=('duckdb', 'databricks'), default='duckdb')
     ap.add_argument('--root', default='warehouse/pipeline')
@@ -337,7 +373,7 @@ def main():
                     cloud.close()
         print('Đã khôi phục phiên bản ' + a.release_id)
         return
-    for stage in ('prepare', 'build', 'validate', 'publish') if a.stage == 'run' else (a.stage,):
+    for stage in STAGES if a.stage == 'run' else (a.stage,):
         result = execute(stage, run_id=a.run_id, target=a.target, root=a.root, data=a.data,
                          snapshot_id=a.snapshot_id, force=a.force)
         print(json.dumps({k: result[k] for k in ('run_id', 'release_id', 'snapshot_id', 'stage')}, ensure_ascii=False))
