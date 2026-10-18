@@ -2292,3 +2292,51 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   - Hạn mức 200 nghìn token mỗi phiên gần chạm trần. B7 phải hạ trần token ra mỗi lần gọi từ 1.536 xuống 1.408 thì 3 câu
     tốn nhất mới vừa.
   - Thêm tool mới sẽ cần tính lại hạn mức.
+
+### 2026-10-18: mỗi trang PS1–PS5 có khung "AI diễn giải" (B8, bước SPS; dev xong ở local, chưa commit)
+
+- **Bạn chốt:** mỗi PS phải có AI giải thích cho stakeholder đọc: hiểu số và kết luận, lời thường, không công thức, không
+  lẫn với trang chat. Claude làm thay Codex.
+- **Trên trang có gì:**
+  - Cột phải, cạnh biểu đồ chính, có hai khung:
+    - **"Tóm tắt từ số liệu"**: câu viết sẵn theo quy tắc, ghi rõ "không do AI viết";
+    - **"AI diễn giải"**: khung màu tím, có biểu tượng AI.
+  - Khung AI không có ô nhập. Bấm **Nhờ AI diễn giải** thì AI viết 3–4 câu về đúng lựa chọn đang xem (kỳ, năm, chiều,
+    nhịp). Ví dụ PS4 năm 2019: "R năm 2019 giảm 554,9 triệu đồng so với năm 2018. Số đơn (N) góp −572,4 triệu đồng…".
+  - Dưới khung luôn có link "Muốn hỏi câu khác? Mở trang Hỏi dữ liệu (AI)".
+- **Vì sao tin được số:**
+  - App tự đọc kho theo lựa chọn trên trang, bằng đúng các tool chỉ đọc mà chat đang dùng. AI chỉ viết lời.
+  - Mỗi con số trong lời AI đi qua cùng bước kiểm như chat. Câu nào tự viết số hay sai dấu thì không hiện.
+  - Mở **Số liệu AI đã dùng** để xem giá trị trong kho và nguồn.
+- **Lựa chọn AI chưa giải thích được** thì khung báo rõ, không gọi AI, và có link sang lựa chọn gần nhất AI giải thích
+  được:
+  - PS1 kỳ 2012–2022 (kỳ mặc định theo deck): link "Xem kỳ 2013–2022";
+  - PS4 theo giai đoạn: link sang năm cuối giai đoạn. Phân rã theo giai đoạn chưa mở trong chat vì cách cộng dồn
+    năm còn chờ PM/BA chốt.
+- **Sửa kèm, ba lỗi của đợt bố cục mới:**
+  - "Chênh lệch G − R" (PS1) và tháng cao / thấp nhất (PS3) trước đây app tự tính. Nay đọc từ cột mới trong kho, có test.
+  - PS2, PS3 lại ghi tên giai đoạn đúng như BA đặt ("C. Sập"), khớp PS4 và chat.
+  - PS5 luôn có câu "chưa phải nguyên nhân" ngay dưới biểu đồ.
+- **Kiểm:**
+  - Kho dựng lại đạt 218/218 trên DuckDB và PostgreSQL.
+  - Test app đầy đủ: 943 đạt, 110 bỏ qua (Databricks, không chạy ở máy), 0 lỗi. Sau hai sửa nhỏ cuối ở khung AI, chạy
+    lại các bộ test trang PS, chat và khung AI: 242/242 đạt. Trong đó có 19 test mới cho khung AI;
+    các test này dùng **mô hình giả**, nên chỉ chứng minh luồng app, chưa chứng minh chất lượng lời AI.
+  - Bản dữ liệu cũ (dựng trước khi có cột mới, như bản public hiện tại): chạy thử trên bản local cũ ở chế độ versioned,
+    năm trang PS, trang chat và khung AI đều không lỗi; PS1 ẩn thẻ G − R, PS3 không nêu tên tháng.
+- **Chưa làm:**
+  - Chưa gọi AI thật lần nào.
+  - Chưa chạy trên Databricks. Bản public chỉ có cột mới sau lần chạy pipeline ở S6; trước đó trang ẩn thẻ G − R và tên
+    tháng, không lỗi.
+- **Lưu ý:** mỗi lần bấm tốn hạn mức token của phiên, dùng chung với chat. Bấm nhiều thì chat có thể báo hết hạn mức sớm
+  hơn; bấm **Xóa hội thoại** ở trang chat để đặt lại.
+- **Đã sửa file chung:**
+  - Tài liệu: `docs/ke_hoach_ai_gd2.md` (§2 quyết định, §4 dòng B8, §8), `docs/giao_viec_theo_so_do.md` (bước SPS,
+    điều kiện S2, lịch), mục này.
+  - Code: `ai_explain/page_explain.py`, `ui/ai_panel.py` (mới), 5 trang PS, `views/ai_explain.py`, test.
+  - dbt: 3 model reporting, `_reporting.yml`, test mới `assert_rpt_gap_peak`.
+- **Cần bạn quyết:**
+  - cho chạy AI thật mỗi PS một lượt trên DuckDB local không. Chi phí API nhỏ, nhưng trước đây bạn duyệt trước;
+  - cho commit không. Phiên S2 đang chờ B8 commit rồi mới chạy pipeline;
+  - có viết lại bằng lời thường các chú thích dưới biểu đồ còn ghi công thức không (PS3 "R tháng ÷ …", PS5 "Tỷ trọng = …").
+    Tooltip và khung "Cách đọc & phương pháp" vẫn giữ công thức.
