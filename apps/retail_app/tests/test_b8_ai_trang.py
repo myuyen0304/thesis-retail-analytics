@@ -76,6 +76,11 @@ def test_prompt_chat_dung_nguyen_them_ghi_chu_trang():
     assert msgs[1]['role'] == 'system' and 'CHẾ ĐỘ GIẢI THÍCH TRANG' in msgs[1]['content']
     assert 'không công thức' in msgs[1]['content'] and 'Năm 2019 so với 2018' in msgs[1]['content']
     assert '"ref": "T1"' in msgs[2]['content']
+    # live Databricks 2026-10-18: PS1 gọi R/G là "tỷ lệ thực nhận", G − R là "hụt"; PS2 thêm nhận định không có số
+    assert 'Không gọi R là "thực nhận"' in msgs[1]['content']
+    assert 'hụt, mất, thất thoát' in msgs[1]['content']
+    assert 'không thêm nhận định không có số đi kèm' in msgs[1]['content']
+    assert pe.PAGE_PROMPT_VERSION == 'b8-2026-10-18b'
 
 
 def test_ps1_ky_va_nam():
