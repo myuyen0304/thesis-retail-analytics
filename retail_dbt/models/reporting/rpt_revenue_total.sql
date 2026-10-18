@@ -26,6 +26,7 @@ eom as (      -- PS3 "mức dồn về cuối tháng" cả kỳ; mức rải đ�
 )
 select
     t.*,
+    t.g - t.r                                                       as gap_g_minus_r,   -- thẻ "Chênh lệch G − R" của PS1
     {{ revenue_ratios() }},
     e.r_day26_plus,
     {{ ratio('e.r_day26_plus', 't.r') }}                            as eom_share,
