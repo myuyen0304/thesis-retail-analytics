@@ -66,16 +66,24 @@ def _so_day_du_trong_help(at):
 def test_ps1_mac_dinh_la_ky_cua_deck(monkeypatch, backend):
     at = _run(monkeypatch, backend, 'views/ps1_do_dung.py')
     assert at.selectbox[0].value == '2012-2022'
-    assert _metrics(at)[:3] == THE_DECK
+    t = queries.revenue_total(backend).set_index('period_code').loc['2012-2022']
+    assert at.title[0].value == 'PS1 · Từ tổng tiền hàng đến doanh thu'
+    assert _metrics(at) == [THE_DECK[0], THE_DECK[1],
+                            ('Chênh lệch G − R', ty(t['g'] - t['r'], 2)), THE_DECK[2]]
     _so_day_du_trong_help(at)
     # thác: 6 bước, cột đầu = G, cột cuối = R, đúng số của rpt_revenue_bridge
     thac = at.dataframe[0].value
     assert thac['Bước'].tolist() == ['G: tiền hàng mọi đơn', 'Đơn hủy', 'Đơn trả', 'Đơn chưa giao',
-                                     'Chiết khấu đơn đã giao', 'R: thực nhận']
+                                     'Chiết khấu đơn đã giao', 'R: doanh thu đơn đã giao']
     b = queries.revenue_bridge(backend)
     b = b[b['period_code'] == '2012-2022']
     assert thac['Số tiền'].tolist() == [ty(a, 2, signed=a < 0) for a in b['amount']]   # cùng đơn vị nhãn cột
     assert thac['Số tiền'].iloc[0] == '16,43 tỷ' and thac['Số tiền'].iloc[-1] == '12,52 tỷ'
+    parts = b[b['step_code'].isin(['cancelled', 'returned', 'undelivered', 'discount'])]
+    assert pytest.approx(t['g'] - t['r'], abs=0.01) == -parts['amount'].sum()
+    largest = parts.loc[parts['amount'].abs().idxmax()]
+    assert any(pct(largest['share_of_g']) in item.value for item in at.markdown)
+    assert any(item.value == '**Giải thích kết quả**' for item in at.markdown)
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
@@ -86,11 +94,16 @@ def test_ps1_chon_mot_nam_thi_doi_theo_rpt_revenue_yearly(monkeypatch, backend):
     y = queries.revenue_yearly(backend).set_index('year').loc[2019]
     assert _metrics(at) == [
         ('G: tiền hàng mọi đơn', ty(y['g'], 2)), ('R: doanh thu đơn đã giao', ty(y['r'], 2)),
-        ('Tỷ lệ R/G', pct(y['capture_rate'])), ('Tỷ lệ tiền hàng bị hủy', pct(y['cancelled_rate'])),
-        ('Tỷ lệ chiết khấu', pct(y['discount_rate'])),
+        ('Chênh lệch G − R', ty(y['g'] - y['r'], 2)), ('Tỷ lệ R/G', pct(y['capture_rate'])),
     ]
     assert _metrics(at)[0][1] == '1,14 tỷ'
     assert 'Số đầy đủ: 1.136.801.441,51.' in at.metric[0].help     # cùng số với bảng năm ở ảnh M0
+    b = queries.revenue_bridge(backend)
+    parts = b[(b['period_code'] == '2019') & b['step_code'].isin(
+        ['cancelled', 'returned', 'undelivered', 'discount'])]
+    largest = parts.loc[parts['amount'].abs().idxmax()]
+    assert any(trieu(abs(largest['amount']), 1) in item.value and pct(largest['share_of_g']) in item.value
+               for item in at.markdown)
     thac = at.dataframe[0].value
     # một năm: phần bị trừ chỉ vài chục triệu → thác ghi theo triệu (theo tỷ chỉ còn 1 chữ số: −0,04 tỷ)
     assert thac['Số tiền'].tolist() == ['1.136,8 triệu', '−106,2 triệu', '−61,3 triệu', '−60,9 triệu', '−44,1 triệu',
@@ -116,10 +129,12 @@ def test_ps1_chon_nam_thi_hien_tung_thang_cua_nam_do(monkeypatch, backend, year,
 
 def test_ps1_ky_gop_thi_bieu_do_thang_theo_dung_ky(monkeypatch):
     at = _run(monkeypatch, 'duckdb', 'views/ps1_do_dung.py')
-    assert any('2012–2022 (toàn bộ dữ liệu), 126 tháng' in c.value for c in at.caption)
+    assert any('2012–2022 (toàn bộ dữ liệu) · 126 tháng' in c.value for c in at.caption)
+    assert len(at.dataframe[1].value) == 126
     at.selectbox[0].set_value('2013-2022').run()
-    assert any('2013–2022 (kỳ phân tích), 120 tháng' in c.value for c in at.caption)
-    assert len(at.dataframe) == 2   # kỳ gộp: không có bảng tháng (120 dòng quá dài), chỉ thác + bảng năm
+    assert any('2013–2022 (kỳ phân tích) · 120 tháng' in c.value for c in at.caption)
+    assert len(at.dataframe[1].value) == 120
+    assert len(at.dataframe) == 3   # thác + bảng tháng trong tab + bảng năm đối chiếu
 
 
 def test_ps1_nhan_ky_lay_tu_bang_thac(monkeypatch):
@@ -134,7 +149,7 @@ def test_ps1_nhan_ky_lay_tu_bang_thac(monkeypatch):
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_bang_nam_ps1_canh_phai_va_du_cot(monkeypatch, backend):
     at = _run(monkeypatch, backend, 'views/ps1_do_dung.py')
-    nam = at.dataframe[1].value
+    nam = at.dataframe[2].value
     assert nam['Năm'].tolist() == list(range(2012, 2023))
     assert list(nam.columns) == ['Năm', 'G', 'R', 'R/G', 'Tỷ lệ hủy', 'Tỷ lệ hủy so năm trước',
                                  'Tỷ lệ chiết khấu', 'Tăng trưởng R']
