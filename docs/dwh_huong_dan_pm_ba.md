@@ -2293,7 +2293,7 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
     tốn nhất mới vừa.
   - Thêm tool mới sẽ cần tính lại hạn mức.
 
-### 2026-10-18: mỗi trang PS1–PS5 có khung "AI diễn giải" (B8, bước SPS; dev xong ở local, chưa commit)
+### 2026-10-18: mỗi trang PS1–PS5 có khung "AI diễn giải" (B8, bước SPS; dev xong ở local, đã commit `8d89b22`…`4ef1b24`)
 
 - **Bạn chốt:** mỗi PS phải có AI giải thích cho stakeholder đọc: hiểu số và kết luận, lời thường, không công thức, không
   lẫn với trang chat. Claude làm thay Codex.
@@ -2324,8 +2324,13 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
     các test này dùng **mô hình giả**, nên chỉ chứng minh luồng app, chưa chứng minh chất lượng lời AI.
   - Bản dữ liệu cũ (dựng trước khi có cột mới, như bản public hiện tại): chạy thử trên bản local cũ ở chế độ versioned,
     năm trang PS, trang chat và khung AI đều không lỗi; PS1 ẩn thẻ G − R, PS3 không nêu tên tháng.
+- **AI thật trên Databricks** (bạn duyệt, 1 lượt mỗi PS, bản đang phục vụ `b25b3e47…`):
+  - 5/5 trả lời được, không lỗi quyền. Số đúng và có câu "chưa phải nguyên nhân" ở cả 5.
+  - Hai lỗi lời cần sửa:
+    - PS1 gọi R/G là "tỷ lệ thực nhận" và G − R là "hụt doanh thu";
+    - PS2 thêm một nhận định không có số đi kèm.
 - **Chưa làm:**
-  - Chưa gọi AI thật lần nào.
+  - Chưa chạy 15 lượt AI thật ở local (chờ S2 dựng xong bản dữ liệu mới).
   - Chưa chạy trên Databricks. Bản public chỉ có cột mới sau lần chạy pipeline ở S6; trước đó trang ẩn thẻ G − R và tên
     tháng, không lỗi.
 - **Lưu ý:** mỗi lần bấm tốn hạn mức token của phiên, dùng chung với chat. Bấm nhiều thì chat có thể báo hết hạn mức sớm
@@ -2336,7 +2341,8 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   - Code: `ai_explain/page_explain.py`, `ui/ai_panel.py` (mới), 5 trang PS, `views/ai_explain.py`, test.
   - dbt: 3 model reporting, `_reporting.yml`, test mới `assert_rpt_gap_peak`.
 - **Cần bạn quyết:**
-  - cho chạy AI thật mỗi PS một lượt trên DuckDB local không. Chi phí API nhỏ, nhưng trước đây bạn duyệt trước;
-  - cho commit không. Phiên S2 đang chờ B8 commit rồi mới chạy pipeline;
+  - cho chạy AI thật mỗi PS khoảng 3 lượt trên DuckDB local không. Chi phí API nhỏ, nhưng trước đây bạn duyệt trước.
+    Phải xong trước khi push và Reboot bản public (S6(a)); chạy sau khi S2 publish bản local mới (bản đó có đủ cột B8);
+  - ~~cho commit không~~: bạn đã cho commit (qua phiên Head of AI), 22 commit `8d89b22`…`4ef1b24`;
   - có viết lại bằng lời thường các chú thích dưới biểu đồ còn ghi công thức không (PS3 "R tháng ÷ …", PS5 "Tỷ trọng = …").
     Tooltip và khung "Cách đọc & phương pháp" vẫn giữ công thức.
