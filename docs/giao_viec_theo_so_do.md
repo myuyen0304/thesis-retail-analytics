@@ -40,21 +40,22 @@ Agent cập nhật cột **Trạng thái** khi làm xong (`xong YYYY-MM-DD` ho�
 |---|---|---|---|---|---|---|
 | S0 | **Dọn trước (PM):** chốt chủ các thay đổi chưa commit trong `apps/` (`evidence.py`, `test_ai_forecast.py`, các trang và test PS1–PS4); commit đợt tài liệu bỏ Snowflake và ba file giao việc | — | — | — | — | một phần 2026-10-18: rv12f là của Codex, PM giữ, commit `946f507` + `c2e443f`; trang PS1–PS5 do Codex đang sửa (chặn S2); tài liệu Snowflake chưa commit (không chặn S1) |
 | S1 | B7: router chọn level, bộ held-out, báo cáo AI4 (Must) | LLM router | `retail-ai-explain` | gd2 §3.7 | phần rv12f của S0 (đã xong). Không đụng `views/`, `ui/common.py` khi Codex còn sửa trang PS | dev xong 2026-10-18, chưa commit: held-out `b7` local 64/72, Databricks 21/24 (đạt cả máy lẫn tay); [ai_eval_b7_nghiem_thu.md](ai_eval_b7_nghiem_thu.md) |
-| S2 | Tách dự báo thành task `forecast_train_score` riêng | dòng DAG | `retail-platform-validation` | §4.1 file này | S1; Codex đã sửa xong và commit các trang PS (pipeline băm cả `apps/`) | chưa làm |
+| SPS | B8: AI giải thích trên từng trang PS1–PS5 (PM chốt 2026-10-18, sổ quyết định `ke_hoach_ai_gd2.md` §2), kèm sửa lỗi đợt bố cục mới của Codex | Streamlit App | `retail-ai-explain` + `retail-bi-product` (+ `retail-analytics-engineering` nếu thêm cột dbt) | — | Codex đã commit bố cục mới (`c3e0d95`…`7edbdfe`) và dừng sửa trang PS; Claude làm thay. Không sửa prompt chat (`service.py`), `evidence.py`, `tools.py` khi S1 còn mở | dev xong 2026-10-18 ở local, chưa commit, chưa chạy LLM thật: test app 943 đạt; dbt 218/218 (thêm cột, kéo theo pipeline); `ke_hoach_ai_gd2.md` §8 |
+| S2 | Tách dự báo thành task `forecast_train_score` riêng | dòng DAG | `retail-platform-validation` | §4.1 file này | S1; SPS xong và commit (pipeline băm cả `apps/`) | chưa làm |
 | S3 | A4 giám sát: lịch sử lần chạy, thẻ bản đang phục vụ, độ tươi | Airflow giám sát | `retail-platform-validation` (+ `retail-bi-product`) | pipeline §4.1 | S2 | chưa làm |
 | S4 | A3 kiểm data contract: kiểu, nullable, khóa chính, quarantine | mũi tên data contract | `retail-platform-validation` + `retail-analytics-engineering` | pipeline §4.2 | S3 | chưa làm |
 | S5 | B4a: dữ liệu giải thích dự báo `rpt_forecast_explain` | L4 (phần dữ liệu) | `retail-forecasting` | gd2 §3.5, prompt thứ nhất | S4 | chưa làm |
 | S6 | **Lên cloud một lần** cho S2–S5: **trước hết** PM push và Reboot bản public (luật 6, §3); rồi build image, chạy DAG Databricks, thử hỏng gate, bật lịch | Databricks, quality gate | `retail-platform-validation` + `databricks:databricks-core` | pipeline §4.4, theo luật 6 | PM cho commit code S1–S5 | chưa làm |
-| S7 | B4b: tool `explain_forecast` | L4 Explainable tool | `retail-ai-explain` | gd2 §3.5, prompt thứ hai | S5 (S6 nếu muốn eval trên cloud) | chưa làm |
-| S8 | B5: RAG `search_knowledge` | RAG | `retail-ai-explain` | gd2 §3.9 | S7 hoặc S7 bị cắt | chưa làm |
+| S7 | B4b: tool `explain_forecast`. **Kèm, thêm khi tăng `PROMPT_VERSION` ở S7:** dòng router cho K02 (khoảng nhiều năm trùng ranh giới giai đoạn → `get_revenue_trend` phases) và K22 (tháng không kèm năm có ở cả 2023 và 2024 → hỏi lại năm), xem `ai_eval_b7_nghiem_thu.md` §7. **Hạn mức token:** sau B7, 3 câu tốn nhất chỉ còn dư khoảng 1.300 token dưới 200 nghìn (`test_tran_token_xau_nhat_con_du`); schema tool mới và dòng router phải tính lại hạn mức | L4 Explainable tool | `retail-ai-explain` | gd2 §3.5, prompt thứ hai | S5 (S6 nếu muốn eval trên cloud) | chưa làm |
+| S8 | B5: RAG `search_knowledge`. **Hạn mức token:** như S7, schema tool mới, dòng router và đoạn văn trả về đều cộng vào cận trên mỗi lần gọi; kiểm `test_tran_token_xau_nhat_con_du` trước khi giao | RAG | `retail-ai-explain` | gd2 §3.9 | S7 hoặc S7 bị cắt | chưa làm |
 | S9 | Đưa lên bản public: PM push, Reboot; một lượt chat trọn vẹn trên public hỏi L4 và RAG; bổ sung kết quả nhóm eval L4/RAG vào `docs/ai_eval_b7_nghiem_thu.md`; **chạy lại bộ held-out của S1 một lần** (cùng mã băm, không sửa câu) trên `PROMPT_VERSION` cuối, ghi thành dòng hồi quy dù kết quả thế nào | Streamlit App | `retail-ai-explain` | — | S7, S8 | chưa làm |
 | S10 | Vẽ lại sơ đồ theo hiện trạng và sửa tài liệu cho khớp | cả sơ đồ | `retail-platform-validation` | §4.2 file này | S9 | chưa làm |
 
-**Lịch gợi ý (hạn 2026-10-25):** S0 10-18 → 10-19 · S1 10-19 → 10-21 · S2, S3 10-21 → 10-22 · S4, S5 10-22 → 10-23 ·
+**Lịch gợi ý (hạn 2026-10-25):** S0 10-18 → 10-19 · SPS 10-18 → 10-20 · S1 10-19 → 10-21 · S2, S3 10-21 → 10-22 · S4, S5 10-22 → 10-23 ·
 S6 10-23 · S7, S8 10-23 → 10-24 · S9, S10 10-24 → 10-25.
 
 **Trễ thì cắt theo thứ tự:** S8 → S7 → S5 → S4 → phần bật lịch của S6. Bước bị cắt giữ viền [KẾ HOẠCH] trên sơ đồ ở S10.
-**Không cắt:** S1 (Must), S6 (bản cloud phải có code đã làm), S10 (sơ đồ và tài liệu phải nói đúng).
+**Không cắt:** S1 (Must), SPS (PM chốt mỗi PS có AI giải thích), S6 (bản cloud phải có code đã làm), S10 (sơ đồ và tài liệu phải nói đúng).
 
 **Quyết định PM** (mã D1–D6 ở `giao_viec_agent_pipeline.md` §2; đề xuất mặc định ghi ở đó). Thêm một mục:
 
