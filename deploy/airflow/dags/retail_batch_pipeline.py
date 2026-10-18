@@ -37,15 +37,20 @@ with DAG(
     tags=['retail', 'batch'],
 ) as dag:
     @task
-    def stage(name):
-        result = subprocess.run(command(name, get_current_context()), cwd='/opt/retail', timeout=3800)
+    def stage(name, timeout_s=3800):
+        # timeout_s luôn dưới execution_timeout của chính task (65 phút mặc định): subprocess tự dừng CLI trước khi
+        # Airflow cắt task, nên không còn tiến trình con giữ writer.lock khi retry
+        result = subprocess.run(command(name, get_current_context()), cwd='/opt/retail', timeout=timeout_s)
         if result.returncode == 2:
             raise AirflowFailException(f'{name}: sai hợp đồng/quality gate; xem console.log và failure.json')
         if result.returncode:
             raise RuntimeError(f'{name}: lỗi tạm thời, exit={result.returncode}')
 
     prepare = stage.override(task_id='prepare_snapshot')('prepare')
+    # Dự báo là task riêng (S2, 2026-10-18), đúng dòng DAG trên sơ đồ kiến trúc. Lần chậm nhất đã đo 956 giây (local
+    # b2b-01); 45 phút chừa chỗ cho máy bận. Lỗi hợp đồng dự báo exit 2 → AirflowFailException, không retry.
+    forecast = stage.override(task_id='forecast_train_score', execution_timeout=timedelta(minutes=45))('forecast', 2640)
     build = stage.override(task_id='ingest_and_dbt_build')('build')
     validate = stage.override(task_id='quality_and_reader_gate')('validate')
     publish = stage.override(task_id='publish_release')('publish')
-    prepare >> build >> validate >> publish
+    prepare >> forecast >> build >> validate >> publish
