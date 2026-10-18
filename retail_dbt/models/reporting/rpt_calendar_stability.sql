@@ -61,16 +61,21 @@ select 1 as rhythm_order, 'mua_vu' as rhythm_code,
        (select {{ ratio('max(r)', 'min(r)') }} from pooled)                          as metric_value,
        (select min(v) from loo_season) as loo_min, (select max(v) from loo_season)    as loo_max,
        (select k from season_years)                                                  as n_years_with_pattern,
-       (select count(*) from yrs)                                                    as n_years
+       (select count(*) from yrs)                                                    as n_years,
+       -- tháng có R gộp cả kỳ cao nhất / thấp nhất (tử / mẫu của metric_value); trang PS3 ghi tên tháng từ hai cột này
+       (select min(month) from pooled where r = (select max(r) from pooled))         as peak_month,
+       (select min(month) from pooled where r = (select min(r) from pooled))         as trough_month
 union all
 select 2, 'cuoi_thang',
        (select {{ ratio('sum(r_day26_plus)', 'sum(r)') }} - {{ ratio('sum(r * eom_expected_share)', 'sum(r)') }} from mo),
        (select min(v) from loo_eom), (select max(v) from loo_eom),
        (select count(*) from {{ ref('rpt_revenue_yearly') }} where is_analysis_period and eom_excess > 0),
-       (select count(*) from yrs)
+       (select count(*) from yrs),
+       null, null
 union all
 select 3, 'thang_8',
        ap.august_odd_vs_even, ap.loo_min_odd_vs_even, ap.loo_max_odd_vs_even,
        (select k from aug_years),
-       (select count(*) from yrs)
+       (select count(*) from yrs),
+       null, null
 from {{ ref('rpt_august_parity') }} ap
