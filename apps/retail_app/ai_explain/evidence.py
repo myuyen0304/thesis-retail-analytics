@@ -575,18 +575,40 @@ def _label_parts(fld: str, row: dict | None) -> tuple:
     return FIELD_LABEL.get(fld), group, _year_of(fld, row), extra
 
 
-def _label(fld: str, row: dict | None, clause: str) -> str:
+def _label(fld: str, row: dict | None, clause: str, actual: bool = False) -> str:
     """Nhãn do app dựng từ chính ô dữ liệu: (chỉ tiêu, nhóm, năm). Bỏ nhãn chỉ khi vế câu đã gọi đúng chỉ tiêu,
-    nhóm và năm của một số tiền R/G/ΔR."""
+    nhóm và năm của một số tiền R/G/ΔR. actual (B7): câu trả lời có cả số dự báo, nên số thực tế luôn mang nhãn
+    "thực tế" do app gắn, như số dự báo luôn mang nhãn "dự báo"."""
     name, group, year, extra = _label_parts(fld, row)
     if name is None:
         return ''
+    if actual:
+        return ' (' + ', '.join([f'{name} thực tế'] + [str(x) for x in (group, year) if x is not None] + extra) + ')'
     parts = [name] + [str(x) for x in (group, year) if x is not None] + extra
     said = (fld in ('r', 'g', 'r_prior_year', 'delta_r', 'r_start', 'r_end')
             and _said_metric(clause) == METRIC_FAMILY.get(fld)
             and (group is None or str(group).lower() in clause.lower())
             and (year is None or str(year) in clause))
     return '' if said else ' (' + ', '.join(parts) + ')'
+
+
+_MIX_CMP = re.compile(r'cao hơn|thấp hơn|lớn hơn|nhỏ hơn|nhiều hơn|ít hơn|vượt|chênh|gấp|so với|tăng|giảm')
+_NEGATED = re.compile(r'(?:không|chưa)\s+(?:\S+\s+){0,3}$')     # "không cộng, trừ hay so với", "không tính chênh lệch"
+_PAST_YEAR = re.compile(r'(?<!\d)(?:201[2-9]|202[0-2])(?!\d)')    # năm có số thực tế (2012-07-04 → 2022-12-31)
+
+
+def _number_kind(path: str, fld: str, results: dict) -> str | None:
+    """'du_bao': số dự báo của get_forecast; 'thuc_te': số của tool số liệu lịch sử. Số backtest không thuộc loại nào."""
+    res = results.get(path.split('.')[0])
+    tool = res.evidence.tool if res is not None and res.evidence is not None else ''
+    if tool == 'get_forecast':
+        return 'du_bao' if fld in FORECAST_FIELDS else None
+    return 'thuc_te' if tool and not tool.startswith('get_forecast') and fld in FIELD_LABEL else None
+
+
+def _mix_compare(low: str) -> bool:
+    """Câu có chữ so sánh / đổi không bị phủ định ngay trước ("không so với" không phải một phép so)."""
+    return any(not _NEGATED.search(low[:m.start()]) for m in _MIX_CMP.finditer(low))
 
 
 def _group_names(results: dict) -> set[str]:
@@ -1171,9 +1193,11 @@ def forecast_question_errors(question: str, values: dict, results: dict, answer:
     # Câu hỏi vừa có kỳ thiếu dự báo vừa xin kỳ tham khảo: status ok có thể khiến
     # lời model gán lại số tham khảo cho kỳ thiếu số ở câu sau (RV12). Với trường
     # hợp này dùng no_data để app dựng số tham khảo theo kỳ lấy từ bằng chứng.
+    # Kỳ trước vùng dự báo mà nằm trong dữ liệu thực tế không thiếu số: quy tắc 16 trả bằng số thực tế (B7: câu trộn
+    # "G thực tế tháng 12/2021 và dự báo tháng 12/2023" trả hai phần, không ép no_data).
     spans = [sp for s in specs if (sp := _spec_span(s)) is not None]
     if (_FORECAST_Q.search(q)
-            and any(sp[1] < _FC_START or sp[0] > _FC_END for sp in spans)
+            and any(sp[1] < _DATA_START or sp[0] > _FC_END for sp in spans)
             and any(_overlaps_horizon(s) for s in specs if s[0] != 'invalid')):
         errs.append('câu hỏi vừa có kỳ ngoài vùng vừa có kỳ tham khảo trong vùng dự báo: status "ok" không hợp lệ; '
                     'trả "no_data" để app ghi số tham khảo đúng kỳ')
@@ -1385,6 +1409,21 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             errors.append(f'câu "{sent.strip()[:80]}" nói theo điểm ngày nhưng dẫn derived.lowest_mape_g_thang; dùng '
                           'derived.lowest_score')
 
+    # B7 router, câu trộn thực tế và dự báo (quy tắc 16): mỗi phần một câu riêng; không so hai loại số bằng lời ("dự báo
+    # thấp hơn thực tế", "chênh so với năm 2021"), vì không tool nào tính chênh lệch dự báo − thực tế
+    kind = {cid: k for cid, (c, _v, fld, _row) in by_id.items() if (k := _number_kind(c['path'], fld, results))}
+    mixed = {'du_bao', 'thuc_te'} <= set(kind.values())
+    for sent in _SENTENCE.split(answer):
+        ks = {kind[cid] for cid in _PLACEHOLDER.findall(sent) if cid in kind}
+        low = _PLACEHOLDER.sub(' ', sent).lower()
+        if ks == {'du_bao', 'thuc_te'}:
+            errors.append(f'câu "{sent.strip()[:80]}" đặt số thực tế và số dự báo trong cùng một câu: tách thành hai câu '
+                          'riêng, mỗi câu một loại số; không cộng, trừ hay so hai loại số')
+        elif _mix_compare(low) and ((mixed and 'dự báo' in low and 'thực tế' in low)
+                                    or ('du_bao' in ks and 'backtest' not in low and _PAST_YEAR.search(low))):
+            errors.append(f'câu "{sent.strip()[:80]}" so số dự báo với số thực tế: không tool nào tính chênh lệch này; '
+                          'nêu hai số thành hai câu riêng, không so')
+
     # câu so sánh phải dẫn ít nhất một số thay đổi do tool tính (delta_r, yoy_rate, *_change_rate...)
     # (câu không có chỗ đặt nào, vd. nhắc lại câu hỏi "tháng 8 năm lẻ có thấp hơn..." khi từ chối, thì không xét)
     for sent in _SENTENCE.split(answer):
@@ -1454,7 +1493,7 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             # chỉ bỏ dấu khi chữ tăng/giảm đúng dấu đi liền trước số; còn lại in dấu thật (−6,4%)
             absolute = near != 0
         s = _fmt(v, fld, absolute)
-        lbl = _label(fld, row, seg) if _is_num(v) else ''
+        lbl = _label(fld, row, seg, actual=mixed and kind.get(cid) == 'thuc_te') if _is_num(v) else ''
         values[cid] = (c['path'], v, s + lbl)
         rendered.append(f'**{s}**{lbl}')
         # model hay viết lại đơn vị sau chỗ đặt ("{c1} VND"): app đã ghi đơn vị, bỏ bản lặp
