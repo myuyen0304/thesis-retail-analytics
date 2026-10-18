@@ -26,7 +26,8 @@ from dwh.connection import describe
 from dwh import releases
 from dwh.guarded import DEFAULT_MAX_ROWS, GuardError, QueryTimeout, RowLimitExceeded, Statement, open_session
 
-TOOL_VERSION = 'v1.7'   # v1.7: chuỗi từng năm (to_year), ghi chú app (notes) cho đóng góp nhóm / sai số tháng
+TOOL_VERSION = 'v1.8'   # v1.8 (B7 S1b): ghi chú thước chọn model cho get_forecast_backtest
+                        # v1.7: chuỗi từng năm (to_year), ghi chú app (notes) cho đóng góp nhóm / sai số tháng
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
     'reporting.rpt_driver_period', 'reporting.rpt_revenue_segment_yearly', 'reporting.driver_rule',
@@ -597,6 +598,10 @@ SELECTION_REASON = {
 }
 BACKTEST_NOTE = ('Sai số backtest 2020–2022 (3 fold, mỗi fold dự báo 548 ngày), không phải độ chính xác trên 2023–2024 '
                  '(chưa có số thực). Điểm của ứng viên thắng là lạc quan vì được chọn từ nhiều ứng viên trên cùng 3 fold.')
+# B7 S1b (live b7 K08: 2/3 lượt vẽ điểm ngày mà không nói đó là thước chọn): ghi chú app in dưới mọi câu trả lời dẫn
+# get_forecast_backtest, như ghi chú MAPE tháng của get_forecast; không gửi cho mô hình
+SELECTION_NOTE = ('Điểm ngày kết hợp ((MAE G + MAE COGS) / 2, trung bình 3 fold) là thước chọn model chính; MAPE G tháng '
+                  'chỉ để hiển thị và có thể xếp hạng khác. ' + BACKTEST_NOTE)
 
 
 class _NoForecast(Exception):
@@ -973,7 +978,7 @@ def _forecast_backtest(turn: '_Turn', a: dict) -> ToolResult:
                       'ngày kết hợp (MAE G + MAE COGS) / 2, trung bình 3 fold; MAPE G tháng chỉ để hiển thị, có thể xếp '
                       f'hạng khác. {BACKTEST_NOTE} Model chính: {derived["primary"]["label"]}. '
                       f'{derived["primary"]["selection_reason"]}',
-                      rows=rows, derived=derived, evidence=turn.evidence(
+                      rows=rows, derived=derived, notes=[SELECTION_NOTE], evidence=turn.evidence(
                           filters={'backtest': '3 fold, origin 2020-06-30 / 2020-12-31 / 2021-06-30'},
                           grain='ứng viên (trung bình 3 fold)', read_at=read_at,
                           metrics=cat.metric_defs('forecast_score', 'mape_g_thang'),
