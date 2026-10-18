@@ -152,6 +152,147 @@ def test_worker_command_uses_pinned_run_and_validated_params():
     assert any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'DAG' for n in ast.walk(tree))
 
 
+# --- S2 (2026-10-18): stage dự báo tách khỏi build thành stage / task riêng forecast_train_score ---
+
+DAG_TASKS = ['prepare_snapshot', 'forecast_train_score', 'ingest_and_dbt_build', 'quality_and_reader_gate', 'publish_release']
+
+
+def test_dag_du_nam_task_dung_thu_tu_va_timeout_du_bao():
+    # Kiểm AST như test trên (không cài Airflow); import DAG thật để dành cho S6
+    import ast
+    src = (ROOT / 'deploy/airflow/dags/retail_batch_pipeline.py').read_text(encoding='utf-8')
+    tree = ast.parse(src)
+    tasks = {}                                                  # biến → (task_id, stage CLI, các tham số override)
+    for n in ast.walk(tree):
+        if (isinstance(n, ast.Assign) and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Call)
+                and isinstance(n.value.func.func, ast.Attribute) and n.value.func.func.attr == 'override'):
+            kw = {k.arg: k.value for k in n.value.func.keywords}
+            tasks[n.targets[0].id] = (kw['task_id'].value, n.value.args[0].value, kw)
+    chain = next(n.value for n in ast.walk(tree) if isinstance(n, ast.Expr) and isinstance(n.value, ast.BinOp))
+    order = []
+    while isinstance(chain, ast.BinOp):                         # a >> b >> c là ((a >> b) >> c)
+        assert isinstance(chain.op, ast.RShift)
+        order.insert(0, chain.right.id)
+        chain = chain.left
+    order.insert(0, chain.id)
+    assert [tasks[v][0] for v in order] == DAG_TASKS
+    assert [tasks[v][1] for v in order] == list(cli.STAGES)     # mỗi task gọi đúng stage CLI cùng thứ tự
+    def minutes(call):                                          # timedelta(minutes=N) → giây
+        return next(k.value.value for k in call.keywords if k.arg == 'minutes') * 60
+    timeout = next(kw['execution_timeout'] for tid, _, kw in tasks.values() if tid == 'forecast_train_score')
+    assert minutes(timeout) >= 956 * 2                          # lần chậm nhất đã đo 956 giây, chừa gấp đôi trở lên
+    # subprocess phải dừng CLI trước khi Airflow cắt task (không để tiến trình con giữ writer.lock khi retry)
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'stage')
+    default_sub = fn.args.defaults[0].value
+    dag_call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, 'id', '') == 'DAG')
+    default_args = next(k.value for k in dag_call.keywords if k.arg == 'default_args')
+    default_exec = minutes(default_args.values[[k.value for k in default_args.keys].index('execution_timeout')])
+    call_args = {n.targets[0].id: n.value.args for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                 and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Call)}
+    for var, (tid, _, kw) in tasks.items():
+        sub = call_args[var][1].value if len(call_args[var]) > 1 else default_sub
+        exec_s = minutes(kw['execution_timeout']) if 'execution_timeout' in kw else default_exec
+        assert sub < exec_s, (tid, sub, exec_s)
+    assert 'returncode == 2' in src and 'AirflowFailException' in src   # lỗi hợp đồng không retry
+
+
+def test_run_chay_du_nam_stage_dung_thu_tu(monkeypatch, tmp_path, capsys):
+    seen = []
+    monkeypatch.setattr(cli, 'execute', lambda stage, **k: seen.append(stage) or
+                        {'run_id': k['run_id'], 'release_id': 'r', 'snapshot_id': 's', 'stage': stage})
+    monkeypatch.setattr(sys, 'argv', ['cli.py', 'run', '--run-id', 'demo', '--root', str(tmp_path)])
+    cli.main()
+    assert seen == ['prepare', 'forecast', 'build', 'validate', 'publish']
+
+
+def _run_ready(tmp_path, monkeypatch, stage='prepared', code='v1'):
+    """Run đã prepare (context.json) trong registry rỗng; snapshot và code_version giả để không cần data thật."""
+    store = Registry(tmp_path)
+    store.initialize()
+    folder = tmp_path / 'runs/demo'
+    context = {**record('b'), 'code_version': code, 'stage': stage, 'target': 'duckdb', 'directory': folder.as_posix(),
+               'snapshot_path': '/snapshot', 'duckdb_path': (folder / 'dbt.duckdb').as_posix(), 'expected_active': None}
+    atomic_json(folder / 'context.json', context)
+    monkeypatch.setattr(cli, 'code_version', lambda: 'v1')
+    monkeypatch.setattr(snapshot, 'validate', lambda path: {})
+    return folder
+
+
+def _fake_forecast(folder, snapshot_id='s1'):
+    """Kết quả stage dự báo đã ghi xong (như lần chạy trước bị ngắt sau khi ghi): hai parquet + meta có hash thật."""
+    import hashlib
+    import pandas as pd
+    from scripts.forecast import stage
+    out = folder / 'forecast'
+    out.mkdir(parents=True, exist_ok=True)
+    sha = {}
+    for f in stage.FILES:
+        pd.DataFrame({'x': [1, 2]}).to_parquet(out / f, index=False)
+        sha[f] = hashlib.sha256((out / f).read_bytes()).hexdigest()
+    meta = {'snapshot_id': snapshot_id, 'model_version': stage.model_version(), 'run_id': 'demo', 'primary': ['m', 'c'],
+            'selection_step': 'buoc_2', 'fits': 0, 'seconds': 0, 'sha256': sha}
+    (out / 'forecast_meta.json').write_text(json.dumps(meta), encoding='utf-8')
+    return out
+
+
+def test_forecast_retry_dung_lai_ket_qua_roi_build_khong_train_lai(tmp_path, monkeypatch):
+    folder = _run_ready(tmp_path, monkeypatch)
+    out = _fake_forecast(folder)
+    # retry task forecast_train_score: stage.run thấy kết quả khớp snapshot, model_version, hash nên không train lại
+    context = cli.execute('forecast', run_id='demo', root=tmp_path)
+    assert context['stage'] == 'forecasted' and Path(context['forecast_path']) == out
+    assert context['forecast']['seconds'] == 0                          # lấy từ meta cũ, không phải lần train mới
+    monkeypatch.setattr(cli, 'forecast_stage', lambda c: pytest.fail('đã xong forecast thì không gọi lại'))
+    assert cli.execute('forecast', run_id='demo', root=tmp_path)['stage'] == 'forecasted'
+    built = []
+    monkeypatch.setattr(cli, 'dbt_build', lambda c, target, cloud=None: built.append((target, c['forecast_path'])))
+    context = cli.execute('build', run_id='demo', root=tmp_path)
+    assert context['stage'] == 'built' and built == [('duckdb', out.as_posix())]
+
+
+def test_build_doi_stage_forecast_xong(tmp_path, monkeypatch):
+    _run_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(cli, 'dbt_build', lambda *a, **k: pytest.fail('chưa có dự báo thì không chạy dbt'))
+    with pytest.raises(ValueError, match='forecast trước build'):
+        cli.execute('build', run_id='demo', root=tmp_path)
+
+
+def test_build_chan_ket_qua_du_bao_bi_sua(tmp_path, monkeypatch):
+    folder = _run_ready(tmp_path, monkeypatch)
+    out = _fake_forecast(folder)
+    cli.execute('forecast', run_id='demo', root=tmp_path)
+    import pandas as pd
+    pd.DataFrame({'x': [9]}).to_parquet(out / 'forecast_daily.parquet', index=False)
+    monkeypatch.setattr(cli, 'dbt_build', lambda *a, **k: pytest.fail('dự báo hỏng thì không chạy dbt'))
+    with pytest.raises(ValueError, match='chạy lại stage forecast'):
+        cli.execute('build', run_id='demo', root=tmp_path)
+
+
+def test_run_bo_qua_thi_forecast_cung_bo_qua(tmp_path, monkeypatch):
+    _run_ready(tmp_path, monkeypatch, stage='skipped')
+    monkeypatch.setattr(cli, 'forecast_stage', lambda c: pytest.fail('run bỏ qua thì không train'))
+    assert cli.execute('forecast', run_id='demo', root=tmp_path)['stage'] == 'skipped'
+
+
+def test_loi_hop_dong_du_bao_dung_pipeline_khong_doi_stage(tmp_path, monkeypatch):
+    # ValueError → __main__ trả exit 2 → DAG nâng AirflowFailException, không retry (test DAG ở trên)
+    folder = _run_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(cli, 'forecast_stage', lambda c: (_ for _ in ()).throw(ValueError('tháng 8/2023 không đạt')))
+    with pytest.raises(ValueError, match='tháng 8/2023'):
+        cli.execute('forecast', run_id='demo', root=tmp_path)
+    assert json.loads((folder / 'failure.json').read_text())['stage'] == 'forecast'
+    assert json.loads((folder / 'context.json').read_text(encoding='utf-8'))['stage'] == 'prepared'
+
+
+def test_run_dang_do_tu_code_cu_bao_tao_run_id_moi(tmp_path, monkeypatch):
+    # run prepare bằng code trước S2 (code_version khác, chưa có stage forecast): báo rõ phải tạo run_id mới
+    _run_ready(tmp_path, monkeypatch, code='truoc_s2')
+    with pytest.raises(ValueError, match='tạo run_id mới'):
+        cli.execute('forecast', run_id='demo', root=tmp_path)
+    with pytest.raises(ValueError, match='tạo run_id mới'):
+        cli.execute('build', run_id='demo', root=tmp_path)
+
+
 def test_reader_grant_registry_before_release_tables():
     # Guard chế độ cũ của chat chỉ chấp nhận bảng của bản mới khi đã đọc được registry.
     schema = 'r_' + 'a' * 24 + '_reporting'
