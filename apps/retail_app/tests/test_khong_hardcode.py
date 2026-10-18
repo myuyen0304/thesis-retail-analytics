@@ -83,10 +83,10 @@ def test_sua_giai_doan_thi_ps2_doi_theo(monkeypatch, tmp_path):
                                  "update reporting.rpt_revenue_turning_point set magnitude = -0.1234, turn_note = 'ghi thử' "
                                  "where turning_year = 2016")
     that = _ps2(monkeypatch, DUCKDB_PATH)
-    assert (that.metric[0].label, that.metric[0].value) == ('A. Tăng trưởng', '+8,75%')
+    assert (that.metric[0].label, that.metric[0].value) == ('A. Tăng trưởng (2013→2016)', '+8,75%/năm')
     sua = _ps2(monkeypatch, ban_sao)
-    assert (sua.metric[0].label, sua.metric[0].value) == ('A. Thử', '+42,42%')
-    td = sua.dataframe[2].value
+    assert (sua.metric[0].label, sua.metric[0].value) == ('A. Thử (2013→2016)', '+42,42%/năm')
+    td = sua.dataframe[3].value
     assert td['Độ lớn'].tolist()[0] == '−12,3%' and td['Ghi chú của BA'].tolist()[0] == 'ghi thử'
 
 
@@ -106,7 +106,11 @@ def test_sua_so_thi_ps3_doi_theo(monkeypatch, tmp_path):
         at = AppTest.from_file(str(APP), default_timeout=30).run()
         at.switch_page('views/ps3_nhip_lich.py').run()
         assert not at.exception and not at.error
-        return [m.value for m in at.metric], ' '.join(c.value for c in at.caption), at.dataframe[2].value   # bảng theo năm
+        yearly = at.dataframe[3].value
+        at.segmented_control[0].set_value('Tháng 8: năm lẻ / chẵn').run()
+        assert not at.exception and not at.error
+        explanation = ' '.join(m.value for m in at.markdown)
+        return [m.value for m in at.metric], explanation, yearly
 
     that, cap_that, tb_that = the(DUCKDB_PATH)
     assert tb_that['Giai đoạn'].tolist()[1] == 'A'
@@ -123,8 +127,8 @@ def test_sua_thang_doi_huong_thi_ps2_doi_theo(monkeypatch, tmp_path):
     ban_sao = _ban_sao(tmp_path, "update reporting.rpt_revenue_direction_change "
                                  "set change_month_date = date '2019-03-01', months_held = 42 "
                                  "where window_months = 6 and direction_after = 'xuong'")
-    assert _ps2(monkeypatch, DUCKDB_PATH).dataframe[0].value['Tháng phát hiện'].tolist()[2] == '02/2017'
-    tc = _ps2(monkeypatch, ban_sao).dataframe[0].value
+    assert _ps2(monkeypatch, DUCKDB_PATH).dataframe[1].value['Tháng phát hiện'].tolist()[2] == '02/2017'
+    tc = _ps2(monkeypatch, ban_sao).dataframe[1].value
     assert (tc['Tháng phát hiện'].tolist()[2], tc['Hướng mới giữ'].tolist()[2]) == ('03/2019', '42 tháng')
 
 def test_sua_phan_gop_va_nhom_thi_ps4_ps5_doi_theo(monkeypatch, tmp_path):
