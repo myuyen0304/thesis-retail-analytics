@@ -21,7 +21,8 @@ from ai_explain.provider import ProviderError
 from dwh.releases import pinned_read
 from ui.fmt import num, trieu, ty
 
-PAGE_PROMPT_VERSION = 'b8-2026-10-18'
+PAGE_PROMPT_VERSION = 'b8-2026-10-18b'   # b: không gọi R là thực nhận / G − R là hụt; câu ý nghĩa không thêm nhận định
+                                         # không có số (live Databricks 2026-10-18: PS1, PS2). Trước: b8-2026-10-18
 MAX_LLM_CALLS = 2          # một lần viết + một lần sửa khi chưa qua bước kiểm
 PAGES = {'ps1': 'PS1 (từ tiền hàng G đến doanh thu R)', 'ps2': 'PS2 (xu hướng doanh thu)',
          'ps3': 'PS3 (nhịp lịch doanh thu)', 'ps4': 'PS4 (số đơn, số món và giá)',
@@ -103,6 +104,10 @@ cho lựa chọn đang xem: {req.label}. Người đọc là quản lý, không 
 là {', '.join(refs)} trong tin nhắn của người dùng. Không gọi tool, chỉ dùng các kết quả đó; status là "ok".
 Viết 3 hoặc 4 câu ngắn, mỗi câu một ý, theo thứ tự: (1) kết luận chính; (2) con số then chốt; (3) điều đó có nghĩa gì
 với doanh thu; (4) một lưu ý: đây là quan sát / phân rã số học, chưa phải nguyên nhân (hoặc giới hạn ghi trong kết quả).
+Câu (3) chỉ nói điều các con số đã nêu cho thấy; không thêm nhận định không có số đi kèm (vd. "phần lớn của cả kỳ",
+"một cú rơi duy nhất") và không so với kỳ, nhóm hay giai đoạn mà câu trả lời không dẫn số.
+Không gọi R là "thực nhận" hay "tiền thực nhận"; không gọi phần chênh G − R là hụt, mất, thất thoát hay lãng phí: đó là
+tiền hàng của đơn hủy, đơn trả, đơn chưa giao và chiết khấu.
 Lời thường, như nói với người không làm dữ liệu: không công thức, không ký hiệu toán (×, ÷, =, Δ), không tên cột, tên
 tool hay mã kết quả, không tiếng Anh. Gọi chỉ tiêu bằng tên đầy đủ kèm ký hiệu một lần: doanh thu đơn đã giao (R), tiền
 hàng mọi đơn (G), số đơn (N), số món mỗi đơn (U), giá mỗi món (P). Không hỏi lại, không chào, không gợi ý câu hỏi khác.
