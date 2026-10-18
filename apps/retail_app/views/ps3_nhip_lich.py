@@ -2,6 +2,8 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from ai_explain import page_explain
+from ui.ai_panel import ai_panel
 from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, need_keys, pick
 from ui.fmt import num, pct, pp
 
@@ -121,12 +123,10 @@ odd_avg = alt.Chart(ap).mark_rule(color='#d1495b', strokeDash=[4, 3]).encode(y='
 even_avg = alt.Chart(ap).mark_rule(color='#1f5f8b', strokeDash=[4, 3]).encode(y='august_index_even:Q')
 one = alt.Chart(ap).mark_rule(color='#888').encode(y=alt.datum(1))
 
-# Tháng cao/thấp gộp đúng cách của rpt_calendar_stability: tổng R từng tháng qua các năm.
-month_total = m.groupby('month')['r'].sum(min_count=1).dropna()
-if month_total.empty:
-    st.warning('Thiếu R theo tháng để xác định tháng cao và thấp trong kỳ phân tích.')
-    st.stop()
-peak_month, trough_month = int(month_total.idxmax()), int(month_total.idxmin())
+# Tháng cao / thấp cả kỳ đọc từ rpt_calendar_stability (cột thêm 2026-10-18, test assert_rpt_gap_peak), không gộp lại
+# trong app. Bản dữ liệu dựng trước đó chưa có cột này thì câu tóm tắt không nêu tên tháng; bảng nhiệt vẫn cho thấy.
+peak_month, trough_month = (int(v) if v is not None and pd.notna(v) else None
+                            for v in (season.get('peak_month'), season.get('trough_month')))
 distinct_august = pd.notna(aug['max_index_odd']) and pd.notna(aug['min_index_even'])
 august_separated = distinct_august and aug['max_index_odd'] < aug['min_index_even']
 
@@ -140,10 +140,11 @@ if rhythm == 'Tháng cao / thấp':
                   'Xanh là trên mốc 1, đỏ là dưới mốc 1. Mỗi ô là một tháng của một năm, không phải VND. '
                   'Số trong ô làm tròn một chữ số; tooltip giữ hai chữ số và R đầy đủ.')
     explanation = [
-        f'**Mẫu quan sát:** gộp {int(season["n_years"])} năm, T{peak_month} có R cao nhất; '
-        f'T{trough_month} thấp nhất.',
-        f'**Căn cứ:** tháng cao nhất / thấp nhất = {num(season["metric_value"], 2)} lần; '
-        f'bỏ lần lượt từng năm còn {num(season["loo_min"], 2)}–{num(season["loo_max"], 2)} lần.',
+        (f'**Mẫu quan sát:** gộp {int(season["n_years"])} năm, T{peak_month} có R cao nhất; T{trough_month} thấp nhất.'
+         if peak_month and trough_month else
+         f'**Mẫu quan sát:** gộp {int(season["n_years"])} năm; tháng cao và thấp xem trên bảng nhiệt.'),
+        f'**Căn cứ:** tháng cao nhất gấp {num(season["metric_value"], 2)} lần tháng thấp nhất; '
+        f'bỏ bớt bất kỳ một năm nào vẫn gấp {num(season["loo_min"], 2)}–{num(season["loo_max"], 2)} lần.',
         f'**Độ lặp lại:** {int(season["n_years_with_pattern"])}/{int(season["n_years"])} năm '
         'đạt điều kiện kiểm tháng cao T4–T6 và thấp T12–T1.',
         '**Giới hạn:** chuẩn hóa theo bình quân năm chưa loại hết xu hướng trong năm; mẫu này chưa giải thích nguyên nhân.',
@@ -194,10 +195,12 @@ with left:
                    'Bảng nhiệt này và bảng nhiệt theo giai đoạn **dùng chung một thang màu**.')
 with side:
     with st.container(border=True):
-        st.markdown('**Giải thích kết quả**')
-        st.caption('Tóm tắt theo quy tắc từ bảng reporting')
+        st.markdown('**Tóm tắt từ số liệu**')
+        st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
         for item in explanation:
             st.markdown(f'- {item}')
+    ai_panel(page_explain.request_ps3({'Tháng cao / thấp': 'mua_vu', 'Dồn cuối tháng': 'cuoi_thang',
+                                       'Tháng 8: năm lẻ / chẵn': 'thang_8'}[rhythm]))
 
 tab_repeat, tab_phase, tab_year = st.tabs(['Độ lặp lại', 'So sánh giai đoạn', 'Bảng theo năm'])
 right = st.column_config.TextColumn(alignment='right')
@@ -233,9 +236,7 @@ with tab_repeat:
 # Giữ nguyên quy ước gán năm và cách chuẩn hóa của rpt_calendar_phase_month.
 need_keys(cpm['phase_code'], cp.set_index('phase_code'), 'calendar_phase',
           'của giai đoạn có trong bảng tháng')
-short_name = {'Chững, giảm nhẹ': 'Chững/giảm nhẹ', 'Sập': 'Giảm mạnh'}
-cp['ten'] = [f'{c}. {short_name.get(n, n)} ({a}–{b})' if a != b else
-             f'{c}. {short_name.get(n, n)} ({a})'
+cp['ten'] = [f'{c}. {n} ({a}–{b})' if a != b else f'{c}. {n} ({a})'      # tên đúng seed BA, như PS4 và chat
              for c, n, a, b in zip(cp['phase_code'], cp['phase_name'], cp['first_year'], cp['last_year'])]
 name_of = dict(zip(cp['phase_code'], cp['ten']))
 cpm['ten'] = cpm['phase_code'].map(name_of)
