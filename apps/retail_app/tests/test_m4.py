@@ -159,6 +159,9 @@ def test_ps5_canh_bao_slide_12(monkeypatch):
     markdown = ' '.join(x.value for x in at.markdown)
     assert 'không cộng đóng góp giữa các chiều' in captions
     assert 'C giảm chưa đủ kết luận khách hàng rời bỏ' in captions
+    # câu "chưa phải nguyên nhân" luôn ngay dưới biểu đồ (caption ngoài expander), không chỉ ở "Giới hạn chi tiết"
+    assert 'phần chia số học của cùng mức đổi R, chưa phải nguyên nhân' in captions
+    assert 'Tách số đơn thành số khách và tần suất là phép chia số học, chưa phải nguyên nhân' in captions
     assert 'Region là nhãn Central / East / West' in markdown
     assert 'chỉ là số học' in markdown
 
