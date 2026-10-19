@@ -59,7 +59,7 @@ class Databricks:
                        [context['started_at'], name, entry['rows'], entry['csv_md5']])
 
     def ingest_forecast(self, context):
-        """Hai file parquet của stage dự báo vào r_<id>_raw, để dbt Databricks dựng rpt_forecast_*.
+        """Ba file parquet của stage dự báo vào r_<id>_raw, để dbt Databricks dựng rpt_forecast_*.
         Chưa nghiệm thu trên workspace (chưa có writer SP, 2026-10-15)."""
         from pathlib import Path
         from databricks.sdk import WorkspaceClient
@@ -67,7 +67,7 @@ class Databricks:
         raw = f"r_{context['release_id']}_raw"
         self.query('create volume if not exists pipeline_landing.forecasts')
         volume = f"/Volumes/{self.catalog}/pipeline_landing/forecasts/{context['release_id']}"
-        for name in ('forecast_daily', 'forecast_backtest'):
+        for name in ('forecast_daily', 'forecast_backtest', 'forecast_explain'):
             with (Path(context['forecast_path']) / f'{name}.parquet').open('rb') as f:
                 w.files.upload(f'{volume}/{name}.parquet', f, overwrite=True)
             self.query(f"create or replace table {raw}.{name} as "
