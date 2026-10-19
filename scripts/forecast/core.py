@@ -216,7 +216,7 @@ class Forecaster:
     def __init__(self, sales, cal):
         self.sales, self.cal = sales, cal
         self.window_start = {'full': sales.index.min(), '2019': REGIME_START}
-        self._cache, self.fit_log = {}, []
+        self._cache, self._boosters, self.fit_log = {}, {}, []
 
     def train_slice(self, origin, window):
         return self.sales.loc[self.window_start[window]:origin]
@@ -258,11 +258,30 @@ class Forecaster:
         elif fam == 'lgbm':
             Xtr, Xf = self.cal.features(tr.index, 'tree', window), self.cal.features(dates, 'tree', window)
             booster = lgb.train(LGB_PARAMS, lgb.Dataset(Xtr, y), num_boost_round=LGB_ROUNDS)
+            # Chỉ giữ booster G của bản cuối để giải thích; các booster backtest rất tốn RAM.
+            if model == 'lgbm_full' and target == 'Revenue' and origin == self.sales.index.max():
+                self._boosters[key] = booster
             out = (booster.predict(Xf), None, None)
         else:
             raise ValueError(model)
         self._cache[key] = out
         return out
+
+    def explain_log_g(self, model, origin, dates):
+        """Đóng góp LightGBM cho log(G), dùng đúng booster đã tạo dự báo cuối."""
+        if model != 'lgbm_full':
+            raise ValueError('B4a chỉ phân rã model chính lgbm_full')
+        self.model_log_forecast(model, 'Revenue', origin, dates)
+        key = (model, 'Revenue', origin, dates[0], len(dates))
+        booster = self._boosters[key]
+        features = self.cal.features(dates, 'tree', 'full')
+        contrib = np.asarray(booster.predict(features, pred_contrib=True))
+        forecast_log = np.asarray(self._cache[key][0])
+        if contrib.shape != (len(dates), len(features.columns) + 1):
+            raise ValueError('Số cột đóng góp LightGBM không khớp feature')
+        if not np.allclose(contrib.sum(axis=1), forecast_log, rtol=0, atol=1e-8):
+            raise ValueError('Đóng góp LightGBM không cộng về log(G) dự báo')
+        return features.columns.tolist(), contrib, forecast_log
 
     def ratio_profile(self, origin, window):
         tr = self.train_slice(origin, window)
@@ -524,5 +543,5 @@ def run(sales, promotions, dates, progress=None):
     pp = out[out.is_primary]
     if not pp.cogs_ratio_hat.between(lo, hi).all():
         raise ValueError('COGS/G dự báo của ứng viên chính ra ngoài khoảng lịch sử nới 10%')
-    return dict(cal=cal, pred=pred, weights=weights, bt=bt, ranking=ranking, primary=primary, step=step,
+    return dict(cal=cal, forecaster=fc, pred=pred, weights=weights, bt=bt, ranking=ranking, primary=primary, step=step,
                 report=report, final=out, final_weights=final_w, fits=fits, august_2023=a23)
