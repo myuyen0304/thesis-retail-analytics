@@ -264,9 +264,37 @@ thẻ "bản đang phục vụ". Không cấp quyền mới cho SP reader.
   - Dữ liệu dừng ở 2022-12-31 theo thiết kế, nên freshness theo ngày dữ liệu luôn đỏ; không đưa vào quality gate.
   - Ngưỡng cảnh báo phải theo lịch chạy (D2). Lịch Airflow còn tắt, nên thẻ chỉ hiện tuổi, không tô đỏ.
 
+## Hợp đồng dữ liệu bản gọn (A3, bước S4, 2026-10-19)
+
+Trước S4, hợp đồng của mỗi nguồn chỉ gồm header và số dòng, cộng SHA-256 của file; snapshot lưu mọi cột dạng chuỗi.
+- **Hợp đồng** (`scripts/ingest/source_contract.py`):
+  - `SOURCES` giữ nguyên (header, số dòng), để `snapshot.validate` / `prepare` không đổi và `snapshot_id` không đổi.
+  - Thêm `COLUMNS`: mỗi cột có (kiểu, được rỗng). Kiểu là đúng kiểu model staging cast (`cast({{ clean(col) }} as <kiểu>)`;
+    `type_double()` = `double`); cột staging không cast là `string`. Chỉ ba cột được rỗng: `promotions.applicable_category`
+    (rỗng = mọi ngành hàng), `order_items.promo_id`, `order_items.promo_id_2`.
+  - Thêm `KEYS`: khóa chính của 13 nguồn. `order_items` không có khóa tự nhiên: 16 nhóm trùng `(order_id, product_id)` là dữ liệu
+    đúng, staging không dedup và lấy thứ tự dòng theo `_src_row`.
+  - Khóa ngoại không kiểm ở đây, dbt test lo như cũ.
+- **Validator** (`scripts/pipeline/contract.py`):
+  - Chạy ở stage `prepare`, trên parquet của snapshot (cả snapshot mới lẫn `--snapshot-id`), trước build.
+  - Dùng DuckDB với đúng biểu thức của staging: giá trị khác rỗng sau `nullif(trim(x), '')` phải `try_cast` được sang kiểu khai báo;
+    cột không được rỗng thì không có giá trị rỗng (chuỗi chỉ có khoảng trắng tính là rỗng, như staging); khóa chính không trùng.
+- **Gặp dòng sai:**
+  - Không bỏ dòng rồi chạy tiếp (bỏ dòng làm lệch đối soát G/COGS với `sales`, `CLAUDE.md` §5 điểm 1) và không sửa hay khử dòng
+    (§5 điểm 8).
+  - Ghi `runs/<run_id>/quarantine/<nguồn>.csv` (`_src_row`, lý do, cột, cả dòng gốc; tối đa 1.000 dòng mỗi lý do) và
+    `quarantine/summary.json` (đếm đủ số dòng sai theo nguồn và lý do).
+  - Rồi dừng: `ValueError` → exit 2, Airflow không retry. Run không có `context.json` nên `build` không chạy được; lịch sử ghi `loi`.
+  - Header sai, số dòng sai hay số field sai thì dừng ngay ở bước đọc CSV như trước, và cũng ghi lý do vào `summary.json`.
+- **Đối chiếu với dbt bằng test:** danh sách nguồn khớp `_sources.yml`; cột và kiểu khớp cast trong 14 model staging
+  (`scripts/pipeline/tests/test_contract.py`).
+- **Dữ liệu thật:** snapshot `5bd9a84aaf73` đạt hợp đồng, `snapshot_id` không đổi; riêng phần kiểm hợp đồng chạy 2,1 giây.
+- `scripts/ingest` và `scripts/pipeline` nằm trong `code_version`: lần chạy sau S4 dựng bản mới.
+
 ## Nhật ký và lỗi
 
 - `<root>/history.jsonl` (từ 2026-10-19): mỗi stage và mỗi lần rollback một dòng, kể cả lần lỗi; xem bằng lệnh `history`.
+- `<root>/runs/<run_id>/quarantine/` (từ 2026-10-19, A3): dòng sai hợp đồng và `summary.json` của lần prepare lỗi.
 - `<root>/runs/<run_id>/context.json`: nguồn, code, release, stage, kết quả đối soát.
 - `<root>/runs/<run_id>/<target>/`: manifest, run_results, console và log dbt.
 - `failure.json`: lần lỗi gần nhất, loại lỗi và stage; không chứa credentials. File này giữ bằng chứng lỗi dù retry sau đó thành công; đọc stage hiện tại trong context/Airflow.
@@ -362,6 +390,37 @@ S3, giám sát A4 (2026-10-19; code + test, một chuỗi chạy local trong roo
   - Vẫn dưới `execution_timeout` 45 phút của task Airflow, nhưng sát hơn lần đo 956 giây trước đây.
 - **Giới hạn:** lệnh gõ sai cú pháp (argparse báo lỗi, ví dụ thiếu giá trị `--release-id`) dừng trước khi vào `execute` hay khối rollback,
   nên **không có dòng lịch sử**. Mã bản sai nhưng đúng cú pháp thì có dòng `loi`.
+
+S4, hợp đồng dữ liệu A3 (2026-10-19; code + test, một chuỗi chạy local trong root riêng; **chưa chạy cloud**). Thiết kế ở mục
+"Hợp đồng dữ liệu bản gọn" phía trên.
+- **Test trong phiên:**
+  - `scripts/pipeline/tests/test_contract.py` (mới) 24/24:
+    - đối chiếu: nguồn khớp `_sources.yml`; cột, thứ tự và kiểu khớp cast ở 14 model staging;
+    - snapshot thật đạt, `snapshot_id` vẫn `5bd9a84aaf73`;
+    - đột biến (CSV tạm, hợp đồng tạm): sai kiểu integer, ngày không có thật, rỗng ở cột không được rỗng, chuỗi chỉ có khoảng trắng,
+      khóa trùng, đổi tên cột;
+    - mỗi ca dừng ở `prepare` (`ValueError` → exit 2), có `quarantine/summary.json` và CSV dòng sai đủ `_src_row`, lý do, cả dòng
+      gốc; lịch sử ghi `prepare` / `loi`; không có `context.json`, `build` không chạy; registry không đổi;
+    - `--snapshot-id` cũng đi qua hợp đồng.
+  - `scripts/pipeline/tests` + `scripts/forecast/tests` + `test_releases.py` + `test_ban_phuc_vu.py` 85/85.
+- **Chuỗi chạy do PM tự chạy ngoài Claude Code** (luật 7), root `warehouse/pipeline-s4`, target duckdb:
+  - `code_version` `5c27dddee29b…` = HEAD `9f037dd` cộng code S4 chưa commit. Không dùng cho cloud.
+  - Run `s4-20261019-01`: năm stage đạt, publish `e9e6f92f221942c2bcfcbbcf`; không có thư mục `quarantine`, không có `failure.json`.
+    Quality 3.833 ngày khớp snapshot, 36 relation. Dự báo 372 giây theo đồng hồ, khớp 369 giây trong `forecast_meta`.
+  - `prepare --snapshot-id 5bd9a84aaf73` (`s4-20261019-02`): snapshot cũ đạt hợp đồng; run bị bỏ qua (cùng snapshot, cùng code với
+    bản đang phục vụ), lịch sử ghi `bo_qua`. Không có thư mục `quarantine`.
+- **Thời gian stage `prepare`** (từ `history.jsonl`):
+
+  | Lần chạy | Validator | Thời gian |
+  |---|---|---|
+  | `s3-20261019-01` (đọc 14 CSV, ghi snapshot) | chưa có | 15 giây |
+  | `s3-20261019-02` (đọc 14 CSV, ghi snapshot) | chưa có | 13 giây |
+  | `s4-20261019-01` (đọc 14 CSV, ghi snapshot, kiểm hợp đồng) | có | 21 giây |
+  | `s4-20261019-02` (`--snapshot-id`, chỉ kiểm snapshot có sẵn) | có | 3 giây |
+
+  Phần kiểm hợp đồng đo riêng trên snapshot thật chạy 2,1 giây; phần còn lại của khoảng chênh 6–8 giây là dao động của máy.
+- **Mẩu sót:** `warehouse/pipeline/snapshots/prepare-iracv4u4` là thư mục tạm của lần chạy S2 bị dừng vì thiếu RAM (2026-10-18). Vô
+  hại (không phải snapshot, `--snapshot-id` chỉ nhận mã 12 ký tự hex); để nguyên, không xóa.
 
 Nghiệm thu local ngày 2026-10-11/12:
 - CLI Windows `acceptance-02`: dbt 217/217 đạt; 3.833 ngày G/COGS khớp tuyệt đối với snapshot `5bd9a84aaf73`;
