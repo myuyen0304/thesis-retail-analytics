@@ -16,3 +16,5 @@ models:
     description: "Sai số backtest 2020–2022 của mọi mốc và ứng viên, theo fold × chỉ số. Nguồn để kiểm và giải thích việc chọn ứng viên chính."
   - name: rpt_forecast_actual
     description: "G (doanh thu gộp, gồm cả đơn hủy) và COGS THỰC TẾ theo ngày 2012-07-04 → 2022-12-31, một dòng = một ngày. Trang Dự báo vẽ cạnh dự báo; cùng bản dữ liệu với rpt_forecast_daily."
+  - name: rpt_forecast_explain
+    description: "Phân rã model LightGBM chính cho log(G) dự báo theo ngày × nhóm biến. Base log + tổng đóng góp log = log(G) dự báo; multiplier là exp(đóng góp log), không cộng được. Đây không phải nguyên nhân."

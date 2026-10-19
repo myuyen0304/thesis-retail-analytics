@@ -14,7 +14,7 @@ import subprocess
 import sys
 import uuid
 
-from scripts.pipeline import snapshot
+from scripts.pipeline import contract, snapshot
 from scripts.pipeline.runtime import Databricks
 from scripts.pipeline.state import Registry, atomic_json, writer_lock
 from scripts.parity.compare_dwh import compare, SKIP
@@ -314,14 +314,25 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                 registry = Registry(root, cloud.query if cloud else None)
                 registry.initialize()
                 landing = root / 'snapshots'
+                quarantine = directory / 'quarantine'
                 if snapshot_id:
                     if not re.fullmatch('[a-f0-9]{12}', snapshot_id):
                         raise ValueError('snapshot_id sai định dạng')
                     path = landing / snapshot_id
                     manifest = snapshot.validate(path)
                 else:
-                    path = snapshot.prepare(data, landing)
+                    try:
+                        path = snapshot.prepare(data, landing)
+                    except ValueError as error:      # header / số dòng / số field sai: chưa có snapshot, vẫn để lại lý do
+                        contract.write_quarantine(quarantine, {}, error=error)
+                        raise
                     manifest = snapshot.validate(path)
+                # A3 (S4): kiểu, not-null, khóa chính trên snapshot, trước build; dòng sai thì dừng, không bỏ dòng chạy tiếp
+                violations = contract.check(path, quarantine)
+                if violations:
+                    n = sum(sum(v.values()) for v in violations.values())
+                    raise ValueError(f'Dữ liệu sai hợp đồng ({n} lỗi ở {", ".join(sorted(violations))}); không build. '
+                                     f'Xem {quarantine.as_posix()}')
                 state = registry.read()['payload']
                 revision = code_version()
                 active = state['releases'].get(state['active'], {})

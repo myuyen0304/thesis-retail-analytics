@@ -45,3 +45,4 @@ sources:
     tables:
       - name: forecast_daily
       - name: forecast_backtest
+      - name: forecast_explain

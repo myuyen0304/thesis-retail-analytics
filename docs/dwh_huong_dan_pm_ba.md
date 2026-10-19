@@ -2426,3 +2426,70 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
 - **Cần bạn quyết / lưu ý:**
   - cho commit code và docs của bước này không;
   - bản public cần push và Reboot mới có thẻ mới. Trước đó, code cũ vẫn đọc được registry mới (đã kiểm).
+
+### 2026-10-19: pipeline kiểm hợp đồng dữ liệu trước khi dựng kho (A3, bước S4; chạy local đạt, chưa commit)
+
+- **Làm gì:**
+  - Hợp đồng của từng file nguồn nay có thêm, cho mỗi cột: kiểu dữ liệu (số nguyên, ngày, số tiền…) và có được rỗng không; cho mỗi
+    file: khóa chính.
+  - Kiểu khai báo đúng như cách tầng staging của dbt đổi kiểu, nên giá trị qua được hợp đồng thì cũng dựng được kho.
+  - Pipeline kiểm hợp đồng ngay ở bước chuẩn bị snapshot, trước khi dựng kho.
+- **Gặp dòng sai:**
+  - Pipeline dừng, không bỏ dòng rồi chạy tiếp: bỏ dòng sẽ làm doanh thu theo ngày lệch với `sales.csv`. Cũng không tự sửa dòng: dữ
+    liệu đề bài sạch, đây không phải bài làm sạch.
+  - Các dòng sai được ghi vào thư mục `quarantine` của lần chạy: số thứ tự dòng trong file, lý do, cả dòng gốc.
+  - Airflow không thử lại; lịch sử lần chạy ghi "lỗi".
+- **Vì sao:** mốc A3 (mũi tên "kiểm data contract" giữa Snapshot và Bronze trên sơ đồ). Trước đây pipeline chỉ kiểm tên cột, số dòng
+  và mã băm của file.
+- **Trả lời PS nào:** không đổi số nào; chỉ chặn dữ liệu sai trước khi vào kho.
+- **Kiểm (2026-10-19):**
+  - Test trong phiên:
+    - thử từng loại lỗi trên file tạm (sai kiểu, ngày không có thật, ô rỗng, chỉ có khoảng trắng, trùng khóa, đổi tên cột), lần nào
+      cũng dừng đúng chỗ và có quarantine;
+    - hợp đồng khớp danh sách nguồn và kiểu cột của dbt;
+    - 85/85 test pipeline / dự báo / bản dữ liệu đạt.
+  - Bạn tự chạy trong thư mục riêng `warehouse/pipeline-s4`:
+    - dữ liệu thật đạt hợp đồng, publish bản `e9e6f92f…`;
+    - snapshot cũ `5bd9a84aaf73` vẫn dùng được với `--snapshot-id`, mã snapshot không đổi;
+    - bước chuẩn bị mất 21 giây, trước đây 13–15 giây; riêng phần kiểm hợp đồng khoảng 2 giây.
+  - Bản local đang phục vụ `06f157ee…` không đổi.
+- **Giới hạn:**
+  - Khóa ngoại (đơn có khách thật, dòng hàng có sản phẩm thật…) vẫn do dbt kiểm như cũ.
+  - `order_items` không có khóa chính tự nhiên (một đơn có thể có hai dòng cùng sản phẩm), nên không kiểm trùng khóa ở file này.
+  - Chưa chạy trên Databricks.
+- **Đã sửa file chung:** `docs/automation_batch.md` (mục Hợp đồng dữ liệu, Nhật ký và lỗi, Kiểm chứng), ô trạng thái S4 ở
+  `docs/giao_viec_theo_so_do.md`, mục này.
+  - Code: `scripts/ingest/source_contract.py`, `scripts/pipeline/cli.py`, mới `scripts/pipeline/contract.py` và
+    `scripts/pipeline/tests/test_contract.py`.
+  - Không đụng app, dbt, `data/`.
+- **Cần bạn quyết:** cho commit code và docs của bước này không.
+
+### 2026-10-19: dữ liệu phân rã model dự báo (B4a, bước S5; dev xong 2026-10-19, chưa commit)
+
+- **Làm gì:** stage dự báo lấy đóng góp LightGBM cho G từ cùng model đã tạo dự báo; gộp thành bảng
+  `reporting.rpt_forecast_explain`, một ngày × nhóm biến. Bảng có `base_log`, `contribution_log`, `forecast_log`,
+  `multiplier`; nhóm gồm mùa vụ, đầu/cuối tháng, từng đợt khuyến mãi, chế độ sau 2018, năm chẵn/lẻ.
+- **Vì sao:** cung cấp dữ liệu có thể kiểm chứng cho tool L4 ở bước S7. Các đóng góp chỉ cộng trên thang log:
+  `base_log + Σcontribution_log = log(G dự báo)`; `multiplier` là hệ số nhân riêng. Nhãn bắt buộc:
+  **“phân rã model, không phải nguyên nhân”**. Không suy tác động thực của marketing hay khuyến mãi.
+- **Trả lời PS nào:** chưa trả lời trực tiếp PS1–PS5 hay câu chat mới; S5 chỉ dựng dữ liệu dự báo. Tool chat L4 ở S7.
+- **Đã kiểm:** test LightGBM thật quy mô nhỏ cho từng ngày và nhóm; test DuckDB nhỏ làm sai tổng log/xóa nhóm thì
+  quality gate trả lỗi; bộ `scripts/forecast/tests/test_forecast.py` + `test_ai_forecast.py` 273/273 đạt trên local
+  (provider giả, không LLM); `dbt parse` và `dbt compile` test mới đạt. Chat `service.run_turn` với provider giả
+  trên bản trước B2b đạt PS và trả `no_data` cho dự báo. Test mở rộng gặp `WinError 5` dưới sandbox, chạy lại
+  ngoài sandbox rồi đạt. PM chạy pipeline local root `warehouse/pipeline-s4`, run `s5-`, publish release
+  `31195a92fa8d4492a99fcd01`: 162 test dbt pass, 5.480 dòng phân rã. Query reporting đối chứng parquet stage
+  ngày 15/08/2023: log dựng lại `14,583764401199444`, `ln(yhat)=14,583764401199439`, G dự báo
+  `2.155.998,2540469267` đồng. Rollback CLI về S4, chat PS/dự báo với provider giả đều `ok`, rồi trở lại S5;
+  cả hai lệnh rollback `dat`. Notebook chạy đủ 22/22 cell code, không cell lỗi; §8.1 chứng minh 548 ngày × 10 nhóm,
+  sai lệch log lớn nhất 4,796×10⁻¹⁴; output đã lưu vào notebook nguồn để Claude review. Claude đối chứng hai
+  release S4 và S5: 8.220 dòng dự báo trùng nhau, `|Δyhat| = |Δcogs_yhat| = 0`, `is_primary` không đổi.
+  Ngày 2026-10-19, PM bật Docker: `pg_ai_readonly_role.py` cấp quyền cho 14 bảng/view, guard đạt;
+  `test_ai_tools.py` đạt 195 passed, 0 skip.
+- **Còn gì:** S5 dev xong, chưa commit; PM chưa nghiệm thu. Test rollback với DuckDB không kiểm được guard
+  Databricks; quyền và rollback trên cloud thuộc S6. LLM thật chưa chạy cho S5; tool chat L4 thuộc S7.
+  Xem [artifact và lệnh](automation_batch.md#b4a-dữ-liệu-phân-rã-model-s5-dev-xong-2026-10-19-chưa-commit).
+- **File chung đã sửa:** `docs/automation_batch.md`, `docs/ke_hoach_ai_gd2.md`,
+  `docs/giao_viec_theo_so_do.md`, mục bàn giao này, notebook của myuyen, `retail_dbt/dbt_project.yml`,
+  `apps/retail_app/ai_explain/tools.py`, script cấp quyền PostgreSQL. Không sửa `CLAUDE.md`, requirements hay skill;
+  không commit. Các file skill và tài liệu khác đã dirty trước S5 không bị đụng.

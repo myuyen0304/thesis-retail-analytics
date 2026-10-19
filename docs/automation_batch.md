@@ -30,18 +30,89 @@ flowchart LR
 
 ## Stage dự báo (B2b, thêm 2026-10-15; tách thành stage riêng 2026-10-18)
 
+### B4a: dữ liệu phân rã model (S5; dev xong 2026-10-19, chưa commit)
+
+Stage dự báo nay ghi thêm `forecast_explain.parquet` cho model chính LightGBM. Mỗi dòng là một ngày dự báo × nhóm biến:
+`base_log + tổng contribution_log = log(yhat)` cho từng ngày; `multiplier = exp(contribution_log)` là hệ số nhân
+riêng, **không cộng các multiplier hay quy đổi mỗi phần thành VND cộng được**. Nhóm gồm mùa vụ, đầu/cuối tháng,
+từng đợt khuyến mãi, chế độ sau 2018, năm chẵn/lẻ. Đây là **phân rã model, không phải nguyên nhân**. Stage dùng
+`pred_contrib=True` của chính booster đã dự báo G, không train lại để giải thích. Nếu luật chọn ứng viên khác LightGBM,
+bảng giải thích rỗng và không mượn phân rã của model khác. `rpt_forecast_explain` nằm trong `reporting` và chỉ bật khi
+có `forecast_path`; test `assert_rpt_forecast_explain` nằm trong quality gate. Parquet mới nằm trong hash stage và
+`code_version`, còn các bản cũ thiếu bảng này được giữ bằng quyền đọc tùy chọn (`ai_optional_relations`,
+`app_optional_relations`, `tools.OPTIONAL_RELATIONS`). Tool `explain_forecast` thuộc S7, chưa làm.
+
+**PM chạy việc nặng (PowerShell tại root, không chạy song song phiên sửa code khác):**
+
+```powershell
+Set-Location D:\retail-analytics
+$env:PYTHONUTF8 = '1'
+$runId = 's5-20261019-01'
+.venv/Scripts/python.exe -m scripts.pipeline.cli run --target duckdb --root warehouse/pipeline-s4 --snapshot-id 5bd9a84aaf73 --run-id $runId
+if ($LASTEXITCODE -ne 0) { throw "Pipeline S5 lỗi: xem warehouse/pipeline-s4/runs/$runId/failure.json và history.jsonl" }
+$ctx = Get-Content -Raw -Encoding utf8 "warehouse/pipeline-s4/runs/$runId/context.json" | ConvertFrom-Json
+$meta = Get-Content -Raw -Encoding utf8 "warehouse/pipeline-s4/runs/$runId/forecast/forecast_meta.json" | ConvertFrom-Json
+$ctx | Select-Object run_id, stage, target, release_id, snapshot_id, code_version, quality
+$meta | Select-Object primary, rows_daily, rows_explain, model_version, seconds
+```
+
+Dấu hiệu xong: exit 0; `stage=published`; `quality.daily_rows=3833`; `rows_explain > 0`; manifest có
+`rpt_forecast_explain` và `assert_rpt_forecast_explain` thành công. Gửi Codex `run_id` và `release_id` để đọc
+artifact, kiểm một ngày bằng query độc lập, rồi mới thử rollback. Bản cũ ở cùng root là
+`e9e6f92f221942c2bcfcbbcf` (S4); **chỉ rollback sau khi đã giữ `release_id` mới**. Bản local mặc định
+`warehouse/pipeline` và cloud không đổi khi dùng root này.
+
+Notebook cùng module có cell §8.1. PM chạy toàn bộ từ root bằng Jupyter rồi lưu notebook; nếu dùng PowerShell:
+
+```powershell
+Set-Location D:\retail-analytics
+$env:PYTHONUTF8 = '1'
+.venv/Scripts/python.exe scripts/ops/run_forecast_notebook_s5.py
+```
+
+Trước khi coi notebook đạt, kiểm cell §8.1 in `Số ngày: 548`, số nhóm và `lệch log lớn nhất < 1e-7`;
+file output nằm ở `warehouse/pipeline-s4/so_sanh_model_s5_chay.ipynb` (không ghi đè notebook nguồn của myuyen).
+Lệnh dùng kernel `python3` ghi trong notebook và cố định working directory là root để `DATA='data'` đúng.
+PM đã chạy lệnh notebook; Codex đã đọc output và lưu vào notebook nguồn để Claude review.
+
+**Kết quả local PM chạy 2026-10-19:** lệnh PowerShell bị tách ở `--run-id`, nên run thực tế là `s5-`
+(không ảnh hưởng dữ liệu); không cần chạy lại để đổi tên. Root `warehouse/pipeline-s4`, snapshot `5bd9a84aaf73`,
+release `31195a92fa8d4492a99fcd01`, `code_version` `96d9862232bf028ef248d43e7a9825d148b161fe2066184728f96142c8c91ebe`,
+`model_version` `b9d99cf84801`. `context.json` ghi `stage=published`, `quality.daily_rows=3833`, `cloud_parity=false`;
+`run_results.json` ghi 63 node `success`, 162 test `pass`, gồm `assert_rpt_forecast_explain`. Metadata dự báo:
+`lgbm_full/direct`, 8.220 dòng dự báo, 546 dòng backtest, **5.480 dòng phân rã = 548 ngày × 10 nhóm**;
+32 lần fit, 2 lần dùng cách tối ưu dự phòng. Hai `ConvergenceWarning` trên màn hình không làm run lỗi;
+`check_convergence` và quality gate đều đạt. Đối chứng độc lập ngày 15/08/2023 bằng query bảng reporting
+và parquet stage: `base_log + Σcontribution_log = 14,583764401199444`, `ln(yhat) = 14,583764401199439`,
+`yhat = 2.155.998,2540469267` đồng. Chạy rollback CLI về bản S4 `e9e6f92f221942c2bcfcbbcf`: lịch sử `s5-check-old`
+ghi `dat`, chat `service.run_turn` với provider giả trả `ok` cho câu PS và dự báo; rollback trở lại S5 với
+`s5-check-new` cũng `dat`, con trỏ hiện là S5. Cả hai bản trả G dự báo 08/2023 bằng `74.151.832,3808278` đồng.
+Claude đối chứng trực tiếp hai bản `e9e6f92f221942c2bcfcbbcf` (S4) và `31195a92fa8d4492a99fcd01` (S5):
+**8.220 dòng dự báo trùng nhau**, `|Δyhat| = |Δcogs_yhat| = 0` và `is_primary` không đổi.
+`model_version` đổi từ `3ac33fc83143` sang `b9d99cf84801` chỉ vì hash code dự báo đổi; số dự báo không đổi.
+Kiểm thử `test_chat_tron_luot_sau_khi_them_relation_tuy_chon_van_doc_ban_cu` dùng DuckDB, nơi không có cấp quyền,
+nên không chứng minh guard hay rollback an toàn trên Databricks. Kiểm quyền và rollback trên cloud thuộc S6.
+Notebook output `warehouse/pipeline-s4/so_sanh_model_s5_chay.ipynb`: 44 cell, cả 22 cell code đã chạy,
+không có cell lỗi. Cell §8.1 (`b4a-explain-proof`, execution 22) in **548 ngày, 10 nhóm, sai lệch log lớn nhất
+4,796163466380676×10⁻¹⁴**, nhỏ hơn ngưỡng 10⁻⁷; notebook nguồn đã lưu output này. Hai cảnh báo khi khởi động
+kernel trên Windows (selector thread của `zmq`, TCP không mã hóa trên máy local) không làm notebook lỗi.
+Ngày 2026-10-19, PM chạy với Docker bật: `pg_ai_readonly_role.py` cấp quyền cho **14 bảng/view** và guard đạt;
+`test_ai_tools.py` đạt **195 passed, 0 skip**.
+**Databricks và LLM thật chưa chạy**; S6/S7 xử lý riêng.
+
 Từ 2026-10-18 (S2 trong `giao_viec_theo_so_do.md`), dự báo là stage riêng `forecast` của CLI, ứng với task Airflow
 `forecast_train_score`. Stage này chạy sau `prepare`, trước `build`, đúng dòng DAG trên sơ đồ kiến trúc. Trước ngày đó dự
 báo chạy bên trong `build`. `forecast_stage` (`scripts/pipeline/cli.py`) gọi `scripts/forecast/stage.py`:
 - đọc `sales`, `promotions`, `sample_submission` từ parquet của snapshot;
 - chạy backtest ba fold cho 12 ứng viên và 3 mốc, áp luật chọn của `docs/hop_dong_du_bao.md` §5, rồi train bản cuối tới ngày thực tế cuối.
   Code nằm ở `scripts/forecast/core.py`, cùng code notebook `notebooks/04_forecasting/so_sanh_model.ipynb` dùng;
-- ghi `forecast_daily.parquet`, `forecast_backtest.parquet`, `forecast_meta.json` vào `<root>/runs/<run_id>/forecast/`.
+- ghi `forecast_daily.parquet`, `forecast_backtest.parquet`, `forecast_explain.parquet`, `forecast_meta.json` vào `<root>/runs/<run_id>/forecast/`.
   Retry cùng run dùng lại kết quả nếu khớp snapshot, `model_version` (hash `scripts/forecast/*.py`) và hash file.
 
 dbt nhận thêm var `forecast_path` và dựng `reporting.rpt_forecast_daily`, `reporting.rpt_forecast_backtest`,
-`reporting.rpt_forecast_actual` (số thực tế G, COGS theo ngày cho trang Dự báo, thêm 2026-10-15), cùng test `assert_rpt_forecast`
-và `assert_rpt_forecast_actual` trong quality gate. Không có var này (build thường) thì ba model và hai test tắt, số node không đổi.
+`reporting.rpt_forecast_actual` (số thực tế G, COGS theo ngày cho trang Dự báo, thêm 2026-10-15),
+`reporting.rpt_forecast_explain` (B4a), cùng test `assert_rpt_forecast`, `assert_rpt_forecast_actual` và
+`assert_rpt_forecast_explain` trong quality gate. Không có var này (build thường) thì bốn model và ba test tắt, số node không đổi.
 `scripts/forecast` nằm trong `code_version()`: đổi code dự báo thì pipeline tạo bản mới.
 
 - **Thứ tự và trạng thái run** (từ 2026-10-18):
@@ -51,8 +122,8 @@ và `assert_rpt_forecast_actual` trong quality gate. Không có var này (build 
   - `forecast` không mở kết nối cloud và không đọc registry.
 - **`build` không train:**
   - Chưa có `forecasted` thì báo lỗi "chạy forecast trước build" (exit 2).
-  - Có rồi thì kiểm lại kết quả trước dbt (`check_forecast`): `forecast_meta.json` khớp snapshot và `model_version`, hai file
-    parquet đúng hash. Lệch thì báo chạy lại stage forecast.
+  - Có rồi thì kiểm lại kết quả trước dbt (`check_forecast`): `forecast_meta.json` khớp snapshot và `model_version`, ba file
+  parquet đúng hash. Lệch thì báo chạy lại stage forecast.
   - Bước chặn dựng lại bản `ready` vẫn chạy trước mọi kiểm khác.
 - **Run đang dở từ trước 2026-10-18:** `code_version` gồm `scripts/pipeline`, nên run prepare bằng code cũ gặp lỗi
   "Code đổi giữa các stage; tạo run_id mới". Phải tạo run_id mới.
@@ -64,13 +135,13 @@ và `assert_rpt_forecast_actual` trong quality gate. Không có var này (build 
     dự báo, 3.800 giây cho task khác. Nhờ vậy tiến trình CLI dừng trước khi Airflow cắt task, và không còn giữ
     `writer.lock` khi retry.
   - Test AST kiểm điều này cho mọi task.
-- **Databricks:** `runtime.ingest_forecast` tải hai parquet lên Volume rồi tạo `r_<id>_raw.forecast_*` cho dbt. **Chưa chạy** trên workspace.
+- **Databricks:** `runtime.ingest_forecast` tải ba parquet lên Volume rồi tạo `r_<id>_raw.forecast_*` cho dbt. B4a **chưa chạy** trên workspace.
 - **Docker:** image cần statsmodels, lightgbm, holidays, scipy (`deploy/airflow/requirements-pipeline.txt`) và `libgomp1` (Dockerfile).
   Image dùng Python 3.12, máy Windows dùng 3.13. **Đã build và chạy DAG 2026-10-15** (kết quả ở dòng nghiệm thu `b3c-docker-02` bên dưới).
   Lần chạy đầu (`b3c-docker-01`) dừng ở stage dự báo vì thư viện `holidays` đặt tên ngày lễ theo biến `LANG`
   (image có `LANG=C.UTF-8` nên trả tên tiếng Việt); `scripts/forecast/core.py` nay cố định `language='en_US'`.
 - **Quyền đọc bảng dự báo** (cập nhật 2026-10-15): bảng tùy chọn, không vào danh sách bắt buộc. Chat: var `ai_optional_relations`
-  (hai bảng `rpt_forecast_*`, B3a/RV04). App: var `app_optional_relations` (ba bảng trang Dự báo, gồm `rpt_forecast_actual`, RV11).
+  (hai bảng dự báo B3a/RV04 và bảng phân rã B4a). App: var `app_optional_relations` (ba bảng trang Dự báo, gồm `rpt_forecast_actual`, RV11, và bảng phân rã B4a).
   `consumers()` gộp chúng vào danh sách reader; `present()` chỉ cấp quyền / thử đọc bảng có trong bản, nên rollback về bản trước B2b
   vẫn chạy. Đường cloud (GRANT + thử đọc bằng chính app SP) **chưa chạy** trên workspace.
 
@@ -264,9 +335,37 @@ thẻ "bản đang phục vụ". Không cấp quyền mới cho SP reader.
   - Dữ liệu dừng ở 2022-12-31 theo thiết kế, nên freshness theo ngày dữ liệu luôn đỏ; không đưa vào quality gate.
   - Ngưỡng cảnh báo phải theo lịch chạy (D2). Lịch Airflow còn tắt, nên thẻ chỉ hiện tuổi, không tô đỏ.
 
+## Hợp đồng dữ liệu bản gọn (A3, bước S4, 2026-10-19)
+
+Trước S4, hợp đồng của mỗi nguồn chỉ gồm header và số dòng, cộng SHA-256 của file; snapshot lưu mọi cột dạng chuỗi.
+- **Hợp đồng** (`scripts/ingest/source_contract.py`):
+  - `SOURCES` giữ nguyên (header, số dòng), để `snapshot.validate` / `prepare` không đổi và `snapshot_id` không đổi.
+  - Thêm `COLUMNS`: mỗi cột có (kiểu, được rỗng). Kiểu là đúng kiểu model staging cast (`cast({{ clean(col) }} as <kiểu>)`;
+    `type_double()` = `double`); cột staging không cast là `string`. Chỉ ba cột được rỗng: `promotions.applicable_category`
+    (rỗng = mọi ngành hàng), `order_items.promo_id`, `order_items.promo_id_2`.
+  - Thêm `KEYS`: khóa chính của 13 nguồn. `order_items` không có khóa tự nhiên: 16 nhóm trùng `(order_id, product_id)` là dữ liệu
+    đúng, staging không dedup và lấy thứ tự dòng theo `_src_row`.
+  - Khóa ngoại không kiểm ở đây, dbt test lo như cũ.
+- **Validator** (`scripts/pipeline/contract.py`):
+  - Chạy ở stage `prepare`, trên parquet của snapshot (cả snapshot mới lẫn `--snapshot-id`), trước build.
+  - Dùng DuckDB với đúng biểu thức của staging: giá trị khác rỗng sau `nullif(trim(x), '')` phải `try_cast` được sang kiểu khai báo;
+    cột không được rỗng thì không có giá trị rỗng (chuỗi chỉ có khoảng trắng tính là rỗng, như staging); khóa chính không trùng.
+- **Gặp dòng sai:**
+  - Không bỏ dòng rồi chạy tiếp (bỏ dòng làm lệch đối soát G/COGS với `sales`, `CLAUDE.md` §5 điểm 1) và không sửa hay khử dòng
+    (§5 điểm 8).
+  - Ghi `runs/<run_id>/quarantine/<nguồn>.csv` (`_src_row`, lý do, cột, cả dòng gốc; tối đa 1.000 dòng mỗi lý do) và
+    `quarantine/summary.json` (đếm đủ số dòng sai theo nguồn và lý do).
+  - Rồi dừng: `ValueError` → exit 2, Airflow không retry. Run không có `context.json` nên `build` không chạy được; lịch sử ghi `loi`.
+  - Header sai, số dòng sai hay số field sai thì dừng ngay ở bước đọc CSV như trước, và cũng ghi lý do vào `summary.json`.
+- **Đối chiếu với dbt bằng test:** danh sách nguồn khớp `_sources.yml`; cột và kiểu khớp cast trong 14 model staging
+  (`scripts/pipeline/tests/test_contract.py`).
+- **Dữ liệu thật:** snapshot `5bd9a84aaf73` đạt hợp đồng, `snapshot_id` không đổi; riêng phần kiểm hợp đồng chạy 2,1 giây.
+- `scripts/ingest` và `scripts/pipeline` nằm trong `code_version`: lần chạy sau S4 dựng bản mới.
+
 ## Nhật ký và lỗi
 
 - `<root>/history.jsonl` (từ 2026-10-19): mỗi stage và mỗi lần rollback một dòng, kể cả lần lỗi; xem bằng lệnh `history`.
+- `<root>/runs/<run_id>/quarantine/` (từ 2026-10-19, A3): dòng sai hợp đồng và `summary.json` của lần prepare lỗi.
 - `<root>/runs/<run_id>/context.json`: nguồn, code, release, stage, kết quả đối soát.
 - `<root>/runs/<run_id>/<target>/`: manifest, run_results, console và log dbt.
 - `failure.json`: lần lỗi gần nhất, loại lỗi và stage; không chứa credentials. File này giữ bằng chứng lỗi dù retry sau đó thành công; đọc stage hiện tại trong context/Airflow.
@@ -362,6 +461,37 @@ S3, giám sát A4 (2026-10-19; code + test, một chuỗi chạy local trong roo
   - Vẫn dưới `execution_timeout` 45 phút của task Airflow, nhưng sát hơn lần đo 956 giây trước đây.
 - **Giới hạn:** lệnh gõ sai cú pháp (argparse báo lỗi, ví dụ thiếu giá trị `--release-id`) dừng trước khi vào `execute` hay khối rollback,
   nên **không có dòng lịch sử**. Mã bản sai nhưng đúng cú pháp thì có dòng `loi`.
+
+S4, hợp đồng dữ liệu A3 (2026-10-19; code + test, một chuỗi chạy local trong root riêng; **chưa chạy cloud**). Thiết kế ở mục
+"Hợp đồng dữ liệu bản gọn" phía trên.
+- **Test trong phiên:**
+  - `scripts/pipeline/tests/test_contract.py` (mới) 24/24:
+    - đối chiếu: nguồn khớp `_sources.yml`; cột, thứ tự và kiểu khớp cast ở 14 model staging;
+    - snapshot thật đạt, `snapshot_id` vẫn `5bd9a84aaf73`;
+    - đột biến (CSV tạm, hợp đồng tạm): sai kiểu integer, ngày không có thật, rỗng ở cột không được rỗng, chuỗi chỉ có khoảng trắng,
+      khóa trùng, đổi tên cột;
+    - mỗi ca dừng ở `prepare` (`ValueError` → exit 2), có `quarantine/summary.json` và CSV dòng sai đủ `_src_row`, lý do, cả dòng
+      gốc; lịch sử ghi `prepare` / `loi`; không có `context.json`, `build` không chạy; registry không đổi;
+    - `--snapshot-id` cũng đi qua hợp đồng.
+  - `scripts/pipeline/tests` + `scripts/forecast/tests` + `test_releases.py` + `test_ban_phuc_vu.py` 85/85.
+- **Chuỗi chạy do PM tự chạy ngoài Claude Code** (luật 7), root `warehouse/pipeline-s4`, target duckdb:
+  - `code_version` `5c27dddee29b…` = HEAD `9f037dd` cộng code S4 chưa commit. Không dùng cho cloud.
+  - Run `s4-20261019-01`: năm stage đạt, publish `e9e6f92f221942c2bcfcbbcf`; không có thư mục `quarantine`, không có `failure.json`.
+    Quality 3.833 ngày khớp snapshot, 36 relation. Dự báo 372 giây theo đồng hồ, khớp 369 giây trong `forecast_meta`.
+  - `prepare --snapshot-id 5bd9a84aaf73` (`s4-20261019-02`): snapshot cũ đạt hợp đồng; run bị bỏ qua (cùng snapshot, cùng code với
+    bản đang phục vụ), lịch sử ghi `bo_qua`. Không có thư mục `quarantine`.
+- **Thời gian stage `prepare`** (từ `history.jsonl`):
+
+  | Lần chạy | Validator | Thời gian |
+  |---|---|---|
+  | `s3-20261019-01` (đọc 14 CSV, ghi snapshot) | chưa có | 15 giây |
+  | `s3-20261019-02` (đọc 14 CSV, ghi snapshot) | chưa có | 13 giây |
+  | `s4-20261019-01` (đọc 14 CSV, ghi snapshot, kiểm hợp đồng) | có | 21 giây |
+  | `s4-20261019-02` (`--snapshot-id`, chỉ kiểm snapshot có sẵn) | có | 3 giây |
+
+  Phần kiểm hợp đồng đo riêng trên snapshot thật chạy 2,1 giây; phần còn lại của khoảng chênh 6–8 giây là dao động của máy.
+- **Mẩu sót:** `warehouse/pipeline/snapshots/prepare-iracv4u4` là thư mục tạm của lần chạy S2 bị dừng vì thiếu RAM (2026-10-18). Vô
+  hại (không phải snapshot, `--snapshot-id` chỉ nhận mã 12 ký tự hex); để nguyên, không xóa.
 
 Nghiệm thu local ngày 2026-10-11/12:
 - CLI Windows `acceptance-02`: dbt 217/217 đạt; 3.833 ngày G/COGS khớp tuyệt đối với snapshot `5bd9a84aaf73`;

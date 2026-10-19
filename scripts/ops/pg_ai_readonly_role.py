@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / 'apps' / 'retail_app'))
 import psycopg                                   # noqa: E402
 from psycopg import sql                          # noqa: E402
 
-from ai_explain.tools import ALLOWED_RELATIONS   # noqa: E402
+from ai_explain.tools import ALLOWED_RELATIONS, OPTIONAL_RELATIONS   # noqa: E402
 from dwh import guarded                          # noqa: E402
 
 AI_USER = os.environ.get('PG_AI_USER', 'retail_ai_ro')
@@ -51,13 +51,19 @@ def apply() -> None:
         for rel in sorted(ALLOWED_RELATIONS):
             schema, name = rel.split('.')
             cur.execute(sql.SQL('grant select on {}.{} to {}').format(sql.Identifier(schema), sql.Identifier(name), role))
+        # Bảng dự báo tùy chọn chỉ có trong bản pipeline; bản cũ không có vẫn phải cấp lại được.
+        for rel in sorted(OPTIONAL_RELATIONS):
+            cur.execute('select to_regclass(%s)', (rel,))
+            if cur.fetchone()[0] is not None:
+                schema, name = rel.split('.')
+                cur.execute(sql.SQL('grant select on {}.{} to {}').format(sql.Identifier(schema), sql.Identifier(name), role))
         conn.commit()
     print(f'{verb} role {AI_USER}: SELECT trên {len(ALLOWED_RELATIONS)} bảng/view reporting')
 
 
 def check() -> None:
     os.environ['PG_AI_USER'], os.environ['PG_AI_PASSWORD'] = AI_USER, AI_PASSWORD
-    sess = guarded.open_session('postgres', ALLOWED_RELATIONS)   # raise GuardError nếu quyền vượt
+    sess = guarded.open_session('postgres', ALLOWED_RELATIONS, optional_relations=OPTIONAL_RELATIONS)
     sess.close()
     print(f'{AI_USER}: guard đạt (không superuser, không quyền ghi/tạo, chỉ SELECT danh sách cho phép)')
 

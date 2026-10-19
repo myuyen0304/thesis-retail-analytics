@@ -41,12 +41,14 @@ vars:
   ai_optional_relations:
     - reporting.rpt_forecast_backtest
     - reporting.rpt_forecast_daily
+    - reporting.rpt_forecast_explain
   # Bảng trang Dự báo đọc (= apps/retail_app/dwh/forecast_queries.SOURCE), cùng kiểu TÙY CHỌN (RV11, review Codex 2026-10-15):
   # pipeline cấp quyền / thử đọc cho app reader khi bản có bảng, không đòi ở bản trước B2b (rollback vẫn chạy).
   app_optional_relations:
     - reporting.rpt_forecast_actual
     - reporting.rpt_forecast_backtest
     - reporting.rpt_forecast_daily
+    - reporting.rpt_forecast_explain
   # Bảng các trang app đọc (= apps/retail_app/dwh/queries.SOURCE): hook cấp SELECT cho SP của app trên Databricks Apps
   app_read_relations:
     - reporting.driver_rule

@@ -19,7 +19,7 @@ from ai_explain import evidence, metric_catalog as cat, service, tools
 from ai_explain.contracts import ToolCall
 from dwh import guarded, releases
 from dwh.connection import ROOT
-from tests.test_ai_chat import FakeProvider, call, final
+from tests.test_ai_chat import E04_OK, FakeProvider, call, final
 
 STATE = ROOT / 'warehouse' / 'pipeline' / 'state.json'
 RTOL = 1e-9
@@ -205,6 +205,24 @@ def test_ban_truoc_b2b_khong_co_du_bao(versioned):
         assert r.status == 'no_data' and r.message == tools.NO_FORECAST
         ok = _run('get_revenue_summary', metric='R', year=2019)
         assert ok.status == 'ok' and ok.evidence.data_version['release_id'] == PRE_B2B
+    finally:
+        releases.reset()
+
+
+def test_chat_tron_luot_sau_khi_them_relation_tuy_chon_van_doc_ban_cu(versioned):
+    """B4a: chạy qua service, gồm known_groups; rollback bản cũ vẫn trả PS và no_data dự báo."""
+    st = _state()
+    if PRE_B2B not in st['releases']:
+        pytest.skip('registry không có bản trước B2b')
+    releases.pin(st['releases'][PRE_B2B])
+    try:
+        ps = service.run_turn('Vì sao R năm 2019 giảm?', [], 'duckdb', FakeProvider(
+            call('get_revenue_drivers', metric='R', year=2019), E04_OK))
+        assert ps.status == 'ok' and ps.results['T1'].evidence.data_version['release_id'] == PRE_B2B
+        forecast = service.run_turn('Dự báo doanh thu tháng 8/2023?', [], 'duckdb', FakeProvider(
+            call('get_forecast', metric='G', period='month', year=2023, month=8),
+            final('no_data', 'Bản dữ liệu này chưa có dự báo.')))
+        assert forecast.status == 'no_data' and forecast.results['T1'].message == tools.NO_FORECAST
     finally:
         releases.reset()
 
