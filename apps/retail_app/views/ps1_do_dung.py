@@ -1,6 +1,9 @@
 import altair as alt
+import pandas as pd
 import streamlit as st
 
+from ai_explain import page_explain
+from ui.ai_panel import ai_panel
 from ui.common import GIOI_HAN_CHUNG, info_strip, kpi, load_or_stop, need, period_label, pick, url_choice
 from ui.fmt import AXIS_PCT1, AXIS_TRIEU, AXIS_TY, num, pct, pp, trieu, ty
 
@@ -44,14 +47,19 @@ with st.expander('Định nghĩa & phạm vi dữ liệu'):
     ]))
 
 # --- Bốn số chính của kỳ đã chọn ---
-c1, c2, c3, c4 = st.columns(4)
-kpi(c1, 'G: tiền hàng mọi đơn', ty(row['g'], 2),
+# G − R đọc từ cột gap_g_minus_r (dbt, test assert_rpt_gap_peak), không trừ trong app. Bản dữ liệu dựng trước khi có cột
+# này (bản public cũ, bản để rollback) thì không hiện thẻ đó, trang vẫn chạy.
+gap = row.get('gap_g_minus_r')
+has_gap = gap is not None and pd.notna(gap)
+cols = st.columns(4 if has_gap else 3)
+kpi(cols[0], 'G: tiền hàng mọi đơn', ty(row['g'], 2),
     f'Mọi đơn, chưa trừ chiết khấu (= sales.csv). Số đầy đủ: {num(row["g"], 2)}.')
-kpi(c2, 'R: doanh thu đơn đã giao', ty(row['r'], 2),
+kpi(cols[1], 'R: doanh thu đơn đã giao', ty(row['r'], 2),
     f'Chỉ đơn đã giao, sau chiết khấu, theo ngày đặt hàng. Số đầy đủ: {num(row["r"], 2)}.')
-kpi(c3, 'Chênh lệch G − R', ty(row['g'] - row['r'], 2),
-    f'G trừ R cùng kỳ; gồm bốn khoản trên thác. Số đầy đủ: {num(row["g"] - row["r"], 2)}.')
-kpi(c4, 'Tỷ lệ R/G', pct(row['capture_rate'], 1),
+if has_gap:
+    kpi(cols[2], 'Chênh lệch G − R', ty(gap, 2),
+        f'Phần tiền hàng không thành doanh thu cùng kỳ; gồm bốn khoản trên thác. Số đầy đủ: {num(gap, 2)}.')
+kpi(cols[-1], 'Tỷ lệ R/G', pct(row['capture_rate'], 1),
     'Doanh thu đơn đã giao chia cho tiền hàng mọi đơn cùng kỳ.')
 
 # --- Thác G → R ---
@@ -103,15 +111,17 @@ with left:
                    f'Tỷ lệ chiết khấu: {pct(row["discount_rate"])} (chiết khấu / tiền hàng đơn đã giao).')
 with side:
     with st.container(border=True):
-        st.markdown('**Giải thích kết quả**')
-        st.caption('Tóm tắt theo quy tắc từ số liệu kỳ đang chọn')
+        st.markdown('**Tóm tắt từ số liệu**')
+        st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
         parts = w[w['step_code'].isin(['cancelled', 'returned', 'undelivered', 'discount'])]
         largest = parts.loc[parts['amount'].abs().idxmax()]
-        st.markdown(f'- **Chênh lệch:** G cao hơn R {ty(row["g"] - row["r"], 2)}; R/G là {pct(row["capture_rate"])}.')
+        st.markdown(f'- **Chênh lệch:** G cao hơn R {ty(gap, 2)}; R bằng {pct(row["capture_rate"])} của G.' if has_gap
+                    else f'- **Tỷ lệ:** R bằng {pct(row["capture_rate"])} của G.')
         st.markdown(f'- **Khoản lớn nhất:** {largest["Bước"].lower()} {gon(abs(largest["amount"]))}, '
                     f'bằng {pct(largest["share_of_g"])} của G.')
         st.markdown('- **Giới hạn:** đây là phân rã theo trạng thái đơn và chiết khấu, '
                     'không phải thất thoát hay dòng tiền theo ngày thanh toán.')
+    ai_panel(page_explain.request_ps1(code, kind))
 
 # --- Chỉ lọc các dòng reporting theo kỳ đã chọn; không tính lại KPI ---
 if kind == 'total':

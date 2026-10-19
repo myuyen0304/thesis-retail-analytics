@@ -42,6 +42,7 @@ select
     year,
     year between 2013 and 2022                                    as is_analysis_period,
     g, r, cancelled_gross, returned_gross, undelivered_gross, delivered_discount,
+    g - r                                                         as gap_g_minus_r,   -- thẻ "Chênh lệch G − R" của PS1
     n, q, c, u, p, f, aov, capture_rate, cancelled_rate, discount_rate,
     -- 2013 không có năm trước đủ 12 tháng → tăng trưởng chính thức bắt đầu 2014
     case when year >= 2014 then r0 end                            as r_prior_year,

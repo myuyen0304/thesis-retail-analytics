@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 
+from dwh import releases
 from ui.common import BACKEND_LABEL, LOCAL_TZ, backend, kpi, load_or_stop, notes, page_header
 from ui.fmt import num
 
@@ -57,6 +58,44 @@ if pd.notna(s['test_invocation_id']):
     kpi(c3, 'Kiểm lúc', gio(s['tests_started_at_utc'], '%H:%M %d/%m'), f'{lan_kiem}, giờ Việt Nam.')
 kpi(c4, 'Dữ liệu tới ngày', s['data_end_date'].strftime('%d/%m/%Y'),
     'Đơn cuối cùng trong nguồn. Đây là bản chụp lịch sử, không cập nhật theo thời gian thực.')
+
+
+def tuoi(ts: pd.Timestamp) -> str:
+    """Tuổi của bản: giờ hiện tại trừ giờ công bố."""
+    phut = max(0, int((pd.Timestamp.now(tz='UTC') - ts).total_seconds() // 60))
+    if phut < 60:
+        return f'{num(phut)} phút'
+    if phut < 48 * 60:
+        return f'{num(phut // 60)} giờ'
+    return f'{num(phut // (24 * 60))} ngày'
+
+
+# --- Bản dữ liệu đang phục vụ (S3, A4). Chỉ dùng thứ app vốn đã đọc: bản ghi release đã pin cho lượt này và giờ công bố
+# lưu cạnh con trỏ trong registry; không đọc lịch sử lần chạy (D1 = không: lần lỗi xem bằng `cli history` và Airflow) ---
+st.subheader('Bản dữ liệu đang phục vụ')
+ban = releases.current()          # đã pin ở lần đọc đầu của trang (load_or_stop → release_for_read)
+if ban is None:
+    st.caption('Không áp dụng: app đang đọc kho dựng bằng `dbt build` thường, không theo bản dữ liệu do pipeline công bố '
+               '(bật bằng `RETAIL_RELEASE_MODE=versioned`).')
+else:
+    try:                          # registry là dữ liệu: giờ hỏng thì coi như chưa ghi, không làm hỏng trang
+        ts = pd.Timestamp(releases.published_at() or 'NaT')
+        ts = None if pd.isna(ts) else (ts.tz_localize('UTC') if ts.tzinfo is None else ts)
+    except (TypeError, ValueError):
+        ts = None
+    b1, b2, b3, b4 = st.columns(4)
+    kpi(b1, 'Mã bản', ban['release_id'][:12],
+        f"Mã đầy đủ {ban['release_id']}. Mọi trang và chat trong lượt này đọc cùng bản này.")
+    kpi(b2, 'Công bố lúc', ts.tz_convert(LOCAL_TZ).strftime('%H:%M %d/%m/%Y') if ts is not None else 'chưa ghi',
+        'Giờ Việt Nam, lúc pipeline đổi con trỏ sang bản này (publish hoặc rollback).' if ts is not None else
+        'Bản được công bố trước khi pipeline ghi giờ công bố (trước 2026-10-19), hoặc con trỏ được đổi bằng code cũ.')
+    kpi(b3, 'Tuổi của bản', tuoi(ts) if ts is not None else '–',
+        'Từ lúc công bố tới giờ mở trang. Đây là độ tươi của bản, không phải của dữ liệu: dữ liệu dừng ở '
+        f"{s['data_end_date'].strftime('%d/%m/%Y')} theo thiết kế. Lịch chạy tự động đang tắt nên app chỉ hiện tuổi, không "
+        'báo đỏ.')
+    kpi(b4, 'Snapshot nguồn', ban['snapshot_id'],
+        f"Dựng bởi lần chạy {ban['run_id']}, code {ban['code_version'][:12]}. Lần chạy lỗi không hiện ở đây: xem bằng lệnh "
+        '`python -m scripts.pipeline.cli history` hoặc Airflow.')
 
 # --- 1. Kết quả test ---
 st.subheader('1. Kết quả test của lần kiểm gần nhất')

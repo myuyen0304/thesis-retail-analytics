@@ -594,6 +594,9 @@ def _label(fld: str, row: dict | None, clause: str, actual: bool = False) -> str
 
 _MIX_CMP = re.compile(r'cao hơn|thấp hơn|lớn hơn|nhỏ hơn|nhiều hơn|ít hơn|vượt|chênh|gấp|so với|tăng|giảm')
 _NEGATED = re.compile(r'(?:không|chưa)\s+(?:\S+\s+){0,3}$')     # "không cộng, trừ hay so với", "không tính chênh lệch"
+_NEG_WORD = re.compile(r'(?<!\w)(?:không|chưa)(?!\w)')
+_TURN_WORD = re.compile(r'(?<!\w)(?:nhưng|còn|trong khi|tuy nhiên|song)(?!\w)')   # phủ định không vắt qua chữ đổi ý
+_CLAUSE_CUT = re.compile(r'[,;:()—–]')
 _PAST_YEAR = re.compile(r'(?<!\d)(?:201[2-9]|202[0-2])(?!\d)')    # năm có số thực tế (2012-07-04 → 2022-12-31)
 
 
@@ -606,9 +609,17 @@ def _number_kind(path: str, fld: str, results: dict) -> str | None:
     return 'thuc_te' if tool and not tool.startswith('get_forecast') and fld in FIELD_LABEL else None
 
 
+def _negated(before: str) -> bool:
+    """Phần câu trước chữ so sánh có phủ định cho chính chữ đó: "không" ở đầu vế ("Không thể trả lời bằng phần trăm
+    chênh lệch", live b7 K16), hoặc trong 3 chữ ngay trước kể cả qua dấu phẩy liệt kê ("không cộng, trừ hay so với").
+    Không tính phủ định nằm trước "nhưng / còn…" ("không phải R, nhưng cao hơn thực tế" vẫn là phép so)."""
+    seg = _TURN_WORD.split(before)[-1]
+    return bool(_NEGATED.search(seg) or _NEG_WORD.search(_CLAUSE_CUT.split(seg)[-1]))
+
+
 def _mix_compare(low: str) -> bool:
-    """Câu có chữ so sánh / đổi không bị phủ định ngay trước ("không so với" không phải một phép so)."""
-    return any(not _NEGATED.search(low[:m.start()]) for m in _MIX_CMP.finditer(low))
+    """Câu có chữ so sánh / đổi không bị phủ định ("không so với" không phải một phép so)."""
+    return any(not _negated(low[:m.start()]) for m in _MIX_CMP.finditer(low))
 
 
 def _group_names(results: dict) -> set[str]:
@@ -838,6 +849,9 @@ _TAIL_SENT = re.compile(r'(?:nếu|bạn có thể|bạn muốn|bạn cần|hãy
 _CONNECTIVE = re.compile(r'(?:ngoài ra|thêm vào đó|hơn nữa|bên cạnh đó|đồng thời|cũng)(?!\w)', re.I)   # câu nối: cần câu mở
 _DIM_WORD = {'category': 'ngành', 'region': 'vùng', 'acquisition_channel': 'kênh'}
 REF_HEADER = 'Số tham khảo, không phải số bạn hỏi:'
+ASKED_HEADER = 'Số đúng kỳ trong câu hỏi:'                            # B7 S1b, xem reference_answer
+_REF_ASK = re.compile(r'tham khảo|(?<!\w)mốc(?!\w)', re.I)             # người hỏi tự xin số làm mốc tham khảo (rv12f)
+_GROUP_Q = re.compile(r'(?<!\w)(?:ngành|vùng(?!\s+dự báo)|khu vực|kênh|nhóm|category|region|channel)(?!\w)', re.I)
 _PRIOR = {'r_prior_year', 'r_same_month_prior_year'}            # số của cùng kỳ năm trước so với dòng
 _CHANGE = re.compile(r'^delta_|yoy|change|contribution|shift')   # so kỳ của dòng với cùng kỳ năm trước: thuộc cả hai kỳ
 _SHIFTED = re.compile(r'before|after|_start$|_end$')            # r_12m_before, r_start...: kỳ không suy được từ dòng
@@ -970,7 +984,7 @@ def reference_refs(question: str, values: dict, results: dict) -> tuple[list, di
     số thực tế có năm."""
     specs = [x for x in question_periods(question or '') if x[0] != 'invalid']
     q_hz = bool(_HORIZON_NAME.search(question or ''))
-    other = {}
+    other, cands = {}, {}
     for cid, (path, _v, _s) in values.items():
         res = results.get(path.split('.')[0])
         if res is None or not res.ok or res.evidence is None:
@@ -990,17 +1004,42 @@ def reference_refs(question: str, values: dict, results: dict) -> tuple[list, di
                     other[cid] = _Ref(f'vùng dự báo {_FC_START.isoformat()} → {_FC_END.isoformat()}', (), True)
                 continue
             gots = tuple((int(p[3:]), int(p[:2]), None) for p in d.get('months', []) if re.fullmatch(r'\d\d/\d{4}', p))
-            if gots and (not specs or any(s[0] == 'range' or not any(_period_match(s, g) for g in gots)
-                                            for s in specs)):
-                other[cid] = _Ref(', '.join(d['months']), gots)
+            if gots:
+                cands[cid] = _Ref(', '.join(d['months']), gots)
             continue
-        gots = _value_gots(tool, fld, row)
-        if gots and (not specs or any(s[0] == 'range' or not any(_period_match(s, g) for g in gots)
-                                        for s in specs)):
+        if gots := _value_gots(tool, fld, row):
             fc = tool == 'get_forecast'
-            other[cid] = _Ref(row.get('period') if fc else ' / '.join(map(_spec_label, gots)), gots,
+            cands[cid] = _Ref(row.get('period') if fc else ' / '.join(map(_spec_label, gots)), gots,
                               kind='dự báo' if fc else 'thực tế', prior=fld in _PRIOR)
+    # Có kỳ được hỏi thiếu số (hoặc là khoảng: tool không có tổng khoảng) → mọi số là số tham khảo: số khớp kỳ tham khảo
+    # không được tắt khuôn cho kỳ thiếu số (rv12f). Mọi kỳ được hỏi đều có số → chỉ số của kỳ KHÁC là số tham khảo
+    # (B7 S1b, live b7 K17: "cộng G thực tế 2021 với G dự báo 2024" có đủ số hai kỳ, chỉ phép cộng là chưa hỗ trợ).
+    have = [g for r in cands.values() for g in r.gots]
+    gap = any(s[0] == 'range' or not any(_period_match(s, g) for g in have) for s in specs)
+    for cid, r in cands.items():
+        if not specs or gap or not any(_period_match(s, g) for s in specs for g in r.gots):
+            other[cid] = r
     return specs, other
+
+
+def _asked_specs(path: str, results: dict, specs: list) -> list:
+    """[(kỳ được hỏi, loại số)] mà số ở path là số đúng kỳ và đúng loại: số thực tế cho kỳ chạm dữ liệu thực tế, số dự
+    báo cho kỳ chạm vùng dự báo (năm 2024 chỉ có tới 01/07, nhãn của số tự ghi phần có dự báo). Số cả vùng / tháng cao,
+    thấp nhất vùng dự báo không tính. Kỳ được hỏi là khoảng (quý, nửa năm…) không tính: tool không có tổng khoảng, số một
+    tháng trong khoảng không phải số được hỏi (phát lại live E38 "R quý 2 năm 2019")."""
+    res = results.get(path.split('.')[0])
+    if res is None or not res.ok or res.evidence is None or _REF_DERIVED.search(path):
+        return []
+    try:
+        _, fld, row = _resolve(path, results)
+    except ValueError:
+        return []
+    fc = res.evidence.tool == 'get_forecast'
+    gots = _value_gots(res.evidence.tool, fld, row)
+    lo, hi = (_FC_START, _FC_END) if fc else (_DATA_START, _DATA_END)
+    return [(s, 'dự báo' if fc else 'thực tế') for s in specs
+            if s[0] != 'range' and (sp := _spec_span(s)) is not None and sp[0] <= hi and lo <= sp[1]
+            and any(_period_match(s, g) for g in gots)]
 
 
 def _unnamed_period_errors(answer: str, other: dict, specs: list) -> list[str]:
@@ -1070,12 +1109,14 @@ def _spec_span(s: tuple):
     return _date(y, m or 1, d or 1), _date(y, m or 12, d or _month_end_day(y, m or 12))
 
 
-def _coverage_line(question: str, specs: list) -> str:
+def _coverage_line(question: str, specs: list, has_actual: frozenset = frozenset()) -> str:
     """Nêu riêng các kỳ đọc chắc và nằm trọn ngoài vùng; kỳ khác trong cùng câu hỏi không bị gọi nhầm là ngoài vùng.
-    Kỳ nằm trong vùng (lý do là grain, nhóm, chỉ tiêu: B02, B03, E08) không có câu này."""
+    Kỳ nằm trong vùng (lý do là grain, nhóm, chỉ tiêu: B02, B03, E08) không có câu này. has_actual (B7 S1b): kỳ đã
+    có số thực tế trong câu trả lời không bị gọi là "ngoài vùng dự báo" (live b7 K17: hỏi G thực tế năm 2021)."""
     fc = bool(_FORECAST_Q.search(question or ''))
     lo, hi = (_FC_START, _FC_END) if fc else (_DATA_START, _DATA_END)
-    outside = [s for s in specs if (sp := _spec_span(s)) is not None and (sp[1] < lo or sp[0] > hi)]
+    outside = [s for s in specs if (sp := _spec_span(s)) is not None and (sp[1] < lo or sp[0] > hi)
+               and not (fc and s in has_actual)]
     if not outside:
         return ''
     ky = ' và '.join(dict.fromkeys(map(_spec_text, outside)))
@@ -1142,27 +1183,36 @@ def reference_answer(question: str, status: str, answer: str, values: dict, resu
     specs, other = reference_refs(question, values, results)
     if not other:
         return None, []
-    lines, errs, seen = [], [], set()
+    lines, asked, errs, seen, has_actual = [], [], [], set(), set()
+    # số đúng kỳ được hỏi, đúng loại số của kỳ đó (thực tế tới 2022, dự báo trong vùng dự báo): mục riêng, không xếp vào
+    # "không phải số bạn hỏi" (B7 S1b). Giữ khuôn cũ khi câu hỏi xin số "tham khảo / mốc" (rv12f) hoặc lọc nhóm (B03:
+    # số toàn công ty đúng kỳ vẫn không phải số của vùng được hỏi)
+    split = bool(specs) and not _REF_ASK.search(question or '') and not _GROUP_Q.search(question or '')
     for cid, (path, v, _s) in values.items():
         if path in seen:
             continue
         seen.add(path)
         try:
-            if line := _ref_line(path, v, results):
-                lines.append(line)
+            line = _ref_line(path, v, results)
         except ValueError as e:
             errs.append(f'{cid}: {e}')
+            continue
+        hits = _asked_specs(path, results, specs)
+        has_actual |= {s for s, kind in hits if kind == 'thực tế'}
+        if line:
+            (asked if split and hits else lines).append(line)
     if errs:
         return None, errs
     lead, tail = _model_sentences(answer)
-    cover = _coverage_line(question, specs)
+    cover = _coverage_line(question, specs, frozenset(has_actual))
     head = [cover] if cover else lead            # có câu "ngoài vùng" thì câu dẫn của mô hình không thêm gì, chỉ thêm rủi ro
     if not head or _CONNECTIVE.match(head[0]):            # câu lý do chính có chữ số đã bị bỏ, còn lại câu "Ngoài ra..."
         head.insert(0, 'Câu hỏi cần nói rõ thêm trước khi có số đúng kỳ.' if status == 'needs_clarification'
                     else 'Chưa có số đúng như câu hỏi.')
     if not tail and status == 'needs_clarification':
         tail = ['Bạn muốn xem kỳ nào?']
-    md = ' '.join(head) + f'\n\n{REF_HEADER}\n\n' + '\n'.join(lines)
+    md = ' '.join(head) + (f'\n\n{ASKED_HEADER}\n\n' + '\n'.join(asked) if asked else '') + (
+        f'\n\n{REF_HEADER}\n\n' + '\n'.join(lines) if lines else '')
     return md + ('\n\n' + ' '.join(tail) if tail else ''), []
 
 

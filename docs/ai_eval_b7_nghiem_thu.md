@@ -148,18 +148,24 @@ Ký hiệu "máy / tay" là số lượt đạt chấm máy / đọc tay. Cột 
 | K23 "Còn tháng 5/2024?" | tiếp nối | 3/3 · 3/3 | 1 · 1 | Giữ G dự báo, đổi kỳ |
 | K24 "Vậy giá vốn dự báo của năm đó?" | tiếp nối | 3/3 · 3/3 | 1 · 1 | Hiểu "năm đó" là 2023 (năm dự báo), nhãn dự báo COGS |
 
-## 7. Chưa đạt: nguyên nhân và đề xuất (chưa sửa)
+## 7. Chưa đạt: nguyên nhân, đề xuất, và phần đã sửa sau nghiệm thu
 
 Không sửa rồi chạy lại trên chính bộ này để báo là đạt. Sửa xong phải đo bằng bộ câu mới.
 
-| Câu | Lỗi của | Nguyên nhân | Đề xuất |
-|---|---|---|---|
-| K02 | Router (prompt) | "Từ 2016 đến 2018" là khoảng năm trùng ranh giới giai đoạn B. Mô hình hiểu là chuỗi năm (`get_revenue_summary` + đổi so năm trước) và không tìm ra `get_revenue_trend` phases, nơi có sẵn % đổi cả giai đoạn. Câu trả lời trung thực (không tự cộng) nhưng không trả lời được | Thêm vào dòng router: khoảng nhiều năm trùng ranh giới giai đoạn (2013–2016, 2016–2018, 2018–2019, 2019–2022) thì dùng `get_revenue_trend` phases; khoảng khác thì nói chưa có tổng khoảng |
-| K17 | App (khuôn dẫn số) | Khi trả `unsupported` mà có dẫn số, khuôn rv12f (`reference_refs`, `_coverage_line`) coi 2021 là "ngoài vùng dự báo" và xếp số G thực tế 2021 vào mục "Số tham khảo, không phải số bạn hỏi", dù đó chính là số được hỏi. Phần sửa ở §1 mới áp cho nhánh `ok`, chưa áp cho khuôn này | Áp cùng ngoại lệ cho khuôn: kỳ có số thực tế không bị gọi là "ngoài vùng dự báo", và số đúng kỳ được hỏi không xếp vào mục tham khảo. Phải phát lại log live cũ trước khi nhận |
-| K21 | Rubric chấm máy, một phần tool | `R_and_G` kèm `compare_prior_year` trả `unsupported`, nên mô hình gọi R và G riêng. Câu trả lời đúng tiêu chí đọc tay, nhưng rubric chỉ nhận lời gọi `R_and_G` | Bộ sau cho rubric nhận cả hai lời gọi R và G; cân nhắc cho `R_and_G` hỗ trợ so năm trước |
-| K08 | Prompt (nhẹ) | 2/3 lượt local không nói điểm ngày là thước chọn model khi vẽ điểm ngày | App tự gắn ghi chú "điểm ngày kết hợp là thước chọn model" khi trả số của `get_forecast_backtest`, như ghi chú MAPE tháng đã có |
-| K22 | Router (prompt) | Tháng không kèm năm có ở cả 2023 và 2024; mô hình tự chọn 2023, có ghi rõ năm | Dòng router "mơ hồ" nêu ví dụ này: hỏi lại năm, hoặc trả cả hai năm |
-| K16 (lần đầu) | App (chặn nhầm nhẹ) | Câu từ chối "Không thể trả lời bằng phần trăm chênh lệch…" bị coi là câu so sánh, vì cửa sổ phủ định chỉ xét 3 chữ trước chữ "chênh". Mô hình sửa lại đạt ở lần thứ hai | Mở cửa sổ phủ định tới đầu vế câu; thêm test cho câu này |
+**Sau nghiệm thu (S1b, PM chốt 2026-10-18):**
+- Sửa phía app cho K17, K16, K08. Commit ghi khi PM commit.
+- Điểm AI4 ở §4–§5 giữ nguyên, không chấm lại bộ `b7`. Phần sửa được đo lại ở S9: chạy lại bộ `b7` cùng mã băm, ghi
+  thành dòng hồi quy dù kết quả thế nào.
+- K02, K22 (dòng router) để tới S7 và thêm khi tăng `PROMPT_VERSION`. K21 sửa rubric ở bộ eval sau.
+
+| Câu | Lỗi của | Nguyên nhân | Đề xuất | Sau nghiệm thu |
+|---|---|---|---|---|
+| K02 | Router (prompt) | "Từ 2016 đến 2018" là khoảng năm trùng ranh giới giai đoạn B. Mô hình hiểu là chuỗi năm (`get_revenue_summary` + đổi so năm trước) và không tìm ra `get_revenue_trend` phases, nơi có sẵn % đổi cả giai đoạn. Câu trả lời trung thực (không tự cộng) nhưng không trả lời được | Thêm vào dòng router: khoảng nhiều năm trùng ranh giới giai đoạn (2013–2016, 2016–2018, 2018–2019, 2019–2022) thì dùng `get_revenue_trend` phases; khoảng khác thì nói chưa có tổng khoảng | Chưa sửa; ghi vào hàng S7 của `giao_viec_theo_so_do.md` |
+| K17 | App (khuôn dẫn số) | Khi trả `unsupported` mà có dẫn số, khuôn rv12f coi 2021 là "ngoài vùng dự báo" và xếp số G thực tế 2021 vào mục "Số tham khảo, không phải số bạn hỏi", dù đó chính là số được hỏi. Gốc: `reference_refs` coi một số là "tham khảo" khi nó không khớp **mọi** kỳ trong câu hỏi, nên câu hỏi hai kỳ luôn bật khuôn dù đủ số cả hai kỳ | Áp cùng ngoại lệ cho khuôn: kỳ có số thực tế không bị gọi là "ngoài vùng dự báo", và số đúng kỳ được hỏi không xếp vào mục tham khảo. Phải phát lại log live cũ trước khi nhận | **Đã sửa (S1b).** (1) Khuôn chỉ bật khi có kỳ được hỏi thiếu số, kỳ là khoảng, hoặc có số của kỳ khác. (2) Kỳ đã có số thực tế không bị gọi là "ngoài vùng dự báo". (3) Số đúng kỳ, đúng loại nằm ở mục riêng "Số đúng kỳ trong câu hỏi"; vẫn giữ mục tham khảo khi câu hỏi xin "mốc tham khảo" (rv12f) hoặc lọc theo nhóm (B03). Test: `test_ai_router.py::test_k17_*` |
+| K21 | Rubric chấm máy, một phần tool | `R_and_G` kèm `compare_prior_year` trả `unsupported`, nên mô hình gọi R và G riêng. Câu trả lời đúng tiêu chí đọc tay, nhưng rubric chỉ nhận lời gọi `R_and_G` | Bộ sau cho rubric nhận cả hai lời gọi R và G; cân nhắc cho `R_and_G` hỗ trợ so năm trước | Chưa sửa; sửa rubric ở bộ eval sau |
+| K08 | Prompt (nhẹ) | 2/3 lượt local không nói điểm ngày là thước chọn model khi vẽ điểm ngày | App tự gắn ghi chú "điểm ngày kết hợp là thước chọn model" khi trả số của `get_forecast_backtest`, như ghi chú MAPE tháng đã có | **Đã sửa (S1b).** `tools.SELECTION_NOTE` in dưới mọi câu trả lời dẫn `get_forecast_backtest`; `TOOL_VERSION` `v1.8`; prompt không đổi. Test: `test_k08_*` |
+| K22 | Router (prompt) | Tháng không kèm năm có ở cả 2023 và 2024; mô hình tự chọn 2023, có ghi rõ năm | Dòng router "mơ hồ" nêu ví dụ này: hỏi lại năm, hoặc trả cả hai năm | Chưa sửa; ghi vào hàng S7 |
+| K16 (lần đầu) | App (chặn nhầm nhẹ) | Câu từ chối "Không thể trả lời bằng phần trăm chênh lệch…" bị coi là câu so sánh, vì cửa sổ phủ định chỉ xét 3 chữ trước chữ "chênh". Mô hình sửa lại đạt ở lần thứ hai | Mở cửa sổ phủ định tới đầu vế câu; thêm test cho câu này | **Đã sửa (S1b).** Phủ định tính từ đầu vế câu, hoặc trong 3 chữ ngay trước. Phủ định nằm trước "nhưng / còn…" không tính, nên câu "không phải R, nhưng cao hơn thực tế" giờ bị chặn; trước khi sửa câu này lọt. Test: `test_k16_*` |
 
 ## 8. Giới hạn
 

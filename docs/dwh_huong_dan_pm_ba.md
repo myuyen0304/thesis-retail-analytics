@@ -2292,3 +2292,137 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   - Hạn mức 200 nghìn token mỗi phiên gần chạm trần. B7 phải hạ trần token ra mỗi lần gọi từ 1.536 xuống 1.408 thì 3 câu
     tốn nhất mới vừa.
   - Thêm tool mới sẽ cần tính lại hạn mức.
+
+### 2026-10-18: mỗi trang PS1–PS5 có khung "AI diễn giải" (B8, bước SPS; dev xong ở local, đã commit `8d89b22`…`4ef1b24`)
+
+- **Bạn chốt:** mỗi PS phải có AI giải thích cho stakeholder đọc: hiểu số và kết luận, lời thường, không công thức, không
+  lẫn với trang chat. Claude làm thay Codex.
+- **Trên trang có gì:**
+  - Cột phải, cạnh biểu đồ chính, có hai khung:
+    - **"Tóm tắt từ số liệu"**: câu viết sẵn theo quy tắc, ghi rõ "không do AI viết";
+    - **"AI diễn giải"**: khung màu tím, có biểu tượng AI.
+  - Khung AI không có ô nhập. Bấm **Nhờ AI diễn giải** thì AI viết 3–4 câu về đúng lựa chọn đang xem (kỳ, năm, chiều,
+    nhịp). Ví dụ PS4 năm 2019: "R năm 2019 giảm 554,9 triệu đồng so với năm 2018. Số đơn (N) góp −572,4 triệu đồng…".
+  - Dưới khung luôn có link "Muốn hỏi câu khác? Mở trang Hỏi dữ liệu (AI)".
+- **Vì sao tin được số:**
+  - App tự đọc kho theo lựa chọn trên trang, bằng đúng các tool chỉ đọc mà chat đang dùng. AI chỉ viết lời.
+  - Mỗi con số trong lời AI đi qua cùng bước kiểm như chat. Câu nào tự viết số hay sai dấu thì không hiện.
+  - Mở **Số liệu AI đã dùng** để xem giá trị trong kho và nguồn.
+- **Lựa chọn AI chưa giải thích được** thì khung báo rõ, không gọi AI, và có link sang lựa chọn gần nhất AI giải thích
+  được:
+  - PS1 kỳ 2012–2022 (kỳ mặc định theo deck): link "Xem kỳ 2013–2022";
+  - PS4 theo giai đoạn: link sang năm cuối giai đoạn. Phân rã theo giai đoạn chưa mở trong chat vì cách cộng dồn
+    năm còn chờ PM/BA chốt.
+- **Sửa kèm, ba lỗi của đợt bố cục mới:**
+  - "Chênh lệch G − R" (PS1) và tháng cao / thấp nhất (PS3) trước đây app tự tính. Nay đọc từ cột mới trong kho, có test.
+  - PS2, PS3 lại ghi tên giai đoạn đúng như BA đặt ("C. Sập"), khớp PS4 và chat.
+  - PS5 luôn có câu "chưa phải nguyên nhân" ngay dưới biểu đồ.
+- **Kiểm:**
+  - Kho dựng lại đạt 218/218 trên DuckDB và PostgreSQL.
+  - Test app đầy đủ: 943 đạt, 110 bỏ qua (Databricks, không chạy ở máy), 0 lỗi. Sau hai sửa nhỏ cuối ở khung AI, chạy
+    lại các bộ test trang PS, chat và khung AI: 242/242 đạt. Trong đó có 19 test mới cho khung AI;
+    các test này dùng **mô hình giả**, nên chỉ chứng minh luồng app, chưa chứng minh chất lượng lời AI.
+  - Bản dữ liệu cũ (dựng trước khi có cột mới, như bản public hiện tại): chạy thử trên bản local cũ ở chế độ versioned,
+    năm trang PS, trang chat và khung AI đều không lỗi; PS1 ẩn thẻ G − R, PS3 không nêu tên tháng.
+- **AI thật trên Databricks** (bạn duyệt, 1 lượt mỗi PS, bản đang phục vụ `b25b3e47…`):
+  - 5/5 trả lời được, không lỗi quyền. Số đúng và có câu "chưa phải nguyên nhân" ở cả 5.
+  - Hai lỗi lời cần sửa:
+    - PS1 gọi R/G là "tỷ lệ thực nhận" và G − R là "hụt doanh thu";
+    - PS2 thêm một nhận định không có số đi kèm.
+  - Đã thêm hai dòng vào lời dặn AI để sửa hai lỗi này (prompt trang `b8-2026-10-18b`).
+- **AI thật ở local** (bạn duyệt, 3 lượt mỗi PS, bản local mới có đủ cột):
+  - 12/15 lượt đạt khi đọc tay. Không câu nào sai số, không còn "thực nhận" hay "hụt".
+  - Ba lượt chưa đạt:
+    - PS2 vẫn một lần thêm nhận định không có số ("phần lớn mức xuống của cả kỳ…");
+    - PS3 một lần nói quá ("không phải dao động ngẫu nhiên", trong khi chưa có kiểm định);
+    - PS5 một lần bị bước kiểm chặn cả hai lần, khung báo "chưa tạo được lời diễn giải", không hiện câu sai.
+  - Có thể siết thêm lời dặn AI (cấm từ xếp hạng khi không dẫn số xếp hạng, cấm kết luận thống kê) rồi đo lại, nếu bạn
+    muốn.
+- **Chưa làm:**
+  - Bản public chỉ có cột mới sau lần chạy pipeline ở S6; trước đó trang ẩn thẻ G − R và tên
+    tháng, không lỗi.
+- **Lưu ý:** mỗi lần bấm tốn hạn mức token của phiên, dùng chung với chat. Bấm nhiều thì chat có thể báo hết hạn mức sớm
+  hơn; bấm **Xóa hội thoại** ở trang chat để đặt lại.
+- **Đã sửa file chung:**
+  - Tài liệu: `docs/ke_hoach_ai_gd2.md` (§2 quyết định, §4 dòng B8, §8), `docs/giao_viec_theo_so_do.md` (bước SPS,
+    điều kiện S2, lịch), mục này.
+  - Code: `ai_explain/page_explain.py`, `ui/ai_panel.py` (mới), 5 trang PS, `views/ai_explain.py`, test.
+  - dbt: 3 model reporting, `_reporting.yml`, test mới `assert_rpt_gap_peak`.
+- **Cần bạn quyết:**
+  - cho chạy AI thật mỗi PS khoảng 3 lượt trên DuckDB local không. Chi phí API nhỏ, nhưng trước đây bạn duyệt trước.
+    Phải xong trước khi push và Reboot bản public (S6(a)); chạy sau khi S2 publish bản local mới (bản đó có đủ cột B8);
+  - ~~cho commit không~~: bạn đã cho commit (qua phiên Head of AI), 22 commit `8d89b22`…`4ef1b24`;
+  - có viết lại bằng lời thường các chú thích dưới biểu đồ còn ghi công thức không (PS3 "R tháng ÷ …", PS5 "Tỷ trọng = …").
+    Tooltip và khung "Cách đọc & phương pháp" vẫn giữ công thức.
+
+### 2026-10-18: dự báo là một bước riêng của pipeline (S2, chạy local đạt, chưa commit)
+
+- **Làm gì:**
+  - Pipeline nay có năm bước, đúng dòng DAG trên sơ đồ kiến trúc: chuẩn bị snapshot → **dự báo (`forecast_train_score`)** →
+    dựng DWH bằng dbt → kiểm chất lượng và quyền đọc → công bố.
+  - Trước đây dự báo chạy lẫn trong bước dựng DWH. Nay bước dựng DWH không train nữa, chỉ dùng kết quả dự báo đã kiểm hash.
+- **Vì sao:** sơ đồ kiến trúc vẽ dự báo là một task riêng. Tách ra thì xem được riêng thời gian và lỗi của dự báo trên Airflow.
+  - Lỗi hợp đồng dự báo dừng ngay ở bước dự báo, Airflow không thử lại.
+  - Lỗi tạm thời thì bước dự báo được thử lại mà không động tới dbt.
+- **Trả lời PS nào:** không đổi số nào của PS1–PS5 hay dự báo; chỉ đổi cách pipeline chạy.
+- **Kiểm (2026-10-18):**
+  - 9 test mới cho pipeline, 1 test dự báo viết lại theo thiết kế mới; 46/46 đạt.
+  - Bạn tự chạy pipeline trong một cửa sổ PowerShell riêng (`s2-20261018-02`), vì Claude Code hai lần tự dừng lần chạy của nó khi
+    máy gần hết RAM. Lần chạy bị dừng đầu tiên (`s2-20261018-01`) để nguyên, không dùng.
+  - Năm bước đều đạt; dbt 223/223.
+  - Dự báo trùng tuyệt đối với lần chạy cũ cùng phiên bản model (`dbx-20261017-01`): mọi model, mọi ngày, lệch 0.
+  - Bản mới có đủ các cột B8 cần.
+- **Bản dữ liệu local đang phục vụ đổi:** từ `fc14b8a2f5a24ff99a434d7c` sang **`06f157ee26ce43639051ad35`**.
+  - Điểm nghiệm thu chat B7 ở local được chấm trên bản cũ `fc14b8a2…`. Hai bản có cùng số dự báo vì cùng snapshot; bản mới có
+    thêm các cột của B8.
+  - Muốn quay về bản cũ:
+    `.venv/Scripts/python.exe -m scripts.pipeline.cli rollback --run-id rb-s2 --release-id fc14b8a2f5a24ff99a434d7c`.
+- **Đã sửa file chung:** `docs/automation_batch.md` (mục Stage dự báo, Airflow Docker, Kiểm chứng), ô trạng thái S2 ở
+  `docs/giao_viec_theo_so_do.md`, mục này.
+  - Code: `scripts/pipeline/cli.py`, `scripts/pipeline/tests/test_pipeline.py`, `scripts/forecast/tests/test_forecast.py`,
+    `deploy/airflow/dags/retail_batch_pipeline.py`.
+  - Không đụng app, dbt, model dự báo.
+- **Cần bạn quyết / lưu ý:**
+  - cho commit code và docs của bước này không;
+  - lần chạy vừa rồi băm cả code S2 chưa commit, nên bản cloud (S6) phải dựng lại từ commit sạch;
+  - image Docker đang có là bản cũ (bốn task): phải build lại trước khi chạy DAG (S6).
+
+### 2026-10-19: pipeline ghi lịch sử từng lần chạy, trang Sức khỏe có thẻ "bản đang phục vụ" (S3, chạy local đạt, chưa commit)
+
+- **Làm gì:**
+  - **Lịch sử lần chạy:** mỗi bước của pipeline và mỗi lần quay về bản cũ (rollback) để lại một dòng: đạt, bỏ qua hay lỗi, giờ bắt đầu
+    và kết thúc, bản nào, lỗi loại gì. Không ghi nội dung lỗi hay thông tin đăng nhập.
+    - Xem bằng lệnh `.venv/Scripts/python.exe -m scripts.pipeline.cli history --root <thư mục pipeline>`.
+    - Trên Databricks, lịch sử nằm trong bảng riêng của pipeline; app và chat không được quyền đọc bảng này.
+  - **Giờ công bố:** mỗi lần đổi bản đang phục vụ, pipeline ghi thêm giờ đổi, cạnh con trỏ "bản đang phục vụ".
+  - **Thẻ "Bản dữ liệu đang phục vụ"** trên trang Sức khỏe dữ liệu:
+    - hiện mã bản, giờ công bố (giờ Việt Nam), tuổi của bản, snapshot nguồn, lần chạy đã dựng bản;
+    - app đọc theo kho cũ thì thẻ ghi "Không áp dụng".
+- **Vì sao:** mốc A4 (giám sát) trên sơ đồ kiến trúc. Bạn chốt (D1 = không): app không hiện lần chạy lỗi, để khỏi phải cấp thêm quyền
+  đọc cho app / chat. Thêm quyền đọc từng làm khóa chat public ngày 2026-10-17. Lần lỗi xem bằng lệnh lịch sử và Airflow.
+- **Độ tươi:** đo bằng tuổi của bản đang phục vụ, không đo theo ngày dữ liệu.
+  - Dữ liệu dừng ở 31/12/2022 theo thiết kế, nên đo theo ngày dữ liệu thì luôn báo cũ.
+  - Lịch chạy tự động đang tắt, nên thẻ chỉ hiện tuổi, không tô đỏ.
+- **Trả lời PS nào:** không đổi số nào; chỉ cho biết số trên app lấy từ bản nào và bản đó được công bố bao lâu rồi.
+- **Kiểm (2026-10-19):**
+  - test trong phiên:
+    - 8 test pipeline mới (32/32);
+    - 7 test app mới, gồm một test bắt buộc: bản public chưa Reboot (code app cũ) đọc registry mới vẫn chạy;
+    - các test sẵn có của trang Sức khỏe đạt (27/27).
+  - Bạn tự chạy chuỗi lệnh kiểm trong thư mục riêng `warehouse/pipeline-s3`, nên bản local đang phục vụ `06f157ee…` không đổi:
+    - dựng hai bản, chạy lại một lần (mọi bước "bỏ qua");
+    - quay về bản đầu (đạt), quay lại lần nữa ("bỏ qua"), gõ mã bản không có (báo lỗi rõ, ghi "lỗi");
+    - lịch sử đủ 18 dòng.
+- **Giới hạn:**
+  - Gõ sai cú pháp lệnh (ví dụ thiếu giá trị sau `--release-id`) thì lệnh dừng trước khi chạy, nên không có dòng lịch sử.
+  - Bước dự báo ở lần dựng thứ hai mất 19,6 phút theo đồng hồ, trong khi phần train tự đo chỉ 301 giây. Chưa rõ vì sao; có thể do máy
+    thiếu RAM.
+  - Chưa chạy trên Databricks.
+- **Đã sửa file chung:** `docs/automation_batch.md` (mục Giám sát, Nhật ký và lỗi, Kiểm chứng), ô trạng thái S3 ở
+  `docs/giao_viec_theo_so_do.md`, mục này.
+  - Code: `scripts/pipeline/cli.py`, `scripts/pipeline/state.py`, `scripts/pipeline/tests/test_pipeline.py`,
+    `apps/retail_app/dwh/releases.py`, `apps/retail_app/views/suc_khoe_du_lieu.py`, test mới `apps/retail_app/tests/test_ban_phuc_vu.py`.
+  - Không đụng chat, các trang PS, dbt.
+- **Cần bạn quyết / lưu ý:**
+  - cho commit code và docs của bước này không;
+  - bản public cần push và Reboot mới có thẻ mới. Trước đó, code cũ vẫn đọc được registry mới (đã kiểm).

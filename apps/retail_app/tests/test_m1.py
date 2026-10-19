@@ -68,8 +68,10 @@ def test_ps1_mac_dinh_la_ky_cua_deck(monkeypatch, backend):
     assert at.selectbox[0].value == '2012-2022'
     t = queries.revenue_total(backend).set_index('period_code').loc['2012-2022']
     assert at.title[0].value == 'PS1 · Từ tổng tiền hàng đến doanh thu'
+    # thẻ G − R đọc cột gap_g_minus_r của dbt (B8), không trừ trong app; cột đó đúng bằng G − R
     assert _metrics(at) == [THE_DECK[0], THE_DECK[1],
-                            ('Chênh lệch G − R', ty(t['g'] - t['r'], 2)), THE_DECK[2]]
+                            ('Chênh lệch G − R', ty(t['gap_g_minus_r'], 2)), THE_DECK[2]]
+    assert pytest.approx(t['g'] - t['r'], abs=0.01) == t['gap_g_minus_r']
     _so_day_du_trong_help(at)
     # thác: 6 bước, cột đầu = G, cột cuối = R, đúng số của rpt_revenue_bridge
     thac = at.dataframe[0].value
@@ -83,7 +85,10 @@ def test_ps1_mac_dinh_la_ky_cua_deck(monkeypatch, backend):
     assert pytest.approx(t['g'] - t['r'], abs=0.01) == -parts['amount'].sum()
     largest = parts.loc[parts['amount'].abs().idxmax()]
     assert any(pct(largest['share_of_g']) in item.value for item in at.markdown)
-    assert any(item.value == '**Giải thích kết quả**' for item in at.markdown)
+    # khung tóm tắt theo quy tắc ghi rõ không do AI viết; khung AI riêng có nhãn "AI diễn giải" (B8)
+    assert any(item.value == '**Tóm tắt từ số liệu**' for item in at.markdown)
+    assert any('không do AI viết' in c.value for c in at.caption)
+    assert any('AI diễn giải' in item.value for item in at.markdown)
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
@@ -94,7 +99,7 @@ def test_ps1_chon_mot_nam_thi_doi_theo_rpt_revenue_yearly(monkeypatch, backend):
     y = queries.revenue_yearly(backend).set_index('year').loc[2019]
     assert _metrics(at) == [
         ('G: tiền hàng mọi đơn', ty(y['g'], 2)), ('R: doanh thu đơn đã giao', ty(y['r'], 2)),
-        ('Chênh lệch G − R', ty(y['g'] - y['r'], 2)), ('Tỷ lệ R/G', pct(y['capture_rate'])),
+        ('Chênh lệch G − R', ty(y['gap_g_minus_r'], 2)), ('Tỷ lệ R/G', pct(y['capture_rate'])),
     ]
     assert _metrics(at)[0][1] == '1,14 tỷ'
     assert 'Số đầy đủ: 1.136.801.441,51.' in at.metric[0].help     # cùng số với bảng năm ở ảnh M0

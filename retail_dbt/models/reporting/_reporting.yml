@@ -125,6 +125,10 @@ models:
           - unique
           - accepted_values:
               arguments: {values: ['mua_vu', 'cuoi_thang', 'thang_8']}
+      - name: peak_month
+        description: "Chỉ nhịp mua_vu: tháng có R gộp 2013–2022 cao nhất (tử của metric_value). Kiểm ở assert_rpt_gap_peak."
+      - name: trough_month
+        description: "Chỉ nhịp mua_vu: tháng có R gộp 2013–2022 thấp nhất (mẫu của metric_value)."
 
   - name: rpt_revenue_phase
     description: "PS2: 1 dòng mỗi giai đoạn (seed ps2_phases). R đầu/cuối, tổng thay đổi, CAGR."

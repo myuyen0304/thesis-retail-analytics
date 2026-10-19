@@ -97,6 +97,7 @@ def test_code_version_covers_forecast_code(tmp_path, monkeypatch):
 
 
 def test_build_runs_forecast_before_dbt(tmp_path, monkeypatch):
+    # S2 (2026-10-18): dự báo là stage riêng `forecast` chạy xong trước; build chỉ truyền forecast_path cho dbt, không train
     Registry(tmp_path).initialize()
     folder = tmp_path / 'runs/demo'
     atomic_json(folder / 'context.json', {'run_id': 'demo', 'release_id': 'b' * 24, 'snapshot_id': 's1', 'code_version': 'v1',
@@ -106,10 +107,13 @@ def test_build_runs_forecast_before_dbt(tmp_path, monkeypatch):
     monkeypatch.setattr(snapshot, 'validate', lambda path: {})
     calls = []
     monkeypatch.setattr(cli, 'forecast_stage', lambda ctx: calls.append('forecast') or ('/fc', {'primary': ['lgbm_full', 'direct']}))
+    monkeypatch.setattr(cli, 'check_forecast', lambda ctx: calls.append(('check', ctx['forecast_path'])))
     monkeypatch.setattr(cli, 'dbt_build', lambda ctx, target, cloud=None: calls.append(('dbt', ctx['forecast_path'])))
-    context = cli.execute('build', run_id='demo', root=tmp_path)
-    assert calls == ['forecast', ('dbt', '/fc')] and context['stage'] == 'built'
+    context = cli.execute('forecast', run_id='demo', root=tmp_path)
+    assert calls == ['forecast'] and context['stage'] == 'forecasted'
     assert context['forecast']['primary'] == ['lgbm_full', 'direct']
+    context = cli.execute('build', run_id='demo', root=tmp_path)
+    assert calls == ['forecast', ('check', '/fc'), ('dbt', '/fc')] and context['stage'] == 'built'
 
 
 def test_dbt_build_passes_forecast_path_as_var(tmp_path, monkeypatch):

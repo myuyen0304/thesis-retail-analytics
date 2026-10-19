@@ -4,14 +4,13 @@ Câu trả lời chỉ hiện SAU khi qua ai_explain/evidence.py (không stream 
 rerun (đổi trang, bấm nút) chỉ vẽ lại, KHÔNG gọi lại mô hình (case E20). Đổi backend thì xóa hội thoại.
 """
 import json
-import os
 
 import pandas as pd
 import streamlit as st
 
 from ai_explain import metric_catalog as cat
 from ai_explain import charts, links, provider, service, tools
-from dwh.guarded import ai_databricks_principal
+from ui.ai_panel import ai_unavailable
 from ui.common import BACKEND_LABEL, backend, notes, page_header
 from ui.fmt import arrow_safe, num
 
@@ -128,17 +127,8 @@ def _turn(t: service.TurnResult) -> None:
 
 
 p = provider.from_config()
-if b not in service.CHAT_BACKENDS:
-    st.info(f'Chat chưa hỗ trợ **{BACKEND_LABEL[b]}**. Chọn backend khác ở thanh bên để hỏi.')
-elif b == 'postgres' and not os.environ.get('PG_AI_USER'):
-    st.info('Trên PostgreSQL, chat đọc bằng tài khoản chỉ-đọc riêng: đặt `PG_AI_USER` / `PG_AI_PASSWORD` (tạo bằng '
-            '`scripts/ops/pg_ai_readonly_role.py`) rồi mở lại app. Hoặc chọn **DuckDB** ở thanh bên.')
-elif b == 'databricks' and not all(ai_databricks_principal()):
-    st.info('Trên Databricks, chat đọc bằng service principal chỉ-đọc riêng (không dùng tài khoản đăng nhập của bạn): '
-            'cần `RETAIL_AI_DBX_CLIENT_ID` / `RETAIL_AI_DBX_CLIENT_SECRET` trong `.env.ai.local` hoặc secret của app.')
-elif p is None:
-    st.info('Chưa cấu hình mô hình AI. Tạo file `.env.ai.local` ở thư mục gốc repo (đã Git ignore) với dòng '
-            "`RETAIL_AI_API_KEY='...'` (khóa API DeepSeek), rồi mở lại app. Không dán khóa vào chat hay commit.")
+if (why := ai_unavailable(b, p)) is not None:       # cùng điều kiện với khung AI trên trang PS (ui/ai_panel.py)
+    st.info(why)
 else:
     turns = st.session_state.ai_turns
     c1, c2 = st.columns([4, 1])

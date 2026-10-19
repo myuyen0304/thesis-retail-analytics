@@ -36,8 +36,8 @@ def test_the_kpi_la_cagr_da_chot(monkeypatch, backend):
     at = _ps2(monkeypatch, backend)
     assert [(m.label, m.value) for m in at.metric] == [
         ('A. Tăng trưởng (2013→2016)', '+8,75%/năm'),
-        ('B. Chững/giảm nhẹ (2016→2018)', '−6,39%/năm'),
-        ('C. Giảm mạnh (2018→2019)', '−39,10%/năm'),
+        ('B. Chững, giảm nhẹ (2016→2018)', '−6,39%/năm'),        # tên đúng seed ps2_phases, như PS4 và chat
+        ('C. Sập (2018→2019)', '−39,10%/năm'),
         ('D. Đi ngang mức thấp (2019→2022)', '−0,14%/năm')]
     assert at.title[0].value == 'PS2 · Xu hướng doanh thu'
     assert any('Số lớn: CAGR (%/năm)' in c.value for c in at.caption)

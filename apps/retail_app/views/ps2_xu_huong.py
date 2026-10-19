@@ -2,6 +2,8 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from ai_explain import page_explain
+from ui.ai_panel import ai_panel
 from ui.common import GIOI_HAN_CHUNG, hang_the, info_strip, kpi, load_or_stop, need, need_keys
 from ui.fmt import AXIS_PCT1, AXIS_TY, num, pct, trieu, ty
 
@@ -20,8 +22,7 @@ rule = load_or_stop('direction_rule')
 
 TREND = {'tang': 'tăng', 'giam': 'giảm', 'giam_manh': 'giảm mạnh', 'di_ngang': 'đi ngang'}
 TREND_COLOR = {'tang': '#2a9d8f', 'giam': '#e9a23b', 'giam_manh': '#d1495b', 'di_ngang': '#8d99ae'}
-SHORT_NAME = {'Chững, giảm nhẹ': 'Chững/giảm nhẹ', 'Sập': 'Giảm mạnh'}
-phase['ten'] = phase['phase_code'] + '. ' + phase['phase_name'].map(lambda n: SHORT_NAME.get(n, n))
+phase['ten'] = phase['phase_code'] + '. ' + phase['phase_name']      # tên đúng seed BA, như PS4 và chat
 phase['nam'] = phase['start_year'].astype(str) + '→' + phase['end_year'].astype(str)
 name_of = dict(zip(phase['phase_code'], phase['ten']))
 need_keys([*turn['from_phase_code'], *turn['to_phase_code']], phase.set_index('phase_code'), 'revenue_phase',
@@ -95,8 +96,8 @@ with left:
     st.caption('Chú giải: ' + '; '.join(legend) + '.')
 with side:
     with st.container(border=True):
-        st.markdown('**Giải thích xu hướng**')
-        st.caption('Tóm tắt theo quy tắc từ số liệu hiện có')
+        st.markdown('**Tóm tắt từ số liệu**')
+        st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
         first_phase, last_phase = phase.iloc[0], phase.iloc[-1]
         steepest = phase.loc[phase['cagr'].idxmin()]
         st.markdown(f'- **Đầu và cuối kỳ:** {first_phase["ten"]} ({first_phase["nam"]}) '
@@ -109,6 +110,7 @@ with side:
                     'đỉnh/đáy trên đường R 12 tháng. Xem tháng phát hiện và độ nhạy ở tab bên dưới.')
         st.markdown('- **Giới hạn:** ranh giới BA là quy ước phân tích; đỉnh/đáy chỉ được xác định '
                     'khi nhìn lại đủ dữ liệu và không chứng minh nguyên nhân kinh doanh.')
+    ai_panel(page_explain.request_ps2())
 
 first = line_df.iloc[0]['month_start_date']
 st.caption(f'Đường bắt đầu từ {first:%m/%Y} (đủ 12 tháng); đoạn trước '

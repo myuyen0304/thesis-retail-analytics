@@ -21,6 +21,9 @@ from scripts.parity.compare_dwh import compare, SKIP
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'apps' / 'retail_app'))
+# Thứ tự stage = thứ tự task của DAG: prepare_snapshot → forecast_train_score → ingest_and_dbt_build
+# → quality_and_reader_gate → publish_release (S2, 2026-10-18: dự báo tách khỏi build thành stage riêng)
+STAGES = ('prepare', 'forecast', 'build', 'validate', 'publish')
 from dwh.releases import checked, allowed_versions, CONTROL_RELATION
 
 
@@ -84,12 +87,32 @@ def verify_artifacts(folder, context, target):
 
 
 def forecast_stage(context):
-    """Train, backtest và chọn ứng viên dự báo từ snapshot (scripts/forecast/stage.py); dbt đọc kết quả thành rpt_forecast_*.
-    Retry cùng run dùng lại kết quả đã có. ValueError (không hội tụ, hỏng kiểm tháng 8/2023) dừng pipeline, không retry."""
+    """Stage `forecast` (task Airflow forecast_train_score, S2 2026-10-18): train, backtest và chọn ứng viên dự báo từ
+    snapshot (scripts/forecast/stage.py); dbt ở stage build đọc kết quả thành rpt_forecast_*. Retry cùng run dùng lại kết
+    quả đã có. ValueError (không hội tụ, hỏng kiểm tháng 8/2023) dừng pipeline, không retry."""
     from scripts.forecast import stage
     out = Path(context['directory']) / 'forecast'
     meta = stage.run(context['snapshot_path'], out, run_id=context['run_id'], snapshot_id=context['snapshot_id'])
     return out.as_posix(), {k: meta[k] for k in ('model_version', 'primary', 'selection_step', 'fits', 'seconds')}
+
+
+def check_forecast(context):
+    """Trước dbt: kết quả của stage forecast còn nguyên (cùng snapshot, cùng code dự báo, đúng hash file). Không train lại
+    ở build; hỏng thì báo chạy lại stage forecast."""
+    from scripts.forecast import stage
+    out = Path(context.get('forecast_path') or '')
+    meta_path = out / 'forecast_meta.json'
+    if not context.get('forecast_path') or not meta_path.exists():
+        raise ValueError('Chưa có kết quả stage forecast; chạy stage forecast trước build')
+    meta = json.loads(meta_path.read_text(encoding='utf-8'))
+    for f in stage.FILES:
+        if not (out / f).exists():
+            raise ValueError(f'Kết quả stage forecast thiếu {f}; chạy lại stage forecast')
+        with (out / f).open('rb') as handle:
+            if hashlib.file_digest(handle, 'sha256').hexdigest() != meta['sha256'][f]:
+                raise ValueError(f'Kết quả stage forecast đổi sau khi ghi ({f}); chạy lại stage forecast')
+    if meta.get('snapshot_id') != context['snapshot_id'] or meta.get('model_version') != stage.model_version():
+        raise ValueError('Kết quả stage forecast không khớp snapshot / code dự báo của run; chạy lại stage forecast')
 
 
 def validate_data(context, cloud=None):
@@ -207,7 +230,71 @@ def verify_consumers(context, registry, cloud=None):
                 cur.fetchall()
 
 
+HISTORY_FIELDS = ('run_id', 'stage', 'target', 'snapshot_id', 'code_version', 'release_id', 'started_at', 'finished_at',
+                  'result', 'error_type')
+HISTORY_TABLE = 'retail_control.run_history'   # cloud: writer sở hữu, KHÔNG grant cho SP reader (D1 = không, S3)
+
+
+def _utc():
+    return dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _read_json(path):
+    try:
+        return json.loads(Path(path).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+
+
+def record_history(root, entry):
+    """Lịch sử lần chạy (S3, A4): mỗi stage và mỗi lần rollback, dù đạt, bỏ qua hay lỗi, thêm một dòng. Local: <root>/history.jsonl
+    (chỉ thêm, không sửa). Target databricks: thêm cả bảng retail_control.run_history. Không ghi SQL, token hay nội dung exception
+    (như failure.json). Không nằm trong r_<id>_ops (bản lỗi không bao giờ được công bố) và không sửa bản ghi release trong registry.
+    Ghi lịch sử lỗi thì chỉ cảnh báo: không che lỗi gốc, không biến một lần publish đã đổi con trỏ thành lỗi."""
+    try:
+        path = Path(root) / 'history.jsonl'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a', encoding='utf-8') as f:
+            f.write(json.dumps({k: entry.get(k) for k in HISTORY_FIELDS}, ensure_ascii=False) + '\n')
+        if entry.get('target') == 'databricks':
+            cloud = Databricks()
+            try:
+                cloud.query(f'create table if not exists {HISTORY_TABLE} ('
+                            + ', '.join(f'{k} string' for k in HISTORY_FIELDS) + ') using delta')
+                cloud.query(f'insert into {HISTORY_TABLE} values (' + ', '.join('?' for _ in HISTORY_FIELDS) + ')',
+                            [entry.get(k) for k in HISTORY_FIELDS])
+            finally:
+                cloud.close()
+    except Exception as error:  # noqa: BLE001 — lỗi ghi lịch sử không được thay lỗi / kết quả của stage
+        print(f'Cảnh báo: không ghi được lịch sử lần chạy ({type(error).__name__}); kết quả stage giữ nguyên.',
+              file=sys.stderr)
+
+
+def _entry(stage, run_id, target, started, result, source=None, error=None):
+    source = source or {}
+    return {'run_id': run_id, 'stage': stage, 'target': target, 'snapshot_id': source.get('snapshot_id'),
+            'code_version': source.get('code_version'), 'release_id': source.get('release_id'), 'started_at': started,
+            'finished_at': _utc(), 'result': result, 'error_type': type(error).__name__ if error is not None else None}
+
+
 def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False):
+    """Chạy một stage và để lại một dòng lịch sử: dat (stage tiến lên), bo_qua (run bỏ qua hoặc stage đã xong từ trước), loi."""
+    started = _utc()
+    context_path = Path(root).resolve() / 'runs' / str(run_id) / 'context.json'
+    before = _read_json(context_path)
+    try:
+        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force)
+    except Exception as error:
+        record_history(Path(root).resolve(), _entry(stage, run_id, target, started, 'loi', _read_json(context_path) or before,
+                                                    error))
+        raise
+    done_before = before is not None and before.get('stage') == context.get('stage')
+    result = 'bo_qua' if context.get('stage') == 'skipped' or done_before else 'dat'
+    record_history(Path(root).resolve(), _entry(stage, run_id, target, started, result, context))
+    return context
+
+
+def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False):
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', run_id):
         raise ValueError('run_id chỉ gồm chữ, số, gạch nối/gạch dưới; tối đa 100 ký tự')
     root = Path(root).resolve()
@@ -256,6 +343,16 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
             if context['code_version'] != code_version():
                 raise ValueError('Code đổi giữa các stage; tạo run_id mới')
             manifest = snapshot.validate(context['snapshot_path'])
+            if stage == 'forecast':
+                # task riêng forecast_train_score (S2): không cần cloud hay registry; chỉ đọc snapshot, ghi runs/<id>/forecast
+                if context['stage'] in ('forecasted', 'built', 'validated'):
+                    return context
+                if context['stage'] != 'prepared':
+                    raise ValueError(f"Stage forecast cần run ở trạng thái prepared, đang là {context['stage']}")
+                context['forecast_path'], context['forecast'] = forecast_stage(context)
+                context['stage'] = 'forecasted'
+                atomic_json(context_path, context)
+                return context
             if target == 'databricks':
                 cloud = Databricks()
             registry = Registry(root, cloud.query if cloud else None)
@@ -264,7 +361,10 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
                     return context
                 if context['release_id'] in registry.read()['payload']['releases']:
                     raise ValueError('Không được dựng lại phiên bản ready')
-                context['forecast_path'], context['forecast'] = forecast_stage(context)
+                if context['stage'] != 'forecasted':
+                    raise ValueError('Chưa chạy stage forecast cho run này: chạy forecast trước build '
+                                     '(DAG có task forecast_train_score giữa prepare_snapshot và ingest_and_dbt_build)')
+                check_forecast(context)
                 if cloud:
                     cloud.ingest(context, manifest)
                     cloud.ingest_forecast(context)
@@ -304,40 +404,90 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
                 cloud.close()
 
 
+def read_history(root, target='duckdb', limit=20):
+    """N lần chạy gần nhất, mới nhất trước. Local đọc <root>/history.jsonl; databricks đọc retail_control.run_history."""
+    if target == 'databricks':
+        cloud = Databricks()
+        try:
+            cols, rows = cloud.query(f'select {", ".join(HISTORY_FIELDS)} from {HISTORY_TABLE} '
+                                     f'order by started_at desc, finished_at desc limit {int(limit)}')
+        finally:
+            cloud.close()
+        return [dict(zip(HISTORY_FIELDS, r)) for r in rows]
+    path = Path(root) / 'history.jsonl'
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding='utf-8').splitlines():
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            continue        # dòng ghi dở (máy tắt giữa chừng): bỏ qua, không làm hỏng cả lệnh
+    return rows[::-1][:max(0, int(limit))]
+
+
+def print_history(root, target='duckdb', limit=20):
+    rows = read_history(root, target, limit)
+    if not rows:
+        print('Chưa có lần chạy nào được ghi.')
+        return
+    head = ('bắt đầu (UTC)', 'kết thúc', 'stage', 'kết quả', 'loại lỗi', 'run_id', 'release_id', 'snapshot', 'code')
+    table = [(r.get('started_at') or '', (r.get('finished_at') or '')[11:], r.get('stage') or '', r.get('result') or '',
+              r.get('error_type') or '', r.get('run_id') or '', (r.get('release_id') or '')[:12],
+              r.get('snapshot_id') or '', (r.get('code_version') or '')[:12]) for r in rows]
+    widths = [max(len(str(x[i])) for x in [head, *table]) for i in range(len(head))]
+    for row in [head, *table]:
+        print('  '.join(str(v).ljust(w) for v, w in zip(row, widths)).rstrip())
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('stage', choices=('prepare', 'build', 'validate', 'publish', 'run', 'rollback'))
-    ap.add_argument('--run-id', required=True)
+    ap.add_argument('stage', choices=(*STAGES, 'run', 'rollback', 'history'))
+    ap.add_argument('--run-id', help='bắt buộc, trừ lệnh history')
     ap.add_argument('--target', choices=('duckdb', 'databricks'), default='duckdb')
     ap.add_argument('--root', default='warehouse/pipeline')
     ap.add_argument('--data', default='data')
     ap.add_argument('--snapshot-id')
     ap.add_argument('--force', action='store_true')
     ap.add_argument('--release-id')
+    ap.add_argument('--limit', type=int, default=20, help='history: số lần chạy gần nhất cần in')
     a = ap.parse_args()
+    if a.stage == 'history':
+        print_history(a.root, a.target, a.limit)
+        return
+    if not a.run_id:
+        ap.error('cần --run-id')
     if a.stage == 'rollback':
-        if not a.release_id or not re.fullmatch('[a-f0-9]{24}', a.release_id):
-            ap.error('rollback cần --release-id gồm 24 ký tự hex')
-        with writer_lock(a.root):
-            cloud = Databricks() if a.target == 'databricks' else None
-            try:
-                registry = Registry(a.root, cloud.query if cloud else None)
-                state = registry.read()['payload']
-                if a.release_id not in state['releases']:
-                    ready = sorted(r for r, rec in state['releases'].items() if rec.get('status') == 'ready')
-                    ap.error(f'không có phiên bản {a.release_id} trong registry; các bản rollback được: '
-                             + (', '.join(ready) or 'chưa có'))
-                record = checked(state['releases'][a.release_id])
-                verify_consumers(record, registry, cloud)
-                registry.publish(a.release_id, state['active'])
-                atomic_json(Path(a.root) / 'rollbacks' / f'{uuid.uuid4().hex}.json',
-                            {'run_id': a.run_id, 'from': state['active'], 'to': a.release_id})
-            finally:
-                if cloud:
-                    cloud.close()
+        started, rollback_record, result = _utc(), {'release_id': a.release_id}, 'loi'
+        try:
+            if not a.release_id or not re.fullmatch('[a-f0-9]{24}', a.release_id):
+                ap.error('rollback cần --release-id gồm 24 ký tự hex')
+            with writer_lock(a.root):
+                cloud = Databricks() if a.target == 'databricks' else None
+                try:
+                    registry = Registry(a.root, cloud.query if cloud else None)
+                    state = registry.read()['payload']
+                    if a.release_id not in state['releases']:
+                        ready = sorted(r for r, rec in state['releases'].items() if rec.get('status') == 'ready')
+                        ap.error(f'không có phiên bản {a.release_id} trong registry; các bản rollback được: '
+                                 + (', '.join(ready) or 'chưa có'))
+                    rollback_record = checked(state['releases'][a.release_id])
+                    verify_consumers(rollback_record, registry, cloud)
+                    registry.publish(a.release_id, state['active'])
+                    atomic_json(Path(a.root) / 'rollbacks' / f'{uuid.uuid4().hex}.json',
+                                {'run_id': a.run_id, 'from': state['active'], 'to': a.release_id})
+                    result = 'bo_qua' if state['active'] == a.release_id else 'dat'
+                finally:
+                    if cloud:
+                        cloud.close()
+        except BaseException as error:     # cả SystemExit của ap.error: mã bản gõ sai cũng để lại một dòng lịch sử
+            record_history(Path(a.root).resolve(), _entry('rollback', a.run_id, a.target, started, 'loi', rollback_record,
+                                                          error))
+            raise
+        record_history(Path(a.root).resolve(), _entry('rollback', a.run_id, a.target, started, result, rollback_record))
         print('Đã khôi phục phiên bản ' + a.release_id)
         return
-    for stage in ('prepare', 'build', 'validate', 'publish') if a.stage == 'run' else (a.stage,):
+    for stage in STAGES if a.stage == 'run' else (a.stage,):
         result = execute(stage, run_id=a.run_id, target=a.target, root=a.root, data=a.data,
                          snapshot_id=a.snapshot_id, force=a.force)
         print(json.dumps({k: result[k] for k in ('run_id', 'release_id', 'snapshot_id', 'stage')}, ensure_ascii=False))

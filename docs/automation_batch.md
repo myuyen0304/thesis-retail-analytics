@@ -28,10 +28,11 @@ flowchart LR
 - Các quyền reader được cấp từng relation sau kiểm dữ liệu. Guard cho phép whitelist của các bản đã kiểm, bao gồm bản cũ để các lượt đang chạy và rollback tiếp tục hoạt động; không cho đọc raw/candidate chưa kiểm.
 - App giữ một release mỗi rerun; chat giữ cùng release qua nhiều tool. Cache chứa `release_id`; evidence chứa snapshot, code và run. Chế độ cũ vẫn là mặc định cho tới khi bật `RETAIL_RELEASE_MODE=versioned`.
 
-## Stage dự báo (B2b, thêm 2026-10-15)
+## Stage dự báo (B2b, thêm 2026-10-15; tách thành stage riêng 2026-10-18)
 
-Trong stage `build`, sau bước chặn dựng lại bản ready và trước dbt, `forecast_stage` (`scripts/pipeline/cli.py`) gọi
-`scripts/forecast/stage.py`:
+Từ 2026-10-18 (S2 trong `giao_viec_theo_so_do.md`), dự báo là stage riêng `forecast` của CLI, ứng với task Airflow
+`forecast_train_score`. Stage này chạy sau `prepare`, trước `build`, đúng dòng DAG trên sơ đồ kiến trúc. Trước ngày đó dự
+báo chạy bên trong `build`. `forecast_stage` (`scripts/pipeline/cli.py`) gọi `scripts/forecast/stage.py`:
 - đọc `sales`, `promotions`, `sample_submission` từ parquet của snapshot;
 - chạy backtest ba fold cho 12 ứng viên và 3 mốc, áp luật chọn của `docs/hop_dong_du_bao.md` §5, rồi train bản cuối tới ngày thực tế cuối.
   Code nằm ở `scripts/forecast/core.py`, cùng code notebook `notebooks/04_forecasting/so_sanh_model.ipynb` dùng;
@@ -43,8 +44,26 @@ dbt nhận thêm var `forecast_path` và dựng `reporting.rpt_forecast_daily`, 
 và `assert_rpt_forecast_actual` trong quality gate. Không có var này (build thường) thì ba model và hai test tắt, số node không đổi.
 `scripts/forecast` nằm trong `code_version()`: đổi code dự báo thì pipeline tạo bản mới.
 
+- **Thứ tự và trạng thái run** (từ 2026-10-18):
+  - `prepare` → `forecast` → `build` → `validate` → `publish`; lệnh `run` chạy đủ năm stage.
+  - `forecast` cần run ở trạng thái `prepared` và ghi `forecasted`; gọi lại khi đã xong thì trả ngay.
+  - Run bị bỏ qua (cùng snapshot và code với bản đang phục vụ) thì `forecast` cũng bỏ qua, không train.
+  - `forecast` không mở kết nối cloud và không đọc registry.
+- **`build` không train:**
+  - Chưa có `forecasted` thì báo lỗi "chạy forecast trước build" (exit 2).
+  - Có rồi thì kiểm lại kết quả trước dbt (`check_forecast`): `forecast_meta.json` khớp snapshot và `model_version`, hai file
+    parquet đúng hash. Lệch thì báo chạy lại stage forecast.
+  - Bước chặn dựng lại bản `ready` vẫn chạy trước mọi kiểm khác.
+- **Run đang dở từ trước 2026-10-18:** `code_version` gồm `scripts/pipeline`, nên run prepare bằng code cũ gặp lỗi
+  "Code đổi giữa các stage; tạo run_id mới". Phải tạo run_id mới.
 - **Lỗi hợp đồng** (fit không hội tụ, tháng 8/2023 không đạt, COGS/G ra ngoài khoảng lịch sử): `ValueError`, exit 2, Airflow không retry.
-- **Thời gian:** stage dự báo chạy 956 giây trong lần nghiệm thu local `b2b-01` (`forecast_meta.json`). Máy bận thì lâu hơn. Airflow cho mỗi task tối đa 65 phút.
+  `failure.json` ghi stage `forecast`, run giữ trạng thái `prepared`.
+- **Thời gian:** stage dự báo chạy 956 giây trong lần nghiệm thu local `b2b-01` (`forecast_meta.json`). Máy bận thì lâu hơn.
+  Task `forecast_train_score` có `execution_timeout` 45 phút; các task khác tối đa 65 phút.
+  - Mỗi task dừng CLI bằng timeout của subprocess, đặt thấp hơn `execution_timeout` của chính task: 2.640 giây cho task
+    dự báo, 3.800 giây cho task khác. Nhờ vậy tiến trình CLI dừng trước khi Airflow cắt task, và không còn giữ
+    `writer.lock` khi retry.
+  - Test AST kiểm điều này cho mọi task.
 - **Databricks:** `runtime.ingest_forecast` tải hai parquet lên Volume rồi tạo `r_<id>_raw.forecast_*` cho dbt. **Chưa chạy** trên workspace.
 - **Docker:** image cần statsmodels, lightgbm, holidays, scipy (`deploy/airflow/requirements-pipeline.txt`) và `libgomp1` (Dockerfile).
   Image dùng Python 3.12, máy Windows dùng 3.13. **Đã build và chạy DAG 2026-10-15** (kết quả ở dòng nghiệm thu `b3c-docker-02` bên dưới).
@@ -114,7 +133,9 @@ Airflow SimpleAuthManager dùng `admin/admin` cho demo local; UI chỉ bind `127
 Nếu muốn đổi mật khẩu, đặt `RETAIL_AIRFLOW_ADMIN_PASSWORD` trong `.env.airflow.local` rồi recreate các dịch vụ.
 File mật khẩu nằm trong volume local tại `/opt/airflow/logs/passwords.json`; không dùng cấu hình demo này khi mở Airflow ra mạng.
 
-DAG gồm bốn task: `prepare_snapshot` → `ingest_and_dbt_build` → `quality_and_reader_gate` → `publish_release`.
+DAG gồm năm task: `prepare_snapshot` → `forecast_train_score` → `ingest_and_dbt_build` → `quality_and_reader_gate` →
+`publish_release` (từ 2026-10-18; trước đó bốn task, dự báo nằm trong `ingest_and_dbt_build`). Image Docker đang có được build
+trước thay đổi này: **build lại image trước khi chạy DAG** (S6).
 Mặc định DAG paused, schedule tắt và target `duckdb`. Trigger thủ công từ UI với target/snapshot_id/force.
 Chỉ sau nghiệm thu mới đặt `RETAIL_PIPELINE_SCHEDULE_ENABLED=true` trong `.env.airflow.local`, recreate dịch vụ và unpause:
 lịch 08:00 Asia/Ho_Chi_Minh, không catchup, tối đa một DAG run. Laptop/Docker phải đang hoạt động.
@@ -205,8 +226,47 @@ Chưa chạy trên workspace thật: các bước trên mới kiểm bằng test
 Một catalog chỉ có một writer deployment. Mọi CLI/Airflow của deployment phải dùng chung root/volume có writer lock;
 không hỗ trợ nhiều writer trên các máy không chia sẻ lock. CAS bảo vệ công bố nhưng không thay lock cho từng stage.
 
+## Giám sát (A4, bước S3, 2026-10-19)
+
+PM chốt D1 = không (2026-10-18): app không hiện lần chạy lỗi. Lần lỗi xem bằng lệnh lịch sử của CLI và Airflow UI; app chỉ hiện
+thẻ "bản đang phục vụ". Không cấp quyền mới cho SP reader.
+
+- **Lịch sử lần chạy.**
+  - CLI ghi một dòng cho mỗi stage (`prepare`, `forecast`, `build`, `validate`, `publish`) và mỗi lần `rollback`, dù đạt, bỏ qua hay lỗi.
+    Ghi từ `scripts/pipeline/cli.py`, không từ callback Airflow, vì lần chạy cloud đầu chạy bằng CLI.
+  - Trường: `run_id, stage, target, snapshot_id, code_version, release_id, started_at, finished_at, result, error_type`.
+  - `result` là `dat` (stage tiến lên), `bo_qua` (run bị bỏ qua, hoặc stage đã xong từ trước khi chạy lại) hoặc `loi`.
+    Rollback trùng bản đang phục vụ cũng ghi `bo_qua`. Rollback với mã bản gõ sai ghi `loi`, `error_type` `SystemExit`.
+  - Không ghi SQL, token hay nội dung exception, như `failure.json`.
+  - Local: `<root>/history.jsonl`, chỉ thêm dòng. Target `databricks`: ghi thêm bảng `retail_control.run_history`, do writer sở hữu và
+    **không** grant cho SP reader (`reader_grants` chỉ cấp `retail_control.state`).
+  - Lịch sử không nằm trong `r_<id>_ops`: bản lỗi không bao giờ được công bố nên không ai thấy. Lịch sử cũng không sửa bản ghi release
+    trong registry.
+  - Ghi lịch sử lỗi thì chỉ in cảnh báo ra stderr. Lỗi gốc của stage vẫn được ném lên, exit code không đổi; một lần publish đã đổi con
+    trỏ vẫn báo đạt.
+  - Xem: `.venv/Scripts/python.exe -m scripts.pipeline.cli history --root <root> --limit 20` (thêm `--target databricks` để đọc bảng
+    cloud). Mới nhất ở trên; dòng ghi dở (máy tắt giữa chừng) bị bỏ qua.
+- **Giờ công bố.**
+  - `Registry.publish` (cả `rollback`) ghi `payload['active_since'] = {'release_id', 'at'}` cạnh con trỏ `active`, không trong bản ghi
+    release (`register()` cấm sửa bản đã qua gate). Retry publish cùng bản không đổi giờ.
+  - Ghi kèm `release_id`: code trước S3 (image cũ, bản public chưa Reboot) đổi con trỏ mà không ghi giờ, thì app thấy `active_since`
+    chỉ bản khác và không hiện giờ sai.
+- **Thẻ "Bản dữ liệu đang phục vụ"** trên trang Sức khỏe dữ liệu, chế độ versioned: mã bản, giờ công bố (giờ Việt Nam), tuổi của bản,
+  snapshot, run đã dựng, `code_version` rút gọn.
+  - Chỉ dùng thứ app vốn đã đọc: bản ghi release đã pin cho lượt và `active_since` trong cùng lần đọc registry
+    (`releases.published_at()`). Không thêm câu SQL, không thêm quyền.
+  - Registry cũ chưa có giờ công bố: thẻ ghi "chưa ghi", trang vẫn chạy. Chế độ cũ: "Không áp dụng".
+- **Tương thích hai chiều.** Pipeline có thể ghi payload mới lên cloud trước khi PM kịp Reboot bản public.
+  - Code app cũ (`dwh/releases.py` và `_release_scope` của `dwh/guarded.py` ở commit `e7c17aa`) đọc payload mới vẫn chạy, vì chỉ
+    đọc `active` và `releases`.
+  - Test: `apps/retail_app/tests/test_ban_phuc_vu.py`.
+- **Độ tươi đo bằng tuổi của bản đang phục vụ**, không dùng dbt source freshness theo ngày dữ liệu.
+  - Dữ liệu dừng ở 2022-12-31 theo thiết kế, nên freshness theo ngày dữ liệu luôn đỏ; không đưa vào quality gate.
+  - Ngưỡng cảnh báo phải theo lịch chạy (D2). Lịch Airflow còn tắt, nên thẻ chỉ hiện tuổi, không tô đỏ.
+
 ## Nhật ký và lỗi
 
+- `<root>/history.jsonl` (từ 2026-10-19): mỗi stage và mỗi lần rollback một dòng, kể cả lần lỗi; xem bằng lệnh `history`.
 - `<root>/runs/<run_id>/context.json`: nguồn, code, release, stage, kết quả đối soát.
 - `<root>/runs/<run_id>/<target>/`: manifest, run_results, console và log dbt.
 - `failure.json`: lần lỗi gần nhất, loại lỗi và stage; không chứa credentials. File này giữ bằng chứng lỗi dù retry sau đó thành công; đọc stage hiện tại trong context/Airflow.
@@ -219,6 +279,89 @@ không hỗ trợ nhiều writer trên các máy không chia sẻ lock. CAS bả
 Chạy kiểm thử bằng `.venv/Scripts/python.exe -m pytest scripts/pipeline/tests apps/retail_app/tests/test_releases.py`.
 Bao gồm header/hash, multiline CSV, partial build, publish khi chưa đạt, CAS, retry, rollback, pin xuyên tool và cache tách release.
 Kiểm app/cloud phải báo riêng: test giả lập guard không chứng minh quyền Databricks thực tế.
+
+S2, tách dự báo thành stage riêng (2026-10-18; code + test đơn vị, một lần `run` local đạt; **chưa build image, chưa chạy DAG**):
+- **Test mới** trong `scripts/pipeline/tests/test_pipeline.py`:
+  - DAG đủ năm task đúng thứ tự, mỗi task gọi đúng stage CLI, timeout dự báo ≥ 2 × 956 giây, timeout subprocess dưới
+    `execution_timeout` ở mọi task (kiểm AST, không cài Airflow);
+  - `run` chạy năm stage;
+  - retry `forecast` dùng lại kết quả đã có (đi qua đường dùng lại thật của `stage.run`, không train) và `build` không train lại;
+  - `build` đòi `forecast` xong; `build` chặn kết quả dự báo bị sửa sau khi ghi;
+  - run bị bỏ qua thì `forecast` cũng bỏ qua;
+  - lỗi hợp đồng dừng ở `forecast`, giữ trạng thái `prepared`;
+  - run prepare bằng code cũ báo tạo run_id mới.
+- **Test cũ viết lại** (PM cho phép): `scripts/forecast/tests/test_forecast.py::test_build_runs_forecast_before_dbt` nay khẳng
+  định `forecast` chạy xong trước, `build` chỉ kiểm rồi truyền `forecast_path` cho dbt, không gọi `forecast_stage`. Sửa file test
+  không đổi `model_version` (chỉ băm `scripts/forecast/*.py`, không đệ quy): vẫn `3ac33fc83143`.
+- **Kết quả:** `scripts/forecast/tests` + `scripts/pipeline/tests` + `test_releases.py` 46/46 đạt.
+- **Docstring cũ:** đầu `scripts/forecast/stage.py` vẫn ghi "Chạy trong stage `build`". Cố ý không sửa, vì sửa file đó đổi
+  `model_version`, kéo theo train lại.
+- **Lần `run` local (2026-10-18):**
+  - `s2-20261018-01` bị bỏ. Claude Code dừng tiến trình nền vì máy sắp hết RAM, giữa stage `forecast`. Run để lại `context.json`
+    trạng thái `prepared` (bản ứng viên `134ee74c…`), không có kết quả dự báo, không publish. Không chạy tiếp được vì sau đó phiên
+    B8 sửa `apps/` (`code_version` đã khóa lúc prepare); để nguyên, không xóa. Lần thử thứ hai trong Claude Code cũng bị dừng ngay
+    ở `prepare`, không ghi gì.
+  - `s2-20261018-02`: PM tự chạy `run` trong một cửa sổ PowerShell riêng, ngoài Claude Code, để tránh cơ chế dừng tác vụ nền khi
+    thiếu RAM. Root `warehouse/pipeline`, target `duckdb`, bắt đầu 15:07:19 UTC.
+  - Năm stage `prepared → forecasted → built → validated → published`, không có `failure.json`.
+  - `code_version` `299b7d36e9af…` băm HEAD `a4abd41` **cộng code S2 chưa commit** (`scripts/pipeline/cli.py`, test). Bản cloud ở
+    S6 phải dựng lại từ commit sạch.
+  - Snapshot `5bd9a84aaf73`. Stage dự báo 157 giây, 32 lần fit (2 lần dùng phương án dự phòng), ứng viên chính `lgbm_full / direct`
+    ở bước 2; có hai ConvergenceWarning của statsmodels như các lần trước.
+  - dbt PASS=223, 0 lỗi; theo manifest có 220 node model/seed/test (56 / 3 / 161), đều đạt. Số này khác 222 của lần trước vì đã có
+    phần dbt của B8. Có các test `assert_rpt_forecast`, `assert_rpt_forecast_actual`, `assert_rpt_gap_peak`.
+  - Bản mới có `gap_g_minus_r` (`rpt_revenue_total`, `rpt_revenue_yearly`), `peak_month` / `trough_month`
+    (`rpt_calendar_phase`, `rpt_calendar_stability`). `rpt_forecast_daily` / `_backtest` / `_actual` có 8.220 / 546 / 3.833 dòng.
+  - Quality: 3.833 ngày khớp snapshot, 36 relation; `cloud_parity=false`.
+  - Publish: active local đổi từ `fc14b8a2f5a24ff99a434d7c` sang **`06f157ee26ce43639051ad35`**; registry có 5 bản.
+  - So dự báo bằng `so_sanh_du_bao.py` với `runs/dbx-20261017-01` (cùng `model_version` `3ac33fc83143`, cùng snapshot, Python 3.13.5):
+    **lệch 0** ở mọi cột. 8.220 / 8.220 dòng ghép được; dự báo điểm, biên khoảng 80% và COGS của 15 ứng viên và mốc lệch 0;
+    điểm backtest trùng; tổng tháng model chính lệch 0%. Không so với `b3b-01` (`model_version` `a78d5b07d43c`, trước bản sửa
+    `holidays`).
+  - Chưa chứng minh bằng lần chạy thật: "run đang dở thì chạy tiếp cùng run_id". Hai run trên không có cơ hội chạy tiếp; ca này
+    mới có test đơn vị.
+- **Chưa chạy:** build image và DAG Docker (S6).
+- **Chạy cloud bằng runner một stage mỗi lần** (`warehouse/pipeline/chay_pipeline_dbx.py`): nay phải chạy `forecast` giữa `prepare`
+  và `build`. Thứ tự bốn stage ở mục Databricks 2026-10-17 là lịch sử.
+
+S3, giám sát A4 (2026-10-19; code + test, một chuỗi chạy local trong root riêng; **chưa chạy cloud**). Thiết kế ở mục "Giám sát" phía trên.
+- **Test trong phiên** (test nhanh, luật 7):
+  - `scripts/pipeline/tests` 32/32 (8 test mới):
+    - lịch sử khi đạt, khi bỏ qua (run bỏ qua, stage đã xong), khi lỗi giữa chừng (`ConnectionError` ở build, không ghi nội dung lỗi);
+    - rollback đạt và rollback mã sai;
+    - lỗi ghi lịch sử không che lỗi gốc, không biến publish đã đổi con trỏ thành lỗi;
+    - `active_since` cạnh con trỏ, không sửa bản ghi release;
+    - lệnh `history` (mới nhất trước, bỏ dòng ghi dở);
+    - target databricks ghi bảng writer, không grant cho reader.
+  - `test_releases.py` + `test_ban_phuc_vu.py` (mới) 17/17:
+    - giờ công bố đọc cùng lần pin;
+    - code app CŨ ở `e7c17aa` đọc payload MỚI (DuckDB `resolve`, `allowed_versions`; guard cũ `_release_scope` ở chế độ versioned và
+      chế độ cũ);
+    - AppTest trang Sức khỏe ở chế độ cũ, ở versioned với registry mới, và ở versioned với registry cũ.
+  - Test sẵn có của trang Sức khỏe trong `test_m5.py`, `test_smoke.py`, `test_m1.py` (DuckDB) 27/27.
+- **Chuỗi chạy do PM tự chạy ngoài Claude Code** (luật 7), root `warehouse/pipeline-s3`, target duckdb, snapshot `5bd9a84aaf73`:
+  - `code_version` `6549051594b0…` băm HEAD `e7c17aa` cộng code S3 chưa commit và thay đổi B8 chưa commit của phiên khác. Không dùng
+    cho cloud.
+  - Root riêng nên bản active local `06f157ee…` không đổi.
+  - Run `s3-20261019-01` → release `7ba32a2fae03418c9a3453a6`, năm stage đạt, không có `failure.json`.
+  - Chạy lại cùng run_id: năm dòng `bo_qua`, không train lại.
+  - Run `s3-20261019-02 --force` → release `f8dba99c0c6042c1a985b3c9`, năm stage đạt.
+  - Quality cả hai run: 3.833 ngày khớp snapshot, 36 relation.
+  - Rollback `s3-rb-01` về `7ba32a2f…` ghi `dat`; lặp lại (`s3-rb-02`) ghi `bo_qua`, giờ công bố không đổi.
+  - `state.json`: active `7ba32a2f…`, `active_since` = `{7ba32a2f…, 2026-10-19T01:29:32Z}`; hai bản ghi release không có trường mới.
+  - Rollback mã không có (`s3-rb-sai`, `--release-id 000000000000000000000000`):
+    - CLI báo "không có phiên bản … trong registry; các bản rollback được: 7ba32a2f…, f8dba99c…", exit 2;
+    - lịch sử ghi `loi`, `error_type` `SystemExit`;
+    - active và `active_since` không đổi.
+  - `history.jsonl` 18 dòng, đủ năm stage của mỗi run, các dòng `bo_qua` và ba dòng rollback (`dat`, `bo_qua`, `loi`); lệnh `history`
+    in đúng các dòng này.
+- **Thời gian stage dự báo:**
+  - Run 1: 6,3 phút theo đồng hồ (`forecast_meta`: 350 giây train).
+  - Run 2: **19,6 phút** theo đồng hồ, trong khi `forecast_meta` ghi 301 giây. Khoảng chênh khoảng 15 phút nằm ngoài phần train
+    `stage.run` tự đo; **chưa rõ nguyên nhân** (máy thiếu RAM là giả thuyết, chưa kiểm).
+  - Vẫn dưới `execution_timeout` 45 phút của task Airflow, nhưng sát hơn lần đo 956 giây trước đây.
+- **Giới hạn:** lệnh gõ sai cú pháp (argparse báo lỗi, ví dụ thiếu giá trị `--release-id`) dừng trước khi vào `execute` hay khối rollback,
+  nên **không có dòng lịch sử**. Mã bản sai nhưng đúng cú pháp thì có dòng `loi`.
 
 Nghiệm thu local ngày 2026-10-11/12:
 - CLI Windows `acceptance-02`: dbt 217/217 đạt; 3.833 ngày G/COGS khớp tuyệt đối với snapshot `5bd9a84aaf73`;

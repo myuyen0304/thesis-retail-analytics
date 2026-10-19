@@ -154,3 +154,75 @@ def test_tiep_noi_giu_ngu_canh_tool_va_goi_lai_tool(versioned):
     ctx = next(m['content'] for m in fake.seen[0] if m['content'].startswith('NGỮ CẢNH CÁC LƯỢT TRƯỚC'))
     assert '"get_forecast"' in ctx and '"month": 12' in ctx and 'Dự báo G tháng 12/2023 là' not in ctx
     assert t2.calls[0][2]['month'] == 1 and '(dự báo G, 01/2024' in t2.answer_md
+
+
+# --- S1b (PM chốt 2026-10-18): sửa phía app ba câu trượt K17, K16, K08 của bộ b7. Câu và kỳ ở đây khác bộ b7 ---
+
+_TRON_2020_2023 = [call('get_revenue_summary', metric='G', year=2020),
+                   call('get_forecast', metric='G', period='year', year=2023)]
+_C_2020_2023 = [{'id': 'c1', 'path': 'T1.rows[0].g'}, {'id': 'c2', 'path': 'T2.rows[0].g_forecast'}]
+
+
+def test_k17_tu_choi_cong_van_dan_dung_so_duoc_hoi(versioned):
+    # K17: mọi kỳ được hỏi đều có số đúng kỳ, chỉ phép cộng là chưa hỗ trợ. Trước khi sửa: app ép khuôn dẫn số, gọi
+    # 2020 là "ngoài vùng dự báo" và xếp chính hai số được hỏi vào mục "không phải số bạn hỏi"
+    rep = final('unsupported', 'Không cộng số thực tế với số dự báo được. G thực tế năm 2020 là {c1}. Dự báo G năm 2023 '
+                'là {c2}.', _C_2020_2023)
+    t = _turn('Tính tổng G thực tế năm 2020 và G dự báo năm 2023 giúp mình', *_TRON_2020_2023, rep, rep)
+    assert t.status == 'unsupported' and t.answer_md, (t.status, t.validation_errors)
+    assert 'không phải số bạn hỏi' not in t.answer_md and 'nằm ngoài' not in t.answer_md, t.answer_md
+    assert '(G thực tế, 2020)' in t.answer_md and '(dự báo G, 2023' in t.answer_md
+
+
+def test_k17_ky_thieu_so_van_dung_khuon_nhung_ky_co_so_thuc_te_khong_bi_goi_ngoai_vung(versioned):
+    # 2025 thiếu số nên vẫn dùng khuôn; 2020 có số thực tế: không bị gọi là "ngoài vùng dự báo", và số G 2020 (đúng kỳ
+    # được hỏi) nằm ở mục riêng, không ở mục "Số tham khảo, không phải số bạn hỏi"
+    rep = final('no_data', 'Năm 2025 chưa có dự báo. G thực tế năm 2020 là {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].g'}])
+    t = _turn('G thực tế năm 2020 và dự báo G năm 2025 là bao nhiêu?', _TRON_2020_2023[0], rep, rep)
+    assert t.status == 'no_data' and t.answer_md, (t.status, t.validation_errors)
+    assert t.answer_md.startswith('Năm 2025 nằm ngoài vùng dự báo'), t.answer_md
+    assert 'Năm 2020 nằm ngoài' not in t.answer_md and 'năm 2020 nằm ngoài' not in t.answer_md, t.answer_md
+    head, _, ref = t.answer_md.partition('Số tham khảo, không phải số bạn hỏi:')
+    assert 'Năm 2020, toàn công ty: G là' in head and 'Năm 2020' not in ref, t.answer_md
+
+
+def test_k17_so_mot_thang_cho_cau_hoi_ca_quy_van_la_so_tham_khao():
+    # phát lại live E38: hỏi cả quý, mô hình dẫn số một tháng trong quý → vẫn là số tham khảo, không phải "đúng kỳ"
+    rep = final('unsupported', 'Chưa hỗ trợ số gộp theo quý. R tháng 5/2018 là {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].r'}])
+    t = _turn('R quý 2 năm 2018 bao nhiêu?', call('get_revenue_monthly', metric='R', year=2018, month=5), rep, rep)
+    head, sep, ref = t.answer_md.partition('Số tham khảo, không phải số bạn hỏi:')
+    assert sep and 'Tháng 5/2018, toàn công ty: R là' in ref and 'Số đúng kỳ' not in head, t.answer_md
+
+
+def test_k17_cau_hoi_xin_moc_tham_khao_van_giu_muc_tham_khao(versioned):
+    # rv12f giữ nguyên: số người hỏi xin "làm mốc tham khảo" vẫn ở mục tham khảo
+    rep = final('no_data', 'Năm 2025 chưa có dự báo. Riêng năm 2023, dự báo G là {c1}.',
+                [{'id': 'c1', 'path': 'T1.rows[0].g_forecast'}])
+    t = _turn('Dự báo G năm 2025 có không? Nếu chưa, cho số năm 2023 làm mốc tham khảo.', _TRON_2020_2023[1], rep, rep)
+    head, sep, ref = t.answer_md.partition('Số tham khảo, không phải số bạn hỏi:')
+    assert sep and 'Năm 2023, toàn công ty: dự báo G là' in ref, t.answer_md
+
+
+def test_k16_cau_tu_choi_phu_dinh_dai_khong_bi_chan(versioned):
+    # K16: chữ "không" cách chữ "chênh" hơn 3 chữ ("Không thể trả lời bằng phần trăm chênh lệch") vẫn là phủ định
+    t = _mix('Không thể trả lời bằng phần trăm chênh lệch giữa dự báo và thực tế. G thực tế tháng 12/2021 là {c1}. '
+             'Dự báo G tháng 12/2023 là {c2}.')
+    assert t.status == 'ok', t.validation_errors
+
+
+@pytest.mark.parametrize('answer', [
+    'G thực tế tháng 12/2021 là {c1}. Dự báo G tháng 12/2023 là {c2}. Dự báo thấp hơn thực tế khá nhiều.',
+    'G thực tế tháng 12/2021 là {c1}. Dự báo G tháng 12/2023 là {c2}. Số dự báo không phải R, nhưng cao hơn thực tế.',
+    'G thực tế tháng 12/2021 là {c1}. Dự báo G tháng 12/2023 là {c2}. Không cần tính, dự báo vẫn vượt thực tế.',
+])
+def test_k16_cau_so_sanh_that_van_bi_chan(versioned, answer):
+    t = _mix(answer)
+    assert t.status == 'answer_validation_failed', (answer, t.status, t.answer_md)
+
+
+def test_k08_so_backtest_co_ghi_chu_thuoc_chon_model(versioned):
+    # K08: app tự gắn ghi chú thước chọn model khi trả số của get_forecast_backtest (mô hình hay quên nói ý này)
+    t = _turn('Vẽ điểm backtest của các model', call('get_forecast_backtest'), call('show_chart', ref='T1', y='score'),
+              final(answer='Biểu đồ điểm ngày kết hợp của các ứng viên ở dưới.'))
+    assert t.status == 'ok', t.validation_errors
+    assert any('thước chọn model chính' in n and 'MAPE G tháng chỉ để hiển thị' in n for n in t.app_notes), t.app_notes
