@@ -80,7 +80,10 @@ def test_prompt_chat_dung_nguyen_them_ghi_chu_trang():
     assert 'Không gọi R là "thực nhận"' in msgs[1]['content']
     assert 'hụt, mất, thất thoát' in msgs[1]['content']
     assert 'không thêm nhận định không có số đi kèm' in msgs[1]['content']
-    assert pe.PAGE_PROMPT_VERSION == 'b8-2026-10-18b'
+    # live local 2026-10-18: "chủ yếu" không có số xếp hạng (PS5 bị chặn, PS3 / PS4 phải sửa), "không phải ngẫu nhiên" (PS3)
+    assert 'Từ xếp hạng hay tỷ trọng (chủ yếu, phần lớn' in msgs[1]['content']
+    assert 'Không kết luận kiểu thống kê' in msgs[1]['content'] and '"ngẫu nhiên"' in msgs[1]['content']
+    assert pe.PAGE_PROMPT_VERSION == 'b8-2026-10-19'
 
 
 def test_ps1_ky_va_nam():
@@ -105,6 +108,24 @@ def test_ps2_ps3_ps5_dung_tool():
                 [{'id': 'c1', 'path': 'T1.derived.largest_decrease.groups'}])
     t, _ = _explain(pe.request_ps5('category', 2019), ans)
     assert t.status == 'ok' and '**Streetwear**' in t.answer_md
+
+
+def test_ps5_so_cua_nhom_giu_ten_nhom():
+    # live local 2026-10-19: mô hình gọi ΔR của riêng Streetwear là "mức đổi của toàn công ty"; bản trang bỏ nhãn kỹ thuật nên
+    # người đọc không thấy đó là số của một nhóm. Số của nhóm phải giữ tên nhóm; số không thuộc nhóm thì không.
+    ans = final('Năm 2019, doanh thu đơn đã giao (R) toàn công ty giảm so với năm trước, mức đổi là {c1}. Ngành kéo giảm '
+                'nhiều nhất là {c2}, với mức giảm {c3}. Đây là phân rã số học theo nhóm, chưa phải nguyên nhân.',
+                [{'id': 'c1', 'path': 'T1.rows[Streetwear].delta_r', 'sign': 'am'},
+                 {'id': 'c2', 'path': 'T1.derived.largest_decrease.groups'},
+                 {'id': 'c3', 'path': 'T1.derived.largest_decrease.delta_r', 'sign': 'am'}])
+    t, _ = _explain(pe.request_ps5('category', 2019), ans)
+    assert t.status == 'ok'
+    first, second = t.answer_md.split('. ')[:2]
+    assert '** (Streetwear)' in first                  # số của nhóm: tên nhóm hiện ngay sau số
+    assert '** (' not in second.split('**Streetwear**')[1]   # số derived không thuộc nhóm nào: không gắn thêm
+    # PS4 không thuộc nhóm: bản trang vẫn bỏ nhãn như trước
+    t4, _ = _explain(pe.request_ps4('2019', 'year', 2018, 2019, 'Năm 2019 so với 2018'), PS4_2019)
+    assert '** (' not in t4.answer_md
 
 
 @pytest.mark.parametrize('req', [
