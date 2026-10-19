@@ -39,7 +39,8 @@ ALLOWED_RELATIONS = frozenset({
 # B3 (2026-10-15): được phép đọc nhưng KHÔNG bắt buộc có. rpt_forecast_* chỉ có trong bản dữ liệu của pipeline từ B2b;
 # build thường (chế độ cũ, PostgreSQL) và bản dựng trước B2b không có. Đưa vào ALLOWED_RELATIONS thì guard Databricks đòi
 # quyền trên bảng không tồn tại và khóa cả chat PS1–PS5. Thiếu bảng thì tool dự báo trả no_data, không lấy số nơi khác.
-OPTIONAL_RELATIONS = frozenset({'reporting.rpt_forecast_daily', 'reporting.rpt_forecast_backtest'})
+OPTIONAL_RELATIONS = frozenset({'reporting.rpt_forecast_daily', 'reporting.rpt_forecast_backtest',
+                                'reporting.rpt_forecast_explain'})
 
 
 # --- schema tham số ---
