@@ -21,8 +21,9 @@ from ai_explain.provider import ProviderError
 from dwh.releases import pinned_read
 from ui.fmt import num, trieu, ty
 
-PAGE_PROMPT_VERSION = 'b8-2026-10-18b'   # b: không gọi R là thực nhận / G − R là hụt; câu ý nghĩa không thêm nhận định
-                                         # không có số (live Databricks 2026-10-18: PS1, PS2). Trước: b8-2026-10-18
+PAGE_PROMPT_VERSION = 'b8-2026-10-19'    # từ xếp hạng chỉ khi có số xếp hạng / tỷ trọng; không kết luận kiểu thống kê
+                                         # (live local 2026-10-18: "chủ yếu" bị chặn ở PS5, "không phải ngẫu nhiên" ở PS3).
+                                         # Trước: b8-2026-10-18b (thực nhận / hụt; nhận định không có số), b8-2026-10-18
 MAX_LLM_CALLS = 2          # một lần viết + một lần sửa khi chưa qua bước kiểm
 PAGES = {'ps1': 'PS1 (từ tiền hàng G đến doanh thu R)', 'ps2': 'PS2 (xu hướng doanh thu)',
          'ps3': 'PS3 (nhịp lịch doanh thu)', 'ps4': 'PS4 (số đơn, số món và giá)',
@@ -106,6 +107,10 @@ Viết 3 hoặc 4 câu ngắn, mỗi câu một ý, theo thứ tự: (1) kết l
 với doanh thu; (4) một lưu ý: đây là quan sát / phân rã số học, chưa phải nguyên nhân (hoặc giới hạn ghi trong kết quả).
 Câu (3) chỉ nói điều các con số đã nêu cho thấy; không thêm nhận định không có số đi kèm (vd. "phần lớn của cả kỳ",
 "một cú rơi duy nhất") và không so với kỳ, nhóm hay giai đoạn mà câu trả lời không dẫn số.
+Từ xếp hạng hay tỷ trọng (chủ yếu, phần lớn, đa số, nhiều nhất, lớn nhất, đứng đầu) chỉ dùng khi chính câu đó có chỗ đặt của
+số xếp hạng hoặc tỷ trọng tương ứng trong kết quả; không có thì nêu số, không xếp hạng.
+Không kết luận kiểu thống kê: không nói "ngẫu nhiên", "không phải ngẫu nhiên", "có ý nghĩa thống kê", "chắc chắn", "luôn
+luôn". Nhịp lặp lại qua các năm thì chỉ nói số năm có cùng nhịp mà kết quả nêu, không suy rộng.
 Không gọi R là "thực nhận" hay "tiền thực nhận"; không gọi phần chênh G − R là hụt, mất, thất thoát hay lãng phí: đó là
 tiền hàng của đơn hủy, đơn trả, đơn chưa giao và chiết khấu.
 Lời thường, như nói với người không làm dữ liệu: không công thức, không ký hiệu toán (×, ÷, =, Δ), không tên cột, tên
@@ -129,11 +134,15 @@ def _gon(v, shown: str) -> str:
 
 
 _RENDERED = re.compile(r'\*\*([^*\n]+)\*\*( \([^()\n]*\))?')     # số bước kiểm in: **giá trị** (nhãn kỹ thuật)
+_GROUP_ROW = re.compile(r'\.rows\[([^\]]+)\]\.')
 
 
-def plain_answer(answer: str, values: dict) -> str:
+def plain_answer(answer: str, values: dict, keep_group: bool = False) -> str:
     """Bản cho người đọc trang: bỏ nhãn kỹ thuật bước kiểm gắn sau số ("(G − R)", "(R/G, 2019)"), số tiền ghi gọn.
-    Chỉ đụng các số có trong values (đã kiểm); giá trị, nhãn đầy đủ vẫn ở bảng "Số liệu AI đã dùng" của khung AI."""
+    Chỉ đụng các số có trong values (đã kiểm); giá trị, nhãn đầy đủ vẫn ở bảng "Số liệu AI đã dùng" của khung AI.
+    keep_group (PS5): số của một nhóm giữ tên nhóm sau số. Live 2026-10-19: mô hình gọi ΔR của riêng Streetwear là "mức đổi
+    của toàn công ty"; bước kiểm cho qua vì số đúng ô, chat có nhãn "(ΔR, Streetwear, 2019)" nên người đọc thấy, còn bản
+    trang bỏ nhãn thì che mất lỗi gán nhầm."""
     by_shown = {shown: (path, v) for path, v, shown in values.values()}
 
     def sub(m):
@@ -144,7 +153,8 @@ def plain_answer(answer: str, values: dict) -> str:
         path, v = hit
         if path.rsplit('.', 1)[-1] in evidence.MONEY and isinstance(v, Number) and not isinstance(v, bool):
             s = _gon(v, s)
-        return f'**{s}**'
+        group = (g[1] if keep_group and (g := _GROUP_ROW.search(path)) and not g[1].isdigit() and g[1] in lbl else None)
+        return f'**{s}** ({group})' if group else f'**{s}**'
     return _RENDERED.sub(sub, answer)
 
 
@@ -159,7 +169,7 @@ def explain(req: PageRequest, backend: str, provider, *, session_tokens_used: in
     def finish(status, message='', chk=None, errors=()):
         turn.status, turn.message, turn.validation_errors = status, message, list(errors)
         if chk is not None and chk.ok:
-            turn.answer_md, turn.values = plain_answer(chk.answer_md, chk.values), chk.values
+            turn.answer_md, turn.values = plain_answer(chk.answer_md, chk.values, keep_group=req.page == 'ps5'), chk.values
         turn.latency_s = time.monotonic() - t0
         return turn
 
