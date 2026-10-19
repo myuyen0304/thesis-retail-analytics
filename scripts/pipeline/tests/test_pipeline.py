@@ -309,7 +309,7 @@ def test_ai_reader_gom_bang_du_bao_chi_khi_ban_co():
     # nhưng không đòi bảng đó ở bản trước B2b (rollback)
     app, ai = cli.consumers()
     opt = cli.optional_relations()
-    ai_opt = {'reporting.rpt_forecast_daily', 'reporting.rpt_forecast_backtest'}
+    ai_opt = {'reporting.rpt_forecast_daily', 'reporting.rpt_forecast_backtest', 'reporting.rpt_forecast_explain'}
     assert ai_opt <= opt and ai_opt <= set(ai)
     assert 'reporting.rpt_forecast_actual' not in ai                     # chat không đọc bảng số thực tế của trang
     schema = 'r_' + 'a' * 24 + '_reporting'
@@ -332,7 +332,8 @@ def test_app_reader_gom_ba_bang_trang_du_bao_chi_khi_ban_co():
     cfg = yaml.safe_load((ROOT / 'retail_dbt/dbt_project.yml').read_text(encoding='utf-8'))['vars']
     sys.path.insert(0, str(ROOT / 'apps/retail_app'))
     from dwh import forecast_queries
-    assert set(cfg['app_optional_relations']) == set(forecast_queries.SOURCE.values()) == TRANG_DU_BAO
+    assert set(forecast_queries.SOURCE.values()) == TRANG_DU_BAO
+    assert set(cfg['app_optional_relations']) == TRANG_DU_BAO | {'reporting.rpt_forecast_explain'}
     assert not TRANG_DU_BAO & set(cfg['app_read_relations'])
     app, _ = cli.consumers()
     assert TRANG_DU_BAO <= set(app) and TRANG_DU_BAO <= cli.optional_relations()
