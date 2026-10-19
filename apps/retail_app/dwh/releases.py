@@ -9,6 +9,7 @@ import re
 CONTROL_RELATION = 'retail_control.state'
 _pin = ContextVar('retail_release', default=None)
 _depth = ContextVar('retail_release_depth', default=0)
+_since = ContextVar('retail_release_since', default=None)    # payload['active_since'] của lần đọc registry đã pin bản
 _HEX = re.compile(r'[a-f0-9]{24}')
 
 
@@ -41,6 +42,7 @@ def choose(state, requested=None):
 
 def reset():
     _pin.set(None)
+    _since.set(None)
 
 
 @contextmanager
@@ -88,7 +90,19 @@ def resolve(backend, fetch=None):
         if len(rows) != 1:
             raise ValueError('Registry phải có đúng một dòng main')
         state = json.loads(rows[0][0])
-    return pin(choose(state))
+    record = pin(choose(state))
+    _since.set(state.get('active_since'))
+    return record
+
+
+def published_at():
+    """Giờ công bố (chuỗi UTC ISO) của bản đang pin, lấy từ cùng lần đọc registry đã pin bản (S3, A4). Không cần câu SQL hay
+    quyền mới: registry là thứ reader vốn đã đọc. None khi registry cũ chưa có trường này, hoặc trường đang chỉ bản khác
+    (code trước S3 đổi con trỏ mà không ghi giờ)."""
+    record, since = current(), _since.get()
+    if record is None or not isinstance(since, dict) or since.get('release_id') != record['release_id']:
+        return None
+    return since.get('at')
 
 
 def sql_for(sql, record):
