@@ -243,7 +243,9 @@ Không thêm số chưa có bằng chứng. Không commit.
 
 Dùng năm câu ở §4 của `giao_viec_agent_gd2.md`, hỏi thêm ba câu:
 
-1. **Chạy pipeline với `--root` nào, run_id và release_id nào?** Không được là `warehouse/pipeline` của thư mục chính.
+1. **Chạy pipeline với `--root` nào, run_id và release_id nào?** Khi chạy song song với phiên AI thì không được là
+   `warehouse/pipeline` của thư mục chính. Làm tuần tự theo `giao_viec_theo_so_do.md` thì được (luật 2, §3 của file đó),
+   trừ lúc có phiên đang đo trên bản active local.
 2. **Lần chạy lỗi để lại gì?** Exit code, `failure.json`, bản ghi lịch sử, file quarantine (A3), con trỏ active trước và sau.
 3. **`code_version` của lần chạy là của commit nào?** Bản cloud phải dựng từ code đã commit.
 
