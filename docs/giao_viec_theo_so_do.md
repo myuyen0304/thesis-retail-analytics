@@ -16,7 +16,8 @@ và rà như các bước S1–S4.
 "Codex xong Sx, rà đi" kèm báo cáo của Codex. Claude rà theo thứ tự, ghi phát hiện theo mức nặng, không tự sửa:
 1. `git diff` của bước: chỉ đụng file trong phạm vi bước, không sửa `data/`, không lộ secret, không xóa test cũ để cho đạt.
 2. Test có thật sự kiểm hành vi không: đọc từng test mới; loại test chỉ kiểm chữ có trong prompt, test giả lập mất chính phần
-   cần kiểm, test luôn đạt. Với test chính, tạm bỏ phần code mới (`git stash` hoặc đảo điều kiện) và chạy lại: test phải trượt.
+   cần kiểm, test luôn đạt. Với test chính, tạm bỏ phần code mới (`git stash push -- <file của bước>` hoặc đảo điều kiện) và chạy
+   lại: test phải trượt. Không dùng `git stash` trần: nó cuốn cả file chưa commit của phiên khác.
 3. Đối chứng độc lập một hai con số bằng đường khác code đang kiểm (pandas từ CSV, hoặc query thẳng vào bảng).
 4. Kiểm các điều bắt buộc của bước (ví dụ S5: cộng đóng góp trên thang log, bảng mới là bảng tùy chọn nên rollback bản cũ vẫn
    chạy, đủ các bước bẫy relation mới, nhãn "phân rã model, không phải nguyên nhân").
@@ -29,21 +30,21 @@ Prompt chi tiết của từng bước nằm ở hai file đã có: [giao_viec_a
 
 ## 1. Từng ô trên sơ đồ: đã có hay chưa
 
-| Ô trên sơ đồ | Hiện trạng 2026-10-18 | Bước |
+| Ô trên sơ đồ | Hiện trạng 2026-10-19 (cập nhật sau S6) | Bước |
 |---|---|---|
 | Nguồn 14 CSV → Snapshot bất biến (Parquet + SHA-256) | Đã chạy | — |
-| Mũi tên "kiểm data contract" Snapshot → Bronze | Một phần: mới kiểm header, số dòng, mã băm | S4 |
+| Mũi tên "kiểm data contract" Snapshot → Bronze | Đã chạy (S4): kiểu, nullable, khóa chính; dòng sai vào quarantine, pipeline dừng ở prepare | S4 |
 | Kafka (nét đứt) | Hoãn | — |
 | Bronze / Silver / Gold, Databricks production, DuckDB local | Đã chạy | — |
-| Task `forecast_train_score` trong dòng DAG | Chưa đúng sơ đồ: dự báo chạy **bên trong** task `ingest_and_dbt_build` | S2 |
+| Task `forecast_train_score` trong dòng DAG | Đã chạy (S2): task riêng, DAG năm task; chạy trên Databricks ở S6 | S2 |
 | ① Dự báo time series | Đã chạy: log + SARIMAX, ARIMA, LightGBM, bản gộp; model chính `lgbm_full / direct` chọn bằng backtest. **LSTM chưa làm** | D7 |
-| `reporting.rpt_forecast_*` | Đã chạy, local và Databricks | — |
-| Quality gate → publish / giữ bản đang phục vụ | Đã chạy. Chưa thử cố ý làm hỏng gate trên cloud | S6 |
-| "Điều phối + giám sát" của Airflow | Điều phối đã chạy. Giám sát một phần: chưa có lịch sử lần chạy, chưa có thẻ bản đang phục vụ | S3 |
+| `reporting.rpt_forecast_*` | Đã chạy, local và Databricks; thêm `rpt_forecast_explain` (S5, lên cloud ở S6) | — |
+| Quality gate → publish / giữ bản đang phục vụ | Đã chạy. Thử cố ý làm hỏng gate trên cloud: bản đang phục vụ được giữ (S6) | S6 |
+| "Điều phối + giám sát" của Airflow | Đã chạy: lịch sử lần chạy, thẻ bản đang phục vụ (S3); lịch 08:00 chạy target databricks (S6) | S3, S6 |
 | Trang PS1–PS5, Sức khỏe dữ liệu, Trang Dự báo | Đã chạy | — |
-| LLM router chọn tool | Có ở dạng LLM tự chọn tool; chưa có luật chọn level và nghiệm thu | S1 |
+| LLM router chọn tool | Đã chạy (S1): luật chọn level, nghiệm thu bằng bộ held-out `b7` | S1 |
 | L1 Query, L2 Dashboard (`show_chart`, deep link), L3 Forecast | Đã chạy, cả bản public | — |
-| L4 Explainable tool | Chưa làm | S5, S7 |
+| L4 Explainable tool | Phần dữ liệu đã chạy (S5, `rpt_forecast_explain`); tool `explain_forecast` chưa làm | S5, S7 |
 | RAG BM25 | Chưa làm | S8 |
 | Evidence check → Answer | Đã chạy | — |
 | Bản thân sơ đồ | Lệch: còn ghi [KẾ HOẠCH] cho các ô đã chạy; hộp ① ghi thước MAE/RMSE/sMAPE và "COGS qua tỷ lệ", khác cái đã chốt | S10 |
@@ -54,7 +55,7 @@ Agent cập nhật cột **Trạng thái** khi làm xong (`xong YYYY-MM-DD` ho�
 
 | Bước | Việc | Ô trên sơ đồ | Skill | Prompt | Điều kiện trước | Trạng thái |
 |---|---|---|---|---|---|---|
-| S0 | **Dọn trước (PM):** chốt chủ các thay đổi chưa commit trong `apps/` (`evidence.py`, `test_ai_forecast.py`, các trang và test PS1–PS4); commit đợt tài liệu bỏ Snowflake và ba file giao việc | — | — | — | — | một phần 2026-10-18: rv12f là của Codex, PM giữ, commit `946f507` + `c2e443f`; trang PS1–PS5 do Codex đang sửa (chặn S2); tài liệu Snowflake chưa commit (không chặn S1) |
+| S0 | **Dọn trước (PM):** chốt chủ các thay đổi chưa commit trong `apps/` (`evidence.py`, `test_ai_forecast.py`, các trang và test PS1–PS4); commit đợt tài liệu bỏ Snowflake và ba file giao việc | — | — | — | — | xong 2026-10-19: rv12f là của Codex, PM giữ, commit `946f507` + `c2e443f`; trang PS1–PS5 Codex commit `c3e0d95`…`7edbdfe`; tài liệu bỏ Snowflake commit `1b0cfc4`…`ed586da`; ba file giao việc đã commit. Còn đợt đồng bộ skill (`.agents/skills`, `.claude/skills`, `scripts/skills`) chưa commit, chờ PM; không chặn bước nào |
 | S1 | B7: router chọn level, bộ held-out, báo cáo AI4 (Must) | LLM router | `retail-ai-explain` | gd2 §3.7 | phần rv12f của S0 (đã xong). Không đụng `views/`, `ui/common.py` khi Codex còn sửa trang PS | xong 2026-10-18: held-out `b7` local 64/72, Databricks 21/24 (đạt cả máy lẫn tay); commit `5722b9e`…`892cbc6`; S1b (K17, K16, K08) commit `b34d3e9`…`929c1b8`; [ai_eval_b7_nghiem_thu.md](ai_eval_b7_nghiem_thu.md) |
 | SPS | B8: AI giải thích trên từng trang PS1–PS5 (PM chốt 2026-10-18, sổ quyết định `ke_hoach_ai_gd2.md` §2), kèm sửa lỗi đợt bố cục mới của Codex | Streamlit App | `retail-ai-explain` + `retail-bi-product` (+ `retail-analytics-engineering` nếu thêm cột dbt) | — | Codex đã commit bố cục mới (`c3e0d95`…`7edbdfe`) và dừng sửa trang PS; Claude làm thay. Không sửa prompt chat (`service.py`), `evidence.py`, `tools.py` khi S1 còn mở | dev xong 2026-10-18, đã commit (`8d89b22`…`4ef1b24`, prompt trang …b `eafc91d`); LLM thật: Databricks 5/5 ok, local 15 lượt đọc tay 12/15, 0 câu sai số. Chờ PM quyết siết thêm PAGE_NOTE (từ xếp hạng, kết luận thống kê) rồi đo lại bằng lượt mới; `ke_hoach_ai_gd2.md` §8 |
 | S2 | Tách dự báo thành task `forecast_train_score` riêng | dòng DAG | `retail-platform-validation` | §4.1 file này | S1; SPS xong và commit (pipeline băm cả `apps/`) | xong 2026-10-18, commit `93f3309`…`c847816`: `run` local `s2-20261018-02` (PM chạy ngoài Claude Code) publish `06f157ee…` (năm stage, dbt PASS=223), dự báo lệch 0 so với `dbx-20261017-01`; image / DAG Docker để S6 ([automation_batch.md](automation_batch.md), mục Kiểm chứng) |
@@ -62,15 +63,16 @@ Agent cập nhật cột **Trạng thái** khi làm xong (`xong YYYY-MM-DD` ho�
 | S4 | A3 kiểm data contract: kiểu, nullable, khóa chính, quarantine | mũi tên data contract | `retail-platform-validation` + `retail-analytics-engineering` | pipeline §4.2 | S3 | xong 2026-10-19, commit `78e3192`…`9a84b4c`: `COLUMNS` / `KEYS` trong `source_contract.py` (kiểu khớp cast staging), validator `scripts/pipeline/contract.py` ở prepare, dòng sai → quarantine + exit 2; test 24 mới; chuỗi chạy PM trong `warehouse/pipeline-s4`: publish `e9e6f92f…`, `--snapshot-id 5bd9a84aaf73` đạt, prepare 21 giây (trước 13–15 giây). Cloud chạy ở S6 ([automation_batch.md](automation_batch.md)) |
 | S5 | B4a: dữ liệu giải thích dự báo `rpt_forecast_explain` | L4 (phần dữ liệu) | `retail-forecasting` | gd2 §3.5, prompt thứ nhất | S4 | **xong 2026-10-19, commit `8dc6a9a`…`ab57f39`:** PM chạy pipeline run `s5-`, publish `31195a92…` (dbt 162 test pass); notebook 22/22 cell code, §8.1 kiểm 548 ngày × 10 nhóm, lệch log lớn nhất 4,80×10⁻¹⁴; Claude đối chứng 8.220 dòng dự báo với S4, sai lệch 0; rollback và chat PS/dự báo trên DuckDB đạt; PM bật Docker, `test_ai_tools.py` 195 pass, 0 skip. Quyền và rollback trên Databricks: đạt ở S6 ([automation_batch.md](automation_batch.md), mục B4a; [dwh_huong_dan_pm_ba.md](dwh_huong_dan_pm_ba.md) §9) |
 | S6 | **Lên cloud một lần** cho S2–S5: **trước hết** PM push và Reboot bản public (luật 6, §3); rồi build image, chạy DAG Databricks, thử hỏng gate, bật lịch | Databricks, quality gate | `retail-platform-validation` + `databricks:databricks-core` | pipeline §4.4, theo luật 6 | PM cho commit code S1–S5 | xong 2026-10-19 (Claude làm; trigger cloud PM chạy file `.ps1` vì auto mode chặn): image từ `ab57f39`, Airflow `dbx-airflow-s6-20261019-01` publish `ccde5a5e…` (dbt 225/225 hai phía, 37 relation, quyền hai SP đạt), rollback qua lại đạt, D3 gate hỏng giữ bản đang phục vụ, D2 lịch 08:00 chạy target databricks (PM chốt, commit `4641d5a`, `d957e85`) ([automation_batch.md](automation_batch.md), mục Databricks S6) |
-| S7 | B4b: tool `explain_forecast`. **Kèm, thêm khi tăng `PROMPT_VERSION` ở S7:** dòng router cho K02 (khoảng nhiều năm trùng ranh giới giai đoạn → `get_revenue_trend` phases) và K22 (tháng không kèm năm có ở cả 2023 và 2024 → hỏi lại năm), xem `ai_eval_b7_nghiem_thu.md` §7. **Hạn mức token:** sau B7, 3 câu tốn nhất chỉ còn dư khoảng 1.300 token dưới 200 nghìn (`test_tran_token_xau_nhat_con_du`); schema tool mới và dòng router phải tính lại hạn mức | L4 Explainable tool | `retail-ai-explain` | gd2 §3.5, prompt thứ hai | S5 (S6 nếu muốn eval trên cloud) | chưa làm |
-| S8 | B5: RAG `search_knowledge`. **Hạn mức token:** như S7, schema tool mới, dòng router và đoạn văn trả về đều cộng vào cận trên mỗi lần gọi; kiểm `test_tran_token_xau_nhat_con_du` trước khi giao | RAG | `retail-ai-explain` | gd2 §3.9 | S7 hoặc S7 bị cắt | chưa làm |
-| S9 | Đưa lên bản public: PM push, Reboot; một lượt chat trọn vẹn trên public hỏi L4 và RAG; bổ sung kết quả nhóm eval L4/RAG vào `docs/ai_eval_b7_nghiem_thu.md`; **chạy lại bộ held-out của S1 một lần** (cùng mã băm, không sửa câu) trên `PROMPT_VERSION` cuối, ghi thành dòng hồi quy dù kết quả thế nào | Streamlit App | `retail-ai-explain` | — | S7, S8 | chưa làm |
-| S10 | Vẽ lại sơ đồ theo hiện trạng và sửa tài liệu cho khớp | cả sơ đồ | `retail-platform-validation` | §4.2 file này | S9 | chưa làm |
+| S7 | B4b: tool `explain_forecast`. **Kèm, thêm khi tăng `PROMPT_VERSION` ở S7:** dòng router cho K02 (khoảng nhiều năm trùng ranh giới giai đoạn → `get_revenue_trend` phases) và K22 (tháng không kèm năm có ở cả 2023 và 2024 → hỏi lại năm), xem `ai_eval_b7_nghiem_thu.md` §7. **Hạn mức token:** sau B7, 3 câu tốn nhất chỉ còn dư khoảng 1.300 token dưới 200 nghìn (`test_tran_token_xau_nhat_con_du`); schema tool mới và dòng router phải tính lại hạn mức. **Giữ `rpt_forecast_explain` là bảng tùy chọn** (`app_optional_relations`, `OPTIONAL_RELATIONS`): cloud còn rollback được về `b25b3e47…`, bản không có bảng; bảng vắng thì tool báo "bản đang phục vụ chưa có dữ liệu giải thích", có test cả hai đường | L4 Explainable tool | `retail-ai-explain` | gd2 §3.5, prompt thứ hai | S5, S6 (xong). Luật 8: không dựng image, không trigger DAG; S7 không đổi dbt nên không chạy pipeline | chưa làm |
+| S8 | B5: RAG `search_knowledge`. **Hạn mức token:** như S7, schema tool mới, dòng router và đoạn văn trả về đều cộng vào cận trên mỗi lần gọi; kiểm `test_tran_token_xau_nhat_con_du` trước khi giao | RAG | `retail-ai-explain` | gd2 §3.9 | S7 hoặc S7 bị cắt; luật 8 | chưa làm |
+| S9 | Đưa lên bản public: PM push, Reboot (không dựng lại image Airflow, luật 8); một lượt chat trọn vẹn trên public hỏi L4 và RAG; bổ sung kết quả nhóm eval L4/RAG vào `docs/ai_eval_b7_nghiem_thu.md`; **chạy lại bộ held-out của S1 một lần** (cùng mã băm, không sửa câu) trên `PROMPT_VERSION` cuối, ghi thành dòng hồi quy dù kết quả thế nào | Streamlit App | `retail-ai-explain` | — | S7, S8 | chưa làm |
+| S10 | Vẽ lại sơ đồ theo hiện trạng và sửa tài liệu cho khớp | cả sơ đồ | `retail-platform-validation` | §4.2 file này | S9; PM chốt D4 (code Snowflake) và D7 (LSTM) | chưa làm |
 
-**Lịch gợi ý (hạn 2026-10-25):** S0 10-18 → 10-19 · SPS 10-18 → 10-20 · S1 10-19 → 10-21 · S2, S3 10-21 → 10-22 · S4, S5 10-22 → 10-23 ·
-S6 10-23 · S7, S8 10-23 → 10-24 · S9, S10 10-24 → 10-25.
+**Lịch gợi ý (hạn 2026-10-25; cập nhật 2026-10-19, đang sớm khoảng 4 ngày):** S1–S6 xong 10-18 → 10-19 · S7 10-20 → 10-21 ·
+S8 10-21 → 10-22 · S9 10-22 · S10 10-23 · dư 10-24 → 10-25.
+(Lịch gốc 10-18: S6 10-23 · S7, S8 10-23 → 10-24 · S9, S10 10-24 → 10-25.)
 
-**Trễ thì cắt theo thứ tự:** S8 → S7 → S5 → S4 → phần bật lịch của S6. Bước bị cắt giữ viền [KẾ HOẠCH] trên sơ đồ ở S10.
+**Trễ thì cắt theo thứ tự:** S8 → S7 (S4, S5, S6 đã xong). Bước bị cắt giữ viền [KẾ HOẠCH] trên sơ đồ ở S10.
 **Không cắt:** S1 (Must), SPS (PM chốt mỗi PS có AI giải thích), S6 (bản cloud phải có code đã làm), S10 (sơ đồ và tài liệu phải nói đúng).
 
 **Quyết định PM** (mã D1–D6 ở `giao_viec_agent_pipeline.md` §2; đề xuất mặc định ghi ở đó). Thêm một mục:
@@ -109,6 +111,16 @@ Thêm các luật:
    bộ test đầy đủ kéo dài. Agent viết sẵn lệnh PowerShell dán được (thư mục, `$env:PYTHONUTF8=1`, lệnh, run_id, dấu hiệu xong),
    gửi PM, rồi chỉ đọc kết quả (context.json, manifest, log). Test nhanh vài phút vẫn chạy trong phiên. Lý do: máy 15,7 GB RAM,
    Claude Code từng hai lần tự dừng pipeline vì thiếu RAM (2026-10-18), và ngồi chờ lần chạy dài tốn token.
+8. **Sau S6, Airflow trong Docker là production** (PM chốt 2026-10-19: lịch 08:00 chạy target databricks, Docker tự lên khi bật
+   máy; `automation_batch.md` mục Airflow Docker). Code nằm cố định trong image, nên:
+   - bước code (S7–S10) không dựng image, không chạy `docker compose -f docker-compose.airflow.yml build/up/restart`, không trigger
+     DAG, không sửa `.env.airflow.local` hay `deploy/`. Trigger không chọn target là chạy production. Container Postgres của
+     `docker-compose.yml` (test PG) không thuộc luật này;
+   - chạy pipeline local vẫn theo luật 2, bằng CLI Windows (`--target` mặc định `duckdb`). Cần đọc bản có `rpt_forecast_explain`
+     mà không chạy pipeline thì đặt `RETAIL_RELEASE_STATE=warehouse/pipeline-s4/state.json`; bản mặc định `warehouse/pipeline`
+     không có bảng này;
+   - dựng lại image là quyết định của PM, làm sau khi đã push và Reboot (luật 6). `code_version` băm cả `apps/`, nên sau khi
+     dựng, lượt 08:00 kế tiếp build và publish lại toàn bộ lên cloud (khoảng 25 phút quota) dù dữ liệu không đổi.
 
 ## 4. Hai prompt mới
 
@@ -161,7 +173,7 @@ Xong khi: mọi ô trên sơ đồ khớp cột "Hiện trạng" mới của b�
 
 ## 5. Prompt PM dán mỗi lần
 
-Mở phiên Claude mới trong `D:/retail-analytics`, dán:
+Mở phiên mới (Claude; từ S5 là Codex, trừ ngoại lệ ghi ở đầu file) trong `D:/retail-analytics`, dán:
 
 ```text
 Làm việc theo docs/giao_viec_theo_so_do.md. Đọc §1–§3. Chọn bước ĐẦU TIÊN trong bảng §2 có trạng thái "chưa làm" mà điều kiện
@@ -171,4 +183,7 @@ Xong bước: cập nhật cột Trạng thái, trả lời PM sáu câu nghiệ
 trả lời thêm ba câu ở §5 của docs/giao_viec_agent_pipeline.md), rồi DỪNG, không tự sang bước sau.
 ```
 
+Chạy bằng Codex: dán cùng prompt; Codex không có công cụ Skill, nên gọi skill bằng `$tên-skill` (ví dụ `$retail-ai-explain`).
+
 Agent báo xong thì PM kiểm bằng chứng (các câu nghiệm thu), cho commit nếu đạt, rồi mở phiên mới và dán lại đúng prompt trên.
+Từ S5, trước khi commit PM gửi báo cáo của Codex cho Claude rà (đầu file).
