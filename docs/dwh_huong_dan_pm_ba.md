@@ -2386,3 +2386,43 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   - cho commit code và docs của bước này không;
   - lần chạy vừa rồi băm cả code S2 chưa commit, nên bản cloud (S6) phải dựng lại từ commit sạch;
   - image Docker đang có là bản cũ (bốn task): phải build lại trước khi chạy DAG (S6).
+
+### 2026-10-19: pipeline ghi lịch sử từng lần chạy, trang Sức khỏe có thẻ "bản đang phục vụ" (S3, chạy local đạt, chưa commit)
+
+- **Làm gì:**
+  - **Lịch sử lần chạy:** mỗi bước của pipeline và mỗi lần quay về bản cũ (rollback) để lại một dòng: đạt, bỏ qua hay lỗi, giờ bắt đầu
+    và kết thúc, bản nào, lỗi loại gì. Không ghi nội dung lỗi hay thông tin đăng nhập.
+    - Xem bằng lệnh `.venv/Scripts/python.exe -m scripts.pipeline.cli history --root <thư mục pipeline>`.
+    - Trên Databricks, lịch sử nằm trong bảng riêng của pipeline; app và chat không được quyền đọc bảng này.
+  - **Giờ công bố:** mỗi lần đổi bản đang phục vụ, pipeline ghi thêm giờ đổi, cạnh con trỏ "bản đang phục vụ".
+  - **Thẻ "Bản dữ liệu đang phục vụ"** trên trang Sức khỏe dữ liệu:
+    - hiện mã bản, giờ công bố (giờ Việt Nam), tuổi của bản, snapshot nguồn, lần chạy đã dựng bản;
+    - app đọc theo kho cũ thì thẻ ghi "Không áp dụng".
+- **Vì sao:** mốc A4 (giám sát) trên sơ đồ kiến trúc. Bạn chốt (D1 = không): app không hiện lần chạy lỗi, để khỏi phải cấp thêm quyền
+  đọc cho app / chat. Thêm quyền đọc từng làm khóa chat public ngày 2026-10-17. Lần lỗi xem bằng lệnh lịch sử và Airflow.
+- **Độ tươi:** đo bằng tuổi của bản đang phục vụ, không đo theo ngày dữ liệu.
+  - Dữ liệu dừng ở 31/12/2022 theo thiết kế, nên đo theo ngày dữ liệu thì luôn báo cũ.
+  - Lịch chạy tự động đang tắt, nên thẻ chỉ hiện tuổi, không tô đỏ.
+- **Trả lời PS nào:** không đổi số nào; chỉ cho biết số trên app lấy từ bản nào và bản đó được công bố bao lâu rồi.
+- **Kiểm (2026-10-19):**
+  - test trong phiên:
+    - 8 test pipeline mới (32/32);
+    - 7 test app mới, gồm một test bắt buộc: bản public chưa Reboot (code app cũ) đọc registry mới vẫn chạy;
+    - các test sẵn có của trang Sức khỏe đạt (27/27).
+  - Bạn tự chạy chuỗi lệnh kiểm trong thư mục riêng `warehouse/pipeline-s3`, nên bản local đang phục vụ `06f157ee…` không đổi:
+    - dựng hai bản, chạy lại một lần (mọi bước "bỏ qua");
+    - quay về bản đầu (đạt), quay lại lần nữa ("bỏ qua"), gõ mã bản không có (báo lỗi rõ, ghi "lỗi");
+    - lịch sử đủ 18 dòng.
+- **Giới hạn:**
+  - Gõ sai cú pháp lệnh (ví dụ thiếu giá trị sau `--release-id`) thì lệnh dừng trước khi chạy, nên không có dòng lịch sử.
+  - Bước dự báo ở lần dựng thứ hai mất 19,6 phút theo đồng hồ, trong khi phần train tự đo chỉ 301 giây. Chưa rõ vì sao; có thể do máy
+    thiếu RAM.
+  - Chưa chạy trên Databricks.
+- **Đã sửa file chung:** `docs/automation_batch.md` (mục Giám sát, Nhật ký và lỗi, Kiểm chứng), ô trạng thái S3 ở
+  `docs/giao_viec_theo_so_do.md`, mục này.
+  - Code: `scripts/pipeline/cli.py`, `scripts/pipeline/state.py`, `scripts/pipeline/tests/test_pipeline.py`,
+    `apps/retail_app/dwh/releases.py`, `apps/retail_app/views/suc_khoe_du_lieu.py`, test mới `apps/retail_app/tests/test_ban_phuc_vu.py`.
+  - Không đụng chat, các trang PS, dbt.
+- **Cần bạn quyết / lưu ý:**
+  - cho commit code và docs của bước này không;
+  - bản public cần push và Reboot mới có thẻ mới. Trước đó, code cũ vẫn đọc được registry mới (đã kiểm).
