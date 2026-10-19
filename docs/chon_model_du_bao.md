@@ -217,7 +217,7 @@ Nó vẫn phải qua luật §6 như mọi ứng viên khác, không được ư
   - Tương thích với pandas 3.0.5 và numpy 2.5.1: kiểm bằng lần chạy notebook B2 (ghi ở `ke_hoach_ai_gd2.md` §8).
 - **Đề xuất (theo mục tiêu agent ở §6.1):** stage dự báo trong pipeline chạy mọi model Must và Should đã làm xong trong notebook, cùng các mốc.
   - Stage chạy cả backtest ba fold chứ không chỉ train bản cuối, vì luật chọn cần điểm backtest. Mỗi model train khoảng bốn lần.
-    Đo ngày 2026-10-14 trên laptop Windows của nhóm: cả notebook `notebooks/04_forecasting/so_sanh_model.ipynb` (12 ứng viên, 3 mốc, ba fold và bản cuối) chạy 878 giây trong lần chạy ngày 2026-10-15 (cell cuối của notebook in tổng thời gian); stage pipeline local cùng ngày chạy 956 giây (`docs/automation_batch.md`). Máy bận thì lâu hơn nhiều.
+    Trên laptop Windows của nhóm, lần chạy notebook `notebooks/04_forecasting/so_sanh_model.ipynb` ngày 2026-10-15 (12 ứng viên, 3 mốc, ba fold và bản cuối) mất 878 giây; stage pipeline local cùng ngày mất 956 giây (`docs/automation_batch.md`). Notebook chạy lại ngày 2026-10-19, ô cuối hiện in 324 giây. Máy bận thì lâu hơn nhiều.
   - Image Docker của Airflow cần cả statsmodels và lightgbm.
   - Khoảng 80% của trung bình cộng chỉ lấy được từ quantile phần dư backtest (`hop_dong_du_bao.md` §6).
   - LSTM chỉ vào stage nếu nó thắng theo luật §6, vì torch làm image nặng thêm nhiều.
