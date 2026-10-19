@@ -6,6 +6,20 @@ Soạn ngày 2026-10-18 (vai Head of AI). Đích: mọi ô trên sơ đồ `docs
 Cách dùng: **làm tuần tự, một phiên Claude một bước**, trong thư mục chính `D:/retail-analytics`. Mỗi lần PM dán cùng một prompt (§5);
 agent tự chọn bước kế tiếp trong bảng §2, làm xong thì ghi trạng thái rồi dừng. Không cần worktree, không chạy hai phiên code cùng lúc.
 
+**Phân vai từ S5 (PM chốt 2026-10-19): Codex thực hiện, Claude rà độc lập.** Lý do: hạn mức Claude gần hết. Codex dán prompt §5,
+gọi skill bằng `$tên-skill`, không nhắn được cho phiên Claude nên tự làm trọn bước. Claude chỉ rà bài của Codex khi còn token,
+không sửa song song. Mỗi lúc vẫn chỉ một phiên sửa code.
+
+**Claude rà bài Codex trước khi commit** (PM chốt 2026-10-19: không tin hoàn toàn test do Codex tự viết). PM gửi Claude
+"Codex xong Sx, rà đi" kèm báo cáo của Codex. Claude rà theo thứ tự, ghi phát hiện theo mức nặng, không tự sửa:
+1. `git diff` của bước: chỉ đụng file trong phạm vi bước, không sửa `data/`, không lộ secret, không xóa test cũ để cho đạt.
+2. Test có thật sự kiểm hành vi không: đọc từng test mới; loại test chỉ kiểm chữ có trong prompt, test giả lập mất chính phần
+   cần kiểm, test luôn đạt. Với test chính, tạm bỏ phần code mới (`git stash` hoặc đảo điều kiện) và chạy lại: test phải trượt.
+3. Đối chứng độc lập một hai con số bằng đường khác code đang kiểm (pandas từ CSV, hoặc query thẳng vào bảng).
+4. Kiểm các điều bắt buộc của bước (ví dụ S5: cộng đóng góp trên thang log, bảng mới là bảng tùy chọn nên rollback bản cũ vẫn
+   chạy, đủ các bước bẫy relation mới, nhãn "phân rã model, không phải nguyên nhân").
+5. Câu chữ trong nhật ký và tài liệu khớp bằng chứng. Test nhanh chạy trong phiên; việc nặng theo luật 7, PM chạy.
+
 Prompt chi tiết của từng bước nằm ở hai file đã có: [giao_viec_agent_gd2.md](giao_viec_agent_gd2.md) (phần AI, §3.x) và
 [giao_viec_agent_pipeline.md](giao_viec_agent_pipeline.md) (phần DE, §4.x). File này thêm hai prompt mới (§4) và luật chạy tuần tự (§3).
 
@@ -43,7 +57,7 @@ Agent cập nhật cột **Trạng thái** khi làm xong (`xong YYYY-MM-DD` ho�
 | SPS | B8: AI giải thích trên từng trang PS1–PS5 (PM chốt 2026-10-18, sổ quyết định `ke_hoach_ai_gd2.md` §2), kèm sửa lỗi đợt bố cục mới của Codex | Streamlit App | `retail-ai-explain` + `retail-bi-product` (+ `retail-analytics-engineering` nếu thêm cột dbt) | — | Codex đã commit bố cục mới (`c3e0d95`…`7edbdfe`) và dừng sửa trang PS; Claude làm thay. Không sửa prompt chat (`service.py`), `evidence.py`, `tools.py` khi S1 còn mở | dev xong 2026-10-18, đã commit (`8d89b22`…`4ef1b24`, prompt trang …b `eafc91d`); LLM thật: Databricks 5/5 ok, local 15 lượt đọc tay 12/15, 0 câu sai số. Chờ PM quyết siết thêm PAGE_NOTE (từ xếp hạng, kết luận thống kê) rồi đo lại bằng lượt mới; `ke_hoach_ai_gd2.md` §8 |
 | S2 | Tách dự báo thành task `forecast_train_score` riêng | dòng DAG | `retail-platform-validation` | §4.1 file này | S1; SPS xong và commit (pipeline băm cả `apps/`) | xong 2026-10-18, commit `93f3309`…`c847816`: `run` local `s2-20261018-02` (PM chạy ngoài Claude Code) publish `06f157ee…` (năm stage, dbt PASS=223), dự báo lệch 0 so với `dbx-20261017-01`; image / DAG Docker để S6 ([automation_batch.md](automation_batch.md), mục Kiểm chứng) |
 | S3 | A4 giám sát: lịch sử lần chạy, thẻ bản đang phục vụ, độ tươi | Airflow giám sát | `retail-platform-validation` (+ `retail-bi-product`) | pipeline §4.1 | S2. D1 = không (PM 2026-10-18) | dev xong 2026-10-19, chưa commit: lịch sử `<root>/history.jsonl` (cloud: `retail_control.run_history`, không grant reader) + lệnh `cli history`; giờ công bố `active_since` cạnh con trỏ; thẻ "Bản dữ liệu đang phục vụ" ở trang Sức khỏe; code app cũ đọc payload mới đạt. Chuỗi chạy PM trong `warehouse/pipeline-s3`: 2 bản, rollback đạt / bỏ qua / mã sai, 18 dòng lịch sử. Cloud chưa chạy ([automation_batch.md](automation_batch.md), mục Giám sát và Kiểm chứng) |
-| S4 | A3 kiểm data contract: kiểu, nullable, khóa chính, quarantine | mũi tên data contract | `retail-platform-validation` + `retail-analytics-engineering` | pipeline §4.2 | S3 | chưa làm |
+| S4 | A3 kiểm data contract: kiểu, nullable, khóa chính, quarantine | mũi tên data contract | `retail-platform-validation` + `retail-analytics-engineering` | pipeline §4.2 | S3 | dev xong 2026-10-19, chưa commit: `COLUMNS` / `KEYS` trong `source_contract.py` (kiểu khớp cast staging), validator `scripts/pipeline/contract.py` ở prepare, dòng sai → quarantine + exit 2; test 24 mới; chuỗi chạy PM trong `warehouse/pipeline-s4`: publish `e9e6f92f…`, `--snapshot-id 5bd9a84aaf73` đạt, prepare 21 giây (trước 13–15 giây). Cloud chưa chạy ([automation_batch.md](automation_batch.md)) |
 | S5 | B4a: dữ liệu giải thích dự báo `rpt_forecast_explain` | L4 (phần dữ liệu) | `retail-forecasting` | gd2 §3.5, prompt thứ nhất | S4 | chưa làm |
 | S6 | **Lên cloud một lần** cho S2–S5: **trước hết** PM push và Reboot bản public (luật 6, §3); rồi build image, chạy DAG Databricks, thử hỏng gate, bật lịch | Databricks, quality gate | `retail-platform-validation` + `databricks:databricks-core` | pipeline §4.4, theo luật 6 | PM cho commit code S1–S5 | chưa làm |
 | S7 | B4b: tool `explain_forecast`. **Kèm, thêm khi tăng `PROMPT_VERSION` ở S7:** dòng router cho K02 (khoảng nhiều năm trùng ranh giới giai đoạn → `get_revenue_trend` phases) và K22 (tháng không kèm năm có ở cả 2023 và 2024 → hỏi lại năm), xem `ai_eval_b7_nghiem_thu.md` §7. **Hạn mức token:** sau B7, 3 câu tốn nhất chỉ còn dư khoảng 1.300 token dưới 200 nghìn (`test_tran_token_xau_nhat_con_du`); schema tool mới và dòng router phải tính lại hạn mức | L4 Explainable tool | `retail-ai-explain` | gd2 §3.5, prompt thứ hai | S5 (S6 nếu muốn eval trên cloud) | chưa làm |
