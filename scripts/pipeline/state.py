@@ -1,5 +1,6 @@
 """Registry và con trỏ công bố: một payload được cập nhật bằng compare-and-swap."""
 from contextlib import contextmanager
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -102,4 +103,8 @@ class Registry:
         if state['active'] != expected:
             raise RuntimeError('Phiên bản đang phục vụ đã đổi; không ghi đè kết quả mới hơn')
         state['active'] = rid
+        # Giờ công bố nằm cạnh con trỏ, không trong bản ghi release (register() cấm sửa bản đã qua gate). Ghi kèm release_id:
+        # code trước S3 đổi con trỏ (rollback) mà không ghi giờ thì app thấy giờ không khớp bản và không hiện giờ sai.
+        state['active_since'] = {'release_id': rid,
+                                 'at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
         self.save(before, state)
