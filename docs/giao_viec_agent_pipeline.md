@@ -41,7 +41,7 @@ Không cần chốt hết trước khi giao việc. Cột "Hỏi lúc nào" cho 
 | Mã | Câu hỏi | Đề xuất mặc định | Hỏi lúc nào |
 |---|---|---|---|
 | D1 | App có hiện cả các lần chạy **lỗi** không? | **Không.** Lần lỗi xem qua lệnh lịch sử của CLI và Airflow UI. App chỉ hiện bản đang phục vụ. Hiện lần lỗi trên app cần cấp thêm quyền đọc cho SP, dễ lặp lại sự cố khóa chat 2026-10-17 | Trước P1 |
-| D2 | Bật lịch Airflow không, chạy target nào? | Bật lịch 08:00 cho **target duckdb** để demo. Databricks vẫn do PM bấm tay. Lịch chạy Databricks mà code đã đổi sẽ tự dựng và **tự công bố** lên app public | Trước P4 |
+| D2 | Bật lịch Airflow không, chạy target nào? | Bật lịch 08:00 cho **target duckdb** để demo. Databricks vẫn do PM bấm tay. Lịch chạy Databricks mà code đã đổi sẽ tự dựng và **tự công bố** lên app public. **PM chốt 2026-10-19: lịch 08:00 chạy target databricks** (biến `RETAIL_PIPELINE_DEFAULT_TARGET` trong `.env.airflow.local`, commit `4641d5a`); Airflow vẫn chạy local trong Docker. Code nằm cố định trong image, nên code mới chỉ lên production khi có người dựng lại image từ một commit; snapshot và code trùng bản đang phục vụ thì run `bo_qua` ở prepare | Trước P4 |
 | D3 | Có làm phép thử hỏng quality gate trên cloud không? | **Có, một lần.** Tốn quota bằng một lần build (khoảng 20 phút). Bằng chứng tốt khi bảo vệ | Trước P4 |
 | D4 | Xóa hay giữ code Snowflake? | **Xóa**, thành bước riêng P2b, làm trước P4 để một lần chạy cloud gom hết thay đổi code | Trước P2b |
 | D5 | Dọn release cũ trên Databricks? | Chưa làm, chỉ ghi giới hạn | Không cần hỏi lại |
@@ -212,6 +212,7 @@ PM đã chốt: D2 = [lịch / target], D3 = [có / không]. Profile Databricks:
    trước mọi lần chạy tiếp hay bật lịch, và kiểm code_version của lần chạy kế khớp commit đó.
 4. Bật lịch theo D2. Tham số mặc định của DAG là target=duckdb: lần chạy theo lịch không đụng Databricks trừ khi đổi
    mặc định. Không tự đổi mặc định sang databricks khi PM chưa chốt.
+   (Đã làm 2026-10-19: PM chốt databricks; mặc định đọc từ `RETAIL_PIPELINE_DEFAULT_TARGET`, xem automation_batch.md mục Airflow Docker.)
 5. PM push rồi Reboot bản public; kiểm thẻ "bản đang phục vụ" trên trang Sức khỏe bản public.
 
 Không làm: xóa release cũ; đổi Secrets của app public; Kafka; commit.

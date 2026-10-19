@@ -30,7 +30,7 @@ flowchart LR
 
 ## Stage dự báo (B2b, thêm 2026-10-15; tách thành stage riêng 2026-10-18)
 
-### B4a: dữ liệu phân rã model (S5; dev xong 2026-10-19, chưa commit)
+### B4a: dữ liệu phân rã model (S5; xong 2026-10-19, commit `8dc6a9a`…`ab57f39`; lên cloud ở S6)
 
 Stage dự báo nay ghi thêm `forecast_explain.parquet` cho model chính LightGBM. Mỗi dòng là một ngày dự báo × nhóm biến:
 `base_log + tổng contribution_log = log(yhat)` cho từng ngày; `multiplier = exp(contribution_log)` là hệ số nhân
@@ -205,11 +205,28 @@ Nếu muốn đổi mật khẩu, đặt `RETAIL_AIRFLOW_ADMIN_PASSWORD` trong `
 File mật khẩu nằm trong volume local tại `/opt/airflow/logs/passwords.json`; không dùng cấu hình demo này khi mở Airflow ra mạng.
 
 DAG gồm năm task: `prepare_snapshot` → `forecast_train_score` → `ingest_and_dbt_build` → `quality_and_reader_gate` →
-`publish_release` (từ 2026-10-18; trước đó bốn task, dự báo nằm trong `ingest_and_dbt_build`). Image Docker đang có được build
-trước thay đổi này: **build lại image trước khi chạy DAG** (S6).
+`publish_release` (từ 2026-10-18; trước đó bốn task, dự báo nằm trong `ingest_and_dbt_build`).
+Dựng image từ bản xuất sạch (`git archive` của một commit), không dùng `docker compose build` (context là thư mục làm việc có
+thể đang có thay đổi chưa commit). Lệnh dựng: mục Databricks S6 bên dưới.
 Mặc định DAG paused, schedule tắt và target `duckdb`. Trigger thủ công từ UI với target/snapshot_id/force.
 Chỉ sau nghiệm thu mới đặt `RETAIL_PIPELINE_SCHEDULE_ENABLED=true` trong `.env.airflow.local`, recreate dịch vụ và unpause:
-lịch 08:00 Asia/Ho_Chi_Minh, không catchup, tối đa một DAG run. Laptop/Docker phải đang hoạt động.
+lịch 08:00 Asia/Ho_Chi_Minh, không catchup, tối đa một DAG run. Laptop/Docker phải đang hoạt động: máy tắt lúc 08:00 thì lượt
+đó bị lỡ, bản đang phục vụ giữ nguyên.
+
+**Target của lịch (PM chốt 2026-10-19: databricks).** Lịch không truyền được conf, nên target mặc định đọc từ
+`RETAIL_PIPELINE_DEFAULT_TARGET` (`duckdb` khi không đặt; commit `4641d5a`). Máy demo đặt `databricks`:
+- lịch 08:00 chạy production; snapshot và `code_version` trùng bản đang phục vụ thì run `bo_qua` ngay ở prepare;
+- code nằm cố định trong image, nên code mới chỉ lên production khi có người dựng lại image từ một commit;
+- trigger tay không chọn target cũng chạy production; muốn chạy local phải chọn `target=duckdb`;
+- dựng image thử nghiệm (như image D3) thì phải dựng lại image thật trước 08:00 hôm sau; lỡ quên thì gate chặn, tốn một lần build cloud;
+- lần đầu bật lịch, Airflow chạy ngay mốc 08:00 vừa qua (2026-10-19: run `scheduled__2026-10-19T01:00:00+00:00`, lúc đó target
+  còn là duckdb, publish bản local `4559c2dd…`).
+- Nghiệm thu 2026-10-19: image dựng từ `d957e85` (`code_version` vẫn `96d98622…`, thư mục DAG không nằm trong phần băm);
+  trigger `dbx-airflow-s6-lich-01` **không kèm conf** (pipeline run `3361fa5d08d22411e808a210`): `context.json` target
+  `databricks`, stage `skipped`, `expected_active` `ccde5a5e…`; 5 task `success` trong khoảng 1 phút 40 giây, lịch sử cloud
+  5 dòng `bo_qua`; bản đang phục vụ không đổi. Đây là điều lịch 08:00 làm mỗi ngày khi dữ liệu và code không đổi.
+
+Hướng mở rộng (chưa làm): điều phối không phụ thuộc máy bật, bằng Databricks Jobs hoặc Airflow có quản lý.
 
 Airflow dùng `warehouse/pipeline/docker` để tách state khỏi chạy CLI Windows. Muốn app host đọc kết quả Docker,
 đặt `RETAIL_RELEASE_STATE` tới `warehouse/pipeline/docker/state.json`; artifact được giải qua đường dẫn tương đối.
@@ -245,7 +262,48 @@ Airflow dùng `warehouse/pipeline/docker` để tách state khỏi chạy CLI Wi
   - Chạy lại cùng lệnh rollback thì version của registry không đổi.
   - Mã bản không có trong registry thì bị từ chối. Lúc chạy cloud lệnh báo `KeyError` thô, exit 1; đã sửa 2026-10-17 (`2c067ac`, test `b5aa37c`): giờ lệnh báo một câu rõ, nêu mã gõ sai và các bản rollback được, exit 2, registry không đổi.
   - Chi tiết từng lệnh: [ghi_chu_l2_airflow_rollback_20261017.md](ghi_chu_l2_airflow_rollback_20261017.md).
-- Chưa làm: cố ý làm hỏng quality gate trên cloud để thấy bản đang phục vụ được giữ (mới có test local); bật lịch Airflow.
+- Chưa làm (lúc đó): cố ý làm hỏng quality gate trên cloud; bật lịch Airflow. Cả hai đã làm ở S6 bên dưới.
+
+### Databricks S6: lên cloud cho S2–S5 (2026-10-19)
+
+Code `ab57f39` (S1–S5 đã push), `code_version` `96d9862232bf…` = run local `s5-` (release `31195a92…`, mốc đối chứng).
+Catalog `retail_lab`, workspace `retail-dev`. Claude chạy các lệnh; lệnh trigger và rollback lên production bị auto mode của
+Claude Code chặn thì PM chạy file `.ps1` (luật 7). Runbook chi tiết: `warehouse/pipeline/runbook_s6.md` (không commit).
+
+- **Trước khi chạy (luật 6):** PM Reboot bản public; trang Sức khỏe hiện `b25b3e47…`, giờ công bố "chưa ghi" (bản công bố
+  trước S3). `kiem_sau_doi_ban.py` (code `ab57f39`, SP thật của bản public) trên `b25b3e47…`: ĐẠT, tức đường "bảng tùy chọn chưa
+  có" (`rpt_forecast_explain`) chạy được. Bản Databricks Apps `retail-analytics`: compute STOPPED.
+- **Image:** dựng từ `git archive` của `ab57f39`; `code_version` trong container = `96d98622…`; DAG 5 task, không lỗi import.
+  Bẫy: `airflow-dag-processor` phải được dựng lại cùng hai service kia (lần này nó đã tắt từ 10-17, còn image cũ); DAG đã
+  serialize trong metadata DB phải có 5 task. Dán lệnh dài vào PowerShell dễ bị gãy dòng, nên dùng file `.ps1`.
+- **Chạy DAG target databricks** (run Airflow `dbx-airflow-s6-20261019-01`, pipeline run `a0f8002cc96392f0d754f815`,
+  release `ccde5a5e21c54e9e9054066f`), 5/5 task đạt trong khoảng 25 phút:
+
+  | Stage | Thời gian | Kết quả |
+  |---|---|---|
+  | prepare | 65 giây | snapshot `5bd9a84aaf73`, hợp đồng S4 đạt, `expected_active` `b25b3e47…` |
+  | forecast | 231 giây | `lgbm_full / direct`, `model_version` `b9d99cf84801`, `rows_daily` 8.220, `rows_explain` 5.480 |
+  | build | 8 phút | dbt DuckDB 225/225 và Databricks 225/225 (63 model, 162 test), có `rpt_forecast_explain` và `assert_rpt_forecast_explain` |
+  | validate | 10 phút | `daily_rows` 3.833, `relations_checked` 37, `cloud_parity` true; thử đọc bằng SP app và SP AI, kiểm quyền thừa: đạt |
+  | publish | 74 giây | active cloud `b25b3e47…` → `ccde5a5e…`; `run_history` có 5 stage `dat` |
+
+  - So dự báo với `s5-` (Python 3.12 Docker và 3.13 Windows): `yhat`, `cogs_yhat` của model chính trùng 8.220/8.220 dòng,
+    tổng tháng G / COGS lệch 0%; điểm backtest lệch ≤ 0,15%, thứ hạng không đổi; cận khoảng 80% LightGBM lệch tối đa khoảng
+    19 nghìn mỗi ngày.
+  - Sau publish: `kiem_sau_doi_ban.py ccde5a5e…` ĐẠT (R 2019 = 864.329.801,94; G dự báo 08/2023 = 74.151.832,38; hai câu chat
+    `ok`, bằng chứng mang `ccde5a5e…`). Trang Sức khỏe public: mã `ccde5a5…`, công bố 14:34 19/10/2026, test 162/162.
+- **Rollback trên cloud** `ccde5a5e…` → `b25b3e47…` (`s6-rb-01`) → `ccde5a5e…` (`s6-rb-02`): cả hai `dat`; kiểm sau khi về bản
+  mới: ĐẠT. Một lần chạy chồng lên `s6-rb-01` bị `writer.lock` chặn (`loi BlockingIOError`, không đổi gì): khóa ghi hoạt động đúng.
+- **D3, cố ý làm hỏng quality gate** (run Airflow `dbx-airflow-s6-gatehong-01`, pipeline run `7a6e983c1f54b13c98c7e236`):
+  - image riêng từ bản xuất `ab57f39` thêm test singular `assert_s6_gate_thu_hong` chỉ fail khi `target.type = 'databricks'`
+    (không commit); `code_version` `b5f77383…`;
+  - DuckDB 226/226 đạt, kể cả test này; Databricks 225 đạt + đúng 1 fail là test này: lỗi nằm ở phía cloud, không phải DuckDB;
+  - task `ingest_and_dbt_build` fail, `failure.json` stage `build`, `ValueError` → exit 2 → `AirflowFailException`, chỉ
+    `attempt=1` (không retry); `quality_and_reader_gate`, `publish_release` `upstream_failed`; lịch sử cloud ghi `build loi`;
+  - active cloud giữ `ccde5a5e…`, `kiem_sau_doi_ban.py` vẫn ĐẠT;
+  - còn sót schema ứng viên `r_16bfafc5e5fb…_*` trên Databricks (D5: chưa dọn);
+  - xong thì dựng lại image thật từ `ab57f39`, `code_version` `96d98622…`.
+- **D2, bật lịch:** xem mục Airflow Docker ở trên (target databricks, commit `4641d5a`, `d957e85`).
 
 Mô tả gốc của đường cloud (viết trước lần chạy thật):
 
@@ -334,6 +392,9 @@ thẻ "bản đang phục vụ". Không cấp quyền mới cho SP reader.
 - **Độ tươi đo bằng tuổi của bản đang phục vụ**, không dùng dbt source freshness theo ngày dữ liệu.
   - Dữ liệu dừng ở 2022-12-31 theo thiết kế, nên freshness theo ngày dữ liệu luôn đỏ; không đưa vào quality gate.
   - Ngưỡng cảnh báo phải theo lịch chạy (D2). Lịch Airflow còn tắt, nên thẻ chỉ hiện tuổi, không tô đỏ.
+  - Từ 2026-10-19 lịch bật (target databricks) nhưng dữ liệu tĩnh, nên run hằng ngày `bo_qua` và tuổi của bản cứ tăng; tuổi lớn
+    không có nghĩa là lỗi. Thẻ vẫn chỉ hiện tuổi, không tô đỏ. Muốn cảnh báo thì phải đo theo lần chạy gần nhất (kể cả `bo_qua`),
+    mà app không đọc được `run_history` (D1). Chưa làm.
 
 ## Hợp đồng dữ liệu bản gọn (A3, bước S4, 2026-10-19)
 

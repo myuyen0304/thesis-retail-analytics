@@ -31,7 +31,9 @@ with DAG(
     dagrun_timeout=timedelta(hours=2),
     default_args={'retries': 2, 'retry_delay': timedelta(minutes=2),
                   'execution_timeout': timedelta(minutes=65)},
-    params={'target': Param('duckdb', enum=['duckdb', 'databricks']),
+    # Lịch 08:00 không truyền được conf, nên target mặc định (cả lịch lẫn trigger tay không ghi target) đọc từ
+    # .env.airflow.local; không đặt thì giữ duckdb. PM chốt 2026-10-19: máy chạy demo đặt databricks để lịch chạy production.
+    params={'target': Param(os.getenv('RETAIL_PIPELINE_DEFAULT_TARGET', 'duckdb'), enum=['duckdb', 'databricks']),
             'snapshot_id': Param(None, type=['null', 'string'], pattern='^[a-f0-9]{12}$'),
             'force': Param(False, type='boolean')},
     tags=['retail', 'batch'],
