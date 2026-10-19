@@ -2426,3 +2426,40 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
 - **Cần bạn quyết / lưu ý:**
   - cho commit code và docs của bước này không;
   - bản public cần push và Reboot mới có thẻ mới. Trước đó, code cũ vẫn đọc được registry mới (đã kiểm).
+
+### 2026-10-19: pipeline kiểm hợp đồng dữ liệu trước khi dựng kho (A3, bước S4; chạy local đạt, chưa commit)
+
+- **Làm gì:**
+  - Hợp đồng của từng file nguồn nay có thêm, cho mỗi cột: kiểu dữ liệu (số nguyên, ngày, số tiền…) và có được rỗng không; cho mỗi
+    file: khóa chính.
+  - Kiểu khai báo đúng như cách tầng staging của dbt đổi kiểu, nên giá trị qua được hợp đồng thì cũng dựng được kho.
+  - Pipeline kiểm hợp đồng ngay ở bước chuẩn bị snapshot, trước khi dựng kho.
+- **Gặp dòng sai:**
+  - Pipeline dừng, không bỏ dòng rồi chạy tiếp: bỏ dòng sẽ làm doanh thu theo ngày lệch với `sales.csv`. Cũng không tự sửa dòng: dữ
+    liệu đề bài sạch, đây không phải bài làm sạch.
+  - Các dòng sai được ghi vào thư mục `quarantine` của lần chạy: số thứ tự dòng trong file, lý do, cả dòng gốc.
+  - Airflow không thử lại; lịch sử lần chạy ghi "lỗi".
+- **Vì sao:** mốc A3 (mũi tên "kiểm data contract" giữa Snapshot và Bronze trên sơ đồ). Trước đây pipeline chỉ kiểm tên cột, số dòng
+  và mã băm của file.
+- **Trả lời PS nào:** không đổi số nào; chỉ chặn dữ liệu sai trước khi vào kho.
+- **Kiểm (2026-10-19):**
+  - Test trong phiên:
+    - thử từng loại lỗi trên file tạm (sai kiểu, ngày không có thật, ô rỗng, chỉ có khoảng trắng, trùng khóa, đổi tên cột), lần nào
+      cũng dừng đúng chỗ và có quarantine;
+    - hợp đồng khớp danh sách nguồn và kiểu cột của dbt;
+    - 85/85 test pipeline / dự báo / bản dữ liệu đạt.
+  - Bạn tự chạy trong thư mục riêng `warehouse/pipeline-s4`:
+    - dữ liệu thật đạt hợp đồng, publish bản `e9e6f92f…`;
+    - snapshot cũ `5bd9a84aaf73` vẫn dùng được với `--snapshot-id`, mã snapshot không đổi;
+    - bước chuẩn bị mất 21 giây, trước đây 13–15 giây; riêng phần kiểm hợp đồng khoảng 2 giây.
+  - Bản local đang phục vụ `06f157ee…` không đổi.
+- **Giới hạn:**
+  - Khóa ngoại (đơn có khách thật, dòng hàng có sản phẩm thật…) vẫn do dbt kiểm như cũ.
+  - `order_items` không có khóa chính tự nhiên (một đơn có thể có hai dòng cùng sản phẩm), nên không kiểm trùng khóa ở file này.
+  - Chưa chạy trên Databricks.
+- **Đã sửa file chung:** `docs/automation_batch.md` (mục Hợp đồng dữ liệu, Nhật ký và lỗi, Kiểm chứng), ô trạng thái S4 ở
+  `docs/giao_viec_theo_so_do.md`, mục này.
+  - Code: `scripts/ingest/source_contract.py`, `scripts/pipeline/cli.py`, mới `scripts/pipeline/contract.py` và
+    `scripts/pipeline/tests/test_contract.py`.
+  - Không đụng app, dbt, `data/`.
+- **Cần bạn quyết:** cho commit code và docs của bước này không.
