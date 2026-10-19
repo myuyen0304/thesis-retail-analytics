@@ -57,3 +57,7 @@ data_tests:
     config:
       enabled: "{{ var('forecast_path', '') != '' }}"
     description: "Số thực tế G, COGS theo ngày của trang Dự báo khớp sales.csv từng ngày, mỗi ngày một dòng, dừng đúng ngày model train tới và dự báo bắt đầu ngay hôm sau. Chỉ chạy trong pipeline."
+  - name: assert_rpt_forecast_explain
+    config:
+      enabled: "{{ var('forecast_path', '') != '' }}"
+    description: "B4a: phân rã LightGBM theo ngày × nhóm biến đủ ngày, đúng ứng viên chính, base log + tổng đóng góp log = ln(G dự báo), multiplier là exp(đóng góp). Chỉ chạy trong pipeline."
