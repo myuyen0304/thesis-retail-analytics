@@ -624,6 +624,31 @@ def test_cau_hoi_dinh_nghia_tra_loi_bang_tool_dinh_nghia():
     assert t.status == 'answer_validation_failed' and 'chưa đọc được dữ liệu' in t.message
 
 
+@pytest.mark.parametrize('question,metric', [('Define gross revenue', 'G'), ('Define net revenue', 'R')])
+def test_dinh_nghia_revenue_tieng_anh_dung_catalog(question, metric):
+    t = turn(FakeProvider(
+        call('get_metric_definition', metric=metric),
+        final(answer=f'{metric} là chỉ tiêu doanh thu: {{c1}}.',
+              claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])), question)
+    assert t.status == 'ok', t.validation_errors
+    assert [(name, args) for _, name, args in t.calls] == [('get_metric_definition', {'metric': metric})]
+    assert t.results['T1'].rows[0]['metric_id'] == metric
+
+
+def test_dinh_nghia_r_theo_tai_lieu_dung_catalog_va_rag():
+    t = turn(FakeProvider(
+        call('get_metric_definition', metric='R'),
+        call('search_knowledge', query='R doanh thu đơn đã giao'),
+        final(answer='Theo tài liệu, R là doanh thu đơn đã giao theo ngày đặt hàng: {c1}.',
+              claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])), 'Theo tài liệu, R là gì?')
+    assert t.status == 'ok', t.validation_errors
+    assert [(name, args) for _, name, args in t.calls] == [
+        ('get_metric_definition', {'metric': 'R'}),
+        ('search_knowledge', {'query': 'R doanh thu đơn đã giao'})]
+    assert t.results['T1'].rows[0]['metric_id'] == 'R'
+    assert any(n.startswith('Nguồn: docs/star_schema.md §3') for n in t.app_notes)
+
+
 # --- evidence.validate trên kết quả dựng tay ---
 
 def _res(rows, derived=None):
