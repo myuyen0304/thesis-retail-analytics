@@ -5,7 +5,8 @@ Luồng: câu hỏi + ngữ cảnh CÓ CẤU TRÚC của các lượt trước �
 → chỉ khi đạt mới hiện câu trả lời; không đạt thì hiện bảng số của tool + "chưa tạo được diễn giải".
 
 Giới hạn mỗi lượt: tối đa MAX_TOOL_CALLS lần gọi tool, MAX_LLM_CALLS lần gọi LLM (gồm 1 lần sửa định dạng/claim).
-Giới hạn phiên: SESSION_TOKEN_LIMIT token (PM chốt 2026-10-05: ≤4 tool mỗi câu, ≤200k token mỗi phiên). Là TRẦN CỨNG:
+Giới hạn phiên: SESSION_TOKEN_LIMIT token (PM chốt 2026-10-05: ≤4 tool mỗi câu, ≤200k token mỗi phiên; PM nâng lên
+≤500k ngày 2026-10-19 khi thêm tool explain_forecast ở B4b). Là TRẦN CỨNG:
 trước mỗi lần gọi, app cộng cận trên của prompt (prompt_bound) và trần output (MAX_OUTPUT_TOKENS, gửi kèm request);
 không đủ chỗ thì dừng trước khi gọi. Cận trên prompt = số byte UTF-8 của tin nhắn + schema tool + phần khung: tokenizer
 BPE theo byte (DeepSeek) cho mỗi token ít nhất 1 byte. Mỗi lần gọi ghi (cận trên, prompt_tokens thật) để eval kiểm.
@@ -27,14 +28,15 @@ from ai_explain.evidence import (DATE_RE, Checked, allowed_years, check_digits, 
                                   stated_period_errors, validate)
 from ai_explain.provider import ProviderError, openai_tools, parse_arguments
 
-PROMPT_VERSION = 'b7-2026-10-18'   # B7: mục router (chọn tool theo loại câu hỏi); câu trộn thực tế / dự báo thành hai câu
-                                   # riêng, R thực tế không đặt cạnh G dự báo (quy tắc 16).
-                                   # Trước: b6-2026-10-17b, chuỗi từng năm (quy tắc 17), "điểm của model thắng là lạc quan"
+PROMPT_VERSION = 'b4b-2026-10-20'   # quy tắc 18: động từ diễn tả đóng góp so với mức nền
+                                   # b4b-2026-10-19b: router K02/K22; quy tắc 18 nói mức nền
+                                   # b4b-2026-10-19: L4 giải thích model dự báo từ bảng phân rã (quy tắc 18)
+                                   # Trước: b7-2026-10-18, mục router; b6-2026-10-17b, chuỗi từng năm (quy tắc 17)
 MAX_TOOL_CALLS = 4
 MAX_LLM_CALLS = 6
-SESSION_TOKEN_LIMIT = 200_000
+SESSION_TOKEN_LIMIT = 500_000     # PM 2026-10-19 (trước 200_000): prompt B4b làm 3 câu xấu nhất vượt 200k
 MAX_OUTPUT_TOKENS = 1408          # 2026-10-17 (trước 2048): 1.277 lượt live 05–16/10 tối đa 1.116 token ra cho CẢ một
-                                  # lượt (nhiều lần gọi); hạ để 3 câu xấu nhất vẫn vừa 200k mà không đổi hạn mức PM chốt.
+                                  # lượt (nhiều lần gọi); hạ để 3 câu xấu nhất vừa hạn mức 200k lúc đó.
                                   # 2026-10-18 (B7, trước 1536): chừa chỗ cho mục router; 1.368 lượt live tới 17/10 vẫn tối đa 1.116
 PROMPT_FRAME_TOKENS = 512         # phần khung chat template / khối tool của nhà cung cấp (không nằm trong JSON gửi đi)
 PROMPT_MESSAGE_TOKENS = 16        # token đặc biệt đánh dấu vai trò, mỗi tin nhắn
@@ -104,6 +106,10 @@ Hôm nay là {today.isoformat()}. Dữ liệu là bản chụp lịch sử, ph�
 CHỌN TOOL (router)
 - Thực tế tới 2022 (PS1–PS5): tool số liệu lịch sử. Dự báo ("sẽ", "dự kiến"), so model: quy tắc 16. Vẽ: 17.
 - Trộn thực tế và dự báo: gọi tool cho từng phần, trả lời theo quy tắc 16. Ngoài phạm vi: "unsupported".
+- Hỏi vì sao G dự báo biến động trong một ngày / tháng: quy tắc 18; không dùng nhịp lịch lịch sử thay phân rã model.
+- Khoảng nhiều năm trùng một giai đoạn (2013–2016, 2016–2018, 2018–2019, 2019–2022): get_revenue_trend phases
+  (quy tắc 13), không ghép từng năm. Khoảng khác: nói chưa có tổng khoảng.
+- Dự báo một tháng không kèm năm mà tháng đó có ở cả 2023 và 2024 (tháng 1–7): hỏi lại năm, hoặc trả cả hai năm.
   Mơ hồ: 2. Tiếp nối: 9.
 
 QUY TẮC BẮT BUỘC
@@ -205,6 +211,17 @@ QUY TẮC BẮT BUỘC
 17. "Vẽ / biểu đồ": gọi tool NHIỀU DÒNG trước (dự báo get_forecast horizon, so model, R theo nhóm, giai đoạn, mùa vụ,
    từng năm) rồi show_chart(ref="T1", y="<cột số>"); câu trả lời vẫn là JSON như trên. Bị từ chối thì nói không vẽ được.
    R / G từng năm: MỘT lần get_revenue_summary year + to_year, không ghép nhiều lần gọi một năm.
+18. PHÂN RÃ MODEL DỰ BÁO G: explain_forecast(period=day/month, year, month, day khi là ngày). Dùng khi hỏi vì sao dự báo
+   một ngày / tháng cao, thấp, hoặc hỏi thành phần model. Chỉ có cho model chính của bản đang phục vụ; tool báo thiếu
+   thì nói không có phân rã, không lấy số nguồn khác. Dẫn rows[<feature_group>].contribution_log (cộng trên log(G))
+   và .multiplier (hệ số nhân, không cộng được); viết tên nhóm theo feature_label. Đóng góp đo so với MỨC NỀN base_log
+   của model, không phải so với tháng / ngày trước: nhóm âm ở mọi tháng (vd. chế độ sau 2018) kéo mức nền xuống, không
+   giải thích riêng tháng được hỏi. Tháng là trung bình log theo ngày, không phải phần góp VND vào tổng tháng.
+   Nên viết "góp", "kéo lên" hoặc "kéo xuống so với mức nền" khi diễn tả đóng góp của nhóm trong model.
+   Hỏi "theo nhóm biến": nêu đủ các nhóm, chiều của TỪNG nhóm theo số thật; không gộp "các nhóm còn lại / khác"
+   bằng ô của một nhóm; không nói "rõ nhất", "chủ yếu".
+   App tự gắn nhãn "Phân rã model, không phải nguyên nhân". Không khẳng định nhóm nào là nguyên nhân làm G thực tế
+   đổi; câu phủ định ("không chứng minh … là nguyên nhân") thì được.
 15. Không nhắc chỉ tiêu mà lượt này không đọc (vd. số khách C) như thể có số. Khi gợi ý câu hỏi khác, chỉ gợi ý điều
    các tool đang làm được. Khi liệt kê phần góp N/U/P, viết cùng một kiểu cho cả ba ("X góp {{cX}}", app tự in dấu).
 
