@@ -12,7 +12,7 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG_VERSION = 'b6-2026-10-17'   # mở chuỗi R / G từng năm (get_revenue_summary to_year)
+CATALOG_VERSION = 'b4b-2026-10-19'   # mở phân rã model dự báo theo ngày / tháng
 MONEY_UNIT = 'VND'
 
 # SQL quyết định định nghĩa các metric đang mở. Hash = nội dung các file này trong CHECKOUT hiện tại.
@@ -251,6 +251,9 @@ CAPABILITIES += [
     ('get_calendar_pattern', 'R', 'cuoi_thang', 'nhịp lịch', None, 'open', 'dồn cuối tháng 2013–2022 + từng giai đoạn'),
     ('get_calendar_pattern', 'R', 'thang_8', 'nhịp lịch', None, 'open', 'tháng 8 năm lẻ / năm chẵn 2013–2022'),
 ]
+CAPABILITIES += [('explain_forecast', 'G', p, g, None, 'open',
+                  'phân rã model LightGBM chính của bản dữ liệu đang phục vụ; không phải nguyên nhân')
+                 for p, g in (('day', 'ngày'), ('month', 'tháng'))]
 
 
 # B3 (2026-10-15): đọc dự báo do pipeline ghi. Chỉ tổng toàn công ty (hợp đồng §1); dự báo R chưa làm (PM chốt 2026-10-11).
@@ -293,6 +296,9 @@ def _capability_key(tool: str, arguments: dict) -> tuple[str | None, tuple, list
         return FORECAST_GRAINS.get(p), (('G', 'COGS') if a.get('metric') == 'G_and_COGS' else (a.get('metric'),)), [p]
     if tool == 'get_forecast_backtest':
         return 'ứng viên × fold', ('G_and_COGS',), ['backtest 2020-2022']
+    if tool == 'explain_forecast':
+        p = a.get('period')
+        return {'day': 'ngày', 'month': 'tháng'}.get(p), ('G',), [p]
     return None, (), []
 
 

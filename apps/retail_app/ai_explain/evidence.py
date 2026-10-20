@@ -61,13 +61,13 @@ INDEX = {'cogs_ratio', 'tai_tao_bien_do', 'month_index', 'august_index_odd', 'au
 MONTHS = {'month', 'peak_month', 'trough_month', 'peak_months', 'trough_months'}
 YEARS = {'year', 'start_year', 'end_year', 'turning_year', 'first_year', 'last_year'}
 # khóa chọn dòng theo tên trong path rows[<tên>]: nhóm PS5, giai đoạn A–D, năm của điểm đổi hướng
-ROW_KEYS = ('dimension_value', 'phase_code', 'turning_year', 'candidate', 'period')
+ROW_KEYS = ('dimension_value', 'phase_code', 'turning_year', 'candidate', 'period', 'feature_group')
 # Số THAY ĐỔI: dương = tăng, âm = giảm. contribution_to_delta / share là TỶ LỆ, không thuộc nhóm này:
 # contribution_to_delta dương = cùng chiều ΔR toàn công ty (Streetwear 2019: +83,6% của mức GIẢM).
 SIGNED = {'delta_r', 'contrib_n', 'contrib_u', 'contrib_p', 'yoy_rate', 'share_shift_pp', 'r_change_rate',
           'n_change_rate', 'u_change_rate', 'p_change_rate',
           'total_change_rate', 'cagr', 'magnitude', 'august_odd_vs_even', 'loo_min_odd_vs_even', 'loo_max_odd_vs_even',
-          'eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess'}
+           'eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess', 'contribution_log'}
 # Câu so sánh ("thấp hơn"...) được nói khi dẫn một cột chênh lệch / kết luận so sánh do tool tính
 COMPARED = SIGNED | {'gap_g_minus_r', 'odd_even_order', 'improvement_vs_floor',   # B3: mức thấp hơn mốc sàn, tool tính
                      'beats_floor_all_folds', 'n_pass_floor'}                        # "vượt mốc sàn ở cả 3 fold", tool tính
@@ -118,12 +118,20 @@ FIELD_LABEL = {'r': 'R', 'g': 'G', 'r_prior_year': 'R', 'r_start': 'R', 'r_end':
                'score': 'điểm ngày kết hợp, backtest 2020–2022', 'mae_g': 'MAE G, backtest', 'mae_cogs': 'MAE COGS, backtest',
                'rmse_g': 'RMSE G, backtest', 'r2_g': 'R² G, backtest', 'mape_g_thang': 'MAPE G tháng, backtest 2020–2022',
                'coverage_80': 'tỷ lệ ngày trong khoảng 80%, backtest', 'tai_tao_bien_do': 'tỷ lệ tái tạo biên độ tháng 8/2021',
-               'improvement_vs_floor': 'điểm thấp hơn mốc seasonal naive 2 năm'}
+                'improvement_vs_floor': 'điểm thấp hơn mốc seasonal naive 2 năm',
+                'contribution_log': 'đóng góp vào log(G) dự báo', 'multiplier': 'hệ số nhân của nhóm biến',
+                'base_log': 'mức nền log(G)', 'forecast_log': 'log(G) dự báo'}
+FEATURE_GROUP_LABEL = {'mua_vu': 'mùa vụ', 'dau_cuoi_thang': 'đầu/cuối tháng',
+                       'che_do_sau_2018': 'chế độ sau 2018', 'nam_chan_le': 'năm chẵn/lẻ',
+                       'promo_fall_launch': 'lịch Fall Launch', 'promo_mid_year_sale': 'lịch Mid Year Sale',
+                       'promo_rural_special': 'lịch Rural Special', 'promo_spring_sale': 'lịch Spring Sale',
+                       'promo_urban_blowout': 'lịch Urban Blowout', 'promo_year_end_sale': 'lịch Year End Sale'}
 METRIC_FAMILY = {f: 'R' for f in ('r', 'r_prior_year', 'r_start', 'r_end', 'r_total', 'delta_r', 'contrib_n', 'contrib_u',
-                                  'contrib_p', 'yoy_rate', 'r_change_rate', 'share', 'share_shift_pp',
-                                  'contribution_to_delta', 'r_same_month_prior_year', 'r_12m_before', 'r_12m_after',
-                                  'total_change_rate', 'cagr', 'magnitude')} | {'g': 'G'} | {
-    f: 'G' for f in ('g_forecast', 'lower_g', 'upper_g')} | {'cogs_forecast': 'COGS', 'cogs_ratio': 'COGS/G'}
+                                   'contrib_p', 'yoy_rate', 'r_change_rate', 'share', 'share_shift_pp',
+                                   'contribution_to_delta', 'r_same_month_prior_year', 'r_12m_before', 'r_12m_after',
+                                   'total_change_rate', 'cagr', 'magnitude')} | {'g': 'G'} | {
+    f: 'G' for f in ('g_forecast', 'lower_g', 'upper_g', 'contribution_log', 'multiplier', 'base_log', 'forecast_log')
+} | {'cogs_forecast': 'COGS', 'cogs_ratio': 'COGS/G'}
 _START_FIELDS = {'r_start', 'n_start', 'u_start', 'p_start'}
 DRIVER_FAMILY = {f'{k}{x}': k.upper() for k in 'nup' for x in ('_start', '_end', '_change_rate')} | {
     'contrib_n': 'N', 'contrib_u': 'U', 'contrib_p': 'P'}
@@ -265,6 +273,10 @@ def _fmt(v, fld: str, absolute: bool) -> str:
         return num(x, 1, signed) + ' điểm %'
     if fld in PP_FRAC:
         return num(x * 100, 1, signed) + ' điểm %'
+    if fld in ('contribution_log', 'base_log', 'forecast_log'):
+        return num(x, 4, signed) + ' log'
+    if fld == 'multiplier':
+        return num(x, 4) + ' lần'
     if fld in UNITS or fld in INDEX:
         return num(x, 2)
     if fld in YEARS or fld in MONTHS:
@@ -562,6 +574,8 @@ def _label_parts(fld: str, row: dict | None) -> tuple:
     """(chỉ tiêu, nhóm, kỳ, phần thêm) do app dựng từ chính ô dữ liệu; chỉ tiêu None nếu cột chưa có nhãn."""
     row_ = row or {}
     group = row_.get('dimension_value') or (f"giai đoạn {row_['phase_code']}" if row_.get('phase_code') else None)
+    if row_.get('feature_group') and fld in ('contribution_log', 'multiplier'):
+        group = 'nhóm ' + FEATURE_GROUP_LABEL.get(row_['feature_group'], row_['feature_group'])
     if row_.get('candidate_label') and (row_.get('is_primary') is False or fld not in FORECAST_FIELDS):
         # số của ứng viên khác model chính, hoặc số backtest của từng ứng viên: nhãn ghi rõ ứng viên nào
         group = row_['candidate_label'] + ('' if row_.get('is_primary') else ', không phải model chính')
@@ -572,6 +586,8 @@ def _label_parts(fld: str, row: dict | None) -> tuple:
         extra.append(f"sai số tháng điển hình {num(row_['typical_month_error'], 1)}% (backtest 2020–2022)")
     if fld in FORECAST_FIELDS and row_.get('is_partial'):
         extra.append(f"chỉ {row_['n_days']}/{row_['n_days_in_period']} ngày có dự báo")
+    if fld in ('contribution_log', 'multiplier') and row_.get('is_partial'):
+        extra.append(f"chỉ {row_['n_days']}/{row_['n_days_in_period']} ngày trong tháng")
     return FIELD_LABEL.get(fld), group, _year_of(fld, row), extra
 
 
@@ -652,6 +668,40 @@ _MAPE_RX = re.compile(r'mape|sai số (?:tổng )?tháng|theo tháng|tổng thá
 _SCORE_RX = re.compile(r'điểm ngày|điểm kết hợp|theo ngày|thước chọn|(?<!\w)mae(?!\w)', re.I)
 _RANK_PATH = re.compile(r'\.derived\.lowest_(score|mape_g_thang)\.')
 _HORIZON_PATH = re.compile(r'\.derived\.(?:horizon_total|highest_month|lowest_month)\.')
+# B4b: nhận các cách gán nguyên nhân phổ biến; phủ định nhân quả có luật riêng bên dưới.
+_CAUSAL = re.compile(r'\b(?:nguyên nhân là|là nguyên nhân|gây ra|gây nên|'
+                     r'khiến\b(?!\s+(?:cho\s+)?(?:log\(\s*g\s*\)\s+)?dự báo\b)|dẫn đến|tạo ra|'
+                     r'làm(?:\s+cho)?\s+(?:(?:tăng|giảm)\s+)?(?:g|doanh thu|giá vốn|cogs)\b'
+                     r'(?!\s+dự báo\b)|'
+                     r'(?:do|vì)\s+(?:hiệu ứng\s+)?(?:năm lẻ|urban blowout|khuyến mãi|marketing))\b')
+_CAUSAL_TURN = re.compile(r'\b(?:nhưng|còn|trong khi|tuy nhiên|song|mà)\b|[,.;:!?]')
+_CAUSAL_DENIAL = re.compile(r'\b(?:không|chưa)\s+(?:'
+                            r'(?:(?:thể|đủ)\s+)?(?:kết luận|khẳng định|chứng minh|cho biết|cho thấy|biết|có bằng chứng)'
+                            r'|(?:thể\s+)?đưa ra kết luận'
+                            r'|đủ\s+(?:(?:cơ sở|bằng chứng|dữ liệu)\s+)?(?:để\s+)?(?:kết luận|nói|khẳng định)'
+                            r'|phải\s+(?:là\s+)?(?:kết luận|bằng chứng)'
+                            r'|thể\s+nói'
+                            r'|có\s+(?:đủ\s+)?(?:cơ sở|bằng chứng|dữ liệu)\b(?:\s+để\s+(?:kết luận|nói|khẳng định))?'
+                            r')\b')
+_CAUSAL_NON_DENIAL = re.compile(r'\b(?:không|chưa)\s+(?:(?:thể|cần)\s+)?(?:phủ nhận|chỉ)\b')
+_G_DECOMP_SCOPE = re.compile(r'\bphân rã\b(?:\s+\S+){0,8}\s+(?:cho|của)\s+(?:dự báo\s+)?'
+                             r'(?:G\b|doanh thu gộp)|\bphân rã\s+(?:model\s+)?(?:dự báo\s+)?'
+                             r'(?:G\b|doanh thu gộp)', re.I)
+_G_DECOMP_UNAVAILABLE = re.compile(r'\b(?:không|chưa)\s+(?:có\s+)?phân rã\s+(?:model\s+)?'
+                                 r'(?:G\b|doanh thu gộp)|\b(?:G\b|doanh thu gộp)\s+'
+                                 r'(?:không|chưa)\s+có\s+phân rã', re.I)
+_COGS_DECOMP_SCOPE = re.compile(r'\bphân rã\b(?:\s+\S+){0,8}\s+(?:cho|của)\s+'
+                                r'(?:dự báo\s+)?(?:COGS\b|giá vốn)|\bphân rã\s+(?:model\s+)?'
+                                r'(?:dự báo\s+)?(?:COGS\b|giá vốn)', re.I)
+
+
+def _causal_denied(before: str) -> bool:
+    """Chỉ bỏ qua khẳng định nhân quả khi chính vế đó từ chối kết luận; không mượn phủ định ở vế trước."""
+    clause = _CAUSAL_TURN.split(before)[-1]
+    if _CAUSAL_NON_DENIAL.search(clause):
+        return False
+    return bool(_CAUSAL_DENIAL.search(clause)
+                or re.search(r'\b(?:không|chưa)(?:\s+\S+){0,2}\s*$', clause))
 MODEL_CODE = {'LightGBM': 'lgbm', 'SARIMAX': 'sarimax', 'ARIMA': 'arima', 'bản gộp': 'blend'}
 
 
@@ -758,7 +808,7 @@ def _claim_period(row: dict | None) -> tuple | None:
     if not row or row.get('year') is None:
         return None
     d = row.get('forecast_date')
-    return int(row['year']), row.get('month'), (d.day if d is not None and hasattr(d, 'day') else None)
+    return int(row['year']), row.get('month'), (d.day if d is not None and hasattr(d, 'day') else row.get('day'))
 
 
 def _period_match(spec: tuple, got: tuple | None) -> bool:
@@ -1239,7 +1289,62 @@ def forecast_question_errors(question: str, values: dict, results: dict, answer:
         used.append((path, fld, row, res.evidence.tool))
     fc = [u for u in used if u[3] == 'get_forecast' and (u[1] in FORECAST_FIELDS or _HORIZON_PATH.search(u[0]))]
     q, errs = question or '', []
+    if any(r.ok and r.evidence and r.evidence.tool == 'explain_forecast' for r in results.values()):
+        # Câu từ chối nhân quả được qua; phủ định một đối tượng khác không phủ định nguyên nhân ở vế sau.
+        if any(not _causal_denied(sent[:m.start()]) for sent in _SENTENCE.split((answer or '').lower())
+               for m in _CAUSAL.finditer(sent)):
+            errs.append('phân rã model không chứng minh nguyên nhân; chỉ nêu đóng góp trong model')
+        clauses = _SENTENCE.split(answer or '')
+        for cid, (path, _v, _s) in values.items():
+            res = results.get(path.split('.')[0])
+            if res is None or res.evidence is None or res.evidence.tool != 'explain_forecast':
+                continue
+            if any('{' + cid + '}' in sent and (_said_metric(sent) == 'COGS'
+                                               or re.search(r'log\(\s*COGS\s*\)', sent, re.I)) for sent in clauses):
+                errs.append('số phân rã G bị gọi là phân rã COGS; không đổi chỉ tiêu của evidence')
+                break
+        if _said_metric(q) == 'COGS':
+            if not any(re.search(r'\b(?:COGS|giá vốn)\b', sent, re.I)
+                       and re.search(r'\b(?:không|chưa)\b', sent, re.I)
+                       and re.search(r'phân rã|giải thích', sent, re.I) for sent in clauses):
+                errs.append('chỉ có phân rã G; câu hỏi COGS phải nói rõ chưa có phân rã COGS')
+            g_scope = False
+            for sent in clauses:
+                ids = _PLACEHOLDER.findall(sent)
+                explain_ids = [cid for cid in ids if (item := values.get(cid))
+                               and (res := results.get(item[0].split('.')[0])) is not None
+                               and res.evidence and res.evidence.tool == 'explain_forecast']
+                if explain_ids and not (re.search(r'\bG\b|doanh thu gộp|log\(G\)', sent, re.I) or g_scope):
+                    errs.append('số phân rã G trong câu hỏi COGS phải được gọi rõ là của G')
+                    break
+                # Nhãn ở câu mở đầu chỉ áp dụng cho các câu sau; câu chứa số gán COGS vẫn bị chặn ở trên.
+                if _G_DECOMP_SCOPE.search(sent) and not _G_DECOMP_UNAVAILABLE.search(sent):
+                    g_scope = True
+                elif _COGS_DECOMP_SCOPE.search(sent):
+                    g_scope = False
+        want = question_model(q)
+        if want:
+            selected = {row.get('candidate') for r in results.values() if r.ok and r.evidence
+                        and r.evidence.tool == 'explain_forecast' for row in r.rows}
+            if not any(_cand_matches(c, want) for c in selected if isinstance(c, str)):
+                errs.append('câu hỏi nêu model khác nhưng phân rã chỉ thuộc model chính; không thay model')
+        for sent in _SENTENCE.split(answer or ''):
+            ids = _PLACEHOLDER.findall(sent)
+            groups = {path.split('rows[', 1)[1].split(']', 1)[0] for cid in ids
+                      if (item := values.get(cid)) and (path := item[0]).split('.')[0] in results
+                      and results[path.split('.')[0]].evidence
+                      and results[path.split('.')[0]].evidence.tool == 'explain_forecast' and 'rows[' in path}
+            if len(groups) == 1 and re.search(r'các (?:nhóm|chương trình)[^.;]*?(?:còn lại|khác)', sent, re.I):
+                errs.append('một ô đóng góp chỉ thuộc một nhóm biến; không gộp thành "các nhóm khác"')
+            if groups and re.search(r'rõ nhất|chủ yếu', sent, re.I):
+                errs.append('phân rã chưa cấp xếp hạng có kiểm; không nói nhóm "rõ nhất" hoặc "chủ yếu"')
+            if groups and re.search(r'các nhóm còn lại\s+góp\s+(?:dương|âm)', sent, re.I):
+                errs.append('không gán cùng một chiều cho "các nhóm còn lại"; nêu chiều của từng nhóm')
     specs = question_periods(q)
+    explain_used = [u for u in used if u[3] == 'explain_forecast' and u[2] is not None]
+    if explain_used and specs and any(not any(_period_match(s, _claim_period(u[2])) for s in specs)
+                                      for u in explain_used):
+        errs.append('phân rã model dẫn từ ngày / tháng khác kỳ được hỏi; gọi explain_forecast đúng kỳ')
     # Câu hỏi vừa có kỳ thiếu dự báo vừa xin kỳ tham khảo: status ok có thể khiến
     # lời model gán lại số tham khảo cho kỳ thiếu số ở câu sau (RV12). Với trường
     # hợp này dùng no_data để app dựng số tham khảo theo kỳ lấy từ bằng chứng.

@@ -22,7 +22,7 @@ Hạn tiến độ khóa luận: **2026-10-25**.
 |---|---|
 | Câu hỏi đang trả lời được | PS1 (G → R theo năm và cả kỳ, R/G một tháng); PS2 (4 giai đoạn, 3 điểm đổi hướng); PS3 (mùa vụ, dồn cuối tháng, tháng 8 năm lẻ); PS4 (phân rã N → U → P theo năm); PS5 (đóng góp theo ngành, vùng, kênh theo năm); định nghĩa chỉ tiêu |
 | Tool | 7 tool + tool định nghĩa, phiên bản `v1.4` (thêm xếp hạng phía nhỏ cho nhóm); catalog `ai3-2026-10-05`; prompt `ai3-2026-10-09b` |
-| Model | `deepseek-flash`, tắt chế độ suy nghĩ; tối đa 4 lần đọc kho mỗi câu; **trần cứng** 200.000 token mỗi phiên (dừng trước khi gọi nếu lần gọi tiếp có thể vượt) |
+| Model | `deepseek-flash`, tắt chế độ suy nghĩ; tối đa 4 lần đọc kho mỗi câu; **trần cứng** 200.000 token mỗi phiên, PM nâng lên 500.000 ngày 2026-10-19 (dừng trước khi gọi nếu lần gọi tiếp có thể vượt) |
 | Kho đọc được | DuckDB local, PostgreSQL local (role chỉ-đọc `retail_ai_ro`), **Databricks `retail_lab`** (service principal chỉ-đọc `retail-ai-ro`, từ 2026-10-06); cả ba đều chỉ đọc đúng 14 bảng. Chưa có Snowflake |
 | Test không gọi model | Test AI 315/315; toàn bộ test app 475 đạt, 26 bỏ qua (đều cần Databricks) |
 | Model thật, bộ nghiệm thu mới nhất (C\*, soạn sau khi sửa) | DuckDB 30/30, PostgreSQL 30/30; đọc tay 0 lỗi chặn; số âm hiện đúng dấu |
@@ -310,6 +310,10 @@ Hạn tiến độ khóa luận: **2026-10-25**.
   - đọc tay: 0 số sai. Ở lần đầu, model vẫn hay tự xếp phía nhỏ cho giai đoạn, N/U/P rồi mới sửa (6/6 lượt F08, F09), tốn thêm một
     lần gọi model nhưng không lọt ra người dùng.
 - **D11** (bộ D\*, trước là câu bẫy): đổi đáp án sang "Casual qua `smallest_decrease.groups`" theo quyết định PM; ghi trong rubric.
+
+### 2026-10-20: S7/B4b xong dev
+
+- Lúc đo code chưa commit; prompt `b4b-2026-10-20`, release `4559c2dd159f4334b2e11d4c`; live `l4b` **3/5** (`set_hash=52622d4cc2f37b64`), `l4c` **5/5** (`set_hash=6dd3e3f066665259`); `l4` là bộ phát triển, code B4b chưa lên public (S9). [Bằng chứng và giới hạn](ai_eval_b4b_l4.md).
 
 ---
 

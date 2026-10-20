@@ -15,6 +15,7 @@ Lựa chọn trạng thái (ghi lại để eval chấm nhất quán):
 - nhóm không tồn tại trong chiều → `no_data`.
 """
 import datetime as dt
+import math
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -22,11 +23,12 @@ from itertools import product
 
 from ai_explain import metric_catalog as cat
 from ai_explain.contracts import Evidence, QueryRecord, ToolCall, ToolResult
+from ai_explain.evidence import FEATURE_GROUP_LABEL
 from dwh.connection import describe
 from dwh import releases
 from dwh.guarded import DEFAULT_MAX_ROWS, GuardError, QueryTimeout, RowLimitExceeded, Statement, open_session
 
-TOOL_VERSION = 'v1.8'   # v1.8 (B7 S1b): ghi chú thước chọn model cho get_forecast_backtest
+TOOL_VERSION = 'v1.9'   # B4b: explain_forecast đọc phân rã của bản dữ liệu đang phục vụ
                         # v1.7: chuỗi từng năm (to_year), ghi chú app (notes) cho đóng góp nhóm / sai số tháng
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
@@ -905,6 +907,93 @@ def _forecast(turn: '_Turn', a: dict) -> ToolResult:
                           method=cat.DECISIONS['forecast_selection_rule']['text']))
 
 
+EXPLAIN_GROUPS = frozenset({'mua_vu', 'dau_cuoi_thang', 'che_do_sau_2018', 'nam_chan_le',
+                            'promo_fall_launch', 'promo_mid_year_sale', 'promo_rural_special',
+                            'promo_spring_sale', 'promo_urban_blowout', 'promo_year_end_sale'})
+EXPLAIN_LABEL = 'Phân rã model, không phải nguyên nhân'
+
+
+def _explain_forecast(turn: '_Turn', a: dict) -> ToolResult:
+    """Đóng góp log(G) của model chính; tháng là trung bình từng ngày, không phải phần góp VND vào tổng tháng."""
+    w, err = _window(a)
+    if err:
+        return err
+    label, start, end = w
+    if (err := _outside(label, start, end)):
+        return err
+    last = min(end, FORECAST_END)
+    try:
+        candidates, err = _candidates(turn)
+        if err:
+            return err
+        primary = next(c for c in candidates if c['is_primary'])
+        # B4a chỉ lưu phân rã cho LightGBM chính. Không mượn phân rã của ứng viên khác.
+        if primary['model'] != 'lgbm_full':
+            return ToolResult('no_data', 'Model chính của bản dữ liệu này chưa có phân rã trong '
+                              'rpt_forecast_explain; không lấy thành phần từ model khác.')
+        raw = _ffetch(turn, 'reporting.rpt_forecast_explain',
+                      'select feature_group, count(*) as n, count(distinct forecast_date) as n_dates, '
+                      'min(expected_groups) as min_groups, max(expected_groups) as max_groups, '
+                      'min(model_version) as min_version, max(model_version) as max_version, '
+                      'min(run_id) as min_run, max(run_id) as max_run, '
+                      'min(trained_through) as min_trained, max(trained_through) as max_trained, '
+                      'avg(base_log) as base_log, avg(contribution_log) as contribution_log, '
+                      'avg(forecast_log) as forecast_log '
+                      'from reporting.rpt_forecast_explain where model = {p} and cogs_method = {p} '
+                      'and forecast_date >= {p} and forecast_date <= {p} group by feature_group order by feature_group',
+                      (primary['model'], primary['cogs_method'], start, last))
+        if not raw:
+            return ToolResult('no_data', 'Bản dữ liệu đang phục vụ chưa có phân rã model cho kỳ này; '
+                              'không lấy số từ nguồn khác thay vào.')
+        days = (last - start).days + 1
+        if (len(raw) != len(EXPLAIN_GROUPS) or {r['feature_group'] for r in raw} != EXPLAIN_GROUPS
+                or any(r['n'] != days or r['n_dates'] != days or r['min_groups'] != len(EXPLAIN_GROUPS)
+                       or r['max_groups'] != len(EXPLAIN_GROUPS) or r['min_version'] != primary['model_version']
+                       or r['max_version'] != primary['model_version'] or r['min_run'] != primary['run_id']
+                       or r['max_run'] != primary['run_id'] or r['min_trained'] != primary['trained_through']
+                       or r['max_trained'] != primary['trained_through'] for r in raw)):
+            return ToolResult('query_error', 'Phân rã thiếu ngày / nhóm hoặc không cùng model_version, run_id, '
+                              'trained_through với dự báo chính; không trả số.')
+        base, target = float(raw[0]['base_log']), float(raw[0]['forecast_log'])
+        if (not all(math.isfinite(float(r[k])) for r in raw for k in ('base_log', 'contribution_log', 'forecast_log'))
+                or any(abs(float(r['base_log']) - base) > 1e-9 or abs(float(r['forecast_log']) - target) > 1e-9
+                       for r in raw)
+                or abs(base + sum(float(r['contribution_log']) for r in raw) - target) > 1e-7):
+            return ToolResult('query_error', 'Phân rã không đối soát về log(G) dự báo; không trả số.')
+        daily = _ffetch(turn, 'reporting.rpt_forecast_daily',
+                        'select count(*) as n, avg(ln(yhat)) as forecast_log from reporting.rpt_forecast_daily '
+                        'where model = {p} and cogs_method = {p} and forecast_date >= {p} and forecast_date <= {p}',
+                        (primary['model'], primary['cogs_method'], start, last))[0]
+        if daily['n'] != days or daily['forecast_log'] is None or abs(float(daily['forecast_log']) - target) > 1e-7:
+            return ToolResult('query_error', 'Phân rã không khớp dự báo G của cùng bản dữ liệu; không trả số.')
+        rows = [{'period': label, 'year': start.year, 'month': start.month,
+                 **({'day': start.day} if a['period'] == 'day' else {}), 'feature_group': r['feature_group'],
+                 'feature_label': FEATURE_GROUP_LABEL[r['feature_group']],
+                 'contribution_log': float(r['contribution_log']), 'multiplier': math.exp(float(r['contribution_log'])),
+                 'n_days': days, 'n_days_in_period': (end - start).days + 1, 'is_partial': last < end,
+                 'candidate': _cand(primary['model'], primary['cogs_method']),
+                 'model_version': primary['model_version'], 'trained_through': primary['trained_through']}
+                for r in raw]
+    except _NoForecast:
+        return ToolResult('no_data', 'Bản dữ liệu đang phục vụ chưa có bảng reporting.rpt_forecast_explain; '
+                          'không lấy số từ nguồn khác thay vào.')
+    return ToolResult('ok', f'{EXPLAIN_LABEL}. Đóng góp theo nhóm biến cho dự báo G kỳ {label}; '
+                      + ('mỗi dòng là một ngày.' if a['period'] == 'day' else
+                         'mỗi dòng là trung bình log theo ngày trong tháng, không phải phần góp VND vào tổng tháng.')
+                      + (f' Chỉ có {days} ngày đến {last.isoformat()}, không đại diện cả tháng.' if last < end else '')
+                      + ' base_log + tổng contribution_log = forecast_log; multiplier = exp(contribution_log), '
+                      'các multiplier không cộng được. Đóng góp đo so với mức nền base_log của model, không phải so với '
+                      'kỳ trước. Các nhóm là thành phần của model, không chứng minh nguyên nhân biến động.',
+                      rows=rows, derived={'base_log': base, 'forecast_log': target, 'candidate': rows[0]['candidate']},
+                      notes=[EXPLAIN_LABEL], evidence=turn.evidence(
+                          filters={'period': a['period'], 'forecast_window': f'{start} → {last}',
+                                   'candidate': rows[0]['candidate']},
+                          grain='ngày' if a['period'] == 'day' else 'tháng (trung bình log theo ngày)',
+                          metrics=cat.metric_defs('G_forecast'), read_at=_now(),
+                          method='LightGBM pred_contrib trên log(G); nhóm biến cộng trong không gian log. '
+                                 'Tháng = trung bình log theo ngày, không phải phân rã tổng VND.'))
+
+
 _BT_METRICS = ('score', 'mae_g', 'mae_cogs', 'rmse_g', 'r2_g', 'mape_g_thang', 'coverage_80', 'tai_tao_bien_do')
 
 
@@ -1053,6 +1142,14 @@ TOOLS = {s.name: s for s in [
                        max_len=40),
         'cogs_method': Param('enum', 'tùy chọn: ratio / direct / copy', ('ratio', 'direct', 'copy'), required=False),
     }, _forecast_backtest),
+    ToolSpec('explain_forecast', 'Phân rã model chính LightGBM theo nhóm biến cho dự báo G một ngày hoặc một tháng '
+             'trong 2023-01-01 → 2024-07-01. Đóng góp ở thang log, tháng là trung bình ngày; '
+             'không suy ra nguyên nhân. Không dùng để giải thích COGS hay model khác.', {
+        'period': Param('enum', 'day (một ngày) hoặc month (một tháng)', ('day', 'month')),
+        'year': Param('int', 'năm trong vùng dự báo'),
+        'month': Param('int', 'tháng 1–12'),
+        'day': Param('int', 'ngày trong tháng, chỉ với period day', required=False),
+    }, _explain_forecast),
 ]}
 
 
