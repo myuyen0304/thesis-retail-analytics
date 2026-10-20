@@ -1,0 +1,239 @@
+{
+  "corpus_version": "62fef6a83eb58ff0",
+  "records": [
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "| G | SUM(gross_amount), mọi trạng thái | Cộng qua các tập dòng không giao nhau |"
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "| R | SUM(net_amount), chỉ order_status = delivered | Cộng qua các tập dòng không giao nhau |"
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "| Q | SUM(quantity), chỉ delivered | Như R |"
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "| N | COUNT DISTINCT order_id, chỉ delivered | Không cộng tùy ý qua category; cộng được qua kỳ ngày đặt không giao nhau |"
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "| C | COUNT DISTINCT customer_sk, chỉ delivered | Không cộng qua tháng, nhóm hàng hoặc các tập có chung khách |"
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "| U | Q/N | Tính lại tử/mẫu |"
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "| P | R/Q | Giá thực thu bình quân mỗi món; tính lại tử/mẫu |"
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "| F | N/C | Tính lại tử/mẫu |"
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "| AOV | R/N = U × P | Tính lại tử/mẫu |"
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "Tất cả kỳ của PS1–PS5 dùng **ngày đặt hàng** và trạng thái có trong snapshot đang phân tích. R là định nghĩa phân tích của đề tài, không khẳng định đó là dòng tiền thu vào theo ngày thanh toán hay doanh thu ghi nhận kế toán."
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "3. Hợp đồng KPI: cùng định nghĩa ở mọi công cụ",
+      "status": "đã chốt",
+      "text": "Mẫu số bằng 0 → NULL, không tự thay bằng 0. Khi triển khai SCD2, C phải đếm **định danh khách bền vững** (`customer_id` hoặc durable key), không đếm số phiên bản customer_sk."
+    },
+    {
+      "source_path": "docs/star_schema.md",
+      "section": "4. Lớp reporting phục vụ PS1–PS5",
+      "status": "đã chốt",
+      "text": "Đây là quy tắc phân bổ số học, phụ thuộc thứ tự, **không chứng minh nguyên nhân**. C giảm nghĩa là ít khách có đơn delivered trong kỳ hơn; chưa đủ kết luận churn."
+    },
+    {
+      "source_path": "docs/star_schema_tu_ps.md",
+      "section": "1. Từ câu hỏi nghiệp vụ tới grain",
+      "status": "đã chốt",
+      "text": "| PS1: đo đúng doanh thu và phần G−R | quantity, unit_price, discount, trạng thái | date; order_junk.order_status | monthly, yearly |"
+    },
+    {
+      "source_path": "docs/star_schema_tu_ps.md",
+      "section": "1. Từ câu hỏi nghiệp vụ tới grain",
+      "status": "đã chốt",
+      "text": "| PS3: mùa vụ, cuối tháng, T8 lẻ/chẵn | R từng ngày | ngày, tháng, năm, days_in_month | monthly, yearly, august_parity |"
+    },
+    {
+      "source_path": "docs/star_schema_tu_ps.md",
+      "section": "1. Từ câu hỏi nghiệp vụ tới grain",
+      "status": "đã chốt",
+      "text": "| PS4: R = N × U × P, AOV | order_id, quantity, net_amount | date và lọc delivered | yearly |"
+    },
+    {
+      "source_path": "docs/star_schema_tu_ps.md",
+      "section": "1. Từ câu hỏi nghiệp vụ tới grain",
+      "status": "đã chốt",
+      "text": "| PS5: nhóm đóng góp và N = C × F | customer_id, order_id, R từng dòng | product.category; customer.acquisition_channel; customer → geography.region | segment_yearly, yearly |"
+    },
+    {
+      "source_path": "docs/star_schema_tu_ps.md",
+      "section": "5. Mức hoàn thành so với nghiệp vụ",
+      "status": "đã chốt",
+      "text": "**Đã làm (2026-09-27):** bảng CAGR theo giai đoạn (`rpt_revenue_phase`) và điểm đổi hướng (`rpt_revenue_turning_point`) PS2; mốc 4 giai đoạn A–D ở seed `ps2_phases` (`dwh_huong_dan_pm_ba.md` §4); 2026-09-28 thêm tháng đổi hướng do dữ liệu tự tìm (`rpt_revenue_direction_change`, seed `ps2_direction_rule`). Giữ tham số giai đoạn/version phân tích; không tự quyết ranh giới hoặc thêm dim giai đoạn chỉ để đáp ứng một báo cáo."
+    },
+    {
+      "source_path": "docs/ai_explain_plan.md",
+      "section": "0.2. Ba quy ước nghiệp vụ cần ghi đúng trạng thái",
+      "status": "đề xuất",
+      "text": "| PS4 theo giai đoạn: cộng phần góp từng năm; khác phân rã một lần từ đầu đến cuối | Ghi `method` tương ứng, dẫn `rpt_driver_period.sql`; không dùng lẫn hai cách. Có thể mở trước phân rã theo năm |"
+    },
+    {
+      "source_path": "docs/ai_explain_plan.md",
+      "section": "0.2. Ba quy ước nghiệp vụ cần ghi đúng trạng thái",
+      "status": "đề xuất",
+      "text": "| `driver_rule.min_abs_delta_rate=0.01` để đánh dấu ΔR nhỏ | Ghi version seed/trạng thái đề xuất, không gọi 1% là ngưỡng thống kê đã chứng minh. Ưu tiên số tiền và hạn chế kết luận tỷ lệ khi mẫu số nhỏ |"
+    },
+    {
+      "source_path": "docs/ai_explain_plan.md",
+      "section": "0.2. Ba quy ước nghiệp vụ cần ghi đúng trạng thái",
+      "status": "đề xuất",
+      "text": "| PS3: năm ranh giới thuộc giai đoạn kết thúc ở năm đó; giai đoạn đầu gồm năm đầu | Đọc `first_year/last_year` từ `rpt_calendar_phase*`; không áp dụng ngầm ranh giới PS2 cho PS3 |"
+    },
+    {
+      "source_path": "docs/data-dictionary.md",
+      "section": "1.1 Câu chuyện vận hành",
+      "status": "đã chốt",
+      "text": "- Khách hàng thuộc một khu vực và đặt đơn hàng. - Mỗi đơn có từ một đến nhiều dòng hàng; doanh thu và giá vốn phát sinh ở grain dòng hàng. - Promotion áp dụng cho dòng hàng, không mặc định áp dụng cho toàn đơn. - Payment và shipment ở grain đơn hàng; return và review ở grain dòng hàng. - Inventory là snapshot cuối tháng theo sản phẩm. - Web traffic và sales chỉ có grain ngày, không có khóa nối trực tiếp tới customer, session hay order."
+    },
+    {
+      "source_path": "docs/data-dictionary.md",
+      "section": "3.4 `promotions.csv`",
+      "status": "đã chốt",
+      "text": "**Grain:** một đợt promotion. **PK:** `promo_id`; `promo_name` là UK trong snapshot."
+    },
+    {
+      "source_path": "docs/data-dictionary.md",
+      "section": "3.4 `promotions.csv`",
+      "status": "đã chốt",
+      "text": "Promotion tương lai sau 2022 không có trong nguồn. Urban Blowout 2023 là giả định forecasting, không phải feature ngoại sinh đã biết."
+    },
+    {
+      "source_path": "CLAUDE.md",
+      "section": "5. Những gì ĐÃ kết luận — đừng dò lại từ đầu",
+      "status": "đã kiểm chứng",
+      "text": "1. **`sales.csv` tái tạo được CHÍNH XÁC** từ `order_items × orders × products`: `Revenue(d) = Σ quantity × unit_price`, **KHÔNG trừ `discount_amount`**; `COGS(d) = Σ quantity × cogs`. Đã dò qua mọi tổ hợp filter, đây là công thức duy nhất khớp. → Target là **hàm xác định** của dữ liệu giao dịch, nên mọi bảng con đều là nguồn feature hợp lệ. → Revenue tách được thành: `N_đơn(d) × (units/đơn) × giá_TB_mỗi_unit(d)`."
+    },
+    {
+      "source_path": "CLAUDE.md",
+      "section": "5. Những gì ĐÃ kết luận — đừng dò lại từ đầu",
+      "status": "đã kiểm chứng",
+      "text": "2. **Đứt gãy cấu trúc cuối 2018** — doanh thu rơi ~40% rồi đi ngang. Chuỗi KHÔNG có một xu hướng duy nhất."
+    },
+    {
+      "source_path": "CLAUDE.md",
+      "section": "5. Những gì ĐÃ kết luận — đừng dò lại từ đầu",
+      "status": "đã kiểm chứng",
+      "text": "3. **Mùa vụ theo tháng rất mạnh và ổn định** — đỉnh T4–T6, đáy T12–T1."
+    },
+    {
+      "source_path": "CLAUDE.md",
+      "section": "5. Những gì ĐÃ kết luận — đừng dò lại từ đầu",
+      "status": "đã kiểm chứng",
+      "text": "4. **Hiệu ứng ngày-trong-tháng rất lớn** — dốc tăng dần về cuối tháng. Đây là tín hiệu baseline bỏ sót nhiều nhất. *Bổ sung 2026-10-15 (`notebooks/04_forecasting/so_sanh_model.ipynb` §2.3):* ngày 1 và ngày 2 của tháng cũng cao hơn hẳn, sau khi đã tính mùa vụ, cuối tháng và khuyến mãi."
+    },
+    {
+      "source_path": "CLAUDE.md",
+      "section": "5. Những gì ĐÃ kết luận — đừng dò lại từ đầu",
+      "status": "đã kiểm chứng",
+      "text": "5. **Thứ trong tuần gần như vô nghĩa** (R² = 0,008) — baseline bỏ qua nó là đúng."
+    },
+    {
+      "source_path": "CLAUDE.md",
+      "section": "5. Những gì ĐÃ kết luận — đừng dò lại từ đầu",
+      "status": "đã kiểm chứng",
+      "text": "6. **Tháng 8 có chu kỳ 2 năm rất mạnh**: năm **lẻ** có siêu khuyến mãi *\"Urban Blowout\"* làm doanh thu **−37%** và **COGS > Revenue** (tỷ lệ ~1,36). → **2023 là năm lẻ, và tháng 8/2023 nằm trong vùng dự báo.** Bỏ qua điểm này là hỏng bài. *Bổ sung 2026-10-15 (`notebooks/04_forecasting/so_sanh_model.ipynb` §2.4):* ~1,36 là **trung bình tỷ lệ ngày** của các tháng 8 năm lẻ; tính theo **tỷ lệ của tổng** (ΣCOGS/ΣRevenue) thì ≈ 1,34, đúng số `docs/problem_statement.md` ghi."
+    },
+    {
+      "source_path": "CLAUDE.md",
+      "section": "5. Những gì ĐÃ kết luận — đừng dò lại từ đầu",
+      "status": "đã kiểm chứng",
+      "text": "7. **`COGS/Revenue` nên mô hình hoá như một TỶ LỆ**, không phải hai mức độc lập."
+    },
+    {
+      "source_path": "CLAUDE.md",
+      "section": "5. Những gì ĐÃ kết luận — đừng dò lại từ đầu",
+      "status": "đã kiểm chứng",
+      "text": "8. **Toàn vẹn tham chiếu hoàn hảo** — 0 orphan trên 14 quan hệ. Đây là bài *khôi phục cấu trúc*, không phải bài *làm sạch dữ liệu*. Đừng viết code xử lý orphan/missing FK."
+    },
+    {
+      "source_path": "CLAUDE.md",
+      "section": "Ràng buộc chi phối mọi lựa chọn feature",
+      "status": "đã kiểm chứng",
+      "text": "**Mọi bảng phụ đều dừng ở 2022-12-31.** Không bảng nào phủ vùng dự báo 2023–2024. → Feature ngoại sinh dùng được cho dự báo phải là biến **suy ra từ lịch** (calendar-derived): tháng, ngày-trong-tháng, năm chẵn/lẻ, khoảng cách tới cuối tháng, cờ mùa khuyến mãi... Không thể dùng trực tiếp `web_traffic`, `inventory`, `reviews`... ở thời điểm tương lai."
+    },
+    {
+      "source_path": "docs/hop_dong_du_bao.md",
+      "section": "2.1 Hợp đồng metric",
+      "status": "đã chốt",
+      "text": "| Metric | **G theo ngày.** Tên cột đề xuất `yhat`. Nhãn hiển thị: **\"G – doanh thu gộp, gồm cả đơn hủy\"** | Đã chốt 2026-10-11 |"
+    },
+    {
+      "source_path": "docs/hop_dong_du_bao.md",
+      "section": "2.1 Hợp đồng metric",
+      "status": "đã chốt",
+      "text": "| Tập dữ liệu | **Mọi trạng thái đơn**, gồm cả đơn hủy và đơn trả. Ngày = ngày đặt hàng | Ràng buộc dữ liệu (`CLAUDE.md` §5.1; `star_schema.md` §3) |"
+    },
+    {
+      "source_path": "docs/hop_dong_du_bao.md",
+      "section": "2.1 Hợp đồng metric",
+      "status": "đã chốt",
+      "text": "| Horizon | 2023-01-01 → 2024-07-01, **548 ngày**, gồm ngày 29/02/2024 | Đã chốt 2026-10-11 |"
+    },
+    {
+      "source_path": "docs/hop_dong_du_bao.md",
+      "section": "2.3 COGS",
+      "status": "đã chốt",
+      "text": "- **Chốt 2026-10-14 (Q10), mở lại quyết định 2026-10-11:** hai cách COGS cùng dự thi, luật §5 chọn. - **(a) Qua tỷ lệ** (`cogs_method = 'ratio'`): `COGS(d) = G(d) × r(d)`, với `r` lấy từ hồ sơ tỷ lệ theo lịch (Q5), tính trên cửa sổ train. - **(b) Trực tiếp** (`cogs_method = 'direct'`): cùng model, cùng biến lịch, train riêng trên log COGS. - **Ràng buộc dữ liệu:** `CLAUDE.md` §5.7, tỷ lệ COGS/G nên mô hình hóa như một tỷ lệ. Cách (b) không mâu thuẫn với kết luận này: đây là một phép thử model, backtest đo cách nào sai số ngày thấp hơn. Tháng 8 năm lẻ có COGS > G (`CLAUDE.md` §5.6). Dù chọn cách nào, kết quả dự báo tháng 8/2023 phải có tỷ lệ > 1 (test §9). - **Cột đề xuất:** `cogs_method`, `cogs_ratio_hat` (= `cogs_yhat / yhat` ở cách b), `cogs_yhat`."
+    },
+    {
+      "source_path": "docs/hop_dong_du_bao.md",
+      "section": "3. Biến ngoại sinh: chỉ suy từ lịch",
+      "status": "đã chốt",
+      "text": "| Cờ cho cả 6 họ khuyến mãi (Spring, Mid-Year, Fall Launch, Year-End, Urban Blowout, Rural Special; hai họ sau chỉ năm lẻ) | `notebooks/04_forecasting/so_sanh_model.ipynb` §2.2: luật \"ngày đầu, ngày cuối hay gặp nhất mỗi họ\" tái tạo các cửa sổ 2013–2022 lệch tối đa 2 ngày, 0,52% số ngày khuyến mãi bị lệch. Cửa sổ 2023–2024 là ngoại suy từ luật | **Dùng** (cell B2, 2026-10-14) |"
+    },
+    {
+      "source_path": "docs/hop_dong_du_bao.md",
+      "section": "5. Backtest",
+      "status": "đã chốt",
+      "text": "**Luật chọn ứng viên** (chốt 2026-10-14, Q1, Q2, Q9, Q10; ngưỡng và thứ tự ở §0): 1. **Sàn:** ứng viên phải thắng seasonal naive 2 năm về điểm ngày kết hợp ở **cả ba fold**. Không ứng viên nào qua thì báo thẳng, và dùng mốc làm bản nộp. 2. **Thấp nhất:** trong các ứng viên qua bước 1, tìm điểm trung bình ba fold thấp nhất. 3. **Hòa thì chọn đơn giản:** mọi ứng viên có điểm ≤ 1,01 × điểm thấp nhất được coi là hòa; chọn ứng viên đơn giản nhất theo thứ tự ở §0. LSTM thêm điều kiện: chênh lệch với ứng viên đứng sau phải lớn hơn độ dao động giữa các seed. 4. **Không dò trên vùng chấm:** tham số model cố định trước; trọng số bản gộp chọn trong phần train của từng fold. 5. **Điểm của ứng viên thắng là lạc quan**, vì được chọn từ nhiều ứng viên trên cùng ba fold. Báo cáo phải ghi điều này."
+    },
+    {
+      "source_path": "docs/hop_dong_du_bao.md",
+      "section": "7. Đầu ra cho B2 và B3 (đã có trong code từ 2026-10-15)",
+      "status": "đã chốt",
+      "text": "**Phục vụ AI agent** (chốt Q8, 2026-10-14; [chon_model_du_bao.md](chon_model_du_bao.md) §6.1): - Stage ghi vào bản dữ liệu **mọi ứng viên Must và Should** đã làm xong, cùng các mốc, không chỉ ứng viên chính. Agent cần đủ các model để so sánh khi được hỏi. - Thêm cột `selection_step` vào `rpt_forecast_daily`: bước nào của luật §5 đã chọn model `is_primary`. Agent dùng cột này để giải thích vì sao model đó được chọn, không tự đặt lý do."
+    }
+  ]
+}
