@@ -12,7 +12,7 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG_VERSION = 'b4b-2026-10-19'   # mở phân rã model dự báo theo ngày / tháng
+CATALOG_VERSION = 'b5-2026-10-20'    # mở tool tri thức, không thêm relation DWH
 MONEY_UNIT = 'VND'
 
 # SQL quyết định định nghĩa các metric đang mở. Hash = nội dung các file này trong CHECKOUT hiện tại.
@@ -251,6 +251,10 @@ CAPABILITIES += [
     ('get_calendar_pattern', 'R', 'cuoi_thang', 'nhịp lịch', None, 'open', 'dồn cuối tháng 2013–2022 + từng giai đoạn'),
     ('get_calendar_pattern', 'R', 'thang_8', 'nhịp lịch', None, 'open', 'tháng 8 năm lẻ / năm chẵn 2013–2022'),
 ]
+
+# B5: tìm trong bản chụp tài liệu đóng gói cùng app; không đọc relation và không cấp số.
+CAPABILITIES += [('search_knowledge', 'knowledge', 'không kỳ', 'đoạn tài liệu', None, 'open',
+                  'BM25 trên corpus tuyển chọn, không cấp claim')]
 CAPABILITIES += [('explain_forecast', 'G', p, g, None, 'open',
                   'phân rã model LightGBM chính của bản dữ liệu đang phục vụ; không phải nguyên nhân')
                  for p, g in (('day', 'ngày'), ('month', 'tháng'))]
@@ -299,6 +303,8 @@ def _capability_key(tool: str, arguments: dict) -> tuple[str | None, tuple, list
     if tool == 'explain_forecast':
         p = a.get('period')
         return {'day': 'ngày', 'month': 'tháng'}.get(p), ('G',), [p]
+    if tool == 'search_knowledge':
+        return 'đoạn tài liệu', ('knowledge',), ['không kỳ']
     return None, (), []
 
 
