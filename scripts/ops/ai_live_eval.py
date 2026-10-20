@@ -43,14 +43,14 @@ PRICE_IN, PRICE_OUT = 0.30, 1.20
 SUM, DRV, SEG = 'get_revenue_summary', 'get_revenue_drivers', 'get_segment_contribution'
 DEF = 'get_metric_definition'
 GAP, MON, TRD, CAL = 'get_revenue_gap', 'get_revenue_monthly', 'get_revenue_trend', 'get_calendar_pattern'
-FC, FB, FX = 'get_forecast', 'get_forecast_backtest', 'explain_forecast'
+FC, FB, FX, SK = 'get_forecast', 'get_forecast_backtest', 'explain_forecast', 'search_knowledge'
 # "N kéo giảm nhiều nhất": hoặc chỗ đặt top_down_driver, hoặc viết thẳng "số đơn" + số góp của N; cách sau được
 # evidence._verified_driver_rank đối chiếu với top_down_driver của kho (đổi ngày 2026-10-05, prompt ai2-…-05d).
 DRIVER_N = ('.top_down_driver', '.contrib_n')
 
 
 def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None, if_ok=None, must_neg=(), group=None, hand='',
-      chart=None, labels=(), must_if_ok=()):
+      chart=None, labels=(), must_if_ok=(), sources=(), rubric_query=None):
     """tools: các lời gọi chấp nhận [(tên, tham số con)] (rỗng = không bắt buộc gọi tool);
     paths: mỗi phần tử (tập tên tool, hậu tố path hoặc tuple hậu tố thay thế) phải khớp ít nhất một claim đã hiện, và claim đó phải trỏ vào
     kết quả của CHÍNH lời gọi khớp `tools` (đúng tool + tham số), không chỉ cùng tên tool;
@@ -70,6 +70,10 @@ def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None, if_ok=
         case['labels'] = list(labels)
     if must_if_ok:
         case['must_if_ok'] = list(must_if_ok)
+    if sources:
+        case['sources'] = list(sources)
+    if rubric_query is not None:
+        case['rubric_query'] = rubric_query
     return case
 
 
@@ -744,10 +748,38 @@ ACCEPT_L4C = [
            'không bịa số hoặc nguyên nhân thực tế.'),
 ]
 
+# B5 (2026-10-20): bộ RAG soạn trước lượt mô hình đầu. Chỉ rubric đọc DWH; --runs 1 do PM chạy.
+ACCEPT_RAG = [
+    C('RAG1', 'Theo tài liệu, R là gì và vì sao không gọi là tiền thực nhận?', {'ok'},
+      tools=[(SK, {})], sources=['docs/star_schema.md §3'], group='RAG',
+      hand='Định nghĩa R đúng tập đơn delivered/ngày đặt hàng; không nhận là dòng tiền thu theo ngày thanh toán. '
+           'App hiện đúng nguồn mục KPI; không đưa số từ đoạn văn.'),
+    C('RAG2', 'Theo hợp đồng KPI, R được tính thế nào và R năm 2022 là bao nhiêu?', {'ok'},
+      tools=[(SK, {}), (SUM, {'metric': 'R', 'year': 2022})],
+      paths=[({SUM}, '.r')], sources=['docs/star_schema.md §3'],
+      group='RAG',
+      hand='Định nghĩa và nguồn từ corpus; số R năm 2022 từ get_revenue_summary cùng kỳ, không lấy bất kỳ số trong '
+           'tài liệu làm evidence. Không gọi R là tiền thực nhận.'),
+    C('RAG3', 'Tài liệu có quy định mức lương nhân viên kho không?', {'no_data'},
+      tools=[(SK, {})], group='RAG',
+      hand='Không tìm thấy trong corpus; nêu đúng là không tìm thấy, không đoán chính sách hoặc mức lương.'),
+    C('RAG4', 'Theo tài liệu, Urban Blowout làm doanh thu giảm bao nhiêu phần trăm?',
+      {'no_data', 'unsupported'}, tools=[(SK, {})], sources=['CLAUDE.md §5'],
+      group='RAG',
+      hand='Đọc được kết luận lịch sử có trích nguồn, nhưng không chép tỷ lệ hoặc ngày từ đoạn văn để trả số; '
+           'nói rõ RAG không cấp số và không khẳng định tác động nhân quả đã kiểm ở kỳ được hỏi.'),
+    C('RAG5', 'Theo hợp đồng, G dự báo là gì và dự báo G tháng 12/2023 bao nhiêu?', {'ok'},
+      tools=[(SK, {}), (FC, {'metric': 'G', 'period': 'month', 'year': 2023, 'month': 12})],
+      paths=[({FC}, '.g_forecast')], sources=['docs/hop_dong_du_bao.md §2.1'],
+      group='RAG',
+      hand='Định nghĩa G và nguồn từ hợp đồng; số dự báo tháng 12/2023 từ get_forecast đúng release, nhãn dự báo G '
+           'do app gắn. Không lẫn G với R/COGS, không lấy số corpus.'),
+]
+
 SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D,
         'f': ACCEPT_F, 'g': ACCEPT_G, 'gm': ACCEPT_GM, 'v': ACCEPT_V, 'n': ACCEPT_N, 'b7': ACCEPT_B7,
-        'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C}
-FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c')  # cần chế độ versioned và bản dữ liệu có dự báo
+        'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C, 'rag': ACCEPT_RAG}
+FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'rag')  # rag có ca trộn dự báo
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -789,6 +821,10 @@ def grade(case, t: service.TurnResult) -> dict:
                       and not re.search(r'(?<![\d.])[12]\.\d{3}(?![\d.,]| VND)', text),   # năm có dấu nghìn ("2.019")
         'bieu_do': _chart_ok(case, t),
     }
+    if case.get('sources'):
+        got_sources = {row.get('citation') for r in t.results.values() if r.ok and r.evidence
+                       and r.evidence.tool == SK for row in r.rows}
+        checks['nguon_rag'] = set(case['sources']) <= got_sources
     return {'case_id': case['id'], 'pass': all(checks.values()), 'checks': checks}
 
 
@@ -818,11 +854,17 @@ def check_rubric(cases, backend: str) -> int:
             continue
         checked += 1
         shown, errs = [], []
+        got_sources = set()
         for name, args in tools_:
-            res = tools.run({'tool': name, 'arguments': args}, backend)
+            run_args = {'query': case.get('rubric_query', case['q']), 'k': 3} if name == SK else args
+            res = tools.run({'tool': name, 'arguments': run_args}, backend)
             if not res.ok:
-                errs.append(f'{name} {args} → {res.status}')
+                if name == SK and res.status == 'no_data' and case['status'] == {'no_data'}:
+                    continue
+                errs.append(f'{name} {run_args} → {res.status}')
                 continue
+            if name == SK:
+                got_sources |= {r['citation'] for r in res.rows}
             for tools_p, suffix in paths:
                 if name not in tools_p:
                     continue
@@ -846,6 +888,8 @@ def check_rubric(cases, backend: str) -> int:
                     errs.append(f'{name} {args}: không dựng được biểu đồ ({out.message[:80]})')
         if not all(m in ' | '.join(shown) for m in case['must']):
             errs.append(f"chuỗi phải có {case['must']} không nằm trong {shown}")
+        if not set(case.get('sources', ())) <= got_sources:
+            errs.append(f"nguồn RAG thiếu {set(case['sources']) - got_sources}")
         if not all('−' + m in ' | '.join(shown) for m in case['must_neg']):     # số thật phải đúng là số âm
             errs.append(f"số âm {case['must_neg']} không nằm trong {shown}")
         bad += bool(errs)
@@ -927,14 +971,15 @@ def main() -> int:
                          'g = G* (dự báo, bộ phát triển); gm = GM* (dự báo, nghiệm thu B3c); v = V* (biểu đồ B6); '
                          'n = N* (chuỗi từng năm, ghi chú app, 2026-10-17); b7 = K* (held-out router, nghiệm thu AI4, '
                           '2026-10-18); l4 = L4* (phân rã model B4b, bộ phát triển); l4b = L4B* (đã đo); '
-                          'l4c = L4C* (bộ mới sau sửa guard L4B5); các bộ dự báo cần chế độ versioned')
+                         'l4c = L4C* (bộ mới sau sửa guard L4B5); rag = RAG* (B5); '
+                         'các bộ dự báo cần chế độ versioned')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
     a = ap.parse_args()
     pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
     by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F + ACCEPT_G
-              + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C}
+              + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C + ACCEPT_RAG}
     if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c')
                                   else _forecast_ready(a.backend)):
         print(f'Không chạy bộ {a.set}: {why}.')
