@@ -23,10 +23,13 @@ def test_prompt_co_muc_router_tro_toi_quy_tac_chi_tiet():
     p = service.system_prompt(dt.date(2026, 10, 18))
     router = p[p.index('CHỌN TOOL (router)'):p.index('QUY TẮC BẮT BUỘC')]
     for x in ('Thực tế tới 2022', 'quy tắc 16', 'Vẽ: 17', 'Trộn thực tế và dự báo', '"unsupported"', 'Mơ hồ: 2',
-              'Tiếp nối: 9'):
+              'Tiếp nối: 9', 'quy tắc 18',
+              '2016–2018', 'get_revenue_trend phases',     # K02 (b7 §7): khoảng năm trùng giai đoạn
+              'cả 2023 và 2024', 'hỏi lại năm'):           # K22: tháng dự báo không kèm năm
         assert x in router, x
     assert 'hai câu riêng' in p and 'không đặt cạnh nhau' in p and 'CÙNG định nghĩa' in p
-    assert service.PROMPT_VERSION.startswith('b7-')
+    assert service.PROMPT_VERSION == 'b4b-2026-10-20' and 'explain_forecast' in p
+    assert '"góp", "kéo lên" hoặc "kéo xuống so với mức nền"' in p
 
 
 # --- L1: số liệu lịch sử, có nút mở trang PS kèm bộ lọc ---
