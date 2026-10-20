@@ -60,6 +60,11 @@ def _evidence(ref: str, tool: str, args, res) -> None:
                 st.caption(f'Bị từ chối `{k}`: {v}')
             return
         e = res.evidence
+        if tool == 'search_knowledge':
+            for row in res.rows:
+                st.caption(f"Nguồn: {row['citation']} · {row['status']} · corpus {row['corpus_version']}")
+                st.code(row['snippet'], language=None)
+            return
         st.dataframe(_rows_df(res.rows), hide_index=True)
         if res.derived:
             st.json({k: service.plain(v) for k, v in res.derived.items()}, expanded=False)
