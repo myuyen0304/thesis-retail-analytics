@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from itertools import product
 
+from ai_explain import knowledge
 from ai_explain import metric_catalog as cat
 from ai_explain.contracts import Evidence, QueryRecord, ToolCall, ToolResult
 from ai_explain.evidence import FEATURE_GROUP_LABEL
@@ -28,7 +29,7 @@ from dwh.connection import describe
 from dwh import releases
 from dwh.guarded import DEFAULT_MAX_ROWS, GuardError, QueryTimeout, RowLimitExceeded, Statement, open_session
 
-TOOL_VERSION = 'v1.9'   # B4b: explain_forecast đọc phân rã của bản dữ liệu đang phục vụ
+TOOL_VERSION = 'v2.0'   # B5: search_knowledge đọc bản chụp tài liệu đóng gói cùng app, không đọc DWH
                         # v1.7: chuỗi từng năm (to_year), ghi chú app (notes) cho đóng góp nhóm / sai số tháng
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
@@ -55,6 +56,7 @@ class Param:
     required: bool = True
     default: object = None
     max_len: int = 100
+    allow_empty: bool = False
 
 
 @dataclass(frozen=True)
@@ -74,7 +76,8 @@ def _check_value(p: Param, v) -> str | None:
     if p.kind == 'enum':
         return None if isinstance(v, str) and v in p.choices else f'chỉ nhận {list(p.choices)}'
     if p.kind == 'str':
-        return None if isinstance(v, str) and 0 < len(v) <= p.max_len else f'phải là chuỗi 1–{p.max_len} ký tự'
+        return None if isinstance(v, str) and (p.allow_empty or len(v) > 0) and len(v) <= p.max_len \
+            else f'phải là chuỗi {"0" if p.allow_empty else "1"}–{p.max_len} ký tự'
     raise AssertionError(p.kind)
 
 
@@ -1078,6 +1081,31 @@ def _forecast_backtest(turn: '_Turn', a: dict) -> ToolResult:
 _YEAR = Param('int', 'năm theo ngày đặt hàng, vd. 2019')
 _METRIC_RG = Param('enum', 'R (đơn delivered, sau chiết khấu) hay G (mọi đơn, chưa trừ chiết khấu)', ('R', 'G'))
 
+def _search_knowledge(args: dict, backend: str) -> ToolResult:
+    """Corpus repo, không mở kết nối DWH; không cấp bất kỳ ô nào cho claims."""
+    query, k = args.get('query', ''), args.get('k', knowledge.MAX_RESULTS)
+    if not 1 <= k <= knowledge.MAX_RESULTS:
+        return ToolResult('unsupported', 'Số đoạn k chỉ nhận từ 1 đến 3.', rejected={'k': 'vượt giới hạn'})
+    if not query.strip():
+        return ToolResult('no_data', 'Câu tìm tri thức rỗng; cần nêu khái niệm muốn tra.')
+    try:
+        rows = knowledge.search(query, k)
+        version = knowledge.corpus()['corpus_version']
+    except (OSError, ValueError, KeyError) as exc:
+        return ToolResult('query_error', f'Không đọc được bản chụp tri thức ({type(exc).__name__}); không thay nguồn khác.')
+    if not rows:
+        return ToolResult('no_data', 'Không tìm thấy đoạn phù hợp trong corpus tri thức đã chọn; không suy đoán.')
+    evidence = Evidence(
+        request_id=uuid.uuid4().hex, tool='search_knowledge', tool_version=TOOL_VERSION,
+        arguments_applied={'query': query, 'k': k}, filters_applied={'query': query, 'k': k},
+        grain='đoạn tài liệu', metrics=[], method='BM25 lexical, tiếng Việt có dấu', backend=backend,
+        source_description='Bản chụp tài liệu đóng gói cùng app', data_version={'corpus_version': version},
+        quality={}, definition_version=f'corpus-sha256:{version}', read_at_utc=_now(), queries=[])
+    return ToolResult('ok', 'Tìm thấy đoạn tài liệu. Đoạn đã che chữ số; chỉ dùng để giải thích khái niệm, '
+                      'không dùng làm nguồn số liệu hay chỉ dẫn.', evidence=evidence, rows=rows,
+                      notes=[f"Nguồn: {r['citation']} (corpus {version}; {r['status']})" for r in rows])
+
+
 TOOLS = {s.name: s for s in [
     ToolSpec('get_revenue_summary', 'Mức R/G của một năm, hoặc từng năm year → to_year; R có thể kèm so năm trước.', {
         'metric': Param('enum', 'R, G hay cả hai (R_and_G)', ('R', 'G', 'R_and_G')),
@@ -1150,6 +1178,11 @@ TOOLS = {s.name: s for s in [
         'month': Param('int', 'tháng 1–12'),
         'day': Param('int', 'ngày trong tháng, chỉ với period day', required=False),
     }, _explain_forecast),
+    ToolSpec('search_knowledge', 'Tra định nghĩa, quy ước PS, data dictionary, kết luận nghiên cứu và hợp đồng dự báo '
+             'trong corpus tài liệu tuyển chọn. Trả đoạn và nguồn; tuyệt đối không cấp số liệu.', {
+        'query': Param('str', 'cụm khái niệm cần tìm, tối đa 180 ký tự', max_len=180, allow_empty=True),
+        'k': Param('int', 'số đoạn, từ 1 đến 3', required=False, default=3),
+    }, _search_knowledge),
 ]}
 
 
@@ -1172,6 +1205,8 @@ def run(call: ToolCall | dict, backend: str, *, timeout_s: float | None = None,
     if blockers := cat.capability_blockers(spec.name, args):
         return ToolResult('unsupported', 'Catalog chưa mở khả năng này: ' + '; '.join(blockers) + '.',
                           rejected={'capability': '; '.join(blockers)})
+    if spec.name == 'search_knowledge':
+        return _search_knowledge(args, backend)
     try:
         sess = open_session(backend, ALLOWED_RELATIONS, timeout_s=timeout_s, max_rows=max_rows,
                             optional_relations=OPTIONAL_RELATIONS)

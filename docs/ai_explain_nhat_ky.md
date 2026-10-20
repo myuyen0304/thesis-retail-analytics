@@ -315,6 +315,10 @@ Hạn tiến độ khóa luận: **2026-10-25**.
 
 - Lúc đo code chưa commit; prompt `b4b-2026-10-20`, release `4559c2dd159f4334b2e11d4c`; live `l4b` **3/5** (`set_hash=52622d4cc2f37b64`), `l4c` **5/5** (`set_hash=6dd3e3f066665259`); `l4` là bộ phát triển, code B4b chưa lên public (S9). [Bằng chứng và giới hạn](ai_eval_b4b_l4.md).
 
+### 2026-10-20: S8/B5 xong dev
+
+- RAG `search_knowledge` không cấp số; PM chốt định nghĩa mã chỉ tiêu dùng `get_metric_definition`, RAG chỉ bổ sung. Live `rag` lượt đầu **5/5 chấm máy, 5/5 đọc tay** với `deepseek-flash`, prompt `b5-2026-10-20b`, release `4559c2dd159f4334b2e11d4c`; lượt thứ hai cùng code cũng 5/5, không thay lượt chính thức. [Log, mã băm, đọc tay và giới hạn](ai_eval_b5_rag.md). Chưa lên public/Databricks (S9); alias “tiền thực nhận” của R để PM quyết sau.
+
 ---
 
 ## 3. Cần cải thiện (lỗi và hạn chế đang biết)

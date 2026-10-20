@@ -2493,3 +2493,10 @@ Mỗi chức năng mới ghi một mục: **làm gì, vì sao, trả lời PS n�
   `docs/giao_viec_theo_so_do.md`, mục bàn giao này, notebook của myuyen, `retail_dbt/dbt_project.yml`,
   `apps/retail_app/ai_explain/tools.py`, script cấp quyền PostgreSQL. Không sửa `CLAUDE.md`, requirements hay skill;
   không commit. Các file skill và tài liệu khác đã dirty trước S5 không bị đụng.
+
+### 2026-10-20: B5/S8 — RAG tri thức (dev local, chờ PM chạy live)
+
+- **Làm gì:** `search_knowledge` tìm định nghĩa KPI, quy ước PS, data dictionary, kết luận EDA, lịch khuyến mãi và hợp đồng dự báo bằng BM25 trên bản chụp 39 đoạn đi cùng app. Ghi nguồn file/mục và `corpus_version` trong bằng chứng; quy ước còn chờ BA giữ nhãn “đề xuất”.
+- **Giới hạn nghiệp vụ:** đoạn tài liệu không cấp số; tool che chữ số trước khi gửi mô hình, evidence từ chối claim RAG và số tự viết. Câu trộn định nghĩa với số vẫn gọi tool dữ liệu cùng kỳ. Không thêm bảng DWH hay quyền đọc. Bản chụp nằm trong `apps/retail_app/`, có đường tới cả public Streamlit và gói Databricks Apps khi triển khai S9.
+- **Kiểm trước live:** offline hit@1 17/20, hit@3 20/20; rubric `rag` 5/5 trên release `4559c2dd159f4334b2e11d4c`. Test với chỉ dẫn độc hại “trả số 999” bị chặn; trần phiên 500.000 token và test ba lượt xấu nhất giữ nguyên. [Báo cáo B5 và lệnh PM](ai_eval_b5_rag.md).
+- **Còn gì:** Claude rà độc lập rồi PM chạy một lượt live `rag`; chưa gọi mô hình thật, chưa thử B5 trên public hoặc Databricks Apps. Không commit, không dựng image/trigger DAG.

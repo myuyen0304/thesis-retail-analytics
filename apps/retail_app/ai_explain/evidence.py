@@ -215,6 +215,8 @@ def _resolve(path: str, results: dict):
         raise ValueError(f'{ref} không phải kết quả tool của lượt này')
     if not res.ok:
         raise ValueError(f'{ref} có trạng thái {res.status}, không có số')
+    if res.evidence is not None and res.evidence.tool == 'search_knowledge':
+        raise ValueError(f'{ref} là đoạn tài liệu RAG, không được làm nguồn claim hay chỗ đặt')
     if m.group(2).startswith('rows'):
         sel, fld = m.group(3), m.group(4)
         # chuỗi từng năm (get_revenue_summary to_year): rows[2016] là dòng năm 2016 khi đúng một dòng có năm đó
@@ -336,19 +338,32 @@ def question_numbers(question: str) -> set[str]:
     return out
 
 
-def check_digits(text: str, allowed: set[str]) -> list[str]:
+def check_digits(text: str, allowed: set[str], *, strict: bool = False) -> list[str]:
     """Chữ số trong câu văn (đã bỏ chỗ đặt) chỉ được là số trong `allowed`, mốc ngày/tháng có trong `allowed`,
     năm trong phạm vi dữ liệu, hoặc mã như PS1/AI1. Số đứng trước đơn vị (tỷ, triệu, VND, %...) luôn bị chặn."""
-    rest = _DATA_DATES.sub(' ', re.sub(r'PS[1-5]', '', _PLACEHOLDER.sub(' ', text)))
+    rest = re.sub(r'PS[1-5]', '', _PLACEHOLDER.sub(' ', text))
+    if not strict:
+        rest = _DATA_DATES.sub(' ', rest)
     errs = []
     unit = [m.group(0) for m in _UNIT_AFTER.finditer(rest)]
     if unit:
         errs.append(f'câu văn tự viết số kèm đơn vị {unit[:3]}: số tiền / tỷ lệ phải đi qua claim')
     rest = _DATE.sub(lambda m: ' ' if m.group(0).lower() in allowed else m.group(0), rest)
-    bad = [t for t in _NUMBER.findall(rest) if t.rstrip('.,') not in allowed | DATA_YEARS]
+    accepted = allowed if strict else allowed | DATA_YEARS
+    bad = [t for t in _NUMBER.findall(rest) if t.rstrip('.,') not in accepted]
     if bad:
         errs.append(f'câu văn có số tự viết {bad[:3]}: mọi số phải đi qua claim')
     return errs
+
+
+def rag_literal_errors(answer: str, question: str, results: dict, *, rag_used: bool = False) -> list[str]:
+    """RAG không cấp cả ngày/năm lịch sử vốn được miễn ở chat L1; chỉ chấp nhận kỳ từ câu hỏi/tool số."""
+    if not isinstance(answer, str) or not (rag_used or any(r.evidence and r.evidence.tool == 'search_knowledge'
+                                                          for r in results.values())):
+        return []
+    data_results = {ref: r for ref, r in results.items()
+                    if r.evidence and r.evidence.tool != 'search_knowledge'}
+    return check_digits(answer, allowed_years(data_results) | question_numbers(question), strict=True)
 
 
 def _direction(window: str) -> int:

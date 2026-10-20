@@ -28,7 +28,11 @@ def test_prompt_co_muc_router_tro_toi_quy_tac_chi_tiet():
               'cả 2023 và 2024', 'hỏi lại năm'):           # K22: tháng dự báo không kèm năm
         assert x in router, x
     assert 'hai câu riêng' in p and 'không đặt cạnh nhau' in p and 'CÙNG định nghĩa' in p
-    assert service.PROMPT_VERSION == 'b4b-2026-10-20' and 'explain_forecast' in p
+    assert service.PROMPT_VERSION == 'b5-2026-10-20b' and 'explain_forecast' in p
+    assert 'bắt buộc get_metric_definition cho từng mã' in router
+    assert 'thêm search_knowledge' in router
+    assert '"Define gross revenue" = G' in p
+    assert '"Define net revenue" = R' in p
     assert '"góp", "kéo lên" hoặc "kéo xuống so với mức nền"' in p
 
 
