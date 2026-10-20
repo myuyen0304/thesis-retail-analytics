@@ -270,12 +270,12 @@ def test_trang_ps_khong_doc_du_bao():
 
 
 def test_rv11_quyen_doc_ba_bang_trang_du_bao():
-    # RV11 (review Codex 2026-10-15 §8): ba bảng trang đọc = var app_optional_relations; macro cấp cho SP của app và của
-    # bản web cả danh sách này (bỏ qua bảng chưa có); không vào app_read_relations bắt buộc
+    # RV11: ba bảng trang Dự báo và bảng phân rã B4b đều tùy chọn; macro cấp cho SP của app và bản web
+    # cả danh sách này (bỏ qua bảng chưa có); không vào app_read_relations bắt buộc.
     import re
     import yaml
     proj = yaml.safe_load((ROOT / 'retail_dbt' / 'dbt_project.yml').read_text(encoding='utf-8'))['vars']
-    assert set(proj['app_optional_relations']) == set(fq.SOURCE.values())
+    assert set(proj['app_optional_relations']) == set(fq.SOURCE.values()) | {'reporting.rpt_forecast_explain'}
     assert not set(proj['app_optional_relations']) & set(proj['app_read_relations'])
     macro = re.sub(r'\{#.*?#\}', '', (ROOT / 'retail_dbt' / 'macros' / 'ai_readonly_grants.sql').read_text(encoding='utf-8'),
                    flags=re.S)
