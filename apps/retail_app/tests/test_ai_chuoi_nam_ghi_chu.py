@@ -261,9 +261,10 @@ def test_ghi_chu_thuoc_thang_khong_co_khi_model_chinh_cung_thap_nhat(monkeypatch
 
 
 def test_tran_token_xau_nhat_con_du():
-    """3 câu xấu nhất (test_tran_token_cung_ca_phien_khong_vuot_200k) vẫn vừa 200k sau khi thêm to_year và câu dặn của
-    quy tắc 5, nhờ hạ MAX_OUTPUT_TOKENS 2048 → 1536 (tối đa live 1.116 token ra cho cả một lượt)."""
+    """3 câu xấu nhất (test_tran_token_cung_ca_phien_khong_vuot_200k) vẫn vừa hạn mức phiên. Hạn mức 200k cũ hết chỗ khi
+    B4b thêm tool explain_forecast (mỗi lượt xấu nhất ~71,9 nghìn token); PM nâng lên 500k ngày 2026-10-19."""
     from tests.test_ai_chat import WorstCaseProvider
+    assert service.SESSION_TOKEN_LIMIT == 500_000
     p, used = WorstCaseProvider(), 0
     for _ in range(3):
         t = service.run_turn('Vì sao R năm 2019 giảm?', [], 'duckdb', p, session_tokens_used=used)
