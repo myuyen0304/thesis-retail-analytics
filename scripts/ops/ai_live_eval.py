@@ -43,18 +43,19 @@ PRICE_IN, PRICE_OUT = 0.30, 1.20
 SUM, DRV, SEG = 'get_revenue_summary', 'get_revenue_drivers', 'get_segment_contribution'
 DEF = 'get_metric_definition'
 GAP, MON, TRD, CAL = 'get_revenue_gap', 'get_revenue_monthly', 'get_revenue_trend', 'get_calendar_pattern'
-FC, FB = 'get_forecast', 'get_forecast_backtest'
+FC, FB, FX = 'get_forecast', 'get_forecast_backtest', 'explain_forecast'
 # "N kéo giảm nhiều nhất": hoặc chỗ đặt top_down_driver, hoặc viết thẳng "số đơn" + số góp của N; cách sau được
 # evidence._verified_driver_rank đối chiếu với top_down_driver của kho (đổi ngày 2026-10-05, prompt ai2-…-05d).
 DRIVER_N = ('.top_down_driver', '.contrib_n')
 
 
 def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None, if_ok=None, must_neg=(), group=None, hand='',
-      chart=None, labels=()):
+      chart=None, labels=(), must_if_ok=()):
     """tools: các lời gọi chấp nhận [(tên, tham số con)] (rỗng = không bắt buộc gọi tool);
     paths: mỗi phần tử (tập tên tool, hậu tố path hoặc tuple hậu tố thay thế) phải khớp ít nhất một claim đã hiện, và claim đó phải trỏ vào
     kết quả của CHÍNH lời gọi khớp `tools` (đúng tool + tham số), không chỉ cùng tên tool;
     if_ok: (tools, paths) bổ sung chỉ áp khi lượt trả `ok` (vd. E02 trả lời luôn thì phải nêu cả R và G);
+    must_if_ok: regex bắt buộc trong câu thô của model khi status `ok` (không tính nhãn app tự gắn);
     must_neg: số ÂM phải có trong câu và MỌI lần xuất hiện phải đọc ra được là âm: có dấu "−" ngay trước, hoặc chữ
     giảm/sụt/âm đứng sát trước (≤ 3 chữ). "must" chỉ kiểm chuỗi nên "6,4%" và "−6,4%" đều qua (lỗi B06 lọt rubric).
     group: nhóm báo cáo (bộ GM); hand: tiêu chí đọc tay answer_md, ghi TRƯỚC lượt chạy đầu (không đặt sau khi đọc kết quả).
@@ -67,6 +68,8 @@ def C(cid, q, status, tools=(), paths=(), must=(), banned=(), after=None, if_ok=
             'chart': chart}
     if labels:                  # chỉ thêm khóa khi có: mã băm của các bộ cũ giữ nguyên
         case['labels'] = list(labels)
+    if must_if_ok:
+        case['must_if_ok'] = list(must_if_ok)
     return case
 
 
@@ -646,9 +649,105 @@ ACCEPT_B7 = [
       if_ok=(_fc(('COGS', 'G_and_COGS'), period='year', year=2023), [({FC}, '.cogs_forecast')]), after='K14', group=_TIEP,
       hand='"năm đó" là năm dự báo 2023 của lượt trước (hoặc hỏi lại); nhãn dự báo COGS; không gọi là thực tế'),
 ]
+ACCEPT_L4 = [
+    C('L401', 'Vì sao dự báo G tháng 8/2023 giảm?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 8})],
+      paths=[({FX}, 'rows[promo_urban_blowout].contribution_log')],
+      labels=['Phân rã model, không phải nguyên nhân'],
+      group='L4',   # câu khẳng định nhân quả đã bị evidence chặn; câu phủ định được phép
+      hand='Nêu nhóm lịch Urban Blowout (hiệu ứng tháng 8 năm lẻ nằm ở đây; nhóm năm chẵn/lẻ gần 0) là thành phần '
+           'model; nói đóng góp so với mức nền, không phải so với tháng 7; chế độ sau 2018 âm ở mọi tháng nên không '
+           'giải thích riêng tháng 8. Không khẳng định nguyên nhân. Tháng là trung bình log theo ngày, không phải VND.'),
+    C('L402', 'Phân rã model dự báo G ngày 15/8/2023 theo nhóm biến.', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2023, 'month': 8, 'day': 15})],
+      paths=[({FX}, 'rows[mua_vu].contribution_log'), ({FX}, 'rows[nam_chan_le].contribution_log')],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4',
+      hand='Dẫn ít nhất hai số đúng nhóm, đúng ngày, có nhãn app; không gọi là tác động nhân quả.'),
+    C('L403', 'Nhóm năm chẵn/lẻ đóng góp bao nhiêu vào dự báo G ngày 1/7/2024?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 7, 'day': 1})],
+      paths=[({FX}, 'rows[nam_chan_le].contribution_log')],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4',
+      hand='Đúng ngày cuối của horizon; không gọi đó là phân rã cả tháng 7/2024.'),
+    C('L404', 'Có phải Urban Blowout là nguyên nhân làm dự báo G tháng 8/2023 giảm?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 8})],
+      paths=[({FX}, 'rows[promo_urban_blowout].contribution_log')],
+      labels=['Phân rã model, không phải nguyên nhân'],
+      group='L4',   # câu khẳng định nhân quả đã bị evidence chặn; câu phủ định được phép
+      hand='Từ chối kết luận nhân quả; promo Urban Blowout chỉ là feature lịch của model.'),
+]
+# Bộ L4B (2026-10-19, rà S7): bộ L4 đã chạy 8 lượt để chỉnh prompt b4b-2026-10-19, thành bộ phát triển. L4B là câu mới,
+# soạn trước lượt chạy đầu, đã đo prompt b4b-2026-10-20; không sửa câu / rubric sau khi đã chạy.
+ACCEPT_L4B = [
+    C('L4B1', 'Vì sao dự báo G tháng 6/2024 cao?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2024, 'month': 6})],
+      paths=[({FX}, 'rows[mua_vu].contribution_log')],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4B',
+      hand='Dẫn nhóm mùa vụ và chiều từng nhóm theo số; đóng góp so với mức nền, không phải so với tháng trước; '
+           'không gọi là nguyên nhân; tháng là trung bình log theo ngày.'),
+    C('L4B2', 'Trong dự báo G ngày 31/1/2023, nhóm đầu/cuối tháng đóng góp bao nhiêu?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2023, 'month': 1, 'day': 31})],
+      paths=[({FX}, 'rows[dau_cuoi_thang].contribution_log')],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4B',
+      hand='Đúng ngày 31/01/2023, đúng nhóm đầu/cuối tháng; nếu nêu hệ số nhân thì không cộng các hệ số.'),
+    C('L4B3', 'Year End Sale có làm dự báo G tháng 12/2023 tăng lên không?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 12})],
+      paths=[({FX}, 'rows[promo_year_end_sale].contribution_log')],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4B',
+      hand='Nêu đóng góp của nhóm lịch Year End Sale trong model, đúng chiều theo số; nói rõ không chứng minh khuyến '
+           'mãi làm doanh thu thực tế tăng.'),
+    C('L4B4', 'Giải thích dự báo G tháng 8/2025 theo nhóm biến.', {'no_data', 'unsupported'}, group='L4B',
+      hand='Tháng 8/2025 ngoài kỳ dự báo (tới 2024-07-01): không có số, không lấy tháng 8/2023 thay vào.'),
+    C('L4B5', 'Phân rã model dự báo COGS tháng 8/2023.', {'unsupported', 'no_data', 'ok'}, group='L4B',
+      if_ok=([(FX, {'period': 'month', 'year': 2023, 'month': 8})], []),
+      must_if_ok=[r'(?i)(?:COGS|giá vốn).{0,40}(?:không|chưa).{0,25}phân rã|'
+                  r'(?:không|chưa).{0,25}phân rã.{0,25}(?:COGS|giá vốn)',
+                  r'(?i)(?<!\w)G(?!\w)|doanh thu gộp'],
+      hand='Phân rã chỉ có cho G: nói không có phân rã COGS; nếu nêu phân rã G thì ghi rõ là của G, không gọi là COGS.'),
+]
+# Bộ L4C (2026-10-20): soạn trước lượt mô hình đầu sau khi sửa guard L4B5. Giữ nguyên L4B và điểm gốc 3/5.
+ACCEPT_L4C = [
+    C('L4C1', 'Vì sao dự báo G tháng 1/2024 thấp?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2024, 'month': 1})],
+      paths=[({FX}, 'rows[mua_vu].contribution_log')],
+      must_neg=['0,4535 log'],
+      labels=['Phân rã model, không phải nguyên nhân'],
+      banned=['mạnh nhất', 'chủ yếu', 'rõ nhất'], group='L4C',
+      hand='Dẫn nhóm mùa vụ đúng chiều theo số và đúng tháng 01/2024; không xếp nhóm "mạnh nhất" / "chủ yếu" '
+           'khi tool không cấp xếp hạng. Đóng góp so với mức nền, không phải so với tháng trước; tháng là trung bình '
+           'log theo ngày. Không khẳng định nguyên nhân G thực tế.'),
+    C('L4C2', 'Ngày 1/5/2024, nhóm đầu/cuối tháng góp bao nhiêu vào dự báo G?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 5, 'day': 1})],
+      paths=[({FX}, 'rows[dau_cuoi_thang].contribution_log')],
+      must=['+0,2894 log'],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4C',
+      hand='Đúng ngày 01/05/2024 và đúng nhóm đầu/cuối tháng; nêu đóng góp log so với mức nền. '
+           'Nếu nêu hệ số nhân thì không cộng các hệ số; không gọi là nguyên nhân thực tế.'),
+    C('L4C3', 'Theo phân rã model, nhóm lịch Spring Sale kéo dự báo G tháng 4/2023 lên hay xuống?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 4})],
+      paths=[({FX}, 'rows[promo_spring_sale].contribution_log')],
+      must_neg=['0,0077 log'],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4C',
+      hand='Đọc đúng dấu nhóm lịch Spring Sale trong tháng 04/2023, diễn đạt lên/xuống so với mức nền; '
+           'không suy ra khuyến mãi làm G thực tế đổi hay xếp hạng nhóm khi chưa có bằng chứng.'),
+    C('L4C4', 'Vì sao dự báo giá vốn tháng 12/2023 thấp?', {'unsupported', 'no_data', 'ok'}, group='L4C',
+      if_ok=([(FX, {'period': 'month', 'year': 2023, 'month': 12})], []),
+      must_if_ok=[r'(?i)(?:COGS|giá vốn).{0,40}(?:không|chưa).{0,25}phân rã|'
+                  r'(?:không|chưa).{0,25}phân rã.{0,25}(?:COGS|giá vốn)',
+                  r'(?i)(?<!\w)G(?!\w)|doanh thu gộp'],
+      hand='Không có phân rã COGS. Nếu trả ok và dẫn phân rã G thì câu thô phải nói rõ COGS chưa có phân rã, '
+           'mọi số là của G tháng 12/2023 so với mức nền; không gọi đóng góp G là của giá vốn, '
+           'không xếp hạng hoặc suy ra nguyên nhân thực tế.'),
+    C('L4C5', 'Giải thích dự báo G cả năm 2023 theo nhóm biến.',
+      {'unsupported', 'needs_clarification'}, group='L4C',
+      hand='explain_forecast chỉ nhận ngày/tháng: từ chối phân rã cả năm 2023; nếu hỏi lại thì phải nói '
+           'không phân rã được cả năm, không tự chọn tháng; không cộng các đóng góp tháng/ngày, '
+           'không bịa số hoặc nguyên nhân thực tế.'),
+]
+
 SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D,
-        'f': ACCEPT_F, 'g': ACCEPT_G, 'gm': ACCEPT_GM, 'v': ACCEPT_V, 'n': ACCEPT_N, 'b7': ACCEPT_B7}
-FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7')      # cần chế độ versioned và bản dữ liệu có dự báo (xem _forecast_ready)
+        'f': ACCEPT_F, 'g': ACCEPT_G, 'gm': ACCEPT_GM, 'v': ACCEPT_V, 'n': ACCEPT_N, 'b7': ACCEPT_B7,
+        'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C}
+FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c')  # cần chế độ versioned và bản dữ liệu có dự báo
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -672,6 +771,10 @@ def _paths_ok(t: service.TurnResult, required, alternatives) -> bool:
 
 def grade(case, t: service.TurnResult) -> dict:
     text = t.answer_md or ''
+    try:
+        raw_answer = json.loads(t.raw_final or '{}').get('answer', '')
+    except (TypeError, ValueError):
+        raw_answer = ''
     tools_, paths = list(case['tools']), list(case['paths'])
     if case['if_ok'] and t.status == 'ok':
         tools_, paths = tools_ + case['if_ok'][0], paths + case['if_ok'][1]
@@ -680,7 +783,8 @@ def grade(case, t: service.TurnResult) -> dict:
         'tool': _tool_ok(t, tools_),
         'claim_dung_o': _paths_ok(t, paths, tools_),
         'must_contain': all(m in text for m in case['must']) and all(neg_shown(text, m) for m in case['must_neg'])
-                        and all(x in text for x in case.get('labels', ())),
+                         and all(x in text or x in getattr(t, 'app_notes', ()) for x in case.get('labels', ())),
+        'must_if_ok': t.status != 'ok' or all(re.search(p, raw_answer) for p in case.get('must_if_ok', ())),
         'not_banned': not any(b.lower() in text.lower() for b in case['banned'])
                       and not re.search(r'(?<![\d.])[12]\.\d{3}(?![\d.,]| VND)', text),   # năm có dấu nghìn ("2.019")
         'bieu_do': _chart_ok(case, t),
@@ -704,12 +808,15 @@ def _chart_ok(case, t: service.TurnResult) -> bool:
 def check_rubric(cases, backend: str) -> int:
     """Kiểm rubric KHÔNG gọi mô hình: mỗi lời gọi kỳ vọng chạy thẳng tool, mỗi path phải ra một ô có giá trị, và mỗi
     chuỗi 'phải có' phải nằm trong giá trị đã định dạng như app hiển thị. Chạy trước live để lỗi rubric không lẫn vào kết quả."""
-    bad = 0
+    bad, checked, skipped = 0, 0, 0
     for case in cases:
         tools_ = case['tools'] + (case['if_ok'][0] if case['if_ok'] else [])
         paths = case['paths'] + (case['if_ok'][1] if case['if_ok'] else [])
         if not tools_:
+            skipped += 1
+            print(f"[BỎ QUA] {case['id']}: không có tool/path để kiểm trước lượt mô hình")
             continue
+        checked += 1
         shown, errs = [], []
         for name, args in tools_:
             res = tools.run({'tool': name, 'arguments': args}, backend)
@@ -743,7 +850,8 @@ def check_rubric(cases, backend: str) -> int:
             errs.append(f"số âm {case['must_neg']} không nằm trong {shown}")
         bad += bool(errs)
         print(f"[{'LỖI' if errs else 'OK '}] {case['id']:5} {'; '.join(errs) or ' | '.join(shown)}")
-    print(f'\nRubric: {len(cases) - bad}/{len(cases)} case không lỗi (case không có tool kỳ vọng chỉ chấm trạng thái).')
+    print(f'\nRubric tool/path: {checked - bad}/{checked} đạt; {skipped} case không có tool/path chưa được kiểm '
+          'trước lượt mô hình.')
     return 1 if bad else 0
 
 
@@ -802,6 +910,13 @@ def _forecast_ready(backend: str) -> str | None:
     return None if res.ok else f'bản dữ liệu đang phục vụ không đọc được dự báo ({res.status}: {res.message[:120]})'
 
 
+def _explain_ready(backend: str) -> str | None:
+    if why := _forecast_ready(backend):
+        return why
+    res = tools.run({'tool': FX, 'arguments': {'period': 'month', 'year': 2023, 'month': 8}}, backend)
+    return None if res.ok else f'bản dữ liệu đang phục vụ không đọc được phân rã ({res.status}: {res.message[:120]})'
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', type=int, default=1)
@@ -811,15 +926,17 @@ def main() -> int:
                          'ai3c = C* (nghiệm thu AI3); d = D* (câu xếp hạng, 2026-10-09); f = F* (phía nhỏ, 2026-10-09); '
                          'g = G* (dự báo, bộ phát triển); gm = GM* (dự báo, nghiệm thu B3c); v = V* (biểu đồ B6); '
                          'n = N* (chuỗi từng năm, ghi chú app, 2026-10-17); b7 = K* (held-out router, nghiệm thu AI4, '
-                         '2026-10-18); g/gm/v/n/b7 cần chế độ versioned')
+                          '2026-10-18); l4 = L4* (phân rã model B4b, bộ phát triển); l4b = L4B* (đã đo); '
+                          'l4c = L4C* (bộ mới sau sửa guard L4B5); các bộ dự báo cần chế độ versioned')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
     a = ap.parse_args()
     pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
     by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F + ACCEPT_G
-             + ACCEPT_GM + ACCEPT_B7}
-    if a.set in FORECAST_SETS and (why := _forecast_ready(a.backend)):
+              + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C}
+    if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c')
+                                  else _forecast_ready(a.backend)):
         print(f'Không chạy bộ {a.set}: {why}.')
         return 2
     meta = {'catalog_version': cat.CATALOG_VERSION, 'tool_version': tools.TOOL_VERSION, 'code_hash': _code_hash(),
@@ -859,7 +976,8 @@ def main() -> int:
                     'raw_final': t.raw_final, 'raw_first': t.raw_first,
                     'prompt_tokens': t.prompt_tokens, 'completion_tokens': t.completion_tokens,
                     'llm_calls': t.llm_calls, 'latency_s': round(time.monotonic() - t0, 2), 'model': t.model,
-                    'prompt_version': t.prompt_version, 'backend': a.backend, 'set': a.set, 'git_rev': rev,
+                     'prompt_version': t.prompt_version, 'backend': a.backend, 'set': a.set, 'git_rev': rev,
+                     'release_id': (meta['release'] or {}).get('release_id'),
                     'history': history, 'prompt_bounds': t.prompt_bounds, **meta,
                     'group': case['group'], 'hand': case['hand'],
                     'data_version': {r: t.results[r].evidence.data_version for r, _, _ in t.calls
