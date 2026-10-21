@@ -806,6 +806,73 @@ ACCEPT_L4D = [
 for _case, _rule in zip(ACCEPT_L4D, ('short', 'short', 'all_groups', 'no_sum', 'no_cause')):
     _case['l4d_rule'] = _rule
 
+# L4E (2026-10-21): câu hỏi tự nhiên để đo câu xếp hạng nhóm theo chiều sau khi duyệt alias.
+# Chốt rubric trước lượt model; tên nhóm và top-k lấy từ claim + kết quả explain_forecast, không chép số kỳ vọng.
+_L4E_GROUP_PATHS = tuple(f'rows[{group}].{field}' for group in sorted(tools.EXPLAIN_GROUPS)
+                         for field in ('pct_vs_base', 'contribution_log', 'multiplier'))
+ACCEPT_L4E = [
+    C('L4E1', 'Vì sao dự báo G tháng 8/2023 thấp?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 8})], paths=[({FX}, _L4E_GROUP_PATHS)],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4E',
+      hand='Câu public nguyên văn. Nêu nhóm kéo xuống mạnh nhất đúng rank_dir chiều âm; tên nhóm có thể dùng alias '
+           'đã duyệt. Không gọi phân rã là nguyên nhân thực tế.'),
+    C('L4E2', 'Vì sao dự báo G tháng 6/2024 cao?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2024, 'month': 6})], paths=[({FX}, _L4E_GROUP_PATHS)],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4E',
+      hand='Tháng cao: nhóm dẫn số và xếp hạng phải cùng chiều dương, đúng top-k rank_dir.'),
+    C('L4E3', 'Vì sao dự báo G ngày 1/5/2024 cao?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 5, 'day': 1})], paths=[({FX}, _L4E_GROUP_PATHS)],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4E',
+      hand='Ngày cao: đúng ngày 01/05/2024, nhóm dương đúng top-k theo chiều.'),
+    C('L4E4', 'Nhóm nào kéo dự báo G tháng 1/2024 xuống mạnh nhất?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2024, 'month': 1})], paths=[({FX}, _L4E_GROUP_PATHS)],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4E',
+      hand='Tháng thấp: nhóm âm xếp đầu theo rank_dir; không trộn nhóm dương trong cùng câu xếp hạng.'),
+    C('L4E5', 'Vì sao dự báo G ngày 15/8/2023 thấp?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2023, 'month': 8, 'day': 15})], paths=[({FX}, _L4E_GROUP_PATHS)],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4E',
+      hand='Ngày thấp: dẫn nhóm âm đúng top-k; nhóm ngược chiều nếu có phải ở câu riêng.'),
+    C('L4E6', 'Nhóm nào đóng góp mạnh nhất vào dự báo G tháng 12/2023?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 12})], paths=[({FX}, _L4E_GROUP_PATHS)],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4E',
+      hand='Câu không nêu chiều: nếu câu trả lời cũng không nêu chiều thì xếp theo rank chung; nếu nêu chiều '
+           'thì xếp theo rank_dir đúng chiều.'),
+]
+for _case, _direction in zip(ACCEPT_L4E, (-1, 1, 1, -1, -1, 0)):
+    _case['l4e_direction'] = _direction
+
+# L4F: bộ mới sau khi L4E đã chạy. Các kỳ/cách hỏi khác L4E; rubric bên dưới tự tính từ t.results.
+ACCEPT_L4F = [
+    C('L4F1', 'Vì sao G dự báo ngày 14/8/2023 thấp hơn mức nền?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2023, 'month': 8, 'day': 14})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4F',
+      hand='Hai nhóm âm đứng đầu khá sát nhau; nếu xếp hạng, phải nêu chế độ sau 2018 trước Urban Blowout.'),
+    C('L4F2', 'Dự báo G tháng 11/2023 thấp: nhóm nào kéo xuống mạnh nhất?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 11})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4F',
+      hand='Câu hỏi top-1 chiều âm; nếu dùng chữ xếp hạng, đối chiếu rank_dir của tháng này.'),
+    C('L4F3', 'Giải thích vì sao dự báo G tháng 5/2023 cao hơn mức nền.', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 5})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4F',
+      hand='Nhóm dương lớn nhất tháng 05/2023 là mùa vụ; câu vì sao cao nêu tối đa ba nhóm.'),
+    C('L4F4', 'Ngày 2/5/2024, nhóm nào đẩy dự báo G lên nhiều nhất?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 5, 'day': 2})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4F',
+      hand='Nếu xếp hạng chiều dương, dùng rank_dir ngày 02/05/2024.'),
+    C('L4F5', 'Theo phân rã model, nhóm nào đóng góp vào G dự báo tháng 2/2024?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2024, 'month': 2})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4F',
+      hand='Không nêu chiều trong câu hỏi; nếu câu trả lời xếp hạng mà cũng không nêu chiều, dùng rank chung.'),
+    C('L4F6', 'Ngày 10/12/2023, phân rã model ghi nhận nhóm kéo xuống nào?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2023, 'month': 12, 'day': 10})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4F',
+      hand='Nêu nhóm âm có bằng chứng; chỉ kiểm thứ tự khi câu trả lời tự dùng chữ xếp hạng.'),
+]
+for _case in ACCEPT_L4F:
+    _case['l4f_rule'] = 'ranked_if_said'
+for _case in (ACCEPT_L4F[0], ACCEPT_L4F[2]):
+    _case['l4f_why'] = True
+
 # B5b lượt 2: soạn các câu dưới đây trước khi thêm alias AOV/U/P. Chưa chạy model.
 ACCEPT_B5B_PARAPHRASE = [
     C('B5BP1', 'Tiền thu bình quân trên một đơn giao thành công được xác định ra sao?',
@@ -873,9 +940,11 @@ ACCEPT_DEF_SO[0]['def_so_cogs'] = True
 
 SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D,
         'f': ACCEPT_F, 'g': ACCEPT_G, 'gm': ACCEPT_GM, 'v': ACCEPT_V, 'n': ACCEPT_N, 'b7': ACCEPT_B7,
-        'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C, 'l4d': ACCEPT_L4D, 'rag': ACCEPT_RAG,
+        'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C, 'l4d': ACCEPT_L4D, 'l4e': ACCEPT_L4E,
+        'l4f': ACCEPT_L4F,
+        'rag': ACCEPT_RAG,
         'b5b_paraphrase': ACCEPT_B5B_PARAPHRASE, 'def_so': ACCEPT_DEF_SO}
-FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'l4d', 'rag')  # rag có ca trộn dự báo
+FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'l4d', 'l4e', 'l4f', 'rag')  # rag có ca trộn dự báo
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -895,6 +964,48 @@ def _paths_ok(t: service.TurnResult, required, alternatives) -> bool:
         tool, a = call_of.get(p.split('.')[0], (None, None))
         return tool in tools_ and (not alternatives or _match(tool, a, alternatives))
     return all(any(p.endswith(suffix) and good(p, tools_) for p in shown) for tools_, suffix in required)
+
+
+def _l4f_ranked_ok(raw_answer: str, t: service.TurnResult) -> bool:
+    """Chấm câu xếp hạng bằng hàng tool, độc lập với guard trong evidence.py."""
+    claim_rows = {}
+    for cid, (path, _value, _shown) in t.values.items():
+        match = re.fullmatch(r'(T\d+)\.rows\[([^]]+)\]\.(?:pct_vs_base|contribution_log|multiplier|feature_label)',
+                             path)
+        if not match:
+            continue
+        ref, key = match.groups()
+        result = t.results.get(ref)
+        if not result or not result.ok or not result.evidence or result.evidence.tool != FX:
+            continue
+        row = (result.rows[int(key)] if key.isdigit() and int(key) < len(result.rows) else
+               next((r for r in result.rows if r.get('feature_group') == key), None))
+        if row:
+            claim_rows[cid] = (ref, row['feature_group'])
+
+    ranking = ('chủ yếu', 'mạnh nhất', 'lớn nhất', 'nhiều nhất', 'dẫn đầu', 'đứng đầu', 'mạnh hơn cả')
+    for sentence in re.split(r'[.;!?\n]', raw_answer):
+        if not any(word in sentence.casefold() for word in ranking):
+            continue
+        cited = [claim_rows[m.group(1)] for m in re.finditer(r'\{(c\d+)\}', sentence)
+                 if m.group(1) in claim_rows]
+        if not cited or len({ref for ref, _ in cited}) != 1:
+            return False
+        ref = cited[0][0]
+        rows = t.results[ref].rows
+        no_claim = re.sub(r'\{c\d+\}', ' ', sentence).casefold()
+        up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', no_claim))
+        down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', no_claim))
+        if up and down:
+            return False
+        direction = 1 if up else -1 if down else 0
+        order = list(dict.fromkeys(group for _, group in cited))
+        field = 'rank_dir' if direction else 'rank'
+        candidates = [r for r in rows if not direction or r['contribution_log'] * direction > 0]
+        expected = [r['feature_group'] for r in sorted(candidates, key=lambda r: r[field])[:len(order)]]
+        if order != expected:
+            return False
+    return True
 
 
 def grade(case, t: service.TurnResult) -> dict:
@@ -942,6 +1053,42 @@ def grade(case, t: service.TurnResult) -> dict:
             checks['noi_ro_du_bao'] = (bool(re.search(r'dự\s+báo', raw_answer, re.I)) if t.status == 'ok'
                                       else bool(re.search(r'COGS_forecast', raw_answer, re.I)
                                                 and re.search(r'\?|bạn\s+muốn|ý\s+bạn', raw_answer, re.I)))
+    if 'l4e_direction' in case:
+        by_claim = {}
+        for cid, (path, _value, _shown) in t.values.items():
+            try:
+                value, field, row = evidence._resolve(path, t.results)
+            except ValueError:
+                continue
+            by_claim[cid] = ({'path': path}, value, field, row)
+        ranked = [sent for sent in evidence._SENTENCE.split(raw_answer)
+                  if evidence._PLACEHOLDER.search(sent)
+                  and any(word in sent.casefold() for word in ('chủ yếu', 'mạnh nhất', 'lớn nhất'))]
+        checks['co_cau_xep_hang'] = bool(ranked)
+        checks['top_k_dung_chieu'] = bool(ranked) and all(
+            evidence._verified_explain_rank(sent, by_claim, t.results) is None for sent in ranked)
+        direction = case['l4e_direction']
+        if direction:
+            direction_word = r'\b(?:cao|tăng|kéo\s+lên)\b' if direction > 0 else r'\b(?:thấp|giảm|kéo\s+xuống)\b'
+            checks['dung_chieu_cau_hoi'] = bool(ranked) and all(
+                re.search(direction_word, evidence._PLACEHOLDER.sub(' ', sent), re.I) for sent in ranked)
+        groups = {m.group(1) for path, _value, _shown in t.values.values()
+                  if (m := re.search(r'\.rows\[([^]]+)\]\.(?:pct_vs_base|contribution_log|multiplier)$', path))}
+        checks['toi_da_3_nhom'] = 1 <= len(groups) <= 3
+    if case.get('l4f_rule'):
+        checks['xep_hang_doc_lap'] = _l4f_ranked_ok(raw_answer, t)
+        if case.get('l4f_why'):
+            groups = set()
+            for path, _value, _shown in t.values.values():
+                match = re.fullmatch(r'(T\d+)\.rows\[([^]]+)\]\.(?:pct_vs_base|contribution_log|multiplier|feature_label)',
+                                     path)
+                if match and (result := t.results.get(match.group(1))) and result.ok:
+                    key = match.group(2)
+                    row = (result.rows[int(key)] if key.isdigit() and int(key) < len(result.rows) else
+                           next((r for r in result.rows if r.get('feature_group') == key), None))
+                    if row:
+                        groups.add(row['feature_group'])
+            checks['toi_da_3_nhom'] = 1 <= len(groups) <= 3
     if rule := case.get('l4d_rule'):
         groups = {m.group(1) for path, _value, _shown in t.values.values()
                   if (m := re.search(r'\.rows\[([^]]+)\]\.(?:pct_vs_base|contribution_log|multiplier)$', path))}
@@ -1104,7 +1251,8 @@ def main() -> int:
                          'g = G* (dự báo, bộ phát triển); gm = GM* (dự báo, nghiệm thu B3c); v = V* (biểu đồ B6); '
                          'n = N* (chuỗi từng năm, ghi chú app, 2026-10-17); b7 = K* (held-out router, nghiệm thu AI4, '
                           '2026-10-18); l4 = L4* (phân rã model B4b, bộ phát triển); l4b = L4B* (đã đo); '
-                         'l4c = L4C* (bộ mới sau sửa guard L4B5); l4d = L4D* (S9b trình bày L4); rag = RAG* (B5); '
+                         'l4c = L4C* (bộ mới sau sửa guard L4B5); l4d = L4D* (S9b trình bày L4); '
+                         'l4e = L4E* (đã chạy); l4f = L4F* (xếp hạng độc lập, chưa chạy); rag = RAG* (B5); '
                          'b5b_paraphrase = B5BP* (định nghĩa, đã chạy một lượt); '
                          'def_so = DS* (luật chữ số câu định nghĩa, chưa chạy model); '
                          'các bộ dự báo cần chế độ versioned')
@@ -1114,9 +1262,10 @@ def main() -> int:
     pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
     by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F + ACCEPT_G
-              + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C + ACCEPT_L4D + ACCEPT_RAG
+              + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C + ACCEPT_L4D + ACCEPT_L4E + ACCEPT_L4F
+              + ACCEPT_RAG
               + ACCEPT_B5B_PARAPHRASE + ACCEPT_DEF_SO}
-    if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c', 'l4d')
+    if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c', 'l4d', 'l4e', 'l4f')
                                   else _forecast_ready(a.backend)):
         print(f'Không chạy bộ {a.set}: {why}.')
         return 2
