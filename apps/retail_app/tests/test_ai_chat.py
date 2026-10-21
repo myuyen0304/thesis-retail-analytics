@@ -231,10 +231,10 @@ def test_toi_da_4_lan_goi_tool():
 
 
 def test_backend_chua_ho_tro_khong_goi_model():
-    # Databricks có đường đọc chỉ-đọc từ 2026-10-06 (tests/test_ai_databricks.py); Snowflake thì chưa
+    # Backend không nằm trong danh sách hỗ trợ phải bị từ chối trước khi gọi model.
     assert 'databricks' in service.CHAT_BACKENDS
     fake = FakeProvider()
-    t = service.run_turn('R 2019?', [], 'snowflake', fake)
+    t = service.run_turn('R 2019?', [], 'unsupported_engine', fake)
     assert t.status == 'unsupported' and not fake.seen
 
 
