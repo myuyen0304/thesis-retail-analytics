@@ -101,6 +101,19 @@ def test_chi_dan_doc_hai_trong_doan_gia_khong_thi_hanh(monkeypatch):
     assert t.status == 'answer_validation_failed' and t.answer_md is None
 
 
+@pytest.mark.parametrize('question,query,answer', [
+    ('Theo tài liệu, kỳ dự báo trong hợp đồng là gì?', 'kỳ dự báo trong hợp đồng',
+     'Hợp đồng mô tả kỳ dự báo trong mục phạm vi.'),
+    ('Urban Blowout là gì?', 'Urban Blowout',
+     'Tài liệu mô tả Urban Blowout là đợt khuyến mãi vào tháng tám năm lẻ.'),
+])
+def test_b5b2_cau_la_gi_rag_khong_ep_dinh_nghia(question, query, answer):
+    t = service.run_turn(question, [], 'duckdb', FakeProvider(
+        call('search_knowledge', query=query), final(answer=answer)))
+    assert t.status == 'ok', t.validation_errors
+    assert [name for _, name, _ in t.calls] == ['search_knowledge']
+
+
 def test_tu_choi_cung_khong_duoc_chep_ngay_tu_rag():
     t = service.run_turn('Theo tài liệu, Urban Blowout giảm bao nhiêu?', [], 'duckdb', FakeProvider(
         call('search_knowledge', query='Urban Blowout tháng 8 năm lẻ'),
@@ -125,14 +138,17 @@ def test_cau_tron_dinh_nghia_va_so_l1_di_qua_run_turn():
 
     t = service.run_turn('Theo tài liệu, R là gì và R năm 2022 bằng bao nhiêu?', [], 'duckdb', FakeProvider(
         call('search_knowledge', query='R doanh thu đơn đã giao'),
+        call('get_metric_definition', metric='R'),
         call('get_revenue_summary', metric='R', year=2022),
-        final(answer='Theo tài liệu, R là doanh thu của đơn đã giao, theo ngày đặt hàng. '
-                     'R năm 2022 là {c1}.', claims=[{'id': 'c1', 'path': 'T2.rows[0].r'}])))
+        final(answer='Theo tài liệu, R là {c2}. R năm 2022 là {c1}.',
+              claims=[{'id': 'c1', 'path': 'T3.rows[0].r'},
+                      {'id': 'c2', 'path': 'T2.rows[0].formula'}])))
     assert t.status == 'ok', t.validation_errors
-    assert [tool for _, tool, _ in t.calls] == ['search_knowledge', 'get_revenue_summary']
-    assert t.values['c1'][0] == 'T2.rows[0].r'
+    assert [tool for _, tool, _ in t.calls] == ['search_knowledge', 'get_metric_definition', 'get_revenue_summary']
+    assert t.values['c1'][0] == 'T3.rows[0].r'
+    assert t.values['c2'][0] == 'T2.rows[0].formula'
     assert any(n.startswith('Nguồn: docs/star_schema.md §3') for n in t.app_notes)
-    assert 'Nguồn:' not in t.results['T2'].message
+    assert 'Nguồn:' not in t.results['T3'].message
     case = ai_live_eval.ACCEPT_RAG[1]
     assert ai_live_eval.grade(case, t)['pass']
     assert not ai_live_eval.grade({**case, 'sources': ['khong-co.md §9']}, t)['checks']['nguon_rag']
@@ -161,7 +177,9 @@ def test_tran_token_rag_ba_doan_toi_da_khong_noi_test_cu(monkeypatch):
 
         def complete(self, messages, schemas, max_tokens=None):
             step = (call('search_knowledge', query='R định nghĩa', k=3),
-                    final(answer='Theo tài liệu, R là doanh thu đơn đã giao.'))[self.n % 2]
+                    call('get_metric_definition', metric='R'),
+                    final(answer='Theo tài liệu, R là {c1}.',
+                          claims=[{'id': 'c1', 'path': 'T2.rows[0].formula'}]))[self.n % 3]
             self.n += 1
             bound = service.prompt_bound(messages, schemas)
             self.bounds.append(bound)
