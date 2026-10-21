@@ -8,10 +8,10 @@
 -- Postgres: đọc raw._ingest_log do scripts/ingest/ingest_raw.py ghi. Cả lần nạp là 1 transaction nên mọi dòng cùng
 --   loaded_at (= lúc transaction bắt đầu); sai số dòng so với contract thì rollback cả log, nên dòng nào có trong log là
 --   lần nạp đã qua kiểm số dòng.
--- Snowflake / Databricks: đọc raw._ingest_log do scripts/ingest/ingest_snowflake.py / ingest_databricks.py ghi; loaded_at đã là giờ UTC, mọi dòng
+-- Databricks: đọc raw._ingest_log do scripts/ingest/ingest_databricks.py ghi; loaded_at đã là giờ UTC, mọi dòng
 --   của một lần nạp cùng loaded_at và chỉ được ghi khi cả 14 nguồn qua kiểm số dòng trên Delta.
 -- DuckDB: không có bước nạp (dbt đọc thẳng data/*.csv), bảng rỗng; rpt_health_summary.ingest_mode = 'doc_csv'.
-{% if target.type in ('postgres', 'databricks', 'snowflake') %}
+{% if target.type in ('postgres', 'databricks') %}
 select
     cast(source as varchar(50))                     as source,
     row_count,

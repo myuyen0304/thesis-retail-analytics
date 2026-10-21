@@ -12,7 +12,7 @@ sources:
         description: "1 dòng / model, seed, test của mỗi lần chạy: trạng thái, số dòng lệch, mô tả test."
   - name: raw_log
     schema: "{{ ('r_' ~ var('release_id') ~ '_raw') if var('release_id', '') else 'raw' }}"
-    description: "Có trên Postgres, Snowflake, Databricks (scripts/ingest/ingest_raw.py / ingest_snowflake.py / ingest_databricks.py). Target DuckDB đọc thẳng CSV, không có bảng này."
+    description: "Có trên Postgres và Databricks (scripts/ingest/ingest_raw.py / ingest_databricks.py). Target DuckDB đọc thẳng CSV, không có bảng này."
     tables:
       - name: _ingest_log
 

@@ -62,7 +62,7 @@ where (status_code = 'loi_test') <> (coalesce(n_tests_fail + n_tests_error, 0) >
    or (status_code = 'kiem_cu' and tests_are_current)
 union all
 -- 4. Log nạp nguồn
-{% if target.type in ('postgres', 'databricks', 'snowflake') %}
+{% if target.type in ('postgres', 'databricks') %}
 select 'ingest: du 14 nguon, cung 1 lan nap', count(*)
 from (select count(*) as k, count(distinct loaded_at_utc) as t from {{ ref('rpt_health_ingest') }}) x
 where k > 0 and (k <> 14 or t <> 1)

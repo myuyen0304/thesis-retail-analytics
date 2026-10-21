@@ -1,4 +1,4 @@
-# Không chứa bí mật: thông tin kết nối Databricks / Snowflake đọc từ biến môi trường, nạp từ các file .env.*.local
+# Không chứa bí mật: thông tin kết nối Databricks đọc từ biến môi trường, nạp từ các file .env.*.local
 # đã gitignore (.env.airflow.local cho pipeline, .env.databricks.local cho scripts/databricks/run_dbt.py).
 # Repo không có GitHub Actions; chạy tự động bằng Airflow (docs/automation_batch.md).
 retail_dbt:
@@ -25,17 +25,5 @@ retail_dbt:
       token: "{{ env_var('DATABRICKS_TOKEN', '') }}"          # token OAuth, không dùng PAT: pipeline lấy bằng writer SP (M2M),
                                                               # run_dbt.py lấy từ profile Databricks CLI
       catalog: "{{ env_var('DATABRICKS_CATALOG', 'retail_lab') }}"
-      schema: dbt
-      threads: 4
-    snowflake:         # phương án cũ: script đã viết, chưa chạy cloud (production chuyển sang Databricks 2026-10-05);
-                       # chạy qua scripts/snowflake/run_dbt.py (đọc .env.snowflake.local)
-      type: snowflake
-      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
-      user: "{{ env_var('SNOWFLAKE_USER', 'RETAIL_DBT') }}"   # user TYPE=SERVICE, scripts/snowflake/bootstrap.sql
-      # key-pair: Snowflake chặn password cho user service (đợt 2026-08–10); khóa bí mật nằm ngoài repo
-      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PATH', '') }}"
-      role: "{{ env_var('SNOWFLAKE_ROLE', 'TRANSFORMER') }}"
-      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'TRANSFORM_WH') }}"
-      database: "{{ env_var('SNOWFLAKE_DATABASE', 'RETAIL') }}"
       schema: dbt
       threads: 4

@@ -1,4 +1,4 @@
-{# Macro cho những chỗ cú pháp DuckDB (dev) và Snowflake (production) khác nhau. #}
+{# Macro cho khác biệt cú pháp giữa DuckDB/PostgreSQL local và Databricks production. #}
 
 {# Tên schema đúng như khai báo (staging/intermediate/marts), không ghép tiền tố target #}
 {% macro generate_schema_name(custom_schema_name, node) -%}
@@ -18,7 +18,6 @@
 {# thứ trong tuần, 0 = thứ Hai #}
 {% macro dow_monday0(d) -%}{{ adapter.dispatch('dow_monday0')(d) }}{%- endmacro %}
 {% macro default__dow_monday0(d) -%}(isodow({{ d }}) - 1){%- endmacro %}
-{% macro snowflake__dow_monday0(d) -%}(dayofweekiso({{ d }}) - 1){%- endmacro %}
 {% macro postgres__dow_monday0(d) -%}(cast(extract(isodow from {{ d }}) as integer) - 1){%- endmacro %}
 {# Databricks: weekday() đã là 0 = thứ Hai #}
 {% macro databricks__dow_monday0(d) -%}weekday({{ d }}){%- endmacro %}
@@ -42,14 +41,6 @@
    Chưa kiểm trên Databricks: assert_inventory_derived_matches_source phải PASS đủ 60.247 dòng. #}
 {% macro databricks__round_half_even(x, digits) -%}
     (rint(cast(({{ x }}) as double) * cast(1e{{ digits }} as double)) / cast(1e{{ digits }} as double))
-{%- endmacro %}
-{# Snowflake: làm tròn trên FLOAT, không ép NUMBER(38,12) — phép ép làm tròn trước ở chữ số 12, có thể biến k,4999999999998
-   thành k,5 rồi về số chẵn sai. Ca đúng nửa (so sánh nhị phân chính xác) lấy 2·round(y/2) = số chẵn gần nhất; ca khác
-   round thường. Đã giả lập trên DuckDB: 0/60.247 dòng lệch round_even ở cả 3 cột tồn kho (1.912 ca đúng nửa).
-   Chưa chạy trên Snowflake: assert_inventory_derived_matches_source là cổng kiểm. #}
-{% macro snowflake__round_half_even(x, digits) -%}
-    {%- set y = '(cast((' ~ x ~ ') as float) * 1e' ~ digits ~ ')' -%}
-    ((case when abs({{ y }} - trunc({{ y }})) = 0.5 then 2 * round({{ y }} / 2) else round({{ y }}) end) / 1e{{ digits }})
 {%- endmacro %}
 
 {# Ghép chuỗi theo thứ tự order_col. dbt.listagg trên Databricks bỏ ORDER BY (chỉ cảnh báo), nên 'A/B' có thể thành 'B/A':

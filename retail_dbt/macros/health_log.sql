@@ -1,7 +1,7 @@
 {# Nhật ký chạy dbt ngay trong kho (schema ops), cho trang Sức khỏe dữ liệu của app (docs/gd2_app_plan.md, M5).
    Vì sao không đọc target/run_results.json: file đó chỉ có 1 bản, lần chạy sau (target khác) ghi đè, nên app đọc
    Postgres có thể hiện kết quả test của DuckDB. Ghi vào chính kho đang build thì mỗi backend có kết quả của riêng nó,
-   và thiết kế để mang sang Snowflake ở GĐ 3 (không cần file trên máy); chưa chạy thử trên Snowflake.
+   Databricks production cũng ghi nhật ký vào kho, không cần file trên máy.
    on-run-start: tạo bảng nếu chưa có. on-run-end: ghi 1 dòng/lần chạy + 1 dòng/node (model, seed, test).
    Hook on-run-end vẫn chạy khi có test FAIL, nên lần build lỗi cũng được ghi lại. #}
 

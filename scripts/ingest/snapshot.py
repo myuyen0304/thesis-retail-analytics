@@ -1,12 +1,12 @@
-"""Snapshot nguồn dùng chung cho mọi loader cloud (Snowflake, Databricks): 14 CSV (data/) -> Parquet + manifest.json.
+"""Snapshot nguồn cho loader Databricks: 14 CSV (data/) -> Parquet + manifest.json.
 
 Cùng hợp đồng với scripts/ingest/ingest_raw.py (Postgres): MỌI cột kiểu chuỗi, tên cột đúng header CSV, ô rỗng -> NULL,
 không làm sạch (việc của dbt staging), thêm `_src_row` = số thứ tự record trong file (bắt đầu từ 1).
 
 Vì sao `_src_row` đánh ở MÁY, không để cloud đánh: line_number của dòng hàng phải theo thứ tự nguồn (star_schema.md §5.1)
 và order_items có 16 cặp (order_id, product_id) lặp, nên thứ tự sai là ghép nhầm returns/reviews mà không test nào báo.
-Thứ tự đọc song song của Spark / Snowflake không phải thứ tự file; METADATA$FILE_ROW_NUMBER đếm DÒNG vật lý, lệch khi một
-record CSV có ô xuống dòng. Hai nền tảng nạp cùng một snapshot nên đối soát so được từng dòng.
+Thứ tự đọc song song của Spark không phải thứ tự file; bộ đếm dòng vật lý lệch khi một
+record CSV có ô xuống dòng. Đánh số ở máy để đối soát từng dòng với bản local.
 
 Đọc CSV bằng csv.reader (record logic), kiểm header + số field + số record theo contract, ghi vào
 warehouse/landing/<snapshot_id>/ (warehouse/ đã gitignore). snapshot_id chỉ phụ thuộc byte 14 file nguồn: cùng data/ thì
@@ -107,7 +107,7 @@ def prepare():
     with open(f'{out}/manifest.json', 'w', encoding='utf-8') as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
     print(f"\nSnapshot {snapshot_id}: {manifest['n_records']:,} record, ghi ở {out}/")
-    print(f'Tiếp theo: ingest_snowflake.py --snapshot {snapshot_id}  hoặc  ingest_databricks.py --snapshot {snapshot_id}')
+    print(f'Tiếp theo: ingest_databricks.py --snapshot {snapshot_id}')
 
 
 if __name__ == '__main__':
