@@ -38,7 +38,7 @@ f as (
         t.n_singular_run,
         t.n_tests_run - t.n_singular_run  as n_generic_run,
         t.n_models_not_ok,
-        '{{ "log" if target.type in ("postgres", "databricks", "snowflake") else "doc_csv" }}' as ingest_mode,
+        '{{ "log" if target.type in ("postgres", "databricks") else "doc_csv" }}' as ingest_mode,
         i.last_ingest_at_utc,
         i.n_sources_ingested,
         t.started_at_utc >= b.built_at_utc                     as tests_are_current,
