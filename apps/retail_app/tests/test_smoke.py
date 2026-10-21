@@ -50,7 +50,7 @@ def test_retail_backends_gioi_han_thanh_ben(monkeypatch):
     monkeypatch.setenv('RETAIL_BACKEND', 'postgres')           # backend mặc định phải nằm trong danh sách bật
     with pytest.raises(ValueError):
         connection.default_backend()
-    monkeypatch.setenv('RETAIL_BACKENDS', 'duckdb,snowflake')
+    monkeypatch.setenv('RETAIL_BACKENDS', 'duckdb,unsupported_engine')
     with pytest.raises(ValueError):
         connection.enabled_backends()
 
