@@ -1,5 +1,5 @@
 -- Không có file nguồn: sinh dải ngày 2012-01-01 -> 2024-07-01 (4.566 dòng, phủ cả vùng dự báo).
--- Chỉ dùng extract(...) và dbt.dateadd để chạy được trên DuckDB, PostgreSQL và Snowflake.
+-- Chỉ dùng extract(...) và dbt.dateadd để chạy được trên DuckDB, PostgreSQL và Databricks.
 with days as (
     select cast({{ dbt.dateadd('day', 'i', "cast('2012-01-01' as date)") }} as date) as full_date
     from ({{ integers(4566) }}) n
