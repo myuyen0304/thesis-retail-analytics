@@ -24,6 +24,7 @@ from ai_explain import tools
 from dwh.releases import pinned_read
 from ai_explain.contracts import ToolCall, ToolResult
 from ai_explain.evidence import (DATE_RE, Checked, allowed_years, check_digits, definition_question_errors,
+                                  definition_text_numbers,
                                   forecast_question_errors,
                                   invalid_period_errors, question_numbers, rag_literal_errors, reference_answer,
                                   stated_period_errors, validate)
@@ -411,7 +412,8 @@ def _check_final(d: dict | None, results: dict, question: str,
                                           + _safe_definition_errors(question, chk.values, results, answer, status, history))), chk
     if not isinstance(answer, str) or not answer.strip():
         return status, ['thiếu câu trả lời'], None
-    errs = list(dict.fromkeys(check_digits(answer, allowed_years(results) | extra) + rag_errors
+    errs = list(dict.fromkeys(check_digits(answer, allowed_years(results) | extra | definition_text_numbers(results))
+                              + rag_errors
                               + _safe_definition_errors(question, {}, results, answer, status, history)))
     return status, errs, None
 
