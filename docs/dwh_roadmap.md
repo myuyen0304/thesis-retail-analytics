@@ -4,9 +4,10 @@
 
 - PM chốt **không làm Snowflake nữa**. Databricks là nền tảng cloud duy nhất cho DWH, pipeline, app và chat.
 - Mọi chỗ bên dưới gọi Snowflake là production, đích demo tháng 12/2026 hay "GĐ 3 Snowflake" là **lịch sử**.
-- Code Snowflake vẫn còn trong repo: `scripts/snowflake/`, `scripts/ingest/ingest_snowflake.py`, chế độ `snowflake`
-  của `scripts/parity/compare_dwh.py`, target `snowflake` trong `retail_dbt/profiles.yml`, macro `snowflake__*` và
-  nhánh `'snowflake'` của các model sức khỏe dữ liệu. Không bảo trì, không chạy. Xóa hay giữ: chờ PM quyết.
+- Code Snowflake **đã xóa ngày 2026-10-21** (PM chốt D4; commit `020ad18`…`c73ad91`): `scripts/snowflake/`,
+  `scripts/ingest/ingest_snowflake.py`, chế độ `snowflake` của `scripts/parity/compare_dwh.py`, target `snowflake`
+  trong `retail_dbt/profiles.yml`, macro `snowflake__*`, nhánh `'snowflake'` của các model sức khỏe dữ liệu và gói
+  `dbt-snowflake`. SQL compile cho DuckDB không đổi (chỉ khác chú thích); các hướng dẫn chạy Snowflake bên dưới là lịch sử.
 - "Snowflake schema" (kiểu mô hình dữ liệu, [star_schema.md](star_schema.md)) là chuyện khác, không đổi.
 
 ## Đổi hướng đã chốt 2026-10-11: GĐ2 theo sơ đồ thầy hướng dẫn
