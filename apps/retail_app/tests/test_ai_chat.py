@@ -635,6 +635,357 @@ def test_dinh_nghia_revenue_tieng_anh_dung_catalog(question, metric):
     assert t.results['T1'].rows[0]['metric_id'] == metric
 
 
+@pytest.mark.parametrize('question', ['AOV là gì?', 'What is average order value?'])
+def test_b5b_aov_lay_dung_dinh_nghia_va_don_vi(question):
+    t = turn(FakeProvider(
+        call('get_metric_definition', metric='AOV'),
+        final(answer='AOV là giá trị trung bình mỗi đơn: {c1}. Đơn vị: {c2}.',
+              claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'},
+                      {'id': 'c2', 'path': 'T1.rows[0].unit'}])), question)
+    assert t.status == 'ok', t.validation_errors
+    assert [(name, args) for _, name, args in t.calls] == [('get_metric_definition', {'metric': 'AOV'})]
+    row = t.results['T1'].rows[0]
+    assert row['metric_id'] == 'AOV' and 'R / N' in row['formula'] and 'U × P' in row['formula']
+    assert row['unit'] == 'VND/đơn' and row['decision_status'] == 'de_xuat'
+    assert 'R / N' in t.answer_md and 'VND/đơn' in t.answer_md
+
+
+def test_b5b_aov_khong_duoc_thay_bang_bang_chung_p():
+    wrong = final(answer='AOV là giá trung bình mỗi món: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='P'), wrong, wrong), 'AOV là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('AOV' in e and 'get_metric_definition' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b_chan_cau_noi_thay_aov_bang_p():
+    wrong = final(answer='Không có mã AOV riêng, tương ứng là P: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='P'), wrong, wrong), 'AOV là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('ánh xạ thay' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b2_nhanh_thay_ma_chan_doc_lap():
+    wrong = final(answer='Trong trường hợp này AOV tương đương P: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='P'), wrong, wrong),
+             'AOV phân biệt với chỉ tiêu giá ra sao?')
+    assert t.status == 'answer_validation_failed'
+    assert any('ánh xạ thay' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b3_tu_noi_thay_ma_chan_ca_khi_chi_dan_nhan():
+    wrong = final(answer='AOV tương đương P: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].label_vi'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='P'), wrong, wrong),
+             'AOV phân biệt với giá ra sao?')
+    assert t.status == 'answer_validation_failed'
+    assert any('ánh xạ thay' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b_khai_niem_ngoai_catalog_khong_lay_dinh_nghia_c_thay():
+    wrong = final(answer='Chỉ số trung thành khách hàng tương đương C: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='C'), wrong, wrong),
+             'Chỉ số trung thành khách hàng là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('chưa có định nghĩa cho khái niệm này' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b2_nhanh_ngoai_catalog_chan_doc_lap():
+    wrong = final(answer='Chỉ số trung thành khách hàng là C: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='C'), wrong, wrong),
+             'Chỉ số trung thành khách hàng là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('chưa có định nghĩa cho khái niệm này' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b2_nhanh_ep_dung_ma_chan_doc_lap():
+    wrong = final(answer='R là doanh thu đơn đã giao theo ngày đặt hàng.')
+    t = turn(FakeProvider(call('search_knowledge', query='R doanh thu đơn đã giao'), wrong, wrong), 'R là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('get_metric_definition(R)' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b_khai_niem_ngoai_catalog_co_the_hoi_lai():
+    t = turn(FakeProvider(final('needs_clarification',
+                                'Chưa có định nghĩa cho khái niệm này. Bạn muốn chọn chỉ tiêu nào?')),
+             'Chỉ số trung thành khách hàng là gì?')
+    assert t.status == 'needs_clarification', t.validation_errors
+
+
+def test_b5b_khai_niem_ngoai_catalog_co_the_nhan_ma_gan_nhat():
+    answer = final('needs_clarification',
+                   'Chưa có định nghĩa cho khái niệm này. Mã gần nhất là {c1}; bạn muốn hỏi mã đó?',
+                   [{'id': 'c1', 'path': 'T1.rows[0].label_vi'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='C'), answer),
+             'Chỉ số trung thành khách hàng là gì?')
+    assert t.status == 'needs_clarification', t.validation_errors
+    assert 'C — số khách' in t.answer_md
+
+
+def test_b5b3_hoi_lai_ma_ung_vien_duoc_dan_cong_thuc():
+    reply = final('needs_clarification',
+                  'Mã gần nhất C có công thức {c1}; bạn muốn hỏi C?',
+                  [{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='C'), reply),
+             'Chỉ số trung thành khách hàng là gì?')
+    assert t.status == 'needs_clarification', t.validation_errors
+
+
+@pytest.mark.parametrize('question,tool,args,answer,claims', [
+    ('Hãy tính R năm 2022 giúp mình', 'get_revenue_summary', {'metric': 'R', 'year': 2022},
+     'R năm 2022 là {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].r'}]),
+    ('Cách tính G năm 2021 ra bao nhiêu?', 'get_revenue_summary', {'metric': 'G', 'year': 2021},
+     'G năm 2021 là {c1}.', [{'id': 'c1', 'path': 'T1.rows[0].g'}]),
+])
+def test_b5b3_hoi_so_khong_ep_dinh_nghia(question, tool, args, answer, claims):
+    t = turn(FakeProvider(call(tool, **args), final(answer=answer, claims=claims)), question)
+    assert t.status == 'ok', t.validation_errors
+    assert all(name != 'get_metric_definition' for _, name, _ in t.calls)
+
+
+def test_b5b3_tinh_n_thang_khong_ep_dinh_nghia(monkeypatch):
+    # Tool công khai chưa mở N theo tháng. Dựng kết quả N từ cùng bảng tháng thật để cô lập guard câu hỏi.
+    import duckdb
+    from dataclasses import replace
+    from ai_explain import metric_catalog as cat
+    from ai_explain.contracts import ToolCall
+    from dwh.connection import duckdb_path
+
+    with duckdb.connect(str(duckdb_path()), read_only=True) as con:
+        n = con.execute('select n from reporting.rpt_revenue_monthly where year = ? and month = ?',
+                        [2022, 3]).fetchone()[0]
+    original_run = tools.run
+    result = original_run(ToolCall('get_revenue_monthly', {'metric': 'R', 'year': 2022, 'month': 3}), 'duckdb')
+    assert result.ok
+    result.rows[0]['n'] = n
+    result.evidence = replace(result.evidence, metrics=cat.metric_defs('N'),
+                              arguments_applied={'metric': 'N', 'year': 2022, 'month': 3})
+
+    def fake_run(request, backend, **kwargs):
+        if request.tool == 'get_revenue_monthly' and request.arguments.get('metric') == 'N':
+            return result
+        return original_run(request, backend, **kwargs)
+
+    monkeypatch.setattr(tools, 'run', fake_run)
+    reply = final(answer='N tháng 3/2022 là {c1}.', claims=[{'id': 'c1', 'path': 'T1.rows[0].n'}])
+    t = turn(FakeProvider(call('get_revenue_monthly', metric='N', year=2022, month=3), reply),
+             'Tính N tháng 3/2022')
+    assert t.status == 'ok', t.validation_errors
+    assert [(name, args['metric']) for _, name, args in t.calls] == [('get_revenue_monthly', 'N')]
+
+
+@pytest.mark.parametrize('question,metric', [
+    ('Cách tính R?', 'R'), ('Công thức tính AOV', 'AOV'), ('R được tính thế nào?', 'R'),
+])
+def test_b5b3_cum_dinh_nghia_ro_ep_tool(question, metric):
+    wrong = final(answer=f'{metric} đã được giải thích trong tài liệu.')
+    t = turn(FakeProvider(call('get_revenue_summary', metric='R', year=2022), wrong, wrong), question)
+    assert t.status == 'answer_validation_failed'
+    assert any(f'get_metric_definition({metric})' in e for e in t.validation_errors), t.validation_errors
+
+
+@pytest.mark.parametrize('question', [
+    'Chỉ số trung thành khách hàng được hiểu thế nào?',
+    'Chỉ số trung thành khách hàng thay đổi ra sao?',
+])
+def test_b5b3_dan_cong_thuc_ma_khong_duoc_hoi_chan_du_cach_dien_dat(question):
+    wrong = final(answer='Chỉ số trung thành khách hàng là C: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='C'), wrong, wrong), question)
+    assert t.status == 'answer_validation_failed'
+    assert any('chưa có định nghĩa cho khái niệm này' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b3_cau_noi_tiep_duoc_dung_dinh_nghia_r():
+    previous = turn(FakeProvider(call('get_revenue_summary', metric='R', year=2022),
+                                 final(answer='R năm 2022 là {c1}.',
+                                       claims=[{'id': 'c1', 'path': 'T1.rows[0].r'}])),
+                    'R năm 2022 là bao nhiêu?')
+    assert previous.status == 'ok', previous.validation_errors
+    reply = final(answer='R được tính theo {c1}.', claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='R'), reply),
+             'Vậy nó được tính thế nào?', history=[previous.context()])
+    assert t.status == 'ok', t.validation_errors
+
+
+@pytest.mark.parametrize('question', [
+    'Vậy R năm 2021 là gì?',
+    'Vậy con số đó năm 2021 là gì?',
+    'Vậy điều đó nghĩa là gì?',
+])
+def test_b5b4_cau_noi_tiep_hoi_so_khong_ep_dinh_nghia(question):
+    previous = {'question': 'R năm 2022 là bao nhiêu?', 'status': 'ok', 'tool_calls': []}
+    reply = final(answer='R năm 2021 là {c1}.', claims=[{'id': 'c1', 'path': 'T1.rows[0].r'}])
+    t = turn(FakeProvider(call('get_revenue_summary', metric='R', year=2021), reply, reply),
+             question, history=[previous])
+    assert t.status == 'ok', t.validation_errors
+    assert [(name, args) for _, name, args in t.calls] == [
+        ('get_revenue_summary', {'metric': 'R', 'year': 2021})]
+
+
+@pytest.mark.parametrize('question', [
+    'Vậy nó được tính thế nào?',
+    'Chỉ số đó được hiểu thế nào?',
+    'Nó nghĩa là gì?',
+])
+def test_b5b4_cau_noi_tiep_hoi_dinh_nghia_r(question):
+    previous = {'question': 'R năm 2022 là bao nhiêu?', 'status': 'ok', 'tool_calls': []}
+    reply = final(answer='R được tính theo {c1}.', claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='R'), reply),
+             question, history=[previous])
+    assert t.status == 'ok', t.validation_errors
+    assert [(name, args) for _, name, args in t.calls] == [('get_metric_definition', {'metric': 'R'})]
+    assert t.results['T1'].rows[0]['formula'] in t.answer_md
+
+
+def test_b5b4_vay_khong_cho_ke_thua_r_sang_khai_niem_khac():
+    previous = {'question': 'R năm 2022 là bao nhiêu?', 'status': 'ok', 'tool_calls': []}
+    wrong = final(answer='Chỉ số trung thành khách hàng là R: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='R'), wrong, wrong),
+             'Vậy chỉ số trung thành khách hàng được hiểu thế nào?', history=[previous])
+    assert t.status == 'answer_validation_failed'
+    assert any('chưa có định nghĩa cho khái niệm này' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b3_cau_noi_tiep_ve_khai_niem_ngoai_catalog_van_chan():
+    previous = turn(FakeProvider(final('needs_clarification', 'Bạn muốn đo khách trung thành theo tiêu chí nào?')),
+                    'Chỉ số trung thành khách hàng là gì?')
+    assert previous.status == 'needs_clarification'
+    wrong = final(answer='Chỉ số đó là C: {c1}.', claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='C'), wrong, wrong),
+             'Chỉ số đó được hiểu thế nào?', history=[previous.context()])
+    assert t.status == 'answer_validation_failed'
+    assert any('chưa có định nghĩa cho khái niệm này' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b3_luot_truoc_hoi_r_khong_cho_doi_khai_niem_sang_c():
+    previous = {'question': 'R năm 2022 là bao nhiêu?', 'status': 'ok', 'tool_calls': []}
+    wrong = final(answer='Chỉ số trung thành khách hàng là C: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='C'), wrong, wrong),
+             'Chỉ số trung thành khách hàng được hiểu thế nào?', history=[previous])
+    assert t.status == 'answer_validation_failed'
+    assert any('chưa có định nghĩa cho khái niệm này' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b_basket_size_mo_ho_phai_hoi_lai():
+    t = turn(FakeProvider(final('needs_clarification',
+                                'Bạn muốn số món mỗi đơn (U) hay giá trị trung bình mỗi đơn (AOV)?')),
+             'Basket size là gì?')
+    assert t.status == 'needs_clarification', t.validation_errors
+    wrong = final(answer='Basket size chính là AOV: {c1}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='AOV'), wrong, wrong), 'Basket size là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('basket size' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b2_nhanh_mo_ho_chan_doc_lap():
+    wrong = final('needs_clarification', 'Basket size là số món trong mỗi đơn.')
+    t = turn(FakeProvider(call('get_metric_definition', metric='U'), wrong, wrong), 'Basket size là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('basket size' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b_aov_sai_cong_thuc_va_trang_thai_du_da_goi_dung_tool():
+    wrong = final(answer='AOV = P (R/Q, VND/món), đã chốt.')
+    t = turn(FakeProvider(call('get_metric_definition', metric='AOV'), wrong, wrong), 'AOV là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('AOV' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b2_aov_khong_nhan_nhan_da_chot():
+    wrong = final(answer='AOV đã chốt trong catalog.')
+    t = turn(FakeProvider(call('get_metric_definition', metric='AOV'), wrong, wrong), 'AOV là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('đã chốt' in e for e in t.validation_errors), t.validation_errors
+
+
+def test_b5b2_aov_khong_nhan_cong_thuc_p():
+    wrong = final(answer='AOV = P (R/Q, VND/món).')
+    t = turn(FakeProvider(call('get_metric_definition', metric='AOV'), wrong, wrong), 'AOV là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('R / N' in e for e in t.validation_errors), t.validation_errors
+
+
+@pytest.mark.parametrize('question', [
+    'Giá trị trung bình mỗi đơn là gì?',
+    'Giá trị TB mỗi đơn là gì?',
+    'Giá trị đơn hàng trung bình được tính thế nào?',
+    'Doanh thu trung bình mỗi đơn là gì?',
+    'How is average order value defined?',
+    'What does average order value mean?',
+    'Giá trị trung bình mỗi đơn được tính theo R và N thế nào?',
+])
+def test_b5b2_alias_aov_hoi_dinh_nghia_sat_ma(question):
+    reply = final(answer='AOV được tính bằng {c1}, đơn vị {c2}.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'},
+                          {'id': 'c2', 'path': 'T1.rows[0].unit'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='AOV'), reply), question)
+    assert t.status == 'ok', t.validation_errors
+    assert 'R / N' in t.answer_md and 'VND/đơn' in t.answer_md
+
+
+@pytest.mark.parametrize('question,metric', [
+    ('Số món trung bình mỗi đơn là gì?', 'U'),
+    ('Giá trung bình mỗi món được tính thế nào?', 'P'),
+])
+def test_b5b2_alias_u_p_khong_trung_ma(question, metric):
+    from ai_explain import metric_catalog as cat
+
+    aliases = {}
+    for code, row in cat.METRICS.items():
+        for alias in row['aliases_vi']:
+            key = alias.casefold().strip()
+            assert key not in aliases or aliases[key] == code, (alias, code, aliases[key])
+            aliases[key] = code
+    t = turn(FakeProvider(call('get_metric_definition', metric=metric),
+                          final(answer=f'{metric}: {{c1}}.', claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])),
+             question)
+    assert t.status == 'ok', t.validation_errors
+
+
+def test_b5b2_aov_chi_nguon_bang_nam():
+    from ai_explain import metric_catalog as cat
+
+    assert cat.METRICS['AOV']['sources'] == ['reporting.rpt_revenue_yearly']
+    assert cat.METRICS['AOV']['decision_status'] == 'de_xuat'
+
+
+def test_b5b2_tu_choi_khong_tool_dinh_nghia_khong_bat_cum_ngoai_catalog():
+    t = turn(FakeProvider(call('search_knowledge', query='chỉ số trung thành khách hàng'),
+                          final('unsupported', 'Tài liệu chưa nêu chỉ số này.')),
+             'Chỉ số trung thành khách hàng là gì?')
+    assert t.status == 'unsupported', t.validation_errors
+    assert [name for _, name, _ in t.calls] == ['search_knowledge']
+
+
+def test_b5b2_giai_doan_r_khong_ep_dinh_nghia_r():
+    t = turn(FakeProvider(call('get_revenue_trend', view='phases'),
+                          final(answer='R giai đoạn 2016–2018 giảm theo bảng; chưa đủ bằng chứng về nguyên nhân.')),
+             'R giai đoạn 2016–2018 giảm, nguyên nhân là gì?')
+    assert t.status == 'ok', t.validation_errors
+    assert [name for _, name, _ in t.calls] == ['get_revenue_trend']
+
+
+def test_b5b_f_chua_co_catalog_khong_lay_dinh_nghia_p_thay_the():
+    from ai_explain import metric_catalog as cat
+
+    assert 'F' not in cat.METRICS
+    assert tools.run({'tool': 'get_metric_definition', 'arguments': {'metric': 'F'}}, 'duckdb').status == 'unsupported'
+    t = turn(FakeProvider(final('unsupported', 'Chưa có định nghĩa F trong catalog.')), 'F là gì?')
+    assert t.status == 'unsupported', t.validation_errors
+    wrong = final(answer='F là {c1}.', claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='P'), wrong, wrong), 'F là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('F' in e and 'catalog' in e for e in t.validation_errors), t.validation_errors
+
+
 def test_dinh_nghia_r_theo_tai_lieu_dung_catalog_va_rag():
     t = turn(FakeProvider(
         call('get_metric_definition', metric='R'),
