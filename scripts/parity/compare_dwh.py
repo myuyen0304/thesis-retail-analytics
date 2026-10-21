@@ -1,18 +1,17 @@
-"""Đối soát DWH trên cloud (Snowflake / Databricks) với bản DuckDB local (warehouse/dbt.duckdb), từng dòng, mọi bảng
+"""Đối soát DWH trên Databricks hoặc PostgreSQL/DuckDB với bản DuckDB local (warehouse/dbt.duckdb), từng dòng, mọi bảng
 marts + reporting (kể cả seed). Bỏ qua rpt_health_* và rpt_build_info: nhật ký chạy, khác nhau theo bản chất.
 
 Cách so mỗi bảng:
-  1. Số dòng, tập cột (tên cột chuẩn hóa chữ thường — Snowflake trả CHỮ HOA).
+  1. Số dòng, tập cột (tên cột chuẩn hóa chữ thường).
   2. Sắp hai bên theo "khóa" = các cột không phải số thực ở cả hai bên; báo nếu khóa không duy nhất trong baseline.
   3. So từng ô:
      - hai bên decimal/integer/chuỗi/ngày/bool: phải bằng CHÍNH XÁC (decimal so theo giá trị, bỏ khác biệt scale 1.50 = 1.5);
-     - một bên decimal, một bên float (vd. phép chia: DuckDB ra DOUBLE, Snowflake ra NUMBER scale ≥ 6): lệch ≤ 1 đơn vị
+     - một bên decimal, một bên float (khác biệt kiểu trả về giữa các adapter): lệch ≤ 1 đơn vị
        ở chữ số cuối của bên decimal — đúng bằng sai số làm tròn của bên đó;
      - hai bên float: lệch tương đối ≤ 1e-12 — chỉ cho phép khác thứ tự cộng khi engine chạy song song.
   Không làm tròn số để "cho khớp"; mọi lệch đều in ra cột, số ô lệch và ví dụ.
 
 Chạy từ root repo (baseline phải build từ đúng revision code đang deploy):
-  .venv/Scripts/python.exe scripts/parity/compare_dwh.py snowflake
   .venv-databricks/Scripts/python.exe scripts/parity/compare_dwh.py databricks   (cần duckdb trong .venv-databricks)
   .venv/Scripts/python.exe scripts/parity/compare_dwh.py postgres   (kiểm chéo hai engine local, PG_* như ingest_raw.py)
   .venv/Scripts/python.exe scripts/parity/compare_dwh.py duckdb --path <bản sao .duckdb>   (tự kiểm script)
@@ -45,21 +44,6 @@ def duckdb_fetch(path):
 
     def fetch(schema, table):
         cur = con.execute(f'select * from {schema}.{table}')
-        return [d[0].lower() for d in cur.description], cur.fetchall()
-    return fetch
-
-
-def snowflake_fetch():
-    import snowflake.connector
-    c = local_config('.env.snowflake.local')
-    con = snowflake.connector.connect(
-        account=c['SNOWFLAKE_ACCOUNT'], user=c.get('SNOWFLAKE_USER', 'RETAIL_DBT'),
-        private_key_file=os.path.expanduser(c['SNOWFLAKE_PRIVATE_KEY_PATH']),
-        role=c.get('SNOWFLAKE_ROLE', 'TRANSFORMER'), warehouse=c.get('SNOWFLAKE_WAREHOUSE', 'TRANSFORM_WH'),
-        database=c.get('SNOWFLAKE_DATABASE', 'RETAIL'), session_parameters={'TIMEZONE': 'UTC'})
-
-    def fetch(schema, table):
-        cur = con.cursor().execute(f'select * from {schema}.{table}')
         return [d[0].lower() for d in cur.description], cur.fetchall()
     return fetch
 
@@ -177,7 +161,7 @@ def compare(name, base, other):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
-    ap.add_argument('target', choices=['snowflake', 'databricks', 'postgres', 'duckdb'])
+    ap.add_argument('target', choices=['databricks', 'postgres', 'duckdb'])
     ap.add_argument('--path', help='chỉ với target duckdb: file .duckdb cần so')
     ap.add_argument('--baseline', default=BASELINE)
     ap.add_argument('--tables', nargs='*', help='chỉ so các bảng này (tên không kèm schema)')
@@ -186,7 +170,7 @@ if __name__ == '__main__':
     todo = [(s, t) for s, t in tables(base_con) if not SKIP(t) and (not a.tables or t in a.tables)]
     base_con.close()
     base = duckdb_fetch(a.baseline)
-    other = {'snowflake': snowflake_fetch, 'databricks': databricks_fetch, 'postgres': postgres_fetch,
+    other = {'databricks': databricks_fetch, 'postgres': postgres_fetch,
              'duckdb': lambda: duckdb_fetch(a.path)}[a.target]()
     n_bad = 0
     for s, t in todo:
