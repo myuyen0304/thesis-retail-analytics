@@ -48,7 +48,7 @@ không còn là "lab". Snowflake thôi là bước mặc định (từ 2026-10-1
 Cách làm: dev và test ở local (DuckDB/PostgreSQL) trước, đạt rồi mới deploy lên Databricks. Chi tiết: `docs/dwh_roadmap.md`.
 
 **Đổi ngày 2026-10-18 (PM chốt):** **bỏ hẳn Snowflake**; Databricks là nền tảng cloud duy nhất. Không làm thêm gì cho Snowflake:
-không chạy cloud, không sửa hay đối soát nhánh Snowflake. Tài liệu cũ gọi Snowflake là production / đích demo GĐ3 là lịch sử.
+không chạy cloud, không sửa hay đối soát nhánh Snowflake. Code Snowflake đã xóa khỏi repo ngày 2026-10-21 (PM chốt D4). Tài liệu cũ gọi Snowflake là production / đích demo GĐ3 là lịch sử.
 Chữ "snowflake schema" (kiểu mô hình dữ liệu, `docs/star_schema.md`) là chuyện khác, không đổi.
 
 **Đổi ngày 2026-10-11 (thầy hướng dẫn giao GĐ2, PM/BA chốt):** dự báo trở lại thành **lõi của GĐ2**.
