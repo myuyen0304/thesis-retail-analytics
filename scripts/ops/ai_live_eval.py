@@ -845,10 +845,36 @@ for _case in ACCEPT_B5B_PARAPHRASE:
     if _case['id'] in ('B5BP1', 'B5BP3', 'B5BP4'):
         _case['b5b_candidate'] = {'B5BP1': 'AOV', 'B5BP3': 'U', 'B5BP4': 'P'}[_case['id']]
 
+# PM chọn B (2026-10-21): bộ mới chỉ đo luật chữ số trong lời giải thích định nghĩa.
+# Không đòi claim path: B5b đã ghi công thức viết bằng lời là giới hạn, không trộn lỗi đó vào phép đo này.
+ACCEPT_DEF_SO = [
+    C('DS1', 'COGS là gì?', {'ok', 'needs_clarification'},
+      tools=[(DEF, {'metric': 'COGS_forecast'})], group='DEF_SO',
+      hand='Nói rõ catalog chỉ có COGS dự báo, hoặc hỏi lại và nêu COGS_forecast; không nhận là COGS thực tế.'),
+    C('DS2', 'Dự báo giá vốn được định nghĩa thế nào?', {'ok'},
+      tools=[(DEF, {'metric': 'COGS_forecast'})], group='DEF_SO',
+      hand='Có thể diễn đạt lưu ý tháng 8 năm lẻ và tỷ lệ lớn hơn 1 từ note của DEF.'),
+    C('DS3', 'Khoảng dự báo nghĩa là gì?', {'ok'},
+      tools=[(DEF, {'metric': 'forecast_interval'})], group='DEF_SO',
+      hand='Khoảng 80% là định nghĩa từ catalog; không suy thành khoảng tháng.'),
+    C('DS4', 'MAPE được tính ra sao?', {'ok'},
+      tools=[(DEF, {'metric': 'mape_g_thang'})], group='DEF_SO',
+      hand='Đúng MAPE G tháng; số trong công thức/note phải có ở DEF lượt này.'),
+    C('DS5', 'Sai số dự báo dùng để chọn model được định nghĩa thế nào?', {'ok'},
+      tools=[(DEF, {'metric': 'forecast_score'})], group='DEF_SO',
+      hand='Đúng điểm ngày kết hợp chọn model; có thể diễn đạt 3 fold từ DEF.'),
+    C('DS6', 'Cùng kỳ tháng được tính thế nào?', {'ok'},
+      tools=[(DEF, {'metric': 'yoy_month'})], group='DEF_SO',
+      hand='Đúng tỷ lệ R so cùng tháng năm trước; số trong công thức chỉ lấy từ DEF.'),
+]
+for _case in ACCEPT_DEF_SO:
+    _case['def_so_rule'] = 'digits'
+ACCEPT_DEF_SO[0]['def_so_cogs'] = True
+
 SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D,
         'f': ACCEPT_F, 'g': ACCEPT_G, 'gm': ACCEPT_GM, 'v': ACCEPT_V, 'n': ACCEPT_N, 'b7': ACCEPT_B7,
         'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C, 'l4d': ACCEPT_L4D, 'rag': ACCEPT_RAG,
-        'b5b_paraphrase': ACCEPT_B5B_PARAPHRASE}
+        'b5b_paraphrase': ACCEPT_B5B_PARAPHRASE, 'def_so': ACCEPT_DEF_SO}
 FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'l4d', 'rag')  # rag có ca trộn dự báo
 
 
@@ -909,6 +935,13 @@ def grade(case, t: service.TurnResult) -> dict:
             candidate = case['b5b_candidate']
             checks['hoi_lai_ma_ung_vien'] = bool(re.search(r'(?<!\w)' + re.escape(candidate) + r'(?!\w)', raw_answer)
                                                    and re.search(r'\?|bạn\s+muốn|ý\s+bạn', raw_answer, re.I))
+    if case.get('def_so_rule'):
+        checks['khong_chan_chu_so'] = not any('số tự viết' in err or 'số kèm đơn vị' in err
+                                             for err in t.validation_errors)
+        if case.get('def_so_cogs'):
+            checks['noi_ro_du_bao'] = (bool(re.search(r'dự\s+báo', raw_answer, re.I)) if t.status == 'ok'
+                                      else bool(re.search(r'COGS_forecast', raw_answer, re.I)
+                                                and re.search(r'\?|bạn\s+muốn|ý\s+bạn', raw_answer, re.I)))
     if rule := case.get('l4d_rule'):
         groups = {m.group(1) for path, _value, _shown in t.values.values()
                   if (m := re.search(r'\.rows\[([^]]+)\]\.(?:pct_vs_base|contribution_log|multiplier)$', path))}
@@ -1072,7 +1105,8 @@ def main() -> int:
                          'n = N* (chuỗi từng năm, ghi chú app, 2026-10-17); b7 = K* (held-out router, nghiệm thu AI4, '
                           '2026-10-18); l4 = L4* (phân rã model B4b, bộ phát triển); l4b = L4B* (đã đo); '
                          'l4c = L4C* (bộ mới sau sửa guard L4B5); l4d = L4D* (S9b trình bày L4); rag = RAG* (B5); '
-                         'b5b_paraphrase = B5BP* (định nghĩa, chưa chạy model); '
+                         'b5b_paraphrase = B5BP* (định nghĩa, đã chạy một lượt); '
+                         'def_so = DS* (luật chữ số câu định nghĩa, chưa chạy model); '
                          'các bộ dự báo cần chế độ versioned')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
@@ -1081,7 +1115,7 @@ def main() -> int:
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
     by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F + ACCEPT_G
               + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C + ACCEPT_L4D + ACCEPT_RAG
-              + ACCEPT_B5B_PARAPHRASE}
+              + ACCEPT_B5B_PARAPHRASE + ACCEPT_DEF_SO}
     if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c', 'l4d')
                                   else _forecast_ready(a.backend)):
         print(f'Không chạy bộ {a.set}: {why}.')
