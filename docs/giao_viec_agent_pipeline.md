@@ -43,7 +43,7 @@ Không cần chốt hết trước khi giao việc. Cột "Hỏi lúc nào" cho 
 | D1 | App có hiện cả các lần chạy **lỗi** không? | **Không.** Lần lỗi xem qua lệnh lịch sử của CLI và Airflow UI. App chỉ hiện bản đang phục vụ. Hiện lần lỗi trên app cần cấp thêm quyền đọc cho SP, dễ lặp lại sự cố khóa chat 2026-10-17 | Trước P1 |
 | D2 | Bật lịch Airflow không, chạy target nào? | Bật lịch 08:00 cho **target duckdb** để demo. Databricks vẫn do PM bấm tay. Lịch chạy Databricks mà code đã đổi sẽ tự dựng và **tự công bố** lên app public. **PM chốt 2026-10-19: lịch 08:00 chạy target databricks** (biến `RETAIL_PIPELINE_DEFAULT_TARGET` trong `.env.airflow.local`, commit `4641d5a`); Airflow vẫn chạy local trong Docker. Code nằm cố định trong image, nên code mới chỉ lên production khi có người dựng lại image từ một commit; snapshot và code trùng bản đang phục vụ thì run `bo_qua` ở prepare | Trước P4 |
 | D3 | Có làm phép thử hỏng quality gate trên cloud không? | **Có, một lần.** Tốn quota bằng một lần build (khoảng 20 phút). Bằng chứng tốt khi bảo vệ | Trước P4 |
-| D4 | Xóa hay giữ code Snowflake? | **Xóa**, thành bước riêng P2b, làm trước P4 để một lần chạy cloud gom hết thay đổi code | Trước P2b |
+| D4 | Xóa hay giữ code Snowflake? | **Xóa**, PM chốt 2026-10-21. P2b đã gỡ code, Claude rà, commit `020ad18`…`c73ad91`. Không dựng image, không chạy pipeline; bản đang phục vụ không đổi | Đã chốt 2026-10-21 |
 | D5 | Dọn release cũ trên Databricks? | Chưa làm, chỉ ghi giới hạn | Không cần hỏi lại |
 | D6 | Phiên pipeline làm trong git worktree riêng? | **Có** (xem §6). Không dùng worktree thì P1, P2 phải đợi B7 làm xong phần code | Trước P1 |
 
@@ -54,7 +54,7 @@ Không cần chốt hết trước khi giao việc. Cột "Hỏi lúc nào" cho 
 | P0 | **Dọn trước:** (1) bước 0 của [giao_viec_agent_gd2.md](giao_viec_agent_gd2.md) §2 (chủ các thay đổi chưa commit trong `apps/`); (2) commit đợt sửa tài liệu bỏ Snowflake và hai file `giao_viec_agent_*.md`; (3) chốt D1, D6; (4) rồi mới tạo worktree (§6) | PM | 10-18 → 10-19 | Chặn P1. Worktree lấy code từ commit, nên file chưa commit sẽ không có trong đó (§6) |
 | P1 | **A4 giám sát** | `retail-platform-validation` (+ `retail-bi-product` cho thẻ trên trang), prompt §4.1 | 10-19 → 10-20 | Should |
 | P2 | **A3 hợp đồng dữ liệu bản gọn** | `retail-platform-validation` + `retail-analytics-engineering`, prompt §4.2 | 10-20 → 10-21 | Should. Cùng phiên với P1 được, làm sau P1 |
-| P2b | Xóa code Snowflake, chỉ khi D4 = xóa | `retail-analytics-engineering`, prompt §4.3 | 10-21 | Đụng `test_ai_chat.py`: làm sau khi B7 xong phần code |
+| P2b | Xóa code Snowflake theo D4 đã chốt | `retail-analytics-engineering`, prompt §4.3 | 10-21 | Xong 2026-10-21, commit `020ad18`…`c73ad91`; không tác động image Airflow đang chạy |
 | P3 | Xem lại, commit, gộp nhánh worktree về `app/myuyen`, chạy bộ test app ở thư mục chính | PM (agent hỗ trợ) | 10-21 → 10-22 | Bộ test app chỉ tính ở bước này (§6) |
 | P4 | **Lên cloud:** build image, chạy DAG target databricks, thử hỏng gate, bật lịch theo D2; PM push và Reboot | `retail-platform-validation` + `databricks:databricks-core`, prompt §4.4 | 10-22 → 10-23 | Không chạy lúc B7 đang eval trên Databricks |
 | P5 | **Sửa tài liệu cho khớp hiện trạng** | `retail-platform-validation`, prompt §4.5 | 10-23 | Chỉ viết tài liệu, chạy song song được |
@@ -178,7 +178,7 @@ prepare trước/sau.
 ### 4.3 P2b: xóa code Snowflake (chỉ khi PM chốt D4 = xóa)
 
 ```text
-/retail-analytics-engineering PM chốt ngày [ngày]: xóa code Snowflake. Danh sách chờ xóa ở docs/dwh_roadmap.md,
+/retail-analytics-engineering PM chốt ngày 2026-10-21: xóa code Snowflake. Danh sách chờ xóa ở docs/dwh_roadmap.md,
 mục "Đổi hướng đã chốt 2026-10-18: bỏ hẳn Snowflake".
 
 - Trước khi xóa: dbt compile target duckdb, lưu SQL đã compile. Sau khi xóa: compile lại, so từng file; phải giống hệt.
