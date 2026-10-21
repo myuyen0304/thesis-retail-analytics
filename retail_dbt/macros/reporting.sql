@@ -1,6 +1,6 @@
 {# Measure cộng dồn của 5 PS, gom từ int_reporting_order_items theo một grain bất kỳ (tháng, năm).
    N và C là đếm PHÂN BIỆT nên phải tính lại ở từng grain, không cộng từ grain nhỏ hơn.
-   Dùng CASE thay cho FILTER (Snowflake không có FILTER). #}
+   Dùng CASE để các target cùng áp dụng một cách đếm. #}
 {% macro revenue_measures() -%}
     sum(gross_amount)                                                            as g,
     sum(case when is_delivered then net_amount end)                              as r,
