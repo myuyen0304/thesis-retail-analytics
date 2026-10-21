@@ -2,7 +2,7 @@
 
 Chỉ đọc, không tính toán. Mọi backend (Postgres, DuckDB, Databricks lab catalog retail_lab) trả DataFrame cùng kiểu dữ liệu
 nhờ `_normalize`:
-- tên cột chữ thường (Snowflake ở GĐ 3 sẽ viết hoa);
+- tên cột chữ thường trên mọi backend đang hỗ trợ;
 - DECIMAL → float64, số nguyên → Int64, boolean → boolean, ngày → datetime64, NULL → NA.
 
 Mật khẩu mặc định `retail/retail` chỉ dùng cho Postgres Docker trên máy local (docker-compose.yml),
