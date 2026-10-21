@@ -187,3 +187,21 @@ Không sửa rồi chạy lại trên chính bộ này để báo là đạt. S�
 
 Số thật xem trên trang billing của DeepSeek. Lượt Databricks còn tốn thêm quota SQL warehouse (24 câu, mỗi câu 1–3 lần
 đọc), chưa đo riêng.
+
+## 10. Chạy hồi quy S9 trên code cuối (2026-10-21)
+
+Chạy lại bộ `b7` **không sửa câu hay rubric** (mã băm `721a9fed30c20b7d`) trên code cuối trước PR, để kiểm các sửa đổi S7–S9b (L4, RAG B5, guard định nghĩa B5b, luật chữ số) không làm hỏng câu router đã nghiệm thu. Đây là phép đo hồi quy; **điểm AI4 ở §4–§5 giữ nguyên**, không chấm lại. Trước lượt model: `--kiem-rubric` 20/20 ca có tool/path đạt.
+
+| Mục | Local DuckDB | Databricks production |
+|---|---|---|
+| Log | `warehouse/ai_eval/live_20261021T033713Z_b7_30416.jsonl` | `warehouse/ai_eval/live_20261021T033959Z_b7_23472.jsonl` |
+| Bản dữ liệu | `4559c2dd159f4334b2e11d4c` (versioned) | `ccde5a5e21c54e9e9054066f` (bản active), SP AI chỉ đọc |
+| Code | `ba200cf55c6bd732` (commit `08fb340`), prompt `b5b-2026-10-20`, tool v2.2, catalog `b5b-2026-10-20b` | như local |
+| Số lần | 1 | 1 |
+| Chấm máy | **24/24** | **24/24** |
+| Đọc tay (Claude, theo tiêu chí `hand` ghi trước) | **24/24** | **24/24** |
+| Token, chi phí ước | vào 704.156, ra 6.666; ~0,22 USD | vào 743.537, ra 7.438; ~0,23 USD |
+
+Bốn câu chưa đạt ở lần nghiệm thu nay đạt ở cả hai nơi: K02 (đọc đúng giai đoạn B, −12,4% cả giai đoạn, CAGR ghi "/năm"), K17 (từ chối cộng số thực tế với dự báo, không nêu số), K21 (nêu cả R và G có nhãn), K22 (local nêu số tháng 4 của cả 2023 và 2024; Databricks hỏi lại năm kèm hai số). Số đọc từ Databricks khớp local ở mọi câu, kể cả ARIMA 10/2023 (57.703.545 VND) và điểm ngày model chính (576.790 VND), vì hai bản dữ liệu nay cùng một lần train.
+
+Ghi nhận khi đọc tay, không làm trượt: Databricks K04 phải sửa câu xếp hạng một lần trước khi đạt (khuôn xếp hạng của app); K04 cả hai nơi có lỗi lặp chữ "nên nên"; local K05 không nhắc "phân rã số học" nhưng cũng không nói nguyên nhân. Đây là **một lần chạy mỗi nơi**; với mô hình không tất định, 24/24 không có nghĩa tỷ lệ đạt thật là 100%.
