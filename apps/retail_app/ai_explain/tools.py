@@ -29,7 +29,7 @@ from dwh.connection import describe
 from dwh import releases
 from dwh.guarded import DEFAULT_MAX_ROWS, GuardError, QueryTimeout, RowLimitExceeded, Statement, open_session
 
-TOOL_VERSION = 'v2.0'   # B5: search_knowledge đọc bản chụp tài liệu đóng gói cùng app, không đọc DWH
+TOOL_VERSION = 'v2.2'   # S9b lượt 2: rank_dir và ngưỡng nhóm nhỏ; v2.1 là lượt đầu
                         # v1.7: chuỗi từng năm (to_year), ghi chú app (notes) cho đóng góp nhóm / sai số tháng
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
@@ -973,10 +973,22 @@ def _explain_forecast(turn: '_Turn', a: dict) -> ToolResult:
                  **({'day': start.day} if a['period'] == 'day' else {}), 'feature_group': r['feature_group'],
                  'feature_label': FEATURE_GROUP_LABEL[r['feature_group']],
                  'contribution_log': float(r['contribution_log']), 'multiplier': math.exp(float(r['contribution_log'])),
+                 'pct_vs_base': math.expm1(float(r['contribution_log'])) * 100,
                  'n_days': days, 'n_days_in_period': (end - start).days + 1, 'is_partial': last < end,
                  'candidate': _cand(primary['model'], primary['cogs_method']),
                  'model_version': primary['model_version'], 'trained_through': primary['trained_through']}
                 for r in raw]
+        ranked = sorted(rows, key=lambda r: (-abs(r['contribution_log']), r['feature_label'], r['feature_group']))
+        for rank, row in enumerate(ranked, 1):
+            row['rank'] = rank
+        for direction in (-1, 1):
+            directed = [r for r in ranked if r['contribution_log'] * direction > 0]
+            for rank, row in enumerate(directed, 1):
+                row['rank_dir'] = rank
+        for row in rows:
+            if row['contribution_log'] == 0:
+                row['rank_dir'] = None
+        small = [r for r in rows if abs(r['pct_vs_base']) < 1]
     except _NoForecast:
         return ToolResult('no_data', 'Bản dữ liệu đang phục vụ chưa có bảng reporting.rpt_forecast_explain; '
                           'không lấy số từ nguồn khác thay vào.')
@@ -986,8 +998,12 @@ def _explain_forecast(turn: '_Turn', a: dict) -> ToolResult:
                       + (f' Chỉ có {days} ngày đến {last.isoformat()}, không đại diện cả tháng.' if last < end else '')
                       + ' base_log + tổng contribution_log = forecast_log; multiplier = exp(contribution_log), '
                       'các multiplier không cộng được. Đóng góp đo so với mức nền base_log của model, không phải so với '
-                      'kỳ trước. Các nhóm là thành phần của model, không chứng minh nguyên nhân biến động.',
-                      rows=rows, derived={'base_log': base, 'forecast_log': target, 'candidate': rows[0]['candidate']},
+                      'kỳ trước. pct_vs_base là ảnh hưởng của từng nhóm khi xét riêng, không cộng các %. '
+                      'Các nhóm là thành phần của model, không chứng minh nguyên nhân biến động.',
+                      rows=rows, derived={'base_log': base, 'forecast_log': target, 'candidate': rows[0]['candidate'],
+                                           'small_groups': {'n': len(small), 'threshold_pct': 1.0,
+                                                           'max_abs_pct': max((abs(r['pct_vs_base']) for r in small),
+                                                                              default=0.0)}},
                       notes=[EXPLAIN_LABEL], evidence=turn.evidence(
                           filters={'period': a['period'], 'forecast_window': f'{start} → {last}',
                                    'candidate': rows[0]['candidate']},
