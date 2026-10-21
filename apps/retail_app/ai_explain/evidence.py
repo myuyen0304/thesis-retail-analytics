@@ -127,6 +127,19 @@ FEATURE_GROUP_LABEL = {'mua_vu': 'mùa vụ', 'dau_cuoi_thang': 'đầu/cuối t
                        'promo_fall_launch': 'lịch Fall Launch', 'promo_mid_year_sale': 'lịch Mid Year Sale',
                        'promo_rural_special': 'lịch Rural Special', 'promo_spring_sale': 'lịch Spring Sale',
                        'promo_urban_blowout': 'lịch Urban Blowout', 'promo_year_end_sale': 'lịch Year End Sale'}
+# Các cách gọi được duyệt cho câu xếp hạng L4; so ranh giới từ, không đoán tên gần giống.
+FEATURE_GROUP_ALIASES = {
+    'mua_vu': ('mùa vụ',),
+    'dau_cuoi_thang': ('đầu/cuối tháng', 'đầu và cuối tháng'),
+    'che_do_sau_2018': ('chế độ sau 2018', 'chế độ sau năm 2018', 'giai đoạn sau 2018'),
+    'nam_chan_le': ('năm chẵn/lẻ', 'năm chẵn lẻ'),
+    'promo_fall_launch': ('lịch Fall Launch', 'Fall Launch'),
+    'promo_mid_year_sale': ('lịch Mid Year Sale', 'Mid Year Sale'),
+    'promo_rural_special': ('lịch Rural Special', 'Rural Special'),
+    'promo_spring_sale': ('lịch Spring Sale', 'Spring Sale'),
+    'promo_urban_blowout': ('lịch Urban Blowout', 'Urban Blowout'),
+    'promo_year_end_sale': ('lịch Year End Sale', 'Year End Sale'),
+}
 METRIC_FAMILY = {f: 'R' for f in ('r', 'r_prior_year', 'r_start', 'r_end', 'r_total', 'delta_r', 'contrib_n', 'contrib_u',
                                    'contrib_p', 'yoy_rate', 'r_change_rate', 'share', 'share_shift_pp',
                                    'contribution_to_delta', 'r_same_month_prior_year', 'r_12m_before', 'r_12m_after',
@@ -478,42 +491,123 @@ def _verified_driver_rank(sent: str, results: dict) -> bool:
     return bool(top) and bool(clauses) and all(x == str(top).upper() for x in said)
 
 
-def _verified_explain_rank(sent: str, by_id: dict, results: dict) -> bool:
-    """Đối chiếu mọi nhóm L4 được dẫn trong câu với top-k của đúng một kết quả tool."""
+def _explain_group_mentions(text: str) -> list[tuple[int, int, str]]:
+    """Vị trí tên nhóm đã duyệt trong câu, kể cả alias; không khớp một phần của từ dài hơn."""
+    text = text.casefold()
+    hits = [(m.start(), m.end(), group) for group, aliases in FEATURE_GROUP_ALIASES.items()
+            for alias in aliases
+            for m in re.finditer(r'(?<!\w)' + re.escape(alias.casefold()) + r'(?!\w)', text)]
+    # "lịch Urban Blowout" và "Urban Blowout" là cùng một lần nhắc tên.
+    hits.sort(key=lambda hit: (hit[0], -(hit[1] - hit[0])))
+    chosen = []
+    for hit in hits:
+        if not chosen or hit[0] >= chosen[-1][1]:
+            chosen.append(hit)
+    return chosen
+
+
+def _verified_explain_rank(sent: str, by_id: dict, results: dict) -> str | None:
+    """Trả lý do chặn câu xếp hạng L4; None khi từng claim đúng tên, chiều và top-k."""
     refs = {}
-    for cid in _PLACEHOLDER.findall(sent):
+    cited = []
+    for m in _PLACEHOLDER.finditer(sent):
+        cid = m.group(1)
         item = by_id.get(cid)
-        if not item or item[2] not in ('contribution_log', 'multiplier', 'pct_vs_base'):
+        if not item or item[2] not in ('contribution_log', 'multiplier', 'pct_vs_base', 'feature_label'):
             continue
         path, row = item[0].get('path', ''), item[3]
         ref = path.split('.')[0]
         res = results.get(ref)
         if not row or not res or not res.ok or not res.evidence or res.evidence.tool != 'explain_forecast':
             continue
-        refs.setdefault(ref, set()).add(row.get('feature_group'))
+        group = row.get('feature_group')
+        refs.setdefault(ref, set()).add(group)
+        cited.append((m.start(), m.end(), cid, group, item[2]))
+    prefix = 'nhóm phân rã nói "chủ yếu/mạnh nhất/lớn nhất" hoặc từ xếp hạng tương đương: '
     if len(refs) != 1 or any(w in sent.lower() for w in WEAK_WORDS):
-        return False
+        return prefix + 'không đối chiếu được một kết quả explain_forecast và rank_dir duy nhất'
     ref, groups = next(iter(refs.items()))
     if None in groups or not groups:
-        return False
+        return prefix + 'claim không xác định được nhóm để kiểm top-k theo rank_dir'
     rows = results[ref].rows
-    said = _PLACEHOLDER.sub(' ', sent).lower()
+    said = _PLACEHOLDER.sub(' ', sent).casefold()
     up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', said))
     down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', said))
+    selected = [r for r in rows if r['feature_group'] in groups]
+
+    def top_text(direction: int, count: int) -> tuple[list[str], str]:
+        if direction:
+            top = [r for r in rows if r['contribution_log'] * direction > 0
+                   and r.get('rank_dir') in range(1, count + 1)]
+            scope = f'top-{count} chiều {"dương" if direction > 0 else "âm"} theo rank_dir'
+        else:
+            top = [r for r in rows if r.get('rank') in range(1, count + 1)]
+            scope = f'top-{count} theo rank'
+        top.sort(key=lambda r: r['rank_dir' if direction else 'rank'])
+        return [r['feature_group'] for r in top], scope + ' là ' + ', '.join(
+            f'"{r.get("feature_label") or FEATURE_GROUP_LABEL[r["feature_group"]]}"' for r in top)
+
     if up and down:
-        return False
+        first_up = re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', said)
+        first_down = re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', said)
+        direction = 1 if first_up.start() < first_down.start() else -1
+        same = [r for r in selected if r['contribution_log'] * direction > 0]
+        other = ', '.join(r.get('feature_label') or FEATURE_GROUP_LABEL[r['feature_group']]
+                          for r in selected if r['contribution_log'] * direction < 0)
+        if not same:
+            return prefix + 'trộn hai chiều trong một câu xếp hạng; chọn một chiều cho câu xếp hạng'
+        _, expected_text = top_text(direction, len({r['feature_group'] for r in same}))
+        return (prefix + f'trộn hai chiều trong một câu xếp hạng; {expected_text}; '
+                f'nhóm ngược chiều ({other}) đặt ở câu riêng')
     if up or down:
         direction = 1 if up else -1
-        selected = [r for r in rows if r['feature_group'] in groups]
         if len(selected) != len(groups) or any(r['contribution_log'] * direction <= 0 for r in selected):
-            return False
-        expected = {r['feature_group'] for r in rows
-                    if r['contribution_log'] * direction > 0 and r.get('rank_dir') in range(1, len(groups) + 1)}
+            _, expected_text = top_text(direction, len(groups))
+            return prefix + f'có nhóm sai chiều; {expected_text}. Nhóm ngược chiều đặt ở câu riêng'
     else:
-        expected = {r['feature_group'] for r in rows if r.get('rank') in range(1, len(groups) + 1)}
-    return (len(expected) == len(groups) and groups == expected
-             and all(str(r.get('feature_label', '')).lower() in said for r in rows
-                     if r['feature_group'] in groups))
+        direction = 0
+    expected, expected_text = top_text(direction, len(groups))
+    if len(expected) != len(groups) or groups != set(expected):
+        return prefix + f'sai nhóm top-k; {expected_text}'
+    rank_field = 'rank_dir' if direction else 'rank'
+    ordered_groups = list(dict.fromkeys(group for _, _, _, group, _ in cited))
+    ranks = [next(r[rank_field] for r in selected if r['feature_group'] == group)
+             for group in ordered_groups]
+    if any(left > right for left, right in zip(ranks, ranks[1:])):
+        return prefix + f'sai thứ tự nhóm theo {rank_field}; thứ tự đúng: {expected_text}'
+
+    # Một dãy claim không có tên nhóm chen giữa nhận cùng dãy tên ngay trước nó.
+    # Nhiều claim liền nhau của cùng nhóm chỉ chiếm một ô tên.
+    # Claim feature_label tự gọi tên nhóm tại vị trí chỗ đặt, kể cả rows[i].
+    mentions = _explain_group_mentions(sent)
+    mentions += [(start, end, group) for start, end, _, group, field in cited if field == 'feature_label']
+    mentions.sort(key=lambda hit: hit[0])
+    placeholders = list(_PLACEHOLDER.finditer(sent))
+    runs = []
+    for claim in cited:
+        if (runs and claim[4] != 'feature_label'
+                and not any(runs[-1][-1][1] <= start < claim[0] for start, _, _ in mentions)
+                and not any(runs[-1][-1][1] <= m.start() < claim[0] for m in placeholders)):
+            runs[-1].append(claim)
+        else:
+            runs.append([claim])
+    for run in runs:
+        previous = max((m.end() for m in placeholders if m.end() <= run[0][0]), default=0)
+        before = [hit for hit in mentions if previous <= hit[0] and hit[1] <= run[0][0]]
+        slots = list(dict.fromkeys(group for _, _, _, group, _ in run))
+        if len(before) >= len(slots):
+            for group, (_, _, named) in zip(slots, before[-len(slots):]):
+                if named != group:
+                    cid = next(cid for _, _, cid, claimed, _ in run if claimed == group)
+                    return (prefix + f'chỗ đặt {{{cid}}} gọi tên "{FEATURE_GROUP_LABEL[named]}" nhưng claim là '
+                            f'"{FEATURE_GROUP_LABEL[group]}"; {expected_text}')
+        else:
+            for _, _, cid, group, _ in run:
+                if not any(named == group for _, _, named in mentions):
+                    return (prefix + f'chỗ đặt {{{cid}}} không gọi tên nhóm "{FEATURE_GROUP_LABEL[group]}"; '
+                            f'viết tên nhóm bằng chữ ngay trước số, hoặc dùng claim feature_label của đúng hàng; '
+                            f'{expected_text}')
+    return None
 
 
 _SMALL_COUNT = re.compile(r'(\{c\d+\})\s+nhóm\s+(?:còn\s+lại|khác|có\s+ảnh\s+hưởng)', re.I)
@@ -1800,10 +1894,13 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
                           and by_id[cid][3] and by_id[cid][3].get('feature_group')
                           and (res := results.get(by_id[cid][0]['path'].split('.')[0])) is not None
                           and res.evidence and res.evidence.tool == 'explain_forecast']
-        if explain_groups and any(w in low for w in ('chủ yếu', 'mạnh nhất', 'lớn nhất')):
-            if not _verified_explain_rank(sent, by_id, results):
-                errors.append('nhóm phân rã nói "chủ yếu/mạnh nhất/lớn nhất" phải đúng top-k theo chiều và rank_dir '
-                              '(hoặc rank khi không nêu chiều) của cùng kết quả tool')
+        if explain_groups and any(w in low for w in WEAK_WORDS):
+            errors.append('phân rã L4 chỉ xếp hạng phía mạnh nhất theo rank_dir; '
+                          'bỏ chữ xếp hạng phía nhỏ (nhỏ nhất/ít nhất/nhẹ nhất/chậm nhất/yếu nhất)')
+            continue
+        if explain_groups and any(w in low for w in ('chủ yếu',) + STRONG_WORDS):
+            if problem := _verified_explain_rank(sent, by_id, results):
+                errors.append(problem)
             continue
         if not ranks and _verified_driver_rank(sent, results):
             continue
