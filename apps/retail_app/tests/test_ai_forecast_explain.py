@@ -501,18 +501,19 @@ def test_s9b_cau_ngan_top_hai_khong_lap_nhan(monkeypatch):
 
     _s9b_tool(monkeypatch)
     answer = ('Dự báo G tháng 8/2023 thấp chủ yếu do hai nhóm trong model: '
-              'lịch Urban Blowout kéo xuống {c1} so với mức nền, và chế độ sau 2018 kéo xuống {c2} '
-              '(nhóm này kéo mọi tháng). Mùa vụ kéo lên {c3}. {c4} nhóm có ảnh hưởng dưới {c5} mỗi nhóm.')
-    claims = [{'id': 'c1', 'path': 'T1.rows[promo_urban_blowout].pct_vs_base'},
-              {'id': 'c2', 'path': 'T1.rows[che_do_sau_2018].pct_vs_base'},
+              'chế độ sau 2018 kéo xuống {c1} so với mức nền (nhóm này kéo mọi tháng), '
+              'và lịch Urban Blowout kéo xuống {c2}. Mùa vụ kéo lên {c3}. '
+              '{c4} nhóm có ảnh hưởng dưới {c5} mỗi nhóm.')
+    claims = [{'id': 'c1', 'path': 'T1.rows[che_do_sau_2018].pct_vs_base'},
+              {'id': 'c2', 'path': 'T1.rows[promo_urban_blowout].pct_vs_base'},
               {'id': 'c3', 'path': 'T1.rows[mua_vu].pct_vs_base'},
               {'id': 'c4', 'path': 'T1.derived.small_groups.n'},
               {'id': 'c5', 'path': 'T1.derived.small_groups.threshold_pct'}]
     turn = service.run_turn('Vì sao dự báo G tháng 8/2023 thấp?', [], 'duckdb', FakeProvider(
         call('explain_forecast', **ARGS_MONTH), final(answer=answer, claims=claims)))
     assert turn.status == 'ok', turn.validation_errors
-    assert 'lịch Urban Blowout kéo xuống **22,6%** so với mức nền' in turn.answer_md
-    assert 'chế độ sau 2018 kéo xuống **26,2%** (so với mức nền, 08/2023)' in turn.answer_md
+    assert 'chế độ sau 2018 kéo xuống **26,2%** so với mức nền' in turn.answer_md
+    assert 'lịch Urban Blowout kéo xuống **22,6%**' in turn.answer_md
     assert 'Mùa vụ kéo lên **7,1%** (so với mức nền, 08/2023)' in turn.answer_md
     assert len(turn.answer_md) <= 700
     assert ai_live_eval.grade(ai_live_eval.ACCEPT_L4D[0], turn)['pass']
@@ -589,6 +590,271 @@ def _s9b_turn(args, question, answer, claims):
     reply = final(answer=answer, claims=[{'id': cid, 'path': 'T1.' + path} for cid, path in claims.items()])
     return service.run_turn(question, [], 'duckdb', FakeProvider(
         call('explain_forecast', **args), reply, reply))
+
+
+L4E_HEAD = 'Đây là phân rã model, không phải nguyên nhân. '
+L4E_CLAIMS = {'c1': 'rows[che_do_sau_2018].pct_vs_base',
+              'c2': 'rows[promo_urban_blowout].pct_vs_base',
+              'c3': 'rows[mua_vu].pct_vs_base'}
+L4E_QUESTION = 'Vì sao dự báo G tháng 8/2023 thấp?'
+
+
+@pytest.mark.parametrize('case,answer', [
+    ('A', 'Hai nhóm kéo xuống mạnh nhất: chế độ sau 2018 kéo xuống {c1}, '
+     'và lịch Urban Blowout kéo xuống {c2}.'),
+    ('B', 'Hai nhóm kéo xuống mạnh nhất: chế độ sau 2018 kéo xuống {c1}, '
+     'và Urban Blowout kéo xuống {c2}.'),
+    ('E', 'Hai nhóm kéo xuống mạnh nhất: chế độ sau năm 2018 kéo xuống {c1}, '
+     'và lịch Urban Blowout kéo xuống {c2}.'),
+    ('C', 'Dự báo thấp chủ yếu do chế độ sau 2018 ({c1}) và lịch Urban Blowout ({c2}). '
+     'Mùa vụ kéo lên {c3}.'),
+])
+def test_l4e_xep_hang_alias_dung_duoc_qua(monkeypatch, case, answer):
+    _s9b_tool(monkeypatch)
+    claims = {cid: path for cid, path in L4E_CLAIMS.items() if '{' + cid + '}' in answer}
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, L4E_HEAD + answer, claims)
+    assert turn.status == 'ok', (case, turn.validation_errors)
+
+
+@pytest.mark.parametrize('case,answer,reason,top', [
+    ('D', 'Dự báo thấp chủ yếu do chế độ sau 2018 ({c1}) và lịch Urban Blowout ({c2}), '
+     'dù mùa vụ kéo lên {c3}.', 'trộn hai chiều', 'top-2 chiều âm'),
+    ('F', 'Nhóm kéo xuống lớn nhất là lịch Urban Blowout ({c2}).', 'sai nhóm top-k', 'top-1 chiều âm'),
+])
+def test_l4e_chan_tron_chieu_va_sai_top(monkeypatch, case, answer, reason, top):
+    _s9b_tool(monkeypatch)
+    claims = {cid: path for cid, path in L4E_CLAIMS.items() if '{' + cid + '}' in answer}
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, L4E_HEAD + answer, claims)
+    assert turn.status == 'answer_validation_failed', (case, turn.validation_errors)
+    assert any(reason in error and top in error and 'chế độ sau 2018' in error
+               for error in turn.validation_errors), turn.validation_errors
+    if case == 'D':
+        assert any('lịch Urban Blowout' in error and 'mùa vụ' in error and 'câu riêng' in error
+                   for error in turn.validation_errors), turn.validation_errors
+
+
+def test_l4e_alias_sai_nhom_claim_va_khop_mot_phan_bi_chan(monkeypatch):
+    _s9b_tool(monkeypatch)
+    wrong = (L4E_HEAD + 'Hai nhóm kéo xuống mạnh nhất: lịch Urban Blowout kéo xuống {c1}, '
+             'và chế độ sau 2018 kéo xuống {c2}.')
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, wrong,
+                     {k: L4E_CLAIMS[k] for k in ('c1', 'c2')})
+    assert turn.status == 'answer_validation_failed'
+    assert any('chỗ đặt {c1}' in e and 'claim là "chế độ sau 2018"' in e
+               for e in turn.validation_errors), turn.validation_errors
+    partial = (L4E_HEAD + 'Hai nhóm kéo xuống mạnh nhất: chế độ sau 2018 kéo xuống {c1}, '
+               'và Urban BlowoutX kéo xuống {c2}.')
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, partial,
+                     {k: L4E_CLAIMS[k] for k in ('c1', 'c2')})
+    assert turn.status == 'answer_validation_failed'
+    assert any('không gọi tên nhóm "lịch Urban Blowout"' in e for e in turn.validation_errors)
+
+
+def test_l4e_sua_cau_tron_chieu_thanh_hai_cau_duoc_qua(monkeypatch):
+    _s9b_tool(monkeypatch)
+    bad = L4E_HEAD + ('Dự báo thấp chủ yếu do chế độ sau 2018 ({c1}) và lịch Urban Blowout ({c2}), '
+                      'dù mùa vụ kéo lên {c3}.')
+    good = L4E_HEAD + ('Dự báo thấp chủ yếu do chế độ sau 2018 ({c1}) và lịch Urban Blowout ({c2}). '
+                       'Mùa vụ kéo lên {c3}.')
+    claims = [{'id': cid, 'path': 'T1.' + path} for cid, path in L4E_CLAIMS.items()]
+    fake = FakeProvider(call('explain_forecast', **ARGS_MONTH),
+                        final(answer=bad, claims=claims), final(answer=good, claims=claims))
+    turn = service.run_turn(L4E_QUESTION, [], 'duckdb', fake)
+    assert turn.status == 'ok', turn.validation_errors
+    assert turn.llm_calls == 3
+    assert any('trộn hai chiều' in e and 'câu riêng' in e for e in turn.repair_errors)
+    assert any('trộn hai chiều' in m.get('content', '') for m in fake.seen[-1] if m.get('role') == 'user')
+
+
+@pytest.mark.parametrize('case,answer,ok', [
+    ('G', 'Chế độ sau 2018 và Urban Blowout là hai nhóm kéo xuống mạnh nhất '
+     '({c1} và {c2}).', True),
+    ('H', 'Chế độ sau 2018 và lịch Urban Blowout là hai nhóm kéo xuống mạnh nhất '
+     '({c1} và {c2}).', True),
+    ('I', 'Hai nhóm kéo xuống mạnh nhất là chế độ sau 2018 và lịch Urban Blowout, '
+     'lần lượt {c1} và {c2}.', True),
+    ('J', 'Hai nhóm kéo xuống mạnh nhất là lịch Urban Blowout và chế độ sau 2018, '
+     'lần lượt {c1} và {c2}.', False),
+    ('K', 'Hai nhóm kéo xuống mạnh nhất ({c1} và {c2}) là chế độ sau 2018 và '
+     'lịch Urban Blowout.', True),
+    ('M', 'Hai nhóm kéo xuống mạnh nhất: lịch Urban Blowout ({c1}) và '
+     'chế độ sau 2018 ({c2}).', False),
+])
+def test_l4f_day_cho_dat_ten_nhom(monkeypatch, case, answer, ok):
+    _s9b_tool(monkeypatch)
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, L4E_HEAD + answer,
+                     {k: L4E_CLAIMS[k] for k in ('c1', 'c2')})
+    assert (turn.status == 'ok') is ok, (case, turn.validation_errors)
+    if not ok:
+        assert any('chỗ đặt' in err and 'claim là' in err for err in turn.validation_errors)
+
+
+@pytest.mark.parametrize('case,answer,ok', [
+    ('N', 'Hai nhóm kéo xuống mạnh nhất: chế độ sau 2018 góp {c1} (hệ số nhân {c4}) '
+     'và lịch Urban Blowout góp {c2} (hệ số nhân {c5}). Mùa vụ kéo lên {c3}.', True),
+    ('O', 'Hai nhóm kéo xuống mạnh nhất: lịch Urban Blowout góp {c1} (hệ số nhân {c4}) '
+     'và chế độ sau 2018 góp {c2} (hệ số nhân {c5}). Mùa vụ kéo lên {c3}.', False),
+    ('P', 'Hai nhóm kéo xuống mạnh nhất là chế độ sau 2018 và lịch Urban Blowout, lần lượt '
+     '{c1} và {c2} (hệ số nhân {c4} và {c5}). Mùa vụ kéo lên {c3}.', True),
+    ('R', 'Hai nhóm kéo xuống mạnh nhất là {c6} ({c1}) và {c7} ({c2}). '
+     'Mùa vụ kéo lên {c3}.', True),
+    ('S', 'Hai nhóm kéo xuống mạnh nhất là lịch Urban Blowout {c6} ({c1}) và {c7} ({c2}). '
+     'Mùa vụ kéo lên {c3}.', False),
+])
+def test_l4f_nhieu_claim_cung_nhom_va_ten_feature_label(monkeypatch, case, answer, ok):
+    _s9b_tool(monkeypatch)
+    paths = L4E_CLAIMS | {
+        'c4': 'rows[che_do_sau_2018].multiplier',
+        'c5': 'rows[promo_urban_blowout].multiplier',
+        'c6': 'rows[che_do_sau_2018].feature_label',
+        'c7': 'rows[promo_urban_blowout].feature_label',
+    }
+    claims = {cid: path for cid, path in paths.items() if '{' + cid + '}' in answer}
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, L4E_HEAD + answer, claims)
+    assert (turn.status == 'ok') is ok, (case, turn.validation_errors)
+    if not ok:
+        assert any('chỗ đặt' in err and 'claim là' in err for err in turn.validation_errors)
+
+
+@pytest.mark.parametrize('answer,path,ok,needle', [
+    ('Nhóm đẩy dự báo lên nhiều nhất là mùa vụ ({c1}).',
+     'rows[mua_vu].pct_vs_base', True, ''),
+    ('Nhóm đẩy dự báo lên nhiều nhất là lịch Urban Blowout ({c1}).',
+     'rows[promo_urban_blowout].pct_vs_base', False, 'sai nhóm top-k'),
+    ('Lịch Urban Blowout ({c1}) dẫn đầu nhóm kéo lên.',
+     'rows[promo_urban_blowout].pct_vs_base', False, 'top-1 chiều dương'),
+])
+def test_l4f_chu_xep_hang_khac_cua_phan_ra(monkeypatch, answer, path, ok, needle):
+    contrib = {g: .001 for g in GROUPS} | {
+        'mua_vu': .6, 'promo_urban_blowout': .2, 'dau_cuoi_thang': .1}
+    _fake_tables(monkeypatch, contrib_override=contrib)
+    args = {'period': 'day', 'year': 2024, 'month': 5, 'day': 2}
+    turn = _s9b_turn(args, 'Ngày 2/5/2024, nhóm nào đẩy dự báo G lên nhiều nhất?',
+                     L4E_HEAD + answer, {'c1': path})
+    assert (turn.status == 'ok') is ok, turn.validation_errors
+    if not ok:
+        assert any(needle in err and 'mùa vụ' in err for err in turn.validation_errors)
+
+
+@pytest.mark.parametrize('word', ['đứng đầu', 'mạnh hơn cả'])
+def test_l4f_xep_hang_mo_rong_va_phia_nho(monkeypatch, word):
+    _s9b_tool(monkeypatch)
+    good = L4E_HEAD + f'Chế độ sau 2018 kéo xuống {{c1}}, {word} nhóm kéo xuống.'
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, good, {'c1': L4E_CLAIMS['c1']})
+    assert turn.status == 'ok', turn.validation_errors
+    weak = L4E_HEAD + 'Chế độ sau 2018 kéo xuống ít nhất {c1}.'
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, weak, {'c1': L4E_CLAIMS['c1']})
+    assert turn.status == 'answer_validation_failed'
+    assert any('phân rã L4 chỉ xếp hạng phía mạnh nhất theo rank_dir' in err
+               for err in turn.validation_errors)
+
+
+def test_l4f_day_ten_khong_vuot_qua_placeholder_khac(monkeypatch):
+    _s9b_tool(monkeypatch)
+    answer = (L4E_HEAD + 'Lịch Urban Blowout có thứ hạng {c3}, nhưng nhóm kéo xuống mạnh nhất '
+              'là {c1}, tức chế độ sau 2018.')
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, answer,
+                     {'c1': L4E_CLAIMS['c1'], 'c3': 'rows[promo_urban_blowout].rank'})
+    assert turn.status == 'ok', turn.validation_errors
+
+
+def test_l4f_chan_dao_thu_tu_l4e5(monkeypatch):
+    contrib = {g: .001 for g in GROUPS} | {
+        'che_do_sau_2018': math.log1p(-.246), 'promo_urban_blowout': math.log1p(-.214),
+        'dau_cuoi_thang': math.log1p(-.1)}
+    _fake_tables(monkeypatch, contrib_override=contrib)
+    answer = (L4E_HEAD + 'Ngày 15/8/2023, nhóm kéo xuống mạnh nhất là lịch Urban Blowout với {c1}, '
+              'tiếp theo là chế độ sau 2018 kéo xuống {c2}, và đầu/cuối tháng kéo xuống {c3}.')
+    claims = {'c1': 'rows[promo_urban_blowout].pct_vs_base',
+              'c2': 'rows[che_do_sau_2018].pct_vs_base',
+              'c3': 'rows[dau_cuoi_thang].pct_vs_base'}
+    turn = _s9b_turn(ARGS_DAY, 'Vì sao dự báo G ngày 15/8/2023 thấp?', answer, claims)
+    assert turn.status == 'answer_validation_failed', turn.validation_errors
+    assert any('sai thứ tự' in err and 'chế độ sau 2018' in err and 'lịch Urban Blowout' in err
+               for err in turn.validation_errors), turn.validation_errors
+
+
+def test_l4f_claim_feature_label_goi_ten_dung_hang(monkeypatch):
+    contrib = {g: .001 for g in GROUPS} | {
+        'mua_vu': -.35, 'che_do_sau_2018': -.30, 'dau_cuoi_thang': -.25}
+    _fake_tables(monkeypatch, contrib_override=contrib, days=31, daily_n=31)
+    month = {'period': 'month', 'year': 2024, 'month': 1}
+    result = tools.run(ToolCall('explain_forecast', month), 'duckdb')
+    assert result.status == 'ok'
+    rows = {r['feature_group']: r for r in result.rows}
+    assert rows['mua_vu']['rank_dir'] == 1
+    good = L4E_HEAD + 'Tháng 1/2024, nhóm kéo xuống mạnh nhất là {c1}, kéo xuống {c2} so với mức nền.'
+    turn = _s9b_turn(month, 'Nhóm nào kéo G tháng 1/2024 xuống mạnh nhất?', good,
+                     {'c1': 'rows[mua_vu].feature_label', 'c2': 'rows[mua_vu].pct_vs_base'})
+    assert turn.status == 'ok', turn.validation_errors
+    assert 'mùa vụ' in turn.answer_md
+    wrong = L4E_HEAD + 'Tháng 1/2024, nhóm kéo xuống mạnh nhất là {c1}.'
+    first_group = result.rows[0]['feature_group']
+    assert first_group == 'che_do_sau_2018'  # hàng 0 không phải top-1 chiều âm
+    turn = _s9b_turn(month, 'Nhóm nào kéo G tháng 1/2024 xuống mạnh nhất?', wrong,
+                     {'c1': 'rows[0].feature_label'})
+    assert turn.status == 'answer_validation_failed', turn.validation_errors
+    assert any('sai nhóm top-k' in err and 'mùa vụ' in err for err in turn.validation_errors)
+
+
+def test_l4f_rubric_tinh_doc_lap_tu_ket_qua_tool(monkeypatch):
+    from scripts.ops import ai_live_eval
+
+    _s9b_tool(monkeypatch)
+    answer = L4E_HEAD + ('Hai nhóm kéo xuống mạnh nhất: chế độ sau 2018 {c1}, '
+                         'lịch Urban Blowout {c2}.')
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, answer,
+                     {k: L4E_CLAIMS[k] for k in ('c1', 'c2')})
+    assert turn.status == 'ok', turn.validation_errors
+    monkeypatch.setattr(evidence, '_verified_explain_rank',
+                        lambda *_args: (_ for _ in ()).throw(AssertionError('rubric gọi guard')))
+    assert ai_live_eval._l4f_ranked_ok(answer, turn)
+    wrong = L4E_HEAD + ('Hai nhóm kéo xuống mạnh nhất: lịch Urban Blowout {c2}, '
+                        'chế độ sau 2018 {c1}.')
+    assert not ai_live_eval._l4f_ranked_ok(wrong, turn)
+    assert not ai_live_eval._l4f_ranked_ok('Nhóm kéo xuống mạnh nhất là lịch Urban Blowout {c2}.', turn)
+    assert ai_live_eval._l4f_ranked_ok('Chế độ sau 2018 kéo xuống {c1}.', turn)
+    checks_why = ai_live_eval.grade(ai_live_eval.ACCEPT_L4F[0], turn)['checks']
+    checks_other = ai_live_eval.grade(ai_live_eval.ACCEPT_L4F[1], turn)['checks']
+    assert 'toi_da_3_nhom' in checks_why and 'toi_da_3_nhom' not in checks_other
+
+
+def test_l4f_rubric_ngay_14_08_dung_sai_thu_tu_va_lan_luot(published):
+    from scripts.ops import ai_live_eval
+
+    args = {'period': 'day', 'year': 2023, 'month': 8, 'day': 14}
+    result = tools.run(ToolCall('explain_forecast', args), 'duckdb')
+    assert result.status == 'ok', result.message
+    rows = {row['feature_group']: row for row in result.rows}
+    assert rows['che_do_sau_2018']['rank_dir'] == 1
+    assert rows['promo_urban_blowout']['rank_dir'] == 2
+    assert rows['che_do_sau_2018']['pct_vs_base'] == pytest.approx(-24.7, abs=.1)
+    assert rows['promo_urban_blowout']['pct_vs_base'] == pytest.approx(-22.1, abs=.1)
+
+    ordered = L4E_HEAD + 'Hai nhóm kéo xuống mạnh nhất: chế độ sau 2018 {c1}, lịch Urban Blowout {c2}.'
+    reversed_order = L4E_HEAD + 'Hai nhóm kéo xuống mạnh nhất: lịch Urban Blowout {c2}, chế độ sau 2018 {c1}.'
+    paired = (L4E_HEAD + 'Hai nhóm kéo xuống mạnh nhất là chế độ sau 2018 và lịch Urban Blowout, '
+              'lần lượt {c1} và {c2} (hệ số nhân {c4} và {c5}).')
+    claims = {cid: path for cid, path in (L4E_CLAIMS | {
+        'c4': 'rows[che_do_sau_2018].multiplier',
+        'c5': 'rows[promo_urban_blowout].multiplier',
+    }).items() if cid != 'c3'}
+    turn = _s9b_turn(args, 'Vì sao dự báo G ngày 14/8/2023 thấp?', paired, claims)
+    assert turn.status == 'ok', turn.validation_errors
+    assert ai_live_eval._l4f_ranked_ok(ordered, turn) is True
+    assert ai_live_eval._l4f_ranked_ok(reversed_order, turn) is False
+    assert ai_live_eval._l4f_ranked_ok(paired, turn) is True
+
+
+def test_l4f_tron_chieu_khong_co_nhom_cung_chieu_khong_in_top_0(monkeypatch):
+    _s9b_tool(monkeypatch)
+    answer = (L4E_HEAD + 'Dự báo cao chủ yếu do chế độ sau 2018 kéo xuống {c1} '
+              'và lịch Urban Blowout kéo xuống {c2}.')
+    turn = _s9b_turn(ARGS_MONTH, L4E_QUESTION, answer,
+                     {k: L4E_CLAIMS[k] for k in ('c1', 'c2')})
+    assert turn.status == 'answer_validation_failed'
+    assert any('chọn một chiều cho câu xếp hạng' in err and 'top-0' not in err
+               for err in turn.validation_errors), turn.validation_errors
 
 
 def test_s9b2_tool_rank_dir_va_nguong(monkeypatch):
