@@ -67,7 +67,7 @@ ROW_KEYS = ('dimension_value', 'phase_code', 'turning_year', 'candidate', 'perio
 SIGNED = {'delta_r', 'contrib_n', 'contrib_u', 'contrib_p', 'yoy_rate', 'share_shift_pp', 'r_change_rate',
           'n_change_rate', 'u_change_rate', 'p_change_rate',
           'total_change_rate', 'cagr', 'magnitude', 'august_odd_vs_even', 'loo_min_odd_vs_even', 'loo_max_odd_vs_even',
-           'eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess', 'contribution_log'}
+           'eom_excess', 'loo_min_eom_excess', 'loo_max_eom_excess', 'contribution_log', 'pct_vs_base'}
 # Câu so sánh ("thấp hơn"...) được nói khi dẫn một cột chênh lệch / kết luận so sánh do tool tính
 COMPARED = SIGNED | {'gap_g_minus_r', 'odd_even_order', 'improvement_vs_floor',   # B3: mức thấp hơn mốc sàn, tool tính
                      'beats_floor_all_folds', 'n_pass_floor'}                        # "vượt mốc sàn ở cả 3 fold", tool tính
@@ -120,6 +120,7 @@ FIELD_LABEL = {'r': 'R', 'g': 'G', 'r_prior_year': 'R', 'r_start': 'R', 'r_end':
                'coverage_80': 'tỷ lệ ngày trong khoảng 80%, backtest', 'tai_tao_bien_do': 'tỷ lệ tái tạo biên độ tháng 8/2021',
                 'improvement_vs_floor': 'điểm thấp hơn mốc seasonal naive 2 năm',
                 'contribution_log': 'đóng góp vào log(G) dự báo', 'multiplier': 'hệ số nhân của nhóm biến',
+                'pct_vs_base': '% so với mức nền',
                 'base_log': 'mức nền log(G)', 'forecast_log': 'log(G) dự báo'}
 FEATURE_GROUP_LABEL = {'mua_vu': 'mùa vụ', 'dau_cuoi_thang': 'đầu/cuối tháng',
                        'che_do_sau_2018': 'chế độ sau 2018', 'nam_chan_le': 'năm chẵn/lẻ',
@@ -130,7 +131,8 @@ METRIC_FAMILY = {f: 'R' for f in ('r', 'r_prior_year', 'r_start', 'r_end', 'r_to
                                    'contrib_p', 'yoy_rate', 'r_change_rate', 'share', 'share_shift_pp',
                                    'contribution_to_delta', 'r_same_month_prior_year', 'r_12m_before', 'r_12m_after',
                                    'total_change_rate', 'cagr', 'magnitude')} | {'g': 'G'} | {
-    f: 'G' for f in ('g_forecast', 'lower_g', 'upper_g', 'contribution_log', 'multiplier', 'base_log', 'forecast_log')
+    f: 'G' for f in ('g_forecast', 'lower_g', 'upper_g', 'contribution_log', 'multiplier', 'pct_vs_base',
+                    'base_log', 'forecast_log')
 } | {'cogs_forecast': 'COGS', 'cogs_ratio': 'COGS/G'}
 _START_FIELDS = {'r_start', 'n_start', 'u_start', 'p_start'}
 DRIVER_FAMILY = {f'{k}{x}': k.upper() for k in 'nup' for x in ('_start', '_end', '_change_rate')} | {
@@ -275,6 +277,14 @@ def _fmt(v, fld: str, absolute: bool) -> str:
         return num(x, 1, signed) + ' điểm %'
     if fld in PP_FRAC:
         return num(x * 100, 1, signed) + ' điểm %'
+    if fld == 'pct_vs_base':
+        return num(x, 1, signed and not absolute) + '%'
+    if fld == 'max_abs_pct':
+        return num(x, 3) + '%'
+    if fld == 'threshold_pct':
+        return num(x, 1) + '%'
+    if fld == 'n':
+        return num(x)
     if fld in ('contribution_log', 'base_log', 'forecast_log'):
         return num(x, 4, signed) + ' log'
     if fld == 'multiplier':
@@ -442,6 +452,116 @@ def _verified_driver_rank(sent: str, results: dict) -> bool:
     return bool(top) and bool(clauses) and all(x == str(top).upper() for x in said)
 
 
+def _verified_explain_rank(sent: str, by_id: dict, results: dict) -> bool:
+    """Đối chiếu mọi nhóm L4 được dẫn trong câu với top-k của đúng một kết quả tool."""
+    refs = {}
+    for cid in _PLACEHOLDER.findall(sent):
+        item = by_id.get(cid)
+        if not item or item[2] not in ('contribution_log', 'multiplier', 'pct_vs_base'):
+            continue
+        path, row = item[0].get('path', ''), item[3]
+        ref = path.split('.')[0]
+        res = results.get(ref)
+        if not row or not res or not res.ok or not res.evidence or res.evidence.tool != 'explain_forecast':
+            continue
+        refs.setdefault(ref, set()).add(row.get('feature_group'))
+    if len(refs) != 1 or any(w in sent.lower() for w in WEAK_WORDS):
+        return False
+    ref, groups = next(iter(refs.items()))
+    if None in groups or not groups:
+        return False
+    rows = results[ref].rows
+    said = _PLACEHOLDER.sub(' ', sent).lower()
+    up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', said))
+    down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', said))
+    if up and down:
+        return False
+    if up or down:
+        direction = 1 if up else -1
+        selected = [r for r in rows if r['feature_group'] in groups]
+        if len(selected) != len(groups) or any(r['contribution_log'] * direction <= 0 for r in selected):
+            return False
+        expected = {r['feature_group'] for r in rows
+                    if r['contribution_log'] * direction > 0 and r.get('rank_dir') in range(1, len(groups) + 1)}
+    else:
+        expected = {r['feature_group'] for r in rows if r.get('rank') in range(1, len(groups) + 1)}
+    return (len(expected) == len(groups) and groups == expected
+             and all(str(r.get('feature_label', '')).lower() in said for r in rows
+                     if r['feature_group'] in groups))
+
+
+_SMALL_COUNT = re.compile(r'(\{c\d+\})\s+nhóm\s+(?:còn\s+lại|khác|có\s+ảnh\s+hưởng)', re.I)
+_SMALL_UNDER = re.compile(r'\b(?:dưới|nhỏ hơn)\s*(\{c\d+\})', re.I)
+_SMALL_MAX = re.compile(r'\b(?:tối đa|không quá|lớn nhất trong đó)\s*(\{c\d+\})', re.I)
+_SMALL_REMAINDER = re.compile(r'\bnhóm\s+còn\s+lại\b', re.I)
+_EXPLAIN_REMAINDER_UNNUMBERED = re.compile(
+    r'\b(?:nhóm|yếu\s+tố|biến|thành\s+phần)\s+(?:khác|còn\s+lại)\b', re.I)
+_SUM_WORD = re.compile(r'\b(?:tổng|cộng lại|cộng dồn)\b', re.I)
+
+
+def _negated_sum(sent: str, start: int) -> bool:
+    before = re.findall(r'\b[\wÀ-ỹ]+\b', sent[:start].lower())[-3:]
+    return 'không' in before or 'chẳng' in before
+
+
+def _explain_significant_cited(ref: str, answer: str, values: dict, results: dict) -> bool:
+    """Các nhóm từ ngưỡng trở lên của một kết quả đã có số trong toàn câu trả lời."""
+    res = results.get(ref)
+    if not res or not res.ok or not res.evidence or res.evidence.tool != 'explain_forecast':
+        return False
+    threshold = res.derived['small_groups']['threshold_pct']
+    significant = {r['feature_group'] for r in res.rows if abs(r['pct_vs_base']) >= threshold}
+    cited = {m[1] for cid, (path, _value, _shown) in values.items() if '{' + cid + '}' in answer
+             and path.startswith(ref + '.rows[')
+             and (m := re.search(r'\.rows\[([^]]+)\]\.(?:pct_vs_base|contribution_log|multiplier)$', path))}
+    return significant <= cited
+
+
+def _small_groups_errors(sent: str, answer: str, values: dict, results: dict) -> list[str]:
+    """Đối chiếu cả vị trí hai claim, ngưỡng thật và tập nhóm đã dẫn số trong lời."""
+    ids = _PLACEHOLDER.findall(sent)
+    paths = {cid: values[cid][0] for cid in ids if cid in values}
+    small_claim = any('.derived.small_groups.' in p for p in paths.values())
+    remainder = bool(_SMALL_REMAINDER.search(sent))
+    other = bool(re.search(r'\bnhóm\s+khác\b', sent, re.I))
+    count = _SMALL_COUNT.search(sent)
+    if not (small_claim or ids and (remainder or other or count
+                                    or re.search(r'mỗi\s+nhóm\s+(?:dưới|nhỏ hơn)\s*\{c\d+\}', sent, re.I))):
+        return []
+
+    # Liệt kê tên và số của từng nhóm là một lời khác với tóm tắt "N nhóm ... dưới X".
+    if (remainder or other) and not small_claim and not count and not _SMALL_UNDER.search(sent) \
+            and not _SMALL_MAX.search(sent):
+        row_refs = {p.split('.')[0] for p in paths.values() if '.rows[' in p}
+        if len(row_refs) == 1:
+            ref = row_refs.pop()
+            if _explain_significant_cited(ref, answer, values, results):
+                return []
+        return ['"còn lại/khác" cần dẫn đủ nhóm có ảnh hưởng lớn của cùng kết quả explain_forecast']
+    refs = {p.split('.')[0] for p in paths.values() if '.derived.small_groups.' in p}
+    if len(refs) != 1:
+        return ['số nhóm và ngưỡng % phải trỏ vào derived.small_groups']
+    ref = refs.pop()
+    if (remainder or other or any(p == ref + '.derived.small_groups.n' for p in paths.values())) and not count:
+        return ['số nhóm phải trỏ vào derived.small_groups.n']
+    if count and paths.get(count[1][1:-1]) != ref + '.derived.small_groups.n':
+        return ['số nhóm phải trỏ vào derived.small_groups.n']
+    under, maximum = _SMALL_UNDER.search(sent), _SMALL_MAX.search(sent)
+    if not under and not maximum:
+        return ['ngưỡng nhóm nhỏ phải trỏ vào derived.small_groups.threshold_pct']
+    if under and paths.get(under[1][1:-1]) != ref + '.derived.small_groups.threshold_pct':
+        return ['"dưới" phải trỏ vào derived.small_groups.threshold_pct']
+    if maximum and paths.get(maximum[1][1:-1]) != ref + '.derived.small_groups.max_abs_pct':
+        return ['"tối đa/không quá/lớn nhất trong đó" phải trỏ vào derived.small_groups.max_abs_pct']
+    if remainder or other:
+        res = results.get(ref)
+        if not res or not res.ok or not res.evidence or res.evidence.tool != 'explain_forecast':
+            return ['nhóm còn lại/khác thiếu kết quả explain_forecast cùng nguồn']
+        if not _explain_significant_cited(ref, answer, values, results):
+            return ['"còn lại/khác" cần dẫn đủ nhóm có ảnh hưởng lớn; nói "N nhóm có ảnh hưởng dưới ngưỡng mỗi nhóm"']
+    return []
+
+
 def _criteria(sent: str) -> set[str]:
     """Tiêu chí xếp hạng câu văn nêu: {'cagr'}, {'tien'}, cả hai ("cả mức đổi R bằng tiền lẫn CAGR") hoặc rỗng."""
     s = _PLACEHOLDER.sub(' ', sent).lower()
@@ -589,7 +709,7 @@ def _label_parts(fld: str, row: dict | None) -> tuple:
     """(chỉ tiêu, nhóm, kỳ, phần thêm) do app dựng từ chính ô dữ liệu; chỉ tiêu None nếu cột chưa có nhãn."""
     row_ = row or {}
     group = row_.get('dimension_value') or (f"giai đoạn {row_['phase_code']}" if row_.get('phase_code') else None)
-    if row_.get('feature_group') and fld in ('contribution_log', 'multiplier'):
+    if row_.get('feature_group') and fld in ('contribution_log', 'multiplier', 'pct_vs_base'):
         group = 'nhóm ' + FEATURE_GROUP_LABEL.get(row_['feature_group'], row_['feature_group'])
     if row_.get('candidate_label') and (row_.get('is_primary') is False or fld not in FORECAST_FIELDS):
         # số của ứng viên khác model chính, hoặc số backtest của từng ứng viên: nhãn ghi rõ ứng viên nào
@@ -601,20 +721,33 @@ def _label_parts(fld: str, row: dict | None) -> tuple:
         extra.append(f"sai số tháng điển hình {num(row_['typical_month_error'], 1)}% (backtest 2020–2022)")
     if fld in FORECAST_FIELDS and row_.get('is_partial'):
         extra.append(f"chỉ {row_['n_days']}/{row_['n_days_in_period']} ngày có dự báo")
-    if fld in ('contribution_log', 'multiplier') and row_.get('is_partial'):
+    if fld in ('contribution_log', 'multiplier', 'pct_vs_base') and row_.get('is_partial'):
         extra.append(f"chỉ {row_['n_days']}/{row_['n_days_in_period']} ngày trong tháng")
     return FIELD_LABEL.get(fld), group, _year_of(fld, row), extra
 
 
-def _label(fld: str, row: dict | None, clause: str, actual: bool = False) -> str:
-    """Nhãn do app dựng từ chính ô dữ liệu: (chỉ tiêu, nhóm, năm). Bỏ nhãn chỉ khi vế câu đã gọi đúng chỉ tiêu,
-    nhóm và năm của một số tiền R/G/ΔR. actual (B7): câu trả lời có cả số dự báo, nên số thực tế luôn mang nhãn
-    "thực tế" do app gắn, như số dự báo luôn mang nhãn "dự báo"."""
+def _label(fld: str, row: dict | None, clause: str, actual: bool = False, answer: str = '',
+           after: str = '') -> str:
+    """Nhãn do app dựng từ ô dữ liệu; số L4 bỏ nhãn khi vế có đúng nhóm và câu trả lời có đúng kỳ.
+    actual (B7): khi có cả dự báo, số thực tế luôn mang nhãn "thực tế" do app gắn."""
     name, group, year, extra = _label_parts(fld, row)
     if name is None:
         return ''
     if actual:
         return ' (' + ', '.join([f'{name} thực tế'] + [str(x) for x in (group, year) if x is not None] + extra) + ')'
+    if fld in ('contribution_log', 'multiplier', 'pct_vs_base') and row and row.get('feature_group'):
+        feature = str(row.get('feature_label') or FEATURE_GROUP_LABEL.get(row['feature_group'], row['feature_group']))
+        period = _claim_period(row)
+        said_period = any(_period_match(spec, period) for spec in _periods(answer))
+        # Phần "so với mức nền" thường đứng SAU chỗ đặt; chỉ đọc tới chỗ đặt / vế kế tiếp.
+        before = re.split(r'[,;:()—–.!?\n]|\bvà\b', clause, flags=re.I)[-1]
+        local = before + re.split(r'[,;:()—–.!?\n]|\bvà\b|\{c\d+\}', after, maxsplit=1, flags=re.I)[0]
+        has_base = 'mức nền' in local.lower()
+        if feature.lower() in before.lower() and has_base and said_period:
+            return ' (' + ', '.join(extra) + ')' if extra else ''
+        short = ([] if 'so với mức nền' in local.lower() else ['so với mức nền']) \
+            + ([str(year)] if year is not None else [])
+        return ' (' + ', '.join(short + extra) + ')'
     parts = [name] + [str(x) for x in (group, year) if x is not None] + extra
     said = (fld in ('r', 'g', 'r_prior_year', 'delta_r', 'r_start', 'r_end')
             and _said_metric(clause) == METRIC_FAMILY.get(fld)
@@ -1285,6 +1418,123 @@ _NOFC_Q = re.compile(r'(?:dự báo|dự kiến|dự đoán)\s+(?:\S+\s+){0,2}?(
                      r'lợi nhuận|biên lợi nhuận|doanh thu thuần|doanh thu thực nhận|(?-i:R)(?!\w))', re.I)
 _COMPARE_Q = re.compile(r'so với|so sánh|cùng tháng|cùng kỳ|chênh', re.I)
 _BACKTEST_MEASURE = {'score', 'mape_g_thang'}
+_DEFINITION_Q = re.compile(r'là\s+gì|định\s+nghĩa|được\s+tính|tính[^.!?;\n]{0,40}thế\s+nào|'
+                           r'what\s+is|what\s+does|define(?:d)?\b|definition\b|'
+                           r'mean(?:ing)?\b|stand\s+for', re.I)
+_DEFINITION_SUBSTITUTE = re.compile(
+    r'không\s+có\s+mã\s+(?:\w+\s+)?riêng|tương\s+ứng\s+là|tương\s+đương|chính\s+là|'
+    r'hay\s+còn\s+gọi|gần\s+với', re.I)
+_UNKNOWN_DEFINITION = re.compile(r'chưa\s+có\s+định\s+nghĩa\s+cho\s+khái\s+niệm\s+này', re.I)
+_AMBIGUOUS_DEFINITION = re.compile(r'(?<!\w)basket\s+size(?!\w)', re.I)
+_AOV_AS_P = re.compile(r'\bAOV\s*(?:=|là)\s*(?:P\b|R\s*/\s*Q\b|giá\s+(?:thực\s+thu\s+)?'
+                       r'(?:TB|trung\s+bình)\s+mỗi\s+món\b)', re.I)
+_AOV_CHOT = re.compile(r'\bAOV\b[^.;!?]*\bđã\s+chốt\b', re.I)
+_RULE10_DEFINITION_CODES = {'R', 'G', 'N', 'U', 'P', 'Q', 'C', 'F', 'AOV', 'G_forecast'}
+_NUMERIC_DEFINITION_QUERY = re.compile(r'bao\s+nhiêu|\b(?:năm|tháng|kỳ)\s+\d', re.I)
+_DEFINITION_FOLLOWUP = re.compile(r'\b(?:nó|(?:chỉ\s+số|con\s+số|mã)\s+(?:đó|này))\b', re.I)
+
+
+def _asked_definition_codes(question: str) -> set[str]:
+    """Mã viết nguyên dạng và aliases_vi là nguồn duy nhất để nhận mã được hỏi."""
+    asked = set()
+    for code, metric in cat.METRICS.items():
+        if re.search(r'(?<!\w)' + re.escape(code) + r'(?!\w)', question or ''):
+            asked.add(code)
+            continue
+        if any(re.search(r'(?<!\w)' + re.escape(alias) + r'(?!\w)', question or '', re.I)
+               for alias in metric['aliases_vi']):
+            asked.add(code)
+    # F có trong prompt nhưng chưa có trong catalog: nhận đúng mã để báo thiếu, không suy ra công thức.
+    if re.search(r'(?<!\w)F(?!\w)', question or ''):
+        asked.add('F')
+    if 'G' in asked and re.search(r'(?<!\w)G\s+dự\s+báo\b', question, re.I):
+        asked.remove('G')
+        asked.add('G_forecast')
+    return asked
+
+
+def _explicit_definition_codes(question: str, asked: set[str]) -> set[str]:
+    """Chỉ mã quy tắc 10 đứng sát cụm hỏi định nghĩa mới buộc đọc catalog."""
+    explicit = set()
+    for code in asked & _RULE10_DEFINITION_CODES:
+        names = [code] + (cat.METRICS[code]['aliases_vi'] if code in cat.METRICS else [])
+        if code == 'G_forecast':
+            names.append('G dự báo')
+        for name in names:
+            token = r'(?<!\w)' + re.escape(name) + r'(?!\w)'
+            strong_patterns = (
+                rf'{token}\s+(?:là\s+gì|nghĩa\s+là\s+gì|(?:được\s+)?tính[^.!?;\n]{{0,40}}(?:thế\s+nào|ra\s+sao))',
+                rf'(?:định\s+nghĩa|define|definition\s+of|what\s+is|what\s+does|công\s+thức(?:\s+tính)?)\s+{token}',
+                rf'how\s+is\s+{token}[^.!?;\n]{{0,40}}\bdefined\b',
+                rf'{token}\s+(?:mean|meaning|stand\s+for)\b',
+            )
+            weak_pattern = rf'cách\s+tính\s+{token}'
+            if (any(re.search(pattern, question or '', re.I) for pattern in strong_patterns)
+                    or (not _NUMERIC_DEFINITION_QUERY.search(question or '')
+                        and re.search(weak_pattern, question or '', re.I))):
+                explicit.add(code)
+                break
+    return explicit
+
+
+def definition_question_errors(question: str, values: dict, results: dict, answer: str, status: str,
+                               history: list[dict] | tuple = ()) -> list[str]:
+    """Đối chiếu mã được hỏi với mã được dùng; không ánh xạ khái niệm sang mã khác."""
+    asked = _asked_definition_codes(question)
+    explicit = _explicit_definition_codes(question, asked)
+    previous = history[-1].get('question', '') if history and isinstance(history[-1], dict) else ''
+    if previous and _DEFINITION_FOLLOWUP.search(question or ''):
+        inherited = _asked_definition_codes(previous)
+        asked |= inherited
+        if _DEFINITION_Q.search(question or '') and not _NUMERIC_DEFINITION_QUERY.search(question or ''):
+            explicit |= inherited & _RULE10_DEFINITION_CODES
+    definitions = {ref: res.rows[0].get('metric_id') for ref, res in results.items()
+                   if res.ok and res.evidence and res.evidence.tool == 'get_metric_definition' and res.rows}
+    cited_definition_refs = {ref for path, _value, _shown in values.values()
+                             if (ref := path.split('.')[0]) in definitions}
+    errs = []
+    if _AMBIGUOUS_DEFINITION.search(question or ''):
+        if status != 'needs_clarification' or definitions or not re.search(r'\?|bạn\s+muốn|ý\s+bạn', answer or '', re.I):
+            errs.append('"basket size" có thể là U hoặc AOV; hỏi lại người dùng, không chọn mã thay')
+        return errs
+    # Nhánh này áp dụng theo hành vi trả lời: dùng định nghĩa Y để nối thay thế dù câu hỏi không hề nêu Y.
+    if _DEFINITION_SUBSTITUTE.search(answer or ''):
+        substituted = set(definitions.values()) - asked
+        if substituted:
+            errs.append(f'không dùng get_metric_definition({", ".join(sorted(substituted))}) để ánh xạ thay '
+                        'khái niệm/mã không được hỏi')
+    cited_unasked = {definitions[ref] for path, _value, _shown in values.values()
+                     if path.rsplit('.', 1)[-1] in ('formula', 'unit', 'additivity')
+                     and (ref := path.split('.')[0]) in definitions and definitions[ref] not in asked}
+    clarifies_candidate = (status == 'needs_clarification'
+                           and re.search(r'\?|bạn\s+muốn|ý\s+bạn', answer or '', re.I)
+                           and any(re.search(r'(?<!\w)' + re.escape(code) + r'(?!\w)', answer or '')
+                                   for code in cited_unasked))
+    if cited_unasked and (status == 'ok' or status == 'needs_clarification' and not clarifies_candidate):
+        errs.append('chưa có định nghĩa cho khái niệm này; hỏi lại hoặc liệt kê mã gần nhất '
+                    'bằng đúng nhãn của mã đó, không dùng định nghĩa mã khác thay thế')
+    if not asked:
+        return errs
+    for code in sorted(asked):
+        if code not in cat.METRICS:
+            if code not in explicit:
+                continue
+            unavailable = (status == 'unsupported' and not definitions
+                           and re.search(r'\b(?:không|chưa|thiếu)\s+(?:có\s+)?định\s+nghĩa\s+'
+                                         + re.escape(code) + r'\b', answer or '', re.I))
+            if not unavailable:
+                errs.append(f'catalog chưa có định nghĩa {code}; nói rõ không có định nghĩa, không dùng mã khác thay thế')
+        elif code in explicit and ((status == 'ok' and code not in definitions.values())
+                                   or cited_definition_refs and not any(definitions[ref] == code
+                                                                         for ref in cited_definition_refs)):
+            errs.append(f'câu hỏi định nghĩa {code} phải dẫn get_metric_definition({code}); '
+                        'không dùng định nghĩa mã khác thay thế')
+        if code == 'AOV':
+            if _AOV_AS_P.search(answer or ''):
+                errs.append('AOV là R / N (= U × P), không phải P = R / Q')
+            if cat.METRICS['AOV']['decision_status'] != 'chot' and _AOV_CHOT.search(answer or ''):
+                errs.append('AOV chưa có quyết định chốt riêng trong catalog; không gọi là "đã chốt"')
+    return errs
 
 
 def forecast_question_errors(question: str, values: dict, results: dict, answer: str = '',
@@ -1310,6 +1560,17 @@ def forecast_question_errors(question: str, values: dict, results: dict, answer:
                for m in _CAUSAL.finditer(sent)):
             errs.append('phân rã model không chứng minh nguyên nhân; chỉ nêu đóng góp trong model')
         clauses = _SENTENCE.split(answer or '')
+        explain_refs = [ref for ref, res in results.items() if res.ok and res.evidence
+                        and res.evidence.tool == 'explain_forecast']
+        for sent in clauses:
+            if _PLACEHOLDER.search(sent) or not _EXPLAIN_REMAINDER_UNNUMBERED.search(sent):
+                continue
+            if len(explain_refs) != 1:
+                errs.append('"nhóm/yếu tố/biến/thành phần khác/còn lại" không có số cần đúng một kết quả '
+                            'explain_forecast; nói "{n} nhóm có ảnh hưởng dưới {threshold} mỗi nhóm"')
+            elif not _explain_significant_cited(explain_refs[0], answer, values, results):
+                errs.append('"nhóm/yếu tố/biến/thành phần khác/còn lại" cần dẫn đủ nhóm có ảnh hưởng lớn; '
+                            'nói "{n} nhóm có ảnh hưởng dưới {threshold} mỗi nhóm"')
         for cid, (path, _v, _s) in values.items():
             res = results.get(path.split('.')[0])
             if res is None or res.evidence is None or res.evidence.tool != 'explain_forecast':
@@ -1351,10 +1612,16 @@ def forecast_question_errors(question: str, values: dict, results: dict, answer:
                       and results[path.split('.')[0]].evidence.tool == 'explain_forecast' and 'rows[' in path}
             if len(groups) == 1 and re.search(r'các (?:nhóm|chương trình)[^.;]*?(?:còn lại|khác)', sent, re.I):
                 errs.append('một ô đóng góp chỉ thuộc một nhóm biến; không gộp thành "các nhóm khác"')
-            if groups and re.search(r'rõ nhất|chủ yếu', sent, re.I):
-                errs.append('phân rã chưa cấp xếp hạng có kiểm; không nói nhóm "rõ nhất" hoặc "chủ yếu"')
+            if groups and re.search(r'rõ nhất', sent, re.I):
+                errs.append('phân rã không chứng minh nhóm "rõ nhất"; nêu thứ hạng theo độ lớn đóng góp nếu cần')
             if groups and re.search(r'các nhóm còn lại\s+góp\s+(?:dương|âm)', sent, re.I):
                 errs.append('không gán cùng một chiều cho "các nhóm còn lại"; nêu chiều của từng nhóm')
+            if any(not _negated_sum(sent, m.start()) for m in _SUM_WORD.finditer(sent)):
+                pct_paths = {values[cid][0] for cid in ids if cid in values
+                             and values[cid][0].endswith('.pct_vs_base')}
+                if len(pct_paths) >= 2:
+                    errs.append('% của từng nhóm nhân với nhau, không cộng')
+            errs += _small_groups_errors(sent, answer, values, results)
     specs = question_periods(q)
     explain_used = [u for u in used if u[3] == 'explain_forecast' and u[2] is not None]
     if explain_used and specs and any(not any(_period_match(s, _claim_period(u[2])) for s in specs)
@@ -1503,6 +1770,15 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
         prev = next((p for p in reversed(pieces[:i]) if p.strip()), '')
         paths = [by_id[cid][0]['path'] for cid in _PLACEHOLDER.findall(sent) if cid in by_id]
         ranks = [r for r in map(_rank_direction, paths) if r]
+        explain_groups = [by_id[cid][3] for cid in _PLACEHOLDER.findall(sent) if cid in by_id
+                          and by_id[cid][3] and by_id[cid][3].get('feature_group')
+                          and (res := results.get(by_id[cid][0]['path'].split('.')[0])) is not None
+                          and res.evidence and res.evidence.tool == 'explain_forecast']
+        if explain_groups and any(w in low for w in ('chủ yếu', 'mạnh nhất', 'lớn nhất')):
+            if not _verified_explain_rank(sent, by_id, results):
+                errors.append('nhóm phân rã nói "chủ yếu/mạnh nhất/lớn nhất" phải đúng top-k theo chiều và rank_dir '
+                              '(hoặc rank khi không nêu chiều) của cùng kết quả tool')
+            continue
         if not ranks and _verified_driver_rank(sent, results):
             continue
         if not ranks and any(by_id[cid][2] in RANK_BOTH for cid in _PLACEHOLDER.findall(sent) if cid in by_id):
@@ -1663,7 +1939,8 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             # chỉ bỏ dấu khi chữ tăng/giảm đúng dấu đi liền trước số; còn lại in dấu thật (−6,4%)
             absolute = near != 0
         s = _fmt(v, fld, absolute)
-        lbl = _label(fld, row, seg, actual=mixed and kind.get(cid) == 'thuc_te') if _is_num(v) else ''
+        lbl = _label(fld, row, seg, actual=mixed and kind.get(cid) == 'thuc_te', answer=answer,
+                     after=answer[m.end():]) if _is_num(v) else ''
         values[cid] = (c['path'], v, s + lbl)
         rendered.append(f'**{s}**{lbl}')
         # model hay viết lại đơn vị sau chỗ đặt ("{c1} VND"): app đã ghi đơn vị, bỏ bản lặp

@@ -19,6 +19,10 @@ env:
     value: databricks
   - name: RETAIL_DATABRICKS_CATALOG
     value: retail_lab
+  # Đọc bản dữ liệu đang phục vụ từ retail_control.state (r_<id>_reporting), giống bản public (S9, PM cho sửa 2026-10-20).
+  # SP của app phải có quyền đọc retail_control.state và bảng của bản đó trước khi deploy.
+  - name: RETAIL_RELEASE_MODE
+    value: versioned
   # Các trang đọc bằng SP của app (nền tảng tự đặt DATABRICKS_HOST/CLIENT_ID/CLIENT_SECRET).
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse

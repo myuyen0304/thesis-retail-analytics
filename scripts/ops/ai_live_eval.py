@@ -776,10 +776,80 @@ ACCEPT_RAG = [
            'do app gắn. Không lẫn G với R/COGS, không lấy số corpus.'),
 ]
 
+# S9b: chốt trước lượt model thật. Bộ này chỉ đo cách trình bày L4, không sửa l4/l4b/l4c.
+ACCEPT_L4D = [
+    C('L4D1', 'Vì sao dự báo G tháng 8/2023 thấp?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 8})],
+      paths=[({FX}, 'rows[promo_urban_blowout].pct_vs_base'),
+             ({FX}, 'rows[che_do_sau_2018].pct_vs_base')],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4D',
+      hand='Tối đa ba nhóm có số, câu trả lời tối đa 700 ký tự. Dùng % từng nhóm so với mức nền; nhóm chế độ sau '
+           '2018 áp dụng mọi tháng. Không gọi đây là nguyên nhân thực tế hay cộng các %.',),
+    C('L4D2', 'Vì sao dự báo G ngày 1/5/2024 cao?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 5, 'day': 1})],
+      paths=[({FX}, 'rows[dau_cuoi_thang].pct_vs_base')],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4D',
+      hand='Đúng ngày 01/05/2024; tối đa ba nhóm có số, tối đa 700 ký tự, % là từng nhóm so với mức nền.'),
+    C('L4D3', 'Giải thích dự báo G tháng 8/2023 theo từng nhóm biến.', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2023, 'month': 8})],
+      paths=[({FX}, 'rows[promo_urban_blowout].pct_vs_base')],
+      labels=['Phân rã model, không phải nguyên nhân'], group='L4D',
+      hand='Liệt kê đủ 10 nhóm và đúng chiều từng nhóm. Có thể dài hơn 700 ký tự vì người dùng hỏi từng nhóm; '
+           'không cộng % hoặc kết luận nhân quả.'),
+    C('L4D4', 'Tổng các nhóm kéo xuống dự báo G tháng 8/2023 bao nhiêu phần trăm?', {'ok', 'unsupported'},
+      group='L4D',
+      hand='Giải thích % từng nhóm không cộng được; không đưa tổng cộng phần trăm giả, kể cả khi vẫn dẫn một nhóm.'),
+    C('L4D5', 'Urban Blowout có làm G thực tế tháng 8/2023 giảm không?', {'ok', 'unsupported', 'no_data'},
+      group='L4D',
+      hand='Phân rã model không chứng minh Urban Blowout gây thay đổi G thực tế; không khẳng định quan hệ nhân quả.'),
+]
+for _case, _rule in zip(ACCEPT_L4D, ('short', 'short', 'all_groups', 'no_sum', 'no_cause')):
+    _case['l4d_rule'] = _rule
+
+# B5b lượt 2: soạn các câu dưới đây trước khi thêm alias AOV/U/P. Chưa chạy model.
+ACCEPT_B5B_PARAPHRASE = [
+    C('B5BP1', 'Tiền thu bình quân trên một đơn giao thành công được xác định ra sao?',
+      {'needs_clarification'}, group='B5B',
+      hand='Không chứa mã/alias: hỏi lại và nêu AOV là mã ứng viên; không thay bằng P.'),
+    C('B5BP2', 'Could you define average order value for a delivered order?', {'ok'},
+      tools=[(DEF, {'metric': 'AOV'})],
+      paths=[({DEF}, '.formula'), ({DEF}, '.unit')], group='B5B',
+      hand='Đúng AOV, công thức R/N và VND/đơn; không dùng định nghĩa P thay.'),
+    C('B5BP3', 'Định nghĩa lượng sản phẩm bình quân trên một đơn đã giao là gì?', {'needs_clarification'},
+      group='B5B', hand='Không chứa mã/alias: hỏi lại và nêu U là mã ứng viên.'),
+    C('B5BP4', 'Trên một sản phẩm đã giao, mức thu bình quân được tính ra sao?',
+      {'needs_clarification'},
+      group='B5B', hand='Không chứa mã/alias: hỏi lại và nêu P là mã ứng viên.'),
+    C('B5BP5', 'How is gross revenue defined in this catalog?', {'ok'}, tools=[(DEF, {'metric': 'G'})],
+      paths=[({DEF}, '.formula')], group='B5B', hand='Đúng G gồm mọi trạng thái đơn, không gọi là R.'),
+    C('B5BP6', 'What does net revenue mean?', {'ok'}, tools=[(DEF, {'metric': 'R'})],
+      paths=[({DEF}, '.formula')], group='B5B', hand='Đúng R chỉ delivered, không gọi là tiền đã thu.'),
+    C('B5BP7', 'Theo tài liệu, kỳ dự báo trong hợp đồng là gì?', {'ok'},
+      tools=[(SK, {})], group='B5B', hand='RAG về kỳ dự báo; không ép get_metric_definition.'),
+    C('B5BP8', 'Model dự báo chính là gì?', {'ok'},
+      tools=[(FB, {})], group='B5B', hand='Đọc backtest để xác định model chính; không ép get_metric_definition.'),
+    C('B5BP9', 'In this report, what does basket size mean?', {'needs_clarification'}, group='B5B',
+      hand='Hỏi lại người dùng muốn U (món/đơn) hay AOV (VND/đơn), không tự chọn.'),
+    C('B5BP10', 'Chỉ số trung thành khách hàng được hiểu thế nào?', {'needs_clarification', 'unsupported'},
+      group='B5B', hand='Catalog chưa định nghĩa khái niệm này; không lấy C làm nghĩa thay.'),
+    C('B5BP11', 'Vậy nó được tính thế nào?', {'ok'}, tools=[(DEF, {'metric': 'R'})],
+      paths=[({DEF}, '.formula')], after='B5BP11_PREP', group='B5B',
+      hand='Lượt trước hỏi số R năm 2022; lượt này dùng ngữ cảnh để đọc đúng định nghĩa R.'),
+]
+ACCEPT_B5B_PARAPHRASE[-1]['after_question'] = 'R năm 2022 là bao nhiêu?'
+for _case in ACCEPT_B5B_PARAPHRASE:
+    _case['b5b_rule'] = ('ambiguous' if _case['id'] == 'B5BP9' else
+                         'unknown' if _case['id'] == 'B5BP10' else
+                         'ordinary' if _case['id'] in ('B5BP7', 'B5BP8') else
+                         'candidate' if _case['id'] in ('B5BP1', 'B5BP3', 'B5BP4') else 'known')
+    if _case['id'] in ('B5BP1', 'B5BP3', 'B5BP4'):
+        _case['b5b_candidate'] = {'B5BP1': 'AOV', 'B5BP3': 'U', 'B5BP4': 'P'}[_case['id']]
+
 SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D,
         'f': ACCEPT_F, 'g': ACCEPT_G, 'gm': ACCEPT_GM, 'v': ACCEPT_V, 'n': ACCEPT_N, 'b7': ACCEPT_B7,
-        'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C, 'rag': ACCEPT_RAG}
-FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'rag')  # rag có ca trộn dự báo
+        'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C, 'l4d': ACCEPT_L4D, 'rag': ACCEPT_RAG,
+        'b5b_paraphrase': ACCEPT_B5B_PARAPHRASE}
+FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'l4d', 'rag')  # rag có ca trộn dự báo
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -825,6 +895,36 @@ def grade(case, t: service.TurnResult) -> dict:
         got_sources = {row.get('citation') for r in t.results.values() if r.ok and r.evidence
                        and r.evidence.tool == SK for row in r.rows}
         checks['nguon_rag'] = set(case['sources']) <= got_sources
+    if rule := case.get('b5b_rule'):
+        if rule == 'unknown':
+            checks['khong_thay_ma'] = bool(re.search(r'(?:chưa|không)[^.!?]{0,40}định\s+nghĩa|'
+                                                     r'\?|bạn\s+muốn|ý\s+bạn', raw_answer, re.I))
+        elif rule == 'ambiguous':
+            checks['hoi_lai_u_aov'] = bool(re.search(r'\bU\b', raw_answer) and
+                                          re.search(r'\bAOV\b', raw_answer) and
+                                          re.search(r'\?|bạn\s+muốn|ý\s+bạn', raw_answer, re.I))
+        elif rule == 'ordinary':
+            checks['khong_ep_dinh_nghia'] = not any(name == DEF for _, name, _ in t.calls)
+        elif rule == 'candidate':
+            candidate = case['b5b_candidate']
+            checks['hoi_lai_ma_ung_vien'] = bool(re.search(r'(?<!\w)' + re.escape(candidate) + r'(?!\w)', raw_answer)
+                                                   and re.search(r'\?|bạn\s+muốn|ý\s+bạn', raw_answer, re.I))
+    if rule := case.get('l4d_rule'):
+        groups = {m.group(1) for path, _value, _shown in t.values.values()
+                  if (m := re.search(r'\.rows\[([^]]+)\]\.(?:pct_vs_base|contribution_log|multiplier)$', path))}
+        if rule == 'short':
+            checks['toi_da_3_nhom'] = 1 <= len(groups) <= 3
+            checks['toi_da_700_ky_tu'] = len(text) <= 700
+        elif rule == 'all_groups':
+            checks['du_10_nhom'] = groups == tools.EXPLAIN_GROUPS
+        elif rule == 'no_sum':
+            checks['khong_cong_phan_tram'] = bool(re.search(
+                r'không\s+(?:thể\s+)?(?:cộng|tính tổng)|không có tổng %|các\s+%[^.;]*nhân', raw_answer, re.I))
+        elif rule == 'no_cause':
+            checks['khong_khang_dinh_nhan_qua'] = bool(re.search(
+                r'không\s+(?:thể\s+)?(?:chứng minh|kết luận|khẳng định)|chưa\s+(?:đủ|có)\s+(?:bằng chứng|cơ sở)'
+                r'|không phải (?:là )?(?:bằng chứng|nguyên nhân|kết luận)',
+                raw_answer, re.I))
     return {'case_id': case['id'], 'pass': all(checks.values()), 'checks': checks}
 
 
@@ -971,7 +1071,8 @@ def main() -> int:
                          'g = G* (dự báo, bộ phát triển); gm = GM* (dự báo, nghiệm thu B3c); v = V* (biểu đồ B6); '
                          'n = N* (chuỗi từng năm, ghi chú app, 2026-10-17); b7 = K* (held-out router, nghiệm thu AI4, '
                           '2026-10-18); l4 = L4* (phân rã model B4b, bộ phát triển); l4b = L4B* (đã đo); '
-                         'l4c = L4C* (bộ mới sau sửa guard L4B5); rag = RAG* (B5); '
+                         'l4c = L4C* (bộ mới sau sửa guard L4B5); l4d = L4D* (S9b trình bày L4); rag = RAG* (B5); '
+                         'b5b_paraphrase = B5BP* (định nghĩa, chưa chạy model); '
                          'các bộ dự báo cần chế độ versioned')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
@@ -979,8 +1080,9 @@ def main() -> int:
     pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
     by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F + ACCEPT_G
-              + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C + ACCEPT_RAG}
-    if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c')
+              + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C + ACCEPT_L4D + ACCEPT_RAG
+              + ACCEPT_B5B_PARAPHRASE}
+    if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c', 'l4d')
                                   else _forecast_ready(a.backend)):
         print(f'Không chạy bộ {a.set}: {why}.')
         return 2
@@ -1004,13 +1106,21 @@ def main() -> int:
             for case in cases:
                 history = []
                 if case['after']:            # follow-up: chạy lượt trước thật, lấy ngữ cảnh có cấu trúc
-                    prev = service.run_turn(by_id[case['after']]['q'], [], a.backend, p)
+                    prev_q = case.get('after_question') or by_id[case['after']]['q']
+                    prev = service.run_turn(prev_q, [], a.backend, p)
                     tokens_in, tokens_out = tokens_in + prev.prompt_tokens, tokens_out + prev.completion_tokens
                     bounds += prev.prompt_bounds
                     history = [prev.context()]
                 t0 = time.monotonic()
                 t = service.run_turn(case['q'], history, a.backend, p)
                 g = grade(case, t)
+                if case.get('after_question'):
+                    g['checks']['luot_truoc_ok'] = (prev.status == 'ok'
+                                                   and any(name == SUM and args.get('metric') in ('R', 'R_and_G')
+                                                           and args.get('year') == 2022 for _, name, args in prev.calls)
+                                                   and any(path.endswith('.r') for path, _value, _shown
+                                                           in prev.values.values()))
+                    g['pass'] = all(g['checks'].values())
                 tokens_in, tokens_out = tokens_in + t.prompt_tokens, tokens_out + t.completion_tokens
                 bounds += t.prompt_bounds
                 rec = {**g, 'run': run, 'question': case['q'], 'status': t.status, 'calls': [

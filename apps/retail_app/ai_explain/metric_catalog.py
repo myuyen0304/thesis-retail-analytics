@@ -12,7 +12,7 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG_VERSION = 'b5-2026-10-20'    # mở tool tri thức, không thêm relation DWH
+CATALOG_VERSION = 'b5b-2026-10-20b'  # thêm alias và sửa nguồn AOV; bản trước b5b-2026-10-20
 MONEY_UNIT = 'VND'
 
 # SQL quyết định định nghĩa các metric đang mở. Hash = nội dung các file này trong CHECKOUT hiện tại.
@@ -72,10 +72,11 @@ G_LABEL = 'G — doanh thu gộp, gồm cả đơn hủy'        # hợp đồng
 FORECAST_HORIZON = ('2023-01-01', '2024-07-01')       # hợp đồng §2: 548 ngày; ngoài kỳ này không có dự báo
 
 METRICS = {m['metric_id']: m for m in [
-    _m('G', G_LABEL, ['doanh thu gộp', 'tiền hàng mọi đơn'], MONEY_UNIT,
+    _m('G', G_LABEL, ['doanh thu gộp', 'tiền hàng mọi đơn', 'gross revenue'], MONEY_UNIT,
        'SUM(quantity × unit_price), mọi trạng thái đơn, theo ngày đặt hàng', 'cộng qua tập dòng không giao nhau',
        note='Đối chứng sales.csv.Revenue. Không phải R.', sources=[_Y]),
-    _m('R', 'R — doanh thu đơn đã giao', ['doanh thu thuần', 'doanh thu đơn đã giao', 'tiền thực nhận'], MONEY_UNIT,
+    _m('R', 'R — doanh thu đơn đã giao', ['doanh thu thuần', 'doanh thu đơn đã giao', 'tiền thực nhận',
+                                       'net revenue'], MONEY_UNIT,
        'SUM(quantity × unit_price − discount_amount), chỉ order_status = delivered, theo ngày đặt hàng',
        'cộng qua tập dòng không giao nhau',
        note='Đơn returned bị loại cả đơn, không trừ refund thêm. Không phải dòng tiền theo ngày thanh toán.',
@@ -85,9 +86,17 @@ METRICS = {m['metric_id']: m for m in [
     _m('Q', 'Q — số món', ['số món', 'số lượng'], 'món', 'SUM(quantity), chỉ delivered', 'như R', sources=[_Y]),
     _m('C', 'C — số khách', ['số khách'], 'khách', 'COUNT DISTINCT customer_sk, chỉ delivered',
        'KHÔNG cộng qua năm, tháng, nhóm hàng', note='C giảm chưa chứng minh churn.', sources=[_Y]),
-    _m('U', 'U — số món mỗi đơn', ['món mỗi đơn'], 'món/đơn', 'Q / N', 'tính lại tử/mẫu', sources=[_Y, _D]),
-    _m('P', 'P — giá thực thu TB mỗi món', ['giá mỗi món'], f'{MONEY_UNIT}/món', 'R / Q', 'tính lại tử/mẫu',
+    _m('U', 'U — số món mỗi đơn', ['món mỗi đơn', 'số món trung bình mỗi đơn'], 'món/đơn', 'Q / N',
+       'tính lại tử/mẫu', sources=[_Y, _D]),
+    _m('P', 'P — giá thực thu TB mỗi món', ['giá mỗi món', 'giá trung bình mỗi món'], f'{MONEY_UNIT}/món',
+       'R / Q', 'tính lại tử/mẫu',
        sources=[_Y, _D]),
+    _m('AOV', 'AOV — giá trị TB mỗi đơn', ['giá trị đơn trung bình', 'average order value',
+                                         'giá trị trung bình mỗi đơn', 'giá trị TB mỗi đơn',
+                                         'giá trị đơn hàng trung bình', 'doanh thu trung bình mỗi đơn'],
+       f'{MONEY_UNIT}/đơn', 'R / N (= U × P), chỉ order_status = delivered', 'tính lại tử/mẫu',
+       decision_status='de_xuat', note='Theo docs/star_schema.md §3; chưa có quyết định PM/BA chốt riêng cho AOV.',
+       sources=[_Y]),
     _m('delta_r', 'ΔR — R đổi so năm trước', ['R tăng/giảm bao nhiêu'], MONEY_UNIT, 'R_năm − R_năm trước',
        'cộng qua năm liên tiếp', note='Chỉ từ 2014 (2012 thiếu tháng, 2013 không có năm gốc đủ).', sources=[_Y, _D, _S]),
     _m('yoy_rate', '% đổi R so năm trước', ['tăng trưởng R', 'YoY'], 'tỷ lệ (0,1 = 10%)', 'R / R_năm trước − 1',

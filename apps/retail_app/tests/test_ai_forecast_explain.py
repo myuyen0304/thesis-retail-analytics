@@ -1,6 +1,7 @@
 """B4b: đối chứng SQL trực tiếp với bản dữ liệu và kiểm đường guard/answer, không gọi LLM thật."""
 import datetime as dt
 import json
+import math
 import os
 
 import duckdb
@@ -211,6 +212,24 @@ def test_evidence_va_nhan_app_khong_do_model_viet(published):
     assert evidence._resolve('T1.rows[nam_chan_le].contribution_log', fake)[0] is not None
 
 
+def test_b5b2_cau_yeu_to_chinh_la_gi_dung_explain_forecast(published):
+    answer = final(answer='Theo phân rã model tháng 8/2023, nhóm năm chẵn/lẻ góp {c1} vào log(G).',
+                   claims=[{'id': 'c1', 'path': 'T1.rows[nam_chan_le].contribution_log'}])
+    t = service.run_turn('Vì sao dự báo G tháng 8/2023 thấp, yếu tố chính là gì?', [], 'duckdb',
+                         FakeProvider(call('explain_forecast', **ARGS_MONTH), answer))
+    assert t.status == 'ok', t.validation_errors
+    assert [name for _, name, _ in t.calls] == ['explain_forecast']
+
+
+def test_b5b2_model_chinh_la_gi_dung_backtest(published):
+    answer = final(answer='Theo backtest, model chính là {c1}.',
+                   claims=[{'id': 'c1', 'path': 'T1.derived.primary.label'}])
+    t = service.run_turn('Model dự báo chính là gì?', [], 'duckdb',
+                         FakeProvider(call('get_forecast_backtest'), answer))
+    assert t.status == 'ok', t.validation_errors
+    assert [name for _, name, _ in t.calls] == ['get_forecast_backtest']
+
+
 def test_evidence_chan_phan_ra_sai_ky(published):
     claim = [{'id': 'c1', 'path': 'T1.rows[nam_chan_le].contribution_log'}]
     answer = final(answer='Phân rã G tháng 8/2023: năm chẵn/lẻ góp {c1}.', claims=claim)
@@ -243,9 +262,11 @@ GROUPS = sorted(tools.EXPLAIN_GROUPS)
 
 
 def _fake_tables(monkeypatch, *, primary='lgbm_full', groups=None, target_shift=0.0, daily_shift=0.0, daily_n=1,
-                 bad=None):
+                 bad=None, contrib_override=None, days=1):
     """Bảng giả cho ngày 15/08/2023: base 14 + Σ đóng góp = forecast_log. `bad` = (nhóm, cột, giá trị) làm hỏng một ô."""
     contrib = {g: 0.01 * (i - 4) for i, g in enumerate(GROUPS)}
+    if contrib_override is not None:
+        contrib.update(contrib_override)
     base = 14.0
     target = base + sum(contrib.values())
     cands = [{'model': primary, 'cogs_method': 'direct', 'is_primary': True, 'selection_step': 1, 'model_version': 'v1',
@@ -253,7 +274,7 @@ def _fake_tables(monkeypatch, *, primary='lgbm_full', groups=None, target_shift=
               'first_date': dt.date(2023, 1, 1), 'last_date': dt.date(2024, 7, 1)}]
 
     def explain_row(g):
-        r = {'feature_group': g, 'n': 1, 'n_dates': 1, 'min_groups': 10, 'max_groups': 10, 'min_version': 'v1',
+        r = {'feature_group': g, 'n': days, 'n_dates': days, 'min_groups': 10, 'max_groups': 10, 'min_version': 'v1',
              'max_version': 'v1', 'min_run': 'r1', 'max_run': 'r1', 'min_trained': TRAINED, 'max_trained': TRAINED,
              'base_log': base, 'contribution_log': contrib[g], 'forecast_log': target + target_shift}
         if bad and bad[0] == g:
@@ -430,3 +451,358 @@ def test_evidence_chan_xep_hang_chu_yeu(published):
         call('explain_forecast', **ARGS_MONTH), a, a))
     assert turn.status == 'answer_validation_failed'
     assert any('chủ yếu' in e for e in turn.validation_errors)
+
+
+# --- S9b: số và cách nói nghiệp vụ lấy từ kết quả tool giả, không gọi mô hình thật ---
+
+S9B_CONTRIB = {g: 0.001 for g in GROUPS} | {
+    'promo_urban_blowout': -0.2556, 'che_do_sau_2018': -0.3032, 'mua_vu': 0.0685}
+
+
+def _s9b_tool(monkeypatch):
+    _fake_tables(monkeypatch, contrib_override=S9B_CONTRIB, days=31, daily_n=31)
+    result = tools.run(ToolCall('explain_forecast', ARGS_MONTH), 'duckdb')
+    assert result.status == 'ok', result.message
+    return result
+
+
+def test_s9b_phan_tram_thu_hang_va_nhom_nho(monkeypatch):
+    result = _s9b_tool(monkeypatch)
+    rows = {r['feature_group']: r for r in result.rows}
+    for group, log_value in S9B_CONTRIB.items():
+        assert rows[group]['pct_vs_base'] == pytest.approx((rows[group]['multiplier'] - 1) * 100)
+        assert rows[group]['pct_vs_base'] == pytest.approx(math.expm1(log_value) * 100)
+    assert [(r['feature_group'], r['rank']) for r in sorted(result.rows, key=lambda r: r['rank'])[:3]] == [
+        ('che_do_sau_2018', 1), ('promo_urban_blowout', 2), ('mua_vu', 3)]
+    assert evidence._fmt(rows['promo_urban_blowout']['pct_vs_base'], 'pct_vs_base', False) == '−22,6%'
+    assert evidence._fmt(rows['che_do_sau_2018']['pct_vs_base'], 'pct_vs_base', False) == '−26,2%'
+    assert evidence._fmt(rows['mua_vu']['pct_vs_base'], 'pct_vs_base', False) == '+7,1%'
+    assert result.derived['small_groups'] == pytest.approx(
+        {'n': 7, 'threshold_pct': 1.0, 'max_abs_pct': math.expm1(.001) * 100})
+    assert rows['che_do_sau_2018']['rank_dir'] == 1
+    assert rows['promo_urban_blowout']['rank_dir'] == 2
+    assert rows['mua_vu']['rank_dir'] == 1
+
+
+def test_s9b_hoa_rank_on_dinh_va_thang_thieu_ngay(monkeypatch):
+    contrib = {g: 0.001 for g in GROUPS} | {'mua_vu': 0.2, 'promo_urban_blowout': -0.2}
+    _fake_tables(monkeypatch, contrib_override=contrib)
+    day = tools.run(ToolCall('explain_forecast', ARGS_DAY), 'duckdb')
+    assert day.status == 'ok'
+    assert [r['feature_group'] for r in sorted(day.rows, key=lambda r: r['rank'])[:2]] == [
+        'promo_urban_blowout', 'mua_vu']
+    partial = tools.run(ToolCall('explain_forecast', {'period': 'month', 'year': 2024, 'month': 7}), 'duckdb')
+    assert partial.status == 'ok'
+    assert all(r['is_partial'] and r['n_days'] == 1 and r['n_days_in_period'] == 31 for r in partial.rows)
+
+
+def test_s9b_cau_ngan_top_hai_khong_lap_nhan(monkeypatch):
+    from scripts.ops import ai_live_eval
+
+    _s9b_tool(monkeypatch)
+    answer = ('Dự báo G tháng 8/2023 thấp chủ yếu do hai nhóm trong model: '
+              'lịch Urban Blowout kéo xuống {c1} so với mức nền, và chế độ sau 2018 kéo xuống {c2} '
+              '(nhóm này kéo mọi tháng). Mùa vụ kéo lên {c3}. {c4} nhóm có ảnh hưởng dưới {c5} mỗi nhóm.')
+    claims = [{'id': 'c1', 'path': 'T1.rows[promo_urban_blowout].pct_vs_base'},
+              {'id': 'c2', 'path': 'T1.rows[che_do_sau_2018].pct_vs_base'},
+              {'id': 'c3', 'path': 'T1.rows[mua_vu].pct_vs_base'},
+              {'id': 'c4', 'path': 'T1.derived.small_groups.n'},
+              {'id': 'c5', 'path': 'T1.derived.small_groups.threshold_pct'}]
+    turn = service.run_turn('Vì sao dự báo G tháng 8/2023 thấp?', [], 'duckdb', FakeProvider(
+        call('explain_forecast', **ARGS_MONTH), final(answer=answer, claims=claims)))
+    assert turn.status == 'ok', turn.validation_errors
+    assert 'lịch Urban Blowout kéo xuống **22,6%** so với mức nền' in turn.answer_md
+    assert 'chế độ sau 2018 kéo xuống **26,2%** (so với mức nền, 08/2023)' in turn.answer_md
+    assert 'Mùa vụ kéo lên **7,1%** (so với mức nền, 08/2023)' in turn.answer_md
+    assert len(turn.answer_md) <= 700
+    assert ai_live_eval.grade(ai_live_eval.ACCEPT_L4D[0], turn)['pass']
+
+
+def test_s9b_theo_tung_nhom_phai_du_muoi_nhom(monkeypatch):
+    from scripts.ops import ai_live_eval
+
+    _s9b_tool(monkeypatch)
+    claims = [{'id': f'c{i}', 'path': f'T1.rows[{g}].pct_vs_base'} for i, g in enumerate(GROUPS, 1)]
+    answer = 'Phân rã model dự báo G tháng 8/2023 theo từng nhóm: ' + '; '.join(
+        f'{tools.FEATURE_GROUP_LABEL[g]} góp {{c{i}}}' for i, g in enumerate(GROUPS, 1)) + '.'
+    turn = service.run_turn('Giải thích dự báo G tháng 8/2023 theo từng nhóm biến.', [], 'duckdb', FakeProvider(
+        call('explain_forecast', **ARGS_MONTH), final(answer=answer, claims=claims)))
+    assert turn.status == 'ok', turn.validation_errors
+    assert ai_live_eval.grade(ai_live_eval.ACCEPT_L4D[2], turn)['pass']
+
+
+def test_s9b_nhan_ngan_khi_thieu_ten_nhom_hoac_ky(monkeypatch):
+    result = _s9b_tool(monkeypatch)
+    row = next(r for r in result.rows if r['feature_group'] == 'promo_urban_blowout')
+    assert evidence._label('pct_vs_base', row, 'lịch Urban Blowout kéo xuống ', answer='G tháng 8/2023') == \
+        ' (so với mức nền, 08/2023)'
+    assert evidence._label('pct_vs_base', row, 'lịch Urban Blowout kéo xuống ', after=' so với mức nền',
+                           answer='G tháng 8/2023') == ''
+    assert evidence._label('pct_vs_base', row, 'nhóm này kéo xuống ', answer='G tháng 8/2023') == \
+        ' (so với mức nền, 08/2023)'
+    assert evidence._label('pct_vs_base', row, 'lịch Urban Blowout kéo xuống ', answer='G tháng 9/2023') == \
+        ' (so với mức nền, 08/2023)'
+    assert evidence._label('pct_vs_base', row, 'nhóm này kéo xuống ', after=' so với mức nền',
+                           answer='G tháng 8/2023') == ' (08/2023)'
+    assert evidence._label('pct_vs_base', row, 'nhóm này ảnh hưởng mức nền ',
+                           answer='G tháng 8/2023') == ' (so với mức nền, 08/2023)'
+    assert evidence._label('pct_vs_base', row, 'lịch Urban Blowout kéo xuống ', after=' so với mức nền',
+                           answer='G tháng 9/2023') == ' (08/2023)'
+
+
+@pytest.mark.parametrize('answer,claims,needle', [
+    ('Mùa vụ kéo xuống chủ yếu {c1}.',
+     [{'id': 'c1', 'path': 'T1.rows[mua_vu].pct_vs_base'}], 'chủ yếu'),
+    ('Tổng hai nhóm kéo xuống {c1} và {c2}.',
+     [{'id': 'c1', 'path': 'T1.rows[promo_urban_blowout].pct_vs_base'},
+      {'id': 'c2', 'path': 'T1.rows[che_do_sau_2018].pct_vs_base'}], 'không cộng'),
+    ('{c1} nhóm còn lại mỗi nhóm dưới {c2}.',
+     [{'id': 'c1', 'path': 'T1.rows[mua_vu].rank'},
+      {'id': 'c2', 'path': 'T1.rows[promo_urban_blowout].pct_vs_base'}], 'small_groups'),
+])
+def test_s9b_chan_xep_hang_sai_cong_phan_tram_va_nhom_nho_sai(monkeypatch, answer, claims, needle):
+    _s9b_tool(monkeypatch)
+    rep = final(answer=answer, claims=claims)
+    turn = service.run_turn('Vì sao dự báo G tháng 8/2023 thấp?', [], 'duckdb', FakeProvider(
+        call('explain_forecast', **ARGS_MONTH), rep, rep))
+    assert turn.status == 'answer_validation_failed'
+    assert any(needle in e for e in turn.validation_errors), turn.validation_errors
+
+
+# S9b lượt 2: một ngày giả có bốn nhóm đáng kể và sáu nhóm thật sự dưới ngưỡng 1%.
+S9B_DAY_PCT = {'mua_vu': 84.4, 'che_do_sau_2018': -30.9, 'dau_cuoi_thang': 33.6,
+               'promo_urban_blowout': 1.46}
+S9B_DAY_PCT.update(dict(zip(sorted(set(GROUPS) - set(S9B_DAY_PCT)), (.846, -.5, .3, -.2, .1, -.05))))
+S9B_DAY = {'period': 'day', 'year': 2024, 'month': 5, 'day': 1}
+
+
+def _s9b_day_tool(monkeypatch):
+    _fake_tables(monkeypatch, contrib_override={g: math.log1p(pct / 100) for g, pct in S9B_DAY_PCT.items()})
+    result = tools.run(ToolCall('explain_forecast', S9B_DAY), 'duckdb')
+    assert result.status == 'ok', result.message
+    assert result.derived['small_groups']['n'] == 6
+    assert result.derived['small_groups']['max_abs_pct'] == pytest.approx(.846)
+    return result
+
+
+def _s9b_turn(args, question, answer, claims):
+    reply = final(answer=answer, claims=[{'id': cid, 'path': 'T1.' + path} for cid, path in claims.items()])
+    return service.run_turn(question, [], 'duckdb', FakeProvider(
+        call('explain_forecast', **args), reply, reply))
+
+
+def test_s9b2_tool_rank_dir_va_nguong(monkeypatch):
+    result = _s9b_day_tool(monkeypatch)
+    rows = {r['feature_group']: r for r in result.rows}
+    assert rows['mua_vu']['pct_vs_base'] == pytest.approx(84.4)
+    assert rows['che_do_sau_2018']['pct_vs_base'] == pytest.approx(-30.9)
+    assert rows['dau_cuoi_thang']['pct_vs_base'] == pytest.approx(33.6)
+    assert rows['promo_urban_blowout']['pct_vs_base'] == pytest.approx(1.46)
+    assert [r['feature_group'] for r in sorted(result.rows, key=lambda r: r['rank_dir'] or 99)
+            if r['contribution_log'] > 0][:2] == ['mua_vu', 'dau_cuoi_thang']
+    assert rows['che_do_sau_2018']['rank_dir'] == 1
+    assert result.derived['small_groups']['threshold_pct'] == 1.0
+
+
+def test_s9b2_chan_nhom_nho_co_dau_phay(monkeypatch):
+    _s9b_tool(monkeypatch)
+    turn = _s9b_turn(ARGS_MONTH, 'Vì sao dự báo G tháng 8/2023 thấp?',
+                     'Lịch Urban Blowout kéo xuống {c1} so với mức nền. {c4} nhóm còn lại, mỗi nhóm dưới {c5}.',
+                     {'c1': 'rows[promo_urban_blowout].pct_vs_base', 'c4': 'rows[mua_vu].rank',
+                      'c5': 'rows[mua_vu].pct_vs_base'})
+    assert turn.status == 'answer_validation_failed'
+    assert any('small_groups' in e for e in turn.validation_errors), turn.validation_errors
+
+
+def test_s9b2_chan_max_abs_sau_duoi(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Ngày 1/5/2024, {c2} nhóm có ảnh hưởng dưới {c3} mỗi nhóm.',
+                     {'c2': 'derived.small_groups.n', 'c3': 'derived.small_groups.max_abs_pct'})
+    assert turn.status == 'answer_validation_failed'
+    assert any('threshold_pct' in e for e in turn.validation_errors), turn.validation_errors
+
+
+def test_s9b2_chan_con_lai_khi_thieu_nhom_lon(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Ngày 1/5/2024, mùa vụ kéo lên {c1} so với mức nền. '
+                     '{c2} nhóm còn lại, mỗi nhóm dưới {c3}.',
+                     {'c1': 'rows[mua_vu].pct_vs_base', 'c2': 'derived.small_groups.n',
+                      'c3': 'derived.small_groups.threshold_pct'})
+    assert turn.status == 'answer_validation_failed'
+    assert any('"còn lại/khác"' in e for e in turn.validation_errors), turn.validation_errors
+
+
+def test_s9b3_chan_nhom_khac_khi_thieu_nhom_lon(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Ngày 1/5/2024, mùa vụ kéo lên {c1} so với mức nền; '
+                     '{c8} nhóm khác, mỗi nhóm dưới {c9}.',
+                     {'c1': 'rows[mua_vu].pct_vs_base', 'c8': 'derived.small_groups.n',
+                      'c9': 'derived.small_groups.threshold_pct'})
+    assert turn.status == 'answer_validation_failed'
+    assert any('"còn lại/khác"' in e for e in turn.validation_errors), turn.validation_errors
+
+
+def test_s9b3_nhom_khac_du_nhom_lon_duoc_qua(monkeypatch):
+    _s9b_tool(monkeypatch)
+    turn = _s9b_turn(ARGS_MONTH, 'Vì sao dự báo G tháng 8/2023 thấp?',
+                     'Tháng 8/2023, lịch Urban Blowout kéo xuống {c1} so với mức nền; '
+                     'chế độ sau 2018 kéo xuống {c2} so với mức nền; '
+                     'mùa vụ kéo lên {c3} so với mức nền; '
+                     '{c8} nhóm khác, mỗi nhóm dưới {c9}.',
+                     {'c1': 'rows[promo_urban_blowout].pct_vs_base',
+                      'c2': 'rows[che_do_sau_2018].pct_vs_base',
+                      'c3': 'rows[mua_vu].pct_vs_base',
+                      'c8': 'derived.small_groups.n',
+                      'c9': 'derived.small_groups.threshold_pct'})
+    assert turn.status == 'ok', turn.validation_errors
+    assert '**7** nhóm khác, mỗi nhóm dưới **1,0%**' in turn.answer_md
+
+
+def test_s9b3_nhom_co_anh_huong_duoi_khong_ngu_y_con_lai(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     '{c8} nhóm có ảnh hưởng dưới {c9} mỗi nhóm.',
+                     {'c8': 'derived.small_groups.n',
+                      'c9': 'derived.small_groups.threshold_pct'})
+    assert turn.status == 'ok', turn.validation_errors
+    assert '**6** nhóm có ảnh hưởng dưới **1,0%** mỗi nhóm.' in turn.answer_md
+
+
+@pytest.mark.parametrize('ending', [
+    '; các nhóm khác ảnh hưởng nhỏ.',
+    '. Các nhóm khác ảnh hưởng không đáng kể.',
+    '; các yếu tố khác đều nhỏ.',
+])
+def test_s9b4_chan_phan_con_lai_khong_co_so_khi_thieu_nhom_lon(monkeypatch, ending):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Ngày 1/5/2024, mùa vụ kéo lên {c1} so với mức nền' + ending,
+                     {'c1': 'rows[mua_vu].pct_vs_base'})
+    assert turn.status == 'answer_validation_failed'
+    assert any('nhóm có ảnh hưởng dưới' in e for e in turn.validation_errors), turn.validation_errors
+
+
+def test_s9b4_phan_con_lai_khong_so_du_nhom_lon_duoc_qua(monkeypatch):
+    _s9b_tool(monkeypatch)
+    turn = _s9b_turn(ARGS_MONTH, 'Vì sao dự báo G tháng 8/2023 thấp?',
+                     'Tháng 8/2023, lịch Urban Blowout kéo xuống {c1} so với mức nền; '
+                     'chế độ sau 2018 kéo xuống {c2} so với mức nền; '
+                     'mùa vụ kéo lên {c3} so với mức nền. Các nhóm khác ảnh hưởng nhỏ.',
+                     {'c1': 'rows[promo_urban_blowout].pct_vs_base',
+                      'c2': 'rows[che_do_sau_2018].pct_vs_base',
+                      'c3': 'rows[mua_vu].pct_vs_base'})
+    assert turn.status == 'ok', turn.validation_errors
+    assert 'Các nhóm khác ảnh hưởng nhỏ.' in turn.answer_md
+
+
+@pytest.mark.parametrize('ending', [
+    'Các kỳ khác không được so sánh ở đây.',
+    'Model khác cần kết quả phân rã riêng.',
+    'Phân rã model không chứng minh nguyên nhân thực tế.',
+])
+def test_s9b4_khong_bat_nham_cau_ngoai_phan_con_lai(monkeypatch, ending):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Ngày 1/5/2024, mùa vụ kéo lên {c1} so với mức nền. ' + ending,
+                     {'c1': 'rows[mua_vu].pct_vs_base'})
+    assert turn.status == 'ok', turn.validation_errors
+
+
+def test_s9b4_phan_con_lai_khong_so_hai_ket_qua_bi_chan(monkeypatch):
+    result = _s9b_day_tool(monkeypatch)
+    answer = 'Ngày 1/5/2024, mùa vụ kéo lên {c1} so với mức nền. Các nhóm khác ảnh hưởng nhỏ.'
+    values = {'c1': ('T1.rows[mua_vu].pct_vs_base', 84.4, '84,4%')}
+    errors = evidence.forecast_question_errors('Vì sao dự báo G ngày 1/5/2024 cao?', values,
+                                               {'T1': result, 'T2': result}, answer)
+    assert any('đúng một kết quả explain_forecast' in e for e in errors), errors
+
+
+def test_s9b2_nhom_nho_khong_noi_con_lai_duoc_qua(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Ngày 1/5/2024, mùa vụ kéo lên {c1} so với mức nền. '
+                     '{c2} nhóm có ảnh hưởng dưới {c3} mỗi nhóm.',
+                     {'c1': 'rows[mua_vu].pct_vs_base', 'c2': 'derived.small_groups.n',
+                      'c3': 'derived.small_groups.threshold_pct'})
+    assert turn.status == 'ok', turn.validation_errors
+    assert 'mùa vụ kéo lên **84,4%** so với mức nền' in turn.answer_md
+    assert '**6** nhóm có ảnh hưởng dưới **1,0%** mỗi nhóm' in turn.answer_md
+
+
+def test_s9b2_chan_xep_hang_cao_lan_nhom_am(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Dự báo G ngày 1/5/2024 cao chủ yếu do mùa vụ ({c1}) và chế độ sau 2018 ({c2}) so với mức nền.',
+                     {'c1': 'rows[mua_vu].pct_vs_base', 'c2': 'rows[che_do_sau_2018].pct_vs_base'})
+    assert turn.status == 'answer_validation_failed'
+    assert any('rank_dir' in e for e in turn.validation_errors), turn.validation_errors
+
+
+def test_s9b2_xep_hang_cao_dung_hai_nhom_duong(monkeypatch):
+    from scripts.ops import ai_live_eval
+
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Dự báo G ngày 1/5/2024 cao chủ yếu do mùa vụ kéo lên {c1} so với mức nền và '
+                     'đầu/cuối tháng kéo lên {c2} so với mức nền. '
+                     '{c3} nhóm có ảnh hưởng dưới {c4} mỗi nhóm.',
+                     {'c1': 'rows[mua_vu].pct_vs_base', 'c2': 'rows[dau_cuoi_thang].pct_vs_base',
+                      'c3': 'derived.small_groups.n', 'c4': 'derived.small_groups.threshold_pct'})
+    assert turn.status == 'ok', turn.validation_errors
+    assert 'mùa vụ kéo lên **84,4%** so với mức nền' in turn.answer_md
+    assert 'đầu/cuối tháng kéo lên **33,6%** so với mức nền' in turn.answer_md
+    assert ai_live_eval.grade(ai_live_eval.ACCEPT_L4D[1], turn)['pass']
+
+
+def test_s9b2_chan_rank_dir_khi_rank_chung_van_dung(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Dự báo G ngày 1/5/2024 cao chủ yếu do mùa vụ {c1}, đầu/cuối tháng {c2} '
+                     'và chế độ sau 2018 {c3} so với mức nền.',
+                     {'c1': 'rows[mua_vu].pct_vs_base', 'c2': 'rows[dau_cuoi_thang].pct_vs_base',
+                      'c3': 'rows[che_do_sau_2018].pct_vs_base'})
+    assert turn.status == 'answer_validation_failed'
+    assert any('rank_dir' in e for e in turn.validation_errors), turn.validation_errors
+
+
+def test_s9b2_chan_xep_hang_co_ca_hai_chieu(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Vì sao dự báo G ngày 1/5/2024 cao?',
+                     'Dự báo G ngày 1/5/2024 cao chủ yếu do mùa vụ kéo lên {c1} '
+                     'và chế độ sau 2018 kéo xuống {c2} so với mức nền.',
+                     {'c1': 'rows[mua_vu].pct_vs_base', 'c2': 'rows[che_do_sau_2018].pct_vs_base'})
+    assert turn.status == 'answer_validation_failed'
+    assert any('rank_dir' in e for e in turn.validation_errors), turn.validation_errors
+
+
+def test_s9b2_con_lai_du_nhom_duoc_qua(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    answer = ('Ngày 1/5/2024: mùa vụ {c1}; chế độ sau 2018 {c2}; đầu/cuối tháng {c3}; '
+              'lịch Urban Blowout {c4}. {c5} nhóm còn lại, mỗi nhóm dưới {c6}.')
+    claims = {'c1': 'rows[mua_vu].pct_vs_base', 'c2': 'rows[che_do_sau_2018].pct_vs_base',
+              'c3': 'rows[dau_cuoi_thang].pct_vs_base', 'c4': 'rows[promo_urban_blowout].pct_vs_base',
+              'c5': 'derived.small_groups.n', 'c6': 'derived.small_groups.threshold_pct'}
+    turn = _s9b_turn(S9B_DAY, 'Phân rã dự báo G ngày 1/5/2024?', answer, claims)
+    assert turn.status == 'ok', turn.validation_errors
+
+
+def test_s9b2_max_abs_dung_voi_toi_da(monkeypatch):
+    _s9b_day_tool(monkeypatch)
+    turn = _s9b_turn(S9B_DAY, 'Phân rã dự báo G ngày 1/5/2024?',
+                     'Ngày 1/5/2024, {c1} nhóm có ảnh hưởng tối đa {c2} mỗi nhóm.',
+                     {'c1': 'derived.small_groups.n', 'c2': 'derived.small_groups.max_abs_pct'})
+    assert turn.status == 'ok', turn.validation_errors
+    assert 'tối đa **0,846%** mỗi nhóm' in turn.answer_md
+
+
+def test_s9b2_phu_dinh_phep_cong_duoc_qua(monkeypatch):
+    _s9b_tool(monkeypatch)
+    turn = _s9b_turn(ARGS_MONTH, 'Vì sao dự báo G tháng 8/2023 thấp?',
+                     'Không có tổng: lịch Urban Blowout kéo xuống {c1} và chế độ sau 2018 kéo xuống {c2} '
+                     'so với mức nền, hai % này nhân với nhau, không cộng lại được.',
+                     {'c1': 'rows[promo_urban_blowout].pct_vs_base',
+                      'c2': 'rows[che_do_sau_2018].pct_vs_base'})
+    assert turn.status == 'ok', turn.validation_errors
