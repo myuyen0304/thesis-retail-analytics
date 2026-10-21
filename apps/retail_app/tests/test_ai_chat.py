@@ -753,11 +753,14 @@ def test_b5b3_tinh_n_thang_khong_ep_dinh_nghia(monkeypatch):
     from dataclasses import replace
     from ai_explain import metric_catalog as cat
     from ai_explain.contracts import ToolCall
+    from dwh import releases
     from dwh.connection import duckdb_path
 
-    with duckdb.connect(str(duckdb_path()), read_only=True) as con:
-        n = con.execute('select n from reporting.rpt_revenue_monthly where year = ? and month = ?',
-                        [2022, 3]).fetchone()[0]
+    with releases.scope():
+        sql = releases.sql_for('select n from reporting.rpt_revenue_monthly where year = ? and month = ?',
+                               releases.resolve('duckdb'))
+        with duckdb.connect(str(duckdb_path()), read_only=True) as con:
+            n = con.execute(sql, [2022, 3]).fetchone()[0]
     original_run = tools.run
     result = original_run(ToolCall('get_revenue_monthly', {'metric': 'R', 'year': 2022, 'month': 3}), 'duckdb')
     assert result.ok
@@ -955,6 +958,138 @@ def test_b5b2_aov_chi_nguon_bang_nam():
 
     assert cat.METRICS['AOV']['sources'] == ['reporting.rpt_revenue_yearly']
     assert cat.METRICS['AOV']['decision_status'] == 'de_xuat'
+
+
+@pytest.mark.parametrize('question,metric,answer,number', [
+    ('COGS là gì?', 'COGS_forecast',
+     'Catalog có COGS dự báo. Tháng 8 năm lẻ, COGS/G có thể lớn hơn 1.', '8'),
+    ('Dự báo giá vốn là gì?', 'COGS_forecast',
+     'Dự báo giá vốn có lưu ý: tháng 8 năm lẻ COGS/G có thể lớn hơn 1.', '8'),
+    ('Khoảng dự báo là gì?', 'forecast_interval',
+     'Khoảng dự báo 80% chỉ áp dụng theo ngày.', '80%'),
+    ('Dự báo doanh thu là gì?', 'G_forecast',
+     'Dự báo doanh thu có kỳ 548 ngày.', '548'),
+])
+def test_def_so_chu_so_trong_dinh_nghia_duoc_viet_loi(question, metric, answer, number):
+    reply = final(answer=answer)
+    t = turn(FakeProvider(call('get_metric_definition', metric=metric), reply, reply), question)
+    assert t.status == 'ok', t.validation_errors
+    assert [(name, args) for _, name, args in t.calls] == [
+        ('get_metric_definition', {'metric': metric})]
+    assert number in t.answer_md
+
+
+def test_def_so_cogsf_cho_qua_so_nhung_khong_noi_guard_b5b():
+    reply = final(answer='COGS dự báo có công thức {c1}. Tháng 8 năm lẻ COGS/G có thể lớn hơn 1.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].formula'}])
+    t = turn(FakeProvider(call('get_metric_definition', metric='COGS_forecast'), reply, reply), 'COGS là gì?')
+    assert t.status == 'answer_validation_failed'
+    assert any('chưa có định nghĩa cho khái niệm này' in e for e in t.validation_errors), t.validation_errors
+    assert not any('số tự viết' in e or 'số kèm đơn vị' in e for e in t.validation_errors)
+
+
+def test_def_so_cum_phan_tram_duoc_chuan_hoa_khoang_trang():
+    reply = final(answer='Khoảng dự báo 80 % theo ngày.')
+    t = turn(FakeProvider(call('get_metric_definition', metric='forecast_interval'), reply, reply),
+             'Khoảng dự báo là gì?')
+    assert t.status == 'ok', t.validation_errors
+
+
+@pytest.mark.parametrize('question,metric,answer', [
+    ('Cùng kỳ tháng là gì?', 'yoy_month',
+     'Chỉ tính từ tháng 8/2013 vì 7/2012 thiếu ba ngày đầu.'),
+    ('Dự báo doanh thu là gì?', 'G_forecast',
+     'Kỳ dự báo từ 1/1/2023 đến 1/7/2024, 548 ngày.'),
+])
+def test_def_so_so_nguyen_co_so_khong_o_dau(question, metric, answer):
+    reply = final(answer=answer)
+    t = turn(FakeProvider(call('get_metric_definition', metric=metric), reply, reply), question)
+    assert t.status == 'ok', t.validation_errors
+    assert [(name, args) for _, name, args in t.calls] == [
+        ('get_metric_definition', {'metric': metric})]
+
+
+@pytest.mark.parametrize('question,metric,answer,expected', [
+    ('Cùng kỳ tháng là gì?', 'yoy_month', 'Chỉ tính từ tháng 9/2013.', "số tự viết ['9']"),
+    ('Khoảng dự báo là gì?', 'forecast_interval', 'Khoảng dự báo xác suất 0,8.', '0,8'),
+])
+def test_def_so_khong_mien_so_ngoai_chu_so_nguyen(question, metric, answer, expected):
+    reply = final(answer=answer)
+    t = turn(FakeProvider(call('get_metric_definition', metric=metric), reply, reply), question)
+    assert t.status == 'answer_validation_failed'
+    assert any(expected in err for err in t.validation_errors), t.validation_errors
+
+
+def test_def_so_so_tran_duoc_dung_lai_nhung_sai_don_vi_bi_chan():
+    for answer, status, expected in [
+        ('Doanh thu năm 2022 là 80.', 'ok', None),
+        ('Doanh thu năm 2022 là 80 tỷ.', 'answer_validation_failed', 'số kèm đơn vị'),
+    ]:
+        reply = final(answer=answer)
+        t = turn(FakeProvider(call('get_metric_definition', metric='forecast_interval'), reply, reply),
+                 'Khoảng dự báo là gì?')
+        assert t.status == status, t.validation_errors
+        if expected:
+            assert any(expected in err for err in t.validation_errors), t.validation_errors
+
+
+@pytest.mark.parametrize('question,metric,answer,expected', [
+    ('Khoảng dự báo là gì?', 'forecast_interval', 'R năm 2022 là 80 tỷ.', 'số kèm đơn vị'),
+    ('Dự báo giá vốn là gì?', 'COGS_forecast', 'Dự báo giá vốn có 9 cách tính.', 'số tự viết'),
+])
+def test_def_so_khong_mien_so_ngoai_dinh_nghia(question, metric, answer, expected):
+    reply = final(answer=answer)
+    t = turn(FakeProvider(call('get_metric_definition', metric=metric), reply, reply), question)
+    assert t.status == 'answer_validation_failed'
+    assert any(expected in e for e in t.validation_errors), t.validation_errors
+
+
+@pytest.mark.parametrize('history', [[], [{
+    'question': 'COGS là gì?', 'status': 'ok',
+    'tool_calls': [{'tool': 'get_metric_definition', 'arguments': {'metric': 'COGS_forecast'}, 'status': 'ok'}],
+}]])
+def test_def_so_khong_mien_so_khi_luot_nay_khong_doc_def(history):
+    reply = final(answer='R năm 2022 là {c1}; tháng 8 cần xem riêng.',
+                  claims=[{'id': 'c1', 'path': 'T1.rows[0].r'}])
+    t = turn(FakeProvider(call('get_revenue_summary', metric='R', year=2022), reply, reply),
+             'R năm 2022 là bao nhiêu?', history=history)
+    assert t.status == 'answer_validation_failed'
+    assert any("số tự viết ['8']" in e for e in t.validation_errors), t.validation_errors
+
+
+def test_def_so_mien_so_ca_o_cau_hoi_lai_khong_claim():
+    reply = final('needs_clarification', 'Catalog có khoảng dự báo 80%. Bạn muốn xem định nghĩa này?')
+    t = turn(FakeProvider(call('get_metric_definition', metric='forecast_interval'), reply, reply),
+             'Khoảng dự báo là gì?')
+    assert t.status == 'needs_clarification', t.validation_errors
+
+
+def test_def_so_khong_noi_luat_chu_so_rag_strict():
+    result = tools.run({'tool': 'get_metric_definition', 'arguments': {'metric': 'forecast_interval'}}, 'duckdb')
+    assert result.ok
+    errs = evidence.rag_literal_errors('Khoảng dự báo 80% theo ngày.', 'Khoảng dự báo là gì?',
+                                       {'T1': result}, rag_used=True)
+    assert any('số kèm đơn vị' in err for err in errs), errs
+
+
+def test_def_so_rubric_kiem_rieng_loi_chu_so_va_cau_hoi_lai():
+    from dataclasses import replace
+
+    from scripts.ops.ai_live_eval import ACCEPT_DEF_SO, grade
+
+    case = ACCEPT_DEF_SO[0]
+    calls = [('T1', 'get_metric_definition', {'metric': 'COGS_forecast'})]
+    ok = service.TurnResult('ok', case['q'], answer_md='Catalog chỉ có COGS dự báo.', calls=calls,
+                            raw_final=json.dumps({'answer': 'Catalog chỉ có COGS dự báo.'}))
+    assert grade(case, ok)['checks']['khong_chan_chu_so']
+    assert grade(case, ok)['checks']['noi_ro_du_bao']
+    wrong = replace(ok, validation_errors=["câu văn có số tự viết ['9']: mọi số phải đi qua claim"])
+    assert not grade(case, wrong)['checks']['khong_chan_chu_so']
+    ask = replace(ok, status='needs_clarification', answer_md='Bạn muốn COGS_forecast?',
+                  raw_final=json.dumps({'answer': 'Bạn muốn COGS_forecast?'}))
+    assert grade(case, ask)['checks']['noi_ro_du_bao']
+    assert not grade(case, replace(ask, raw_final=json.dumps({'answer': 'Bạn muốn mã nào?'})))[
+        'checks']['noi_ro_du_bao']
 
 
 def test_b5b2_tu_choi_khong_tool_dinh_nghia_khong_bat_cum_ngoai_catalog():
