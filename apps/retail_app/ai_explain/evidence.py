@@ -180,7 +180,7 @@ _NUMBER = re.compile(r'(?<![^\W\d])\d[\d.,]*')     # không tính chữ số dí
 _SENTENCE = re.compile(r'[.;!?\n]')
 # mốc ngày/tháng người dùng có thể gõ: 15/3, 10/6/2019, tháng 8, ngày 15, quý 3
 DATE_RE = _DATE = re.compile(r'(?<!\d)\d{1,2}/\d{1,2}(?:/\d{4})?(?![\d/])|(?:ngày|tháng|quý)\s+\d{1,2}(?!\d)', re.I)
-# số đứng trước đơn vị tiền/tỷ lệ: không bao giờ được viết tay
+# số đứng trước đơn vị tiền/tỷ lệ: chỉ miễn nguyên cụm có trong DEF của lượt này
 _UNIT_AFTER = re.compile(r'(?<![^\W\d])\d(?:[\d.,]*\d)?\s*(?:tỷ|tỉ|triệu|nghìn|ngàn|vnd|đồng|usd|\$|%)(?!\w)', re.I)
 _DRIVER_WORD = {'N': re.compile(r'số đơn|(?<!\w)N(?!\w)'),
                 'U': re.compile(r'số món|món mỗi đơn|(?<!\w)U(?!\w)'),
@@ -338,6 +338,30 @@ def _numbers(text: str) -> set[str]:
     return {t.rstrip('.,') for t in _NUMBER.findall(text or '')}
 
 
+def _unit_literal(text: str) -> str:
+    """Chuẩn hóa khoảng trắng trong cụm số + đơn vị để so đúng cả hai phần."""
+    return re.sub(r'\s+', '', text).casefold()
+
+
+def definition_text_numbers(results: dict) -> set[str]:
+    """Chỉ miễn chữ số có trong trường chữ của DEF thành công ở lượt hiện tại."""
+    allowed = set()
+    fields = ('label_vi', 'formula', 'unit', 'additivity', 'note')
+    for result in results.values():
+        if not (result.ok and result.evidence and result.evidence.tool == 'get_metric_definition'):
+            continue
+        for row in result.rows:
+            for field in fields:
+                value = row.get(field)
+                if isinstance(value, str):
+                    numbers = _numbers(value)
+                    allowed |= numbers
+                    allowed |= {number.lstrip('0') or '0' for number in numbers
+                                if len(number) > 1 and number.startswith('0') and number.isdecimal()}
+                    allowed |= {_unit_literal(m.group(0)) for m in _UNIT_AFTER.finditer(value)}
+    return allowed
+
+
 def question_numbers(question: str) -> set[str]:
     """Phần số trong câu hỏi mà câu trả lời được nhắc lại: năm (1900–2099) và NGUYÊN CỤM mốc ngày/tháng
     ("15/3", "10/6/2019", "tháng 8"). Số trần như "10" trong "10 tỷ" không được nhắc lại ở bất kỳ vị trí nào,
@@ -350,12 +374,14 @@ def question_numbers(question: str) -> set[str]:
 
 def check_digits(text: str, allowed: set[str], *, strict: bool = False) -> list[str]:
     """Chữ số trong câu văn (đã bỏ chỗ đặt) chỉ được là số trong `allowed`, mốc ngày/tháng có trong `allowed`,
-    năm trong phạm vi dữ liệu, hoặc mã như PS1/AI1. Số đứng trước đơn vị (tỷ, triệu, VND, %...) luôn bị chặn."""
+    năm trong phạm vi dữ liệu, hoặc mã như PS1/AI1. Cụm số + đơn vị chỉ được miễn khi nguyên cụm nằm trong DEF."""
     rest = re.sub(r'PS[1-5]', '', _PLACEHOLDER.sub(' ', text))
     if not strict:
         rest = _DATA_DATES.sub(' ', rest)
     errs = []
-    unit = [m.group(0) for m in _UNIT_AFTER.finditer(rest)]
+    allowed_units = {_unit_literal(value) for value in allowed if _UNIT_AFTER.fullmatch(value)}
+    unit = [m.group(0) for m in _UNIT_AFTER.finditer(rest)
+            if _unit_literal(m.group(0)) not in allowed_units]
     if unit:
         errs.append(f'câu văn tự viết số kèm đơn vị {unit[:3]}: số tiền / tỷ lệ phải đi qua claim')
     rest = _DATE.sub(lambda m: ' ' if m.group(0).lower() in allowed else m.group(0), rest)
@@ -1753,7 +1779,7 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
     for cid in sorted(used):
         if cid not in by_id and not any(e.startswith(f'{cid}:') for e in errors):
             errors.append(f'chỗ đặt {{{cid}}} không có claim hợp lệ')
-    errors += check_digits(answer, allowed_years(results) | set(extra_allowed))
+    errors += check_digits(answer, allowed_years(results) | set(extra_allowed) | definition_text_numbers(results))
     # ô kiểu NGÀY không phải số ngày: "mỗi fold dự báo {c2} ngày" với c2 = trained_through (live B3c GM13)
     for m in _PLACEHOLDER.finditer(answer):
         if m[1] in by_id and isinstance(by_id[m[1]][1], _date) and re.match(r'\s*ngày(?!\w)', answer[m.end():], re.I):
