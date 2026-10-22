@@ -163,6 +163,26 @@ RANK_WORDS = ('nhiều nhất', 'lớn nhất', 'mạnh nhất', 'cao nhất', '
 # ngược lại (giảm ít nhất): chỉ smallest_* chứng minh được (có cho nhóm từ 2026-10-09; giai đoạn / điểm đổi hướng chưa có).
 STRONG_WORDS = ('mạnh nhất', 'nhiều nhất', 'lớn nhất', 'dẫn đầu', 'đứng đầu', 'mạnh hơn cả')
 WEAK_WORDS = ('nhỏ nhất', 'ít nhất', 'nhẹ nhất', 'chậm nhất', 'yếu nhất')
+# Chỉ dùng cho chuỗi xếp hạng của explain_forecast, không áp vào kỳ tiếp theo hay ngày thứ Hai.
+_EXPLAIN_NEXT = re.compile(r'(?<!\w)(?:tiếp\s+theo|tiếp\s+đến|kế\s+đến|kế\s+tiếp|sau\s+đó\s+là|theo\s+sau\s+là)(?!\w)', re.I)
+_EXPLAIN_ORDINAL = re.compile(r'(?<!\w)(?:đứng|xếp|nhóm|mạnh|lớn|nhiều)\s+thứ\s+(hai|nhì|ba|2|3)(?!\w)', re.I)
+_EXPLAIN_ORDINAL_BARE = re.compile(r'(?:^|[,.;!?\n])\s*(?:và\s+)?thứ\s+(hai|nhì|ba|2|3)\s+là\b(?!\s*(?:ngày\b|\d))', re.I)
+_EXPLAIN_ORDINAL_LIST = re.compile(r'(?:^|,)\s*(?:và\s+)?thứ\s+(hai|nhì|ba|2|3)\s*,(?!\s*(?:\d|ngày\b|\{))\s*', re.I)
+_EXPLAIN_WEEKDAY = re.compile(r'\bngày\s+\d{1,2}/\d{1,2}/\d{4}\s+là\s+thứ\s+(2)(?=\s*[.;!?\n]|\s*$)', re.I)
+_EXPLAIN_TIME_NEXT = re.compile(r'(?:tháng|kỳ|năm)\s*$', re.I)
+
+
+def _explain_ordinals(sent: str, chained: bool) -> list:
+    """Lấy từng vị trí; 'Thứ hai, ...' chỉ là thứ hạng khi có chuỗi trước."""
+    matches = [*_EXPLAIN_ORDINAL.finditer(sent), *_EXPLAIN_ORDINAL_BARE.finditer(sent)]
+    if chained:
+        matches.extend(_EXPLAIN_ORDINAL_LIST.finditer(sent))
+    matches.sort(key=lambda m: (m.start(), -(m.end() - m.start())))
+    chosen = []
+    for match in matches:
+        if not chosen or match.start() >= chosen[-1].end():
+            chosen.append(match)
+    return chosen
 # tiêu chí xếp hạng giai đoạn PS2 mà câu văn nêu: theo CAGR (largest_*_cagr) hay theo mức đổi R bằng tiền (largest_*)
 # Chỉ tính là tiêu chí khi đi sau "theo / xét / lẫn / tiêu chí": "mức đổi R là {c2}" chỉ là dẫn số, không phải tiêu chí.
 _CRIT_CAGR = re.compile(r'(?:theo|xét|lẫn|tiêu chí)\s+(?:cả\s+)?(?:tiêu chí\s+)?(?:cagr|tốc độ)')
@@ -607,6 +627,75 @@ def _verified_explain_rank(sent: str, by_id: dict, results: dict) -> str | None:
                     return (prefix + f'chỗ đặt {{{cid}}} không gọi tên nhóm "{FEATURE_GROUP_LABEL[group]}"; '
                             f'viết tên nhóm bằng chữ ngay trước số, hoặc dùng claim feature_label của đúng hàng; '
                             f'{expected_text}')
+    return None
+
+
+def _explain_rank_piece(sent: str, by_id: dict, results: dict) -> tuple[set[str], list[str], int]:
+    """Ref, nhóm theo lần dẫn đầu và chiều của riêng mảnh L4."""
+    refs, groups = set(), []
+    for cid in _PLACEHOLDER.findall(sent):
+        item = by_id.get(cid)
+        if not item or item[2] not in ('contribution_log', 'multiplier', 'pct_vs_base', 'feature_label'):
+            continue
+        ref = item[0].get('path', '').split('.')[0]
+        result = results.get(ref)
+        row = item[3]
+        if result and result.ok and result.evidence and result.evidence.tool == 'explain_forecast' and row:
+            refs.add(ref)
+            group = row.get('feature_group')
+            if group and group not in groups:
+                groups.append(group)
+    plain = _PLACEHOLDER.sub(' ', sent).casefold()
+    up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', plain))
+    down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', plain))
+    return refs, groups, 2 if up and down else 1 if up else -1 if down else 0
+
+
+def _verified_explain_ordinal(sent: str, by_id: dict, results: dict, inherited: int,
+                              matches: list) -> str | None:
+    """Đối chiếu từng cụm thứ hai/ba với claim ngay sau nó trong cùng mảnh."""
+    if not matches:
+        return None
+    refs, groups, direction = _explain_rank_piece(sent, by_id, results)
+    if not groups:
+        return None
+    prefix = 'nhóm phân rã nêu vị trí thứ hai/ba: '
+    if len(refs) != 1 or direction == 2:
+        return prefix + 'chỉ dùng một kết quả explain_forecast và một chiều trong mảnh xếp hạng'
+    if direction and inherited and direction != inherited:
+        return prefix + 'mảnh đổi chiều; tách khỏi chuỗi xếp hạng trước'
+    direction = direction or inherited
+    ref = next(iter(refs))
+    rank_field = 'rank_dir' if direction else 'rank'
+    rows = results[ref].rows
+    for i, match in enumerate(matches):
+        part = sent[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(sent)]
+        _, current, _ = _explain_rank_piece(part, by_id, results)
+        position = 2 if match.group(1).casefold() in ('hai', 'nhì', '2') else 3
+        expected = next((row for row in rows if row.get(rank_field) == position
+                         and (not direction or row['contribution_log'] * direction > 0)), None)
+        if len(current) != 1 or expected is None or current[0] != expected['feature_group']:
+            label = (expected.get('feature_label') or FEATURE_GROUP_LABEL[expected['feature_group']]) if expected else 'không có'
+            scope = f'chiều {"dương" if direction > 0 else "âm"} theo rank_dir' if direction else 'theo rank'
+            return prefix + f'sai thứ tự: nhóm thứ {position} {scope} là "{label}"'
+        # Với vị trí độc lập, vẫn phải gọi tên đúng nhóm của claim.
+        mentions = _explain_group_mentions(part)
+        first_claim = _PLACEHOLDER.search(part)
+        before = [group for _, end, group in mentions if first_claim and end <= first_claim.start()]
+        named = [group for _, _, group in mentions]
+        # "Lịch Urban Blowout đứng thứ hai ({c})": tên nằm ngay trước cụm thứ hạng.
+        previous_claim = max((m.end() for m in _PLACEHOLDER.finditer(sent, 0, match.start())), default=0)
+        previous_ordinal = matches[i - 1].end() if i else 0
+        prior = _explain_group_mentions(sent[max(previous_claim, previous_ordinal):match.start()])
+        if prior:
+            before.insert(0, prior[-1][2])
+            named.append(prior[-1][2])
+        named += [by_id[cid][3]['feature_group'] for cid in _PLACEHOLDER.findall(part)
+                  if cid in by_id and by_id[cid][2] == 'feature_label' and by_id[cid][3]]
+        if before and before[-1] != current[0]:
+            return prefix + f'tên nhóm gần chỗ đặt không khớp claim; nhóm thứ {position} là "{expected["feature_label"]}"'
+        if current[0] not in named:
+            return prefix + f'không gọi tên nhóm "{expected["feature_label"]}"; viết tên trước số hoặc dùng claim feature_label'
     return None
 
 
@@ -1873,7 +1962,23 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
     for cid in sorted(used):
         if cid not in by_id and not any(e.startswith(f'{cid}:') for e in errors):
             errors.append(f'chỗ đặt {{{cid}}} không có claim hợp lệ')
-    errors += check_digits(answer, allowed_years(results) | set(extra_allowed) | definition_text_numbers(results))
+    # "nhóm thứ 2/3" là vị trí xếp hạng, không phải số liệu tự viết. Chỉ bỏ chính chữ số trong cụm đó
+    # khi mảnh có claim phân rã; mọi chữ số khác vẫn qua check_digits như cũ.
+    digit_chars = list(answer)
+    for match in (*_EXPLAIN_ORDINAL.finditer(answer), *_EXPLAIN_ORDINAL_BARE.finditer(answer)):
+        if match.group(1) not in ('2', '3'):
+            continue
+        start = max((m.end() for m in _SENTENCE.finditer(answer, 0, match.end())), default=0)
+        end = next((m.start() for m in _SENTENCE.finditer(answer, match.end())), len(answer))
+        refs, groups, _ = _explain_rank_piece(answer[start:end], by_id, results)
+        if refs and groups:
+            digit_chars[match.start(1)] = ' '
+    # "Ngày 14/8/2023 là thứ 2" là thứ trong tuần của ngày đã viết, không phải vị trí nhóm.
+    if _explain_rank_piece(answer, by_id, results)[1]:
+        for match in _EXPLAIN_WEEKDAY.finditer(answer):
+            digit_chars[match.start(1)] = ' '
+    digit_answer = ''.join(digit_chars)
+    errors += check_digits(digit_answer, allowed_years(results) | set(extra_allowed) | definition_text_numbers(results))
     # ô kiểu NGÀY không phải số ngày: "mỗi fold dự báo {c2} ngày" với c2 = trained_through (live B3c GM13)
     for m in _PLACEHOLDER.finditer(answer):
         if m[1] in by_id and isinstance(by_id[m[1]][1], _date) and re.match(r'\s*ngày(?!\w)', answer[m.end():], re.I):
@@ -1883,9 +1988,71 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
     # câu xếp hạng: chỗ đặt xếp hạng phải nằm trong CHÍNH câu đó và cùng hướng với chữ tăng/giảm của câu; hoặc app tự
     # đối chiếu được (N/U/P viết thẳng, câu nối "Đây là…" trỏ về đối tượng của câu ngay trước)
     pieces = _SENTENCE.split(answer)
+    explain_chain = None
     for i, sent in enumerate(pieces):
         low = _METRIC_NAME_RANK.sub(' ', sent.lower())
-        if not any(w in low for w in RANK_WORDS):
+        next_word = next((m for m in _EXPLAIN_NEXT.finditer(sent)
+                          if not _EXPLAIN_TIME_NEXT.search(sent[:m.start()])), None)
+        ordinal = _explain_ordinals(sent, explain_chain is not None)
+        refs, groups, piece_direction = _explain_rank_piece(sent, by_id, results)
+        if not any(w in low for w in RANK_WORDS) and not (groups and (next_word or ordinal)):
+            if groups and explain_chain:
+                old_ref, old_direction, old_text = explain_chain
+                if piece_direction and old_direction and piece_direction != old_direction:
+                    explain_chain = None  # Mảnh ngược chiều kết thúc chuỗi xếp hạng.
+                elif refs == {old_ref} and piece_direction != 2:
+                    # Mảnh dẫn số không nói thứ hạng vẫn chiếm một vị trí khi câu sau nói "tiếp theo".
+                    kept = sent
+                    if not piece_direction and old_direction:
+                        # Không gộp claim ngược dấu khi mảnh này không tự nêu chiều.
+                        kept = _PLACEHOLDER.sub(
+                            lambda m: m.group() if (m.group(1) in by_id and by_id[m.group(1)][3]
+                                                   and by_id[m.group(1)][3]['contribution_log'] * old_direction > 0)
+                            else ' ', sent)
+                    if _explain_rank_piece(kept, by_id, results)[1]:
+                        explain_chain = (old_ref, old_direction, old_text + ' ' + kept)
+            continue
+        if groups and (next_word or ordinal) and not any(w in low for w in ('chủ yếu',) + STRONG_WORDS):
+            inherited = (explain_chain[1] if explain_chain and refs == {explain_chain[0]}
+                         and not (piece_direction and explain_chain[1] and piece_direction != explain_chain[1]) else 0)
+            if ordinal and (problem := _verified_explain_ordinal(
+                    sent, by_id, results, inherited, ordinal)):
+                errors.append(problem)
+            if ordinal and not next_word and explain_chain and piece_direction and piece_direction != explain_chain[1]:
+                explain_chain = None
+            elif ordinal and not next_word and explain_chain and not problem and refs == {explain_chain[0]}:
+                old_ref, old_direction, old_text = explain_chain
+                combined = old_text + ' ' + sent
+                if problem := _verified_explain_rank(combined, by_id, results):
+                    errors.append(problem + '; không bỏ qua vị trí giữa')
+                else:
+                    explain_chain = (old_ref, old_direction or piece_direction, combined)
+            if next_word and explain_chain:
+                old_ref, old_direction, old_text = explain_chain
+                if len(refs) != 1 or old_ref not in refs:
+                    errors.append('nhóm phân rã nói "tiếp theo": mảnh nối phải cùng kết quả explain_forecast với chuỗi trước')
+                elif piece_direction == 2 or (old_direction and piece_direction and piece_direction != old_direction):
+                    errors.append('nhóm phân rã nói "tiếp theo": mảnh nối phải cùng chiều với chuỗi xếp hạng trước')
+                else:
+                    _, old_groups, _ = _explain_rank_piece(old_text, by_id, results)
+                    direction = old_direction or piece_direction
+                    field = 'rank_dir' if direction else 'rank'
+                    expected = next((row for row in results[old_ref].rows
+                                     if row.get(field) == len(old_groups) + 1
+                                     and (not direction or row['contribution_log'] * direction > 0)), None)
+                    previous = next((row for row in results[old_ref].rows
+                                     if row['feature_group'] == old_groups[-1]), None)
+                    hint = (f'sau "{previous["feature_label"]}", nhóm kế tiếp '
+                            f'{"chiều dương" if direction > 0 else "chiều âm" if direction < 0 else "theo rank"} '
+                            f'theo {field} là "{expected["feature_label"]}"' if expected and previous else
+                            'không có nhóm kế tiếp ở chiều này')
+                    combined = old_text + ' ' + sent
+                    if any(group in old_groups for group in groups):
+                        errors.append('nhóm phân rã nói "tiếp theo" phải là nhóm mới; ' + hint)
+                    elif problem := _verified_explain_rank(combined, by_id, results):
+                        errors.append(problem + '; ' + hint + '; không bỏ qua vị trí giữa')
+                    else:
+                        explain_chain = (old_ref, direction, combined)
             continue
         prev = next((p for p in reversed(pieces[:i]) if p.strip()), '')
         paths = [by_id[cid][0]['path'] for cid in _PLACEHOLDER.findall(sent) if cid in by_id]
@@ -1899,8 +2066,12 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
                           'bỏ chữ xếp hạng phía nhỏ (nhỏ nhất/ít nhất/nhẹ nhất/chậm nhất/yếu nhất)')
             continue
         if explain_groups and any(w in low for w in ('chủ yếu',) + STRONG_WORDS):
-            if problem := _verified_explain_rank(sent, by_id, results):
+            problem = _verified_explain_rank(sent, by_id, results)
+            if problem:
                 errors.append(problem)
+                explain_chain = None
+            elif len(refs) == 1 and piece_direction != 2:
+                explain_chain = (next(iter(refs)), piece_direction, sent)
             continue
         if not ranks and _verified_driver_rank(sent, results):
             continue
