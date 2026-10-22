@@ -846,6 +846,194 @@ def test_l4f_rubric_ngay_14_08_dung_sai_thu_tu_va_lan_luot(published):
     assert ai_live_eval._l4f_ranked_ok(paired, turn) is True
 
 
+L4G_DAY = {'period': 'day', 'year': 2023, 'month': 8, 'day': 14}
+L4G_CLAIMS = {
+    'c1': 'rows[che_do_sau_2018].feature_label',
+    'c2': 'rows[che_do_sau_2018].pct_vs_base',
+    'c3': 'rows[dau_cuoi_thang].feature_label',
+    'c4': 'rows[dau_cuoi_thang].pct_vs_base',
+    'c5': 'derived.small_groups.n',
+    'c6': 'derived.small_groups.threshold_pct',
+    'c7': 'rows[promo_urban_blowout].feature_label',
+    'c8': 'rows[promo_urban_blowout].pct_vs_base',
+    'c9': 'rows[mua_vu].pct_vs_base',
+}
+L4G_HEAD = 'Đây là phân rã model, không phải nguyên nhân. '
+L4G_X1 = ('Nhóm kéo xuống mạnh nhất là {c1} ({c2}); tiếp theo là {c3} kéo xuống {c4}. '
+          'Ngoài ra {c5} nhóm có ảnh hưởng dưới {c6} mỗi nhóm.')
+L4G_X2 = 'Nhóm kéo xuống mạnh nhất là {c1} ({c2}); đứng thứ hai là {c3} kéo xuống {c4}.'
+L4G_GOOD = 'Nhóm kéo xuống mạnh nhất là {c1} ({c2}); tiếp theo là {c7} kéo xuống {c8}.'
+
+
+@pytest.mark.parametrize('case,answer,ok,needle', [
+    ('X1', L4G_X1, False, 'lịch Urban Blowout'),
+    ('X2', L4G_X2, False, 'lịch Urban Blowout'),
+    ('X3', 'Hai nhóm kéo xuống mạnh nhất là {c1} ({c2}) và {c3} ({c4}).', False,
+     'lịch Urban Blowout'),
+    ('đúng hai nhóm', L4G_GOOD, True, ''),
+    ('nối kế thừa chiều', 'Nhóm kéo xuống mạnh nhất là {c1} ({c2}); tiếp theo là {c7} ({c8}).', True, ''),
+    ('đúng ba nhóm', L4G_GOOD[:-1] + '; kế đến là đầu/cuối tháng kéo xuống {c4}.', True, ''),
+    ('đảo nhóm 2/3', 'Nhóm kéo xuống mạnh nhất là {c1} ({c2}); tiếp theo là {c3} ({c4}); '
+     'kế đến là {c7} ({c8}).', False, 'lịch Urban Blowout'),
+    ('đổi chiều', L4G_GOOD + ' Ở chiều ngược lại, mùa vụ kéo lên {c9}.', True, ''),
+    ('thứ Hai', 'Nhóm kéo xuống mạnh nhất là {c1} ({c2}). Thứ Hai, {c3} kéo xuống {c4}.', True, ''),
+    ('tháng tiếp theo', 'Nhóm kéo xuống mạnh nhất là {c1} ({c2}). Tháng tiếp theo, '
+     '{c3} kéo xuống {c4}.', True, ''),
+    ('thứ hai độc lập', 'Đứng thứ hai là {c3} kéo xuống {c4}.', False, 'lịch Urban Blowout'),
+    ('thứ hai và tên nhóm khác sau số', 'Đứng thứ hai là lịch Urban Blowout kéo xuống {c8}, '
+     'còn mùa vụ được nêu riêng.', True, ''),
+    ('nối không chuỗi', 'Tiếp theo là đầu/cuối tháng kéo xuống {c4}.', True, ''),
+])
+def test_l4g_thu_tu_phan_ra_ngay_14_08(published, case, answer, ok, needle):
+    result = tools.run(ToolCall('explain_forecast', L4G_DAY), 'duckdb')
+    assert result.status == 'ok', result.message
+    rows = {row['feature_group']: row for row in result.rows}
+    for group, rank, pct in (('che_do_sau_2018', 1, -24.74),
+                             ('promo_urban_blowout', 2, -22.06), ('dau_cuoi_thang', 3, -5.27)):
+        assert rows[group]['rank_dir'] == rank
+        assert rows[group]['pct_vs_base'] == pytest.approx(pct, abs=.06)
+    claims = {cid: path for cid, path in L4G_CLAIMS.items() if '{' + cid + '}' in answer}
+    turn = _s9b_turn(L4G_DAY, 'Vì sao G dự báo ngày 14/8/2023 thấp hơn mức nền?',
+                     L4G_HEAD + answer, claims)
+    assert (turn.status == 'ok') == ok, (case, turn.validation_errors)
+    if needle:
+        assert any(needle in err and ('top-' in err or 'thứ hai' in err or 'thứ 2' in err)
+                   for err in turn.validation_errors), (case, turn.validation_errors)
+
+
+@pytest.mark.parametrize('word', ['tiếp theo', 'tiếp đến', 'kế đến', 'kế tiếp', 'sau đó là', 'theo sau là'])
+def test_l4g_cac_tu_noi_tiep_phai_dung_nhom_ke(published, word):
+    answer = L4G_HEAD + f'Nhóm kéo xuống mạnh nhất là {{c1}} ({{c2}}); {word} {{c3}} kéo xuống {{c4}}.'
+    turn = _s9b_turn(L4G_DAY, 'Vì sao G dự báo ngày 14/8/2023 thấp?', answer,
+                     {cid: L4G_CLAIMS[cid] for cid in ('c1', 'c2', 'c3', 'c4')})
+    assert turn.status == 'answer_validation_failed', (word, turn.validation_errors)
+
+
+@pytest.mark.parametrize('word', ['đứng thứ hai', 'xếp thứ nhì', 'nhóm thứ ba', 'mạnh thứ 2', 'lớn thứ 3',
+                                   'nhiều thứ ba'])
+def test_l4g_vi_tri_tuong_minh_khong_can_chuoi_truoc(published, word):
+    answer = L4G_HEAD + f'{word} là {{c3}} kéo xuống {{c4}}.'
+    turn = _s9b_turn(L4G_DAY, 'Phân rã G dự báo ngày 14/8/2023?', answer,
+                     {cid: L4G_CLAIMS[cid] for cid in ('c3', 'c4')})
+    should_pass = word in ('nhóm thứ ba', 'lớn thứ 3', 'nhiều thứ ba')
+    assert (turn.status == 'ok') == should_pass, (word, turn.validation_errors)
+
+
+def test_l4g_rubric_doc_lap_kiem_manh_noi_va_thu_tu(published, monkeypatch):
+    from scripts.ops import ai_live_eval
+
+    answer = L4G_HEAD + L4G_GOOD + ' Đầu/cuối tháng kéo xuống {c3} {c4}.'
+    turn = _s9b_turn(L4G_DAY, 'Vì sao G dự báo ngày 14/8/2023 thấp?', answer,
+                     {cid: L4G_CLAIMS[cid] for cid in ('c1', 'c2', 'c3', 'c4', 'c7', 'c8')})
+    assert turn.status == 'ok', turn.validation_errors
+    monkeypatch.setattr(evidence, '_verified_explain_rank',
+                        lambda *_args: (_ for _ in ()).throw(AssertionError('rubric gọi guard')))
+    assert ai_live_eval._l4g_ranked_ok(answer, turn)
+    assert not ai_live_eval._l4g_ranked_ok(L4G_HEAD + L4G_X1, turn)
+    assert not ai_live_eval._l4g_ranked_ok(L4G_HEAD + L4G_X2, turn)
+    assert ai_live_eval._l4g_ranked_ok(L4G_HEAD + L4G_GOOD[:-1] +
+                                       '; kế đến là đầu/cuối tháng kéo xuống {c4}.', turn)
+    assert not ai_live_eval._l4g_ranked_ok(L4G_HEAD +
+                                           'Nhóm kéo xuống mạnh nhất là {c1} ({c2}); tiếp theo là {c3} ({c4}); '
+                                           'kế đến là {c7} ({c8}).', turn)
+
+
+@pytest.mark.parametrize('case,answer,ok,needle', [
+    ('E1', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Lịch Urban Blowout kéo xuống {c8}. Tiếp theo là đầu/cuối tháng ({c4}).', True, ''),
+    ('E13', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}); '
+     'thứ hai là đầu/cuối tháng ({c4}).', False, 'lịch Urban Blowout'),
+    ('bỏ qua nhóm thứ hai', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Đầu/cuối tháng kéo xuống {c4}. Tiếp theo là lịch Urban Blowout ({c8}).',
+     False, 'lịch Urban Blowout'),
+    ('không nói tiếp', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Đầu/cuối tháng kéo xuống {c4}.', True, ''),
+    ('thứ 2 là sai', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}); '
+     'thứ 2 là đầu/cuối tháng ({c4}).', False, 'lịch Urban Blowout'),
+    ('thứ 2 là đúng', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}); '
+     'thứ 2 là lịch Urban Blowout ({c8}).', True, ''),
+    ('thứ hai, sai', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Thứ hai, đầu/cuối tháng kéo xuống {c4}.', False, 'lịch Urban Blowout'),
+    ('thứ hai, đúng', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Thứ hai, lịch Urban Blowout kéo xuống {c8}.', True, ''),
+    ('thứ Hai đầu câu', 'Thứ Hai, 14/8/2023, nhóm kéo xuống mạnh nhất là '
+     'chế độ sau 2018 ({c2}).', True, ''),
+    ('thứ Hai sau ngày', 'Ngày 14/8/2023 là thứ Hai; nhóm kéo xuống mạnh nhất là '
+     'chế độ sau 2018 ({c2}).', True, ''),
+    ('thứ 2 sau ngày', 'Ngày 14/8/2023 là thứ 2; nhóm kéo xuống mạnh nhất là '
+     'chế độ sau 2018 ({c2}).', True, ''),
+    ('thứ Hai là ngày', 'Thứ Hai là ngày 14/8/2023, nhóm kéo xuống mạnh nhất là '
+     'chế độ sau 2018 ({c2}).', True, ''),
+    ('E14', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Mùa vụ kéo lên {c9}. Tiếp theo là đầu/cuối tháng ({c4}).', True, ''),
+])
+def test_l4g_bien_chuoi_va_vi_tri_thu_hai(published, case, answer, ok, needle):
+    from types import SimpleNamespace
+
+    from scripts.ops import ai_live_eval
+
+    result = tools.run(ToolCall('explain_forecast', L4G_DAY), 'duckdb')
+    assert result.status == 'ok', result.message
+    claims = {cid: path for cid, path in L4G_CLAIMS.items() if '{' + cid + '}' in answer}
+    raw = L4G_HEAD + answer
+    turn = _s9b_turn(L4G_DAY, 'Vì sao G dự báo ngày 14/8/2023 thấp hơn mức nền?', raw, claims)
+    assert (turn.status == 'ok') == ok, (case, turn.validation_errors)
+    if needle:
+        assert any(needle in error for error in turn.validation_errors), (case, turn.validation_errors)
+    rubric_turn = SimpleNamespace(results={'T1': result},
+                                  values={cid: ('T1.' + path, None, '') for cid, path in claims.items()})
+    # E14 là giới hạn guard đã chốt; rubric độc lập vẫn phải nhận ra nhóm thứ hai bị bỏ qua.
+    rubric_ok = False if case == 'E14' else ok
+    assert ai_live_eval._l4g_ranked_ok(raw, rubric_turn) == rubric_ok, case
+
+
+@pytest.mark.parametrize('case,answer,guard_ok,rubric_ok', [
+    ('N1', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Thứ nhì là đầu/cuối tháng ({c4}).', False, False),
+    ('N2', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Thứ hai là lịch Urban Blowout ({c8}), và thứ ba là đầu/cuối tháng ({c4}).', True, True),
+    ('N2 nhiều claim', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Thứ hai là {c7} ({c8}), và thứ ba là {c3} ({c4}).', True, True),
+    ('N3', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Thứ hai là lịch Urban Blowout ({c8}), và thứ ba là mùa vụ ({c9}).', False, False),
+    ('N4', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}); '
+     'thứ 2 là đầu/cuối tháng ({c4}).', False, False),
+    ('N5', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}); '
+     'thứ 2 là lịch Urban Blowout ({c8}).', True, True),
+    ('M1', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Mùa vụ đóng góp {c9}. Tiếp theo là lịch Urban Blowout kéo xuống {c8}.', True, True),
+    ('M2', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Ngoài ra, mùa vụ ở mức {c9}. Tiếp theo trong nhóm kéo xuống là lịch Urban Blowout ({c8}).', True, True),
+    ('M3', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Lịch Urban Blowout ở mức {c8}. Tiếp theo là đầu/cuối tháng ({c4}).', True, True),
+    ('E4', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}); '
+     'tiếp theo là lịch Urban Blowout ({c8}). Ở chiều ngược lại, mùa vụ kéo lên {c9}.', True, True),
+    ('E6', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}); '
+     'lịch Urban Blowout đứng thứ hai ({c8}); đầu/cuối tháng đứng thứ ba ({c4}).', True, True),
+    ('E7', 'Lịch Urban Blowout đứng thứ hai trong các nhóm kéo xuống, ở mức {c8}.', True, True),
+    ('E12', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Mùa vụ kéo lên {c9}. Tiếp theo là lịch Urban Blowout ({c8}).', True, True),
+    ('E14', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Mùa vụ kéo lên {c9}. Tiếp theo là đầu/cuối tháng ({c4}).', True, False),
+    ('bỏ qua vị trí hai', 'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+     'Đầu/cuối tháng kéo xuống {c4}. Tiếp theo là lịch Urban Blowout ({c8}).', False, False),
+])
+def test_l4g_luot6_vi_tri_va_chieu_ngam(published, case, answer, guard_ok, rubric_ok):
+    from types import SimpleNamespace
+
+    from scripts.ops import ai_live_eval
+
+    result = tools.run(ToolCall('explain_forecast', L4G_DAY), 'duckdb')
+    assert result.status == 'ok', result.message
+    claims = {cid: path for cid, path in L4G_CLAIMS.items() if '{' + cid + '}' in answer}
+    raw = 'Đây là phân rã model dự báo G, không phải nguyên nhân. ' + answer
+    turn = _s9b_turn(L4G_DAY, 'Vì sao G dự báo ngày 14/8/2023 thấp hơn mức nền?', raw, claims)
+    assert (turn.status == 'ok') == guard_ok, (case, turn.validation_errors)
+    rubric_turn = SimpleNamespace(results={'T1': result},
+                                  values={cid: ('T1.' + path, None, '') for cid, path in claims.items()})
+    assert ai_live_eval._l4g_ranked_ok(raw, rubric_turn) == rubric_ok, case
+
+
 def test_l4f_tron_chieu_khong_co_nhom_cung_chieu_khong_in_top_0(monkeypatch):
     _s9b_tool(monkeypatch)
     answer = (L4E_HEAD + 'Dự báo cao chủ yếu do chế độ sau 2018 kéo xuống {c1} '
