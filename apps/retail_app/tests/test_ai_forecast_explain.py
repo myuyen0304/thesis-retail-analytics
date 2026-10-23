@@ -1034,6 +1034,57 @@ def test_l4g_luot6_vi_tri_va_chieu_ngam(published, case, answer, guard_ok, rubri
     assert ai_live_eval._l4g_ranked_ok(raw, rubric_turn) == rubric_ok, case
 
 
+@pytest.mark.parametrize('case,connector,swapped', [
+    ('VA', ' và ', False),
+    ('ROI', ' rồi ', False),
+    ('CON', ', còn ', False),
+    ('CON2', ' còn ', False),
+    ('VAsw', ' và ', True),
+    ('ROIsw', ' rồi ', True),
+    ('CONsw', ', còn ', True),
+    ('CON2sw', ' còn ', True),
+])
+def test_l4g_luot7_thu_ba_sau_tu_noi(published, case, connector, swapped):
+    from types import SimpleNamespace
+
+    from scripts.ops import ai_live_eval
+
+    result = tools.run(ToolCall('explain_forecast', L4G_DAY), 'duckdb')
+    assert result.status == 'ok', result.message
+    second = 'đầu/cuối tháng ({c4})' if swapped else 'lịch Urban Blowout ({c8})'
+    third = 'lịch Urban Blowout ({c8})' if swapped else 'đầu/cuối tháng ({c4})'
+    answer = ('Đây là phân rã model dự báo G, không phải nguyên nhân. '
+              'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+              f'Thứ hai là {second}{connector}thứ ba là {third}.')
+    claims = {cid: L4G_CLAIMS[cid] for cid in ('c2', 'c4', 'c8')}
+    turn = _s9b_turn(L4G_DAY, 'Vì sao G dự báo ngày 14/8/2023 thấp hơn mức nền?', answer, claims)
+    assert (turn.status == 'ok') == (not swapped), (case, turn.validation_errors)
+    rubric_turn = SimpleNamespace(results={'T1': result},
+                                  values={cid: ('T1.' + path, None, '') for cid, path in claims.items()})
+    assert ai_live_eval._l4g_ranked_ok(answer, rubric_turn) == (not swapped), case
+
+
+def test_l4g_luot7_thu_3_chi_che_chu_so_thu_hang(published):
+    from types import SimpleNamespace
+
+    from scripts.ops import ai_live_eval
+
+    result = tools.run(ToolCall('explain_forecast', L4G_DAY), 'duckdb')
+    assert result.status == 'ok', result.message
+    answer = ('Đây là phân rã model dự báo G, không phải nguyên nhân. '
+              'Nhóm kéo xuống mạnh nhất là chế độ sau 2018 ({c2}). '
+              'Thứ hai là lịch Urban Blowout ({c8}) và thứ 3 là đầu/cuối tháng, khoảng 5%.')
+    claims = {cid: L4G_CLAIMS[cid] for cid in ('c2', 'c8')}
+    turn = _s9b_turn(L4G_DAY, 'Vì sao G dự báo ngày 14/8/2023 thấp hơn mức nền?', answer, claims)
+    assert turn.status == 'answer_validation_failed'
+    digit_errors = [error for error in turn.validation_errors if 'số tự viết' in error]
+    assert len(digit_errors) == 1 and "['5']" in digit_errors[0], turn.validation_errors
+    assert any("['5%']" in error for error in turn.validation_errors), turn.validation_errors
+    rubric_turn = SimpleNamespace(results={'T1': result},
+                                  values={cid: ('T1.' + path, None, '') for cid, path in claims.items()})
+    assert not ai_live_eval._l4g_ranked_ok(answer, rubric_turn)
+
+
 def test_l4f_tron_chieu_khong_co_nhom_cung_chieu_khong_in_top_0(monkeypatch):
     _s9b_tool(monkeypatch)
     answer = (L4E_HEAD + 'Dự báo cao chủ yếu do chế độ sau 2018 kéo xuống {c1} '
