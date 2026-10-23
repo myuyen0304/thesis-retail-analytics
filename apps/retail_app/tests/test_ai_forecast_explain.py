@@ -1085,6 +1085,77 @@ def test_l4g_luot7_thu_3_chi_che_chu_so_thu_hang(published):
     assert not ai_live_eval._l4g_ranked_ok(answer, rubric_turn)
 
 
+def _l4h_probe(args, question, answer, claims):
+    from types import SimpleNamespace
+
+    from scripts.ops import ai_live_eval
+
+    result = tools.run(ToolCall('explain_forecast', args), 'duckdb')
+    assert result.ok, result.message
+    turn = _s9b_turn(args, question, answer, claims)
+    rubric_turn = SimpleNamespace(results={'T1': result},
+                                  values={cid: ('T1.' + path, None, '') for cid, path in claims.items()})
+    return turn, ai_live_eval._l4g_ranked_ok(answer, rubric_turn)
+
+
+L4H_DAY = {'period': 'day', 'year': 2024, 'month': 4, 'day': 12}
+L4H_QUESTION = 'Ngày 12/4/2024, nhóm nào đứng thứ hai trong các nhóm kéo G dự báo lên?'
+L4H_LOG_ANSWER = ('Ngày 12/04/2024, nhóm đứng thứ hai trong các nhóm kéo G dự báo lên là {c1}, '
+                  'với ảnh hưởng {c2} so với mức nền. Đứng đầu là {c3} ({c4}). '
+                  'Đây là phân rã model, không phải nguyên nhân biến động.')
+L4H_LOG_CLAIMS = {
+    'c1': 'rows[che_do_sau_2018].feature_label',
+    'c2': 'rows[che_do_sau_2018].pct_vs_base',
+    'c3': 'rows[mua_vu].feature_label',
+    'c4': 'rows[mua_vu].pct_vs_base',
+}
+
+
+def test_l4h_nguyen_van_l4g5_bi_chan(published):
+    turn, rubric_ok = _l4h_probe(L4H_DAY, L4H_QUESTION, L4H_LOG_ANSWER, L4H_LOG_CLAIMS)
+    assert turn.status == 'answer_validation_failed'
+    assert not rubric_ok
+    assert any('lịch Urban Blowout' in err and 'chiều dương' in err for err in turn.validation_errors)
+
+
+@pytest.mark.parametrize('phrase,args,good,bad,question', [
+    ('kéo G dự báo lên', L4H_DAY, 'promo_urban_blowout', 'che_do_sau_2018', L4H_QUESTION),
+    ('đẩy dự báo G lên', L4H_DAY, 'promo_urban_blowout', 'che_do_sau_2018', L4H_QUESTION),
+    ('làm G dự báo tăng', L4H_DAY, 'promo_urban_blowout', 'che_do_sau_2018', L4H_QUESTION),
+    ('kéo G dự báo xuống', L4G_DAY, 'promo_urban_blowout', 'dau_cuoi_thang',
+     'Ngày 14/8/2023, nhóm nào đứng thứ hai trong các nhóm kéo G dự báo xuống?'),
+])
+@pytest.mark.parametrize('correct', [True, False])
+def test_l4h_dong_tu_tach_dung_chieu(published, phrase, args, good, bad, question, correct):
+    group = good if correct else bad
+    answer = (f'Nhóm đứng thứ hai trong các nhóm {phrase} là {{c1}} ({{c2}}). '
+              'Đây là phân rã model, không phải nguyên nhân.')
+    claims = {'c1': f'rows[{group}].feature_label', 'c2': f'rows[{group}].pct_vs_base'}
+    turn, rubric_ok = _l4h_probe(args, question, answer, claims)
+    assert (turn.status == 'ok') == correct, turn.validation_errors
+    assert rubric_ok == correct
+
+
+@pytest.mark.parametrize('phrase', ['kéo, lên', 'kéo G dự báo trong ngày lên'])
+def test_l4h_khong_noi_qua_dau_cau_hoac_qua_bon_chu(published, phrase):
+    answer = (f'Nhóm đứng thứ hai trong các nhóm {phrase} là chế độ sau 2018 ({{c1}}). '
+              'Đây là phân rã model, không phải nguyên nhân.')
+    turn, rubric_ok = _l4h_probe(L4H_DAY, L4H_QUESTION, answer,
+                                 {'c1': 'rows[che_do_sau_2018].pct_vs_base'})
+    assert turn.status == 'ok', turn.validation_errors
+    assert rubric_ok
+
+
+def test_l4h_chi_bo_qua_ten_nhom_cho_path_chi_so_hop_le(published):
+    from scripts.ops import ai_live_eval
+
+    answer = 'Đây là phân rã model, không phải nguyên nhân. Chế độ sau 2018 góp {c1} so với mức nền.'
+    turn = _s9b_turn(L4H_DAY, L4H_QUESTION, answer, {'c1': 'rows[0].pct_vs_base'})
+    assert turn.status == 'ok', turn.validation_errors
+    assert ai_live_eval.grade(ai_live_eval.ACCEPT_L4H[3], turn)['checks']['claim_dung_o']
+    assert not ai_live_eval.grade(ai_live_eval.ACCEPT_L4G[4], turn)['checks']['claim_dung_o']
+
+
 def test_l4f_tron_chieu_khong_co_nhom_cung_chieu_khong_in_top_0(monkeypatch):
     _s9b_tool(monkeypatch)
     answer = (L4E_HEAD + 'Dự báo cao chủ yếu do chế độ sau 2018 kéo xuống {c1} '
