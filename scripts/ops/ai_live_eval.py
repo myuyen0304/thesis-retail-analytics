@@ -1059,7 +1059,7 @@ def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult) -> bool:
     strong = ('chủ yếu', 'mạnh nhất', 'lớn nhất', 'nhiều nhất', 'dẫn đầu', 'đứng đầu', 'mạnh hơn cả')
     connector = re.compile(r'(?<!\w)(?:tiếp\s+theo|tiếp\s+đến|kế\s+đến|kế\s+tiếp|sau\s+đó\s+là|theo\s+sau\s+là)(?!\w)', re.I)
     ordinal = re.compile(r'(?<!\w)(?:đứng|xếp|nhóm|mạnh|lớn|nhiều)\s+thứ\s+(hai|nhì|ba|2|3)(?!\w)', re.I)
-    ordinal_bare = re.compile(r'(?:^|,)\s*(?:và\s+)?thứ\s+(hai|nhì|ba|2|3)\s+là\b(?!\s*(?:ngày\b|\d))', re.I)
+    ordinal_bare = re.compile(r'(?:^|,|\s+(?:và|rồi|còn))\s*(?:(?:và|rồi|còn)\s+)?thứ\s+(hai|nhì|ba|2|3)\s+là\b(?!\s*(?:ngày\b|\d))', re.I)
     ordinal_list = re.compile(r'(?:^|,)\s*(?:và\s+)?thứ\s+(hai|nhì|ba|2|3)\s*,(?!\s*(?:\d|ngày\b|\{))\s*', re.I)
     chain = None
     for sentence in re.split(r'[.;!?\n]', raw_answer):
