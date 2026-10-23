@@ -166,7 +166,7 @@ WEAK_WORDS = ('nhỏ nhất', 'ít nhất', 'nhẹ nhất', 'chậm nhất', 'y�
 # Chỉ dùng cho chuỗi xếp hạng của explain_forecast, không áp vào kỳ tiếp theo hay ngày thứ Hai.
 _EXPLAIN_NEXT = re.compile(r'(?<!\w)(?:tiếp\s+theo|tiếp\s+đến|kế\s+đến|kế\s+tiếp|sau\s+đó\s+là|theo\s+sau\s+là)(?!\w)', re.I)
 _EXPLAIN_ORDINAL = re.compile(r'(?<!\w)(?:đứng|xếp|nhóm|mạnh|lớn|nhiều)\s+thứ\s+(hai|nhì|ba|2|3)(?!\w)', re.I)
-_EXPLAIN_ORDINAL_BARE = re.compile(r'(?:^|[,.;!?\n])\s*(?:và\s+)?thứ\s+(hai|nhì|ba|2|3)\s+là\b(?!\s*(?:ngày\b|\d))', re.I)
+_EXPLAIN_ORDINAL_BARE = re.compile(r'(?:^|[,.;!?\n]|\s+(?:và|rồi|còn))\s*(?:(?:và|rồi|còn)\s+)?thứ\s+(hai|nhì|ba|2|3)\s+là\b(?!\s*(?:ngày\b|\d))', re.I)
 _EXPLAIN_ORDINAL_LIST = re.compile(r'(?:^|,)\s*(?:và\s+)?thứ\s+(hai|nhì|ba|2|3)\s*,(?!\s*(?:\d|ngày\b|\{))\s*', re.I)
 _EXPLAIN_WEEKDAY = re.compile(r'\bngày\s+\d{1,2}/\d{1,2}/\d{4}\s+là\s+thứ\s+(2)(?=\s*[.;!?\n]|\s*$)', re.I)
 _EXPLAIN_TIME_NEXT = re.compile(r'(?:tháng|kỳ|năm)\s*$', re.I)
