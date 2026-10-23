@@ -646,8 +646,11 @@ def _explain_rank_piece(sent: str, by_id: dict, results: dict) -> tuple[set[str]
             if group and group not in groups:
                 groups.append(group)
     plain = _PLACEHOLDER.sub(' ', sent).casefold()
-    up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', plain))
-    down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', plain))
+    # Động từ và chiều có thể cách nhau tối đa bốn chữ; chỉ khớp chữ, không vượt dấu câu hay {cN}.
+    split_up = r'\b(?:kéo|đẩy|nâng)\s+(?:[^\W\d_]+\s+){0,4}lên\b|\blàm\s+(?:[^\W\d_]+\s+){0,4}tăng\b'
+    split_down = r'\b(?:kéo|đẩy)\s+(?:[^\W\d_]+\s+){0,4}xuống\b|\blàm\s+(?:[^\W\d_]+\s+){0,4}giảm\b|\bhạ\b'
+    up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', plain) or re.search(split_up, sent.casefold()))
+    down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', plain) or re.search(split_down, sent.casefold()))
     return refs, groups, 2 if up and down else 1 if up else -1 if down else 0
 
 
