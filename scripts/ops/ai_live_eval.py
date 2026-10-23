@@ -904,6 +904,38 @@ for _case in ACCEPT_L4G:
     _case['l4g_rule'] = 'ranked_if_said'
 ACCEPT_L4G[3]['l4g_why'] = True
 
+# L4H: bộ chưa chạy, soạn trước khi sửa luật nhận chiều trong câu L4.
+ACCEPT_L4H = [
+    C('L4H1', 'Ngày 11/4/2024, nhóm nào đứng thứ hai trong các nhóm kéo G dự báo lên?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 4, 'day': 11})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4H',
+      hand='Chiều dương: mùa vụ đứng đầu, lịch Urban Blowout thứ hai; đối chiếu rank_dir.'),
+    C('L4H2', 'Ngày 13/4/2024, nhóm nào đứng thứ ba trong các nhóm đẩy dự báo G lên?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 4, 'day': 13})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4H',
+      hand='Chiều dương: năm chẵn/lẻ đứng thứ ba; không lấy nhóm âm có rank chung bằng 3.'),
+    C('L4H3', 'Ngày 2/5/2024, nhóm nào đứng thứ hai trong các nhóm làm G dự báo tăng?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 5, 'day': 2})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4H',
+      hand='Chiều dương: lịch Urban Blowout đứng thứ hai, sau mùa vụ.'),
+    C('L4H4', 'Ngày 12/4/2024, nhóm nào đứng thứ hai trong các nhóm kéo G dự báo lên?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 4, 'day': 12})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4H',
+      hand='Hồi quy lỗi L4G5: nhóm thứ hai chiều dương là lịch Urban Blowout, không phải chế độ sau 2018.'),
+    C('L4H5', 'Ngày 18/8/2023, nhóm nào đứng thứ hai trong các nhóm kéo G dự báo xuống?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2023, 'month': 8, 'day': 18})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4H',
+      hand='Đối chứng chiều âm: kiểm nhóm thứ hai theo rank_dir âm.'),
+    C('L4H6', 'Vì sao dự báo G tháng 4/2024 cao hơn mức nền?', {'ok'},
+      tools=[(FX, {'period': 'month', 'year': 2024, 'month': 4})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4H',
+      hand='Câu vì sao cao: tối đa ba nhóm có số, nếu xếp hạng thì đúng chiều dương.'),
+]
+for _case in ACCEPT_L4H:
+    _case['l4g_rule'] = 'ranked_if_said'
+    _case['paths_index_ok'] = True
+ACCEPT_L4H[-1]['l4g_why'] = True
+
 # B5b lượt 2: soạn các câu dưới đây trước khi thêm alias AOV/U/P. Chưa chạy model.
 ACCEPT_B5B_PARAPHRASE = [
     C('B5BP1', 'Tiền thu bình quân trên một đơn giao thành công được xác định ra sao?',
@@ -972,10 +1004,10 @@ ACCEPT_DEF_SO[0]['def_so_cogs'] = True
 SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D,
         'f': ACCEPT_F, 'g': ACCEPT_G, 'gm': ACCEPT_GM, 'v': ACCEPT_V, 'n': ACCEPT_N, 'b7': ACCEPT_B7,
         'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C, 'l4d': ACCEPT_L4D, 'l4e': ACCEPT_L4E,
-        'l4f': ACCEPT_L4F, 'l4g': ACCEPT_L4G,
+        'l4f': ACCEPT_L4F, 'l4g': ACCEPT_L4G, 'l4h': ACCEPT_L4H,
         'rag': ACCEPT_RAG,
         'b5b_paraphrase': ACCEPT_B5B_PARAPHRASE, 'def_so': ACCEPT_DEF_SO}
-FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'l4d', 'l4e', 'l4f', 'l4g', 'rag')  # rag có ca trộn dự báo
+FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'l4d', 'l4e', 'l4f', 'l4g', 'l4h', 'rag')  # rag có ca trộn dự báo
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -995,6 +1027,31 @@ def _paths_ok(t: service.TurnResult, required, alternatives) -> bool:
         tool, a = call_of.get(p.split('.')[0], (None, None))
         return tool in tools_ and (not alternatives or _match(tool, a, alternatives))
     return all(any(p.endswith(suffix) and good(p, tools_) for p in shown) for tools_, suffix in required)
+
+
+def _l4h_paths_ok(t: service.TurnResult, required, alternatives) -> bool:
+    """L4H cho phép chỉ số hàng thật; các bộ cũ vẫn dùng _paths_ok nguyên trạng."""
+    call_of = {ref: (tool, args) for ref, tool, args in t.calls}
+
+    def indexed(tools_, suffix):
+        suffixes = suffix if isinstance(suffix, tuple) else (suffix,)
+        fields = {m.group(1) for s in suffixes
+                  if (m := re.fullmatch(r'rows\[[^]]+\]\.(pct_vs_base|contribution_log|multiplier|feature_label)', s))}
+        for path, _value, _shown in t.values.values():
+            match = re.fullmatch(r'(T\d+)\.rows\[(\d+)\]\.([a-z_]+)', path)
+            if not match or match.group(3) not in fields:
+                continue
+            ref, index = match.group(1), int(match.group(2))
+            tool, args = call_of.get(ref, (None, None))
+            result = t.results.get(ref)
+            if (tool in tools_ and (not alternatives or _match(tool, args, alternatives))
+                    and result and result.ok and result.evidence and result.evidence.tool == FX
+                    and index < len(result.rows)):
+                return True
+        return False
+
+    return all(_paths_ok(t, [(tools_, suffix)], alternatives) or indexed(tools_, suffix)
+               for tools_, suffix in required)
 
 
 def _l4f_ranked_ok(raw_answer: str, t: service.TurnResult) -> bool:
@@ -1073,8 +1130,11 @@ def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult) -> bool:
                 return False
             continue
         refs = {ref for ref, _ in cited}
-        up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', words))
-        down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', words))
+        # Viết độc lập với guard: tối đa bốn chữ giữa động từ và chiều, không vượt dấu câu/chỗ đặt.
+        split_up = r'\b(?:kéo|đẩy|nâng)\s+(?:[^\W\d_]+\s+){0,4}lên\b|\blàm\s+(?:[^\W\d_]+\s+){0,4}tăng\b'
+        split_down = r'\b(?:kéo|đẩy)\s+(?:[^\W\d_]+\s+){0,4}xuống\b|\blàm\s+(?:[^\W\d_]+\s+){0,4}giảm\b|\bhạ\b'
+        up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', words) or re.search(split_up, sentence.casefold()))
+        down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', words) or re.search(split_down, sentence.casefold()))
         if up and down:
             if any(word in words for word in strong) or connector.search(words) or ordinal.search(words):
                 return False
@@ -1150,7 +1210,8 @@ def grade(case, t: service.TurnResult) -> dict:
     checks = {
         'status': t.status in case['status'],
         'tool': _tool_ok(t, tools_),
-        'claim_dung_o': _paths_ok(t, paths, tools_),
+        'claim_dung_o': (_l4h_paths_ok(t, paths, tools_) if case.get('paths_index_ok')
+                          else _paths_ok(t, paths, tools_)),
         'must_contain': all(m in text for m in case['must']) and all(neg_shown(text, m) for m in case['must_neg'])
                          and all(x in text or x in getattr(t, 'app_notes', ()) for x in case.get('labels', ())),
         'must_if_ok': t.status != 'ok' or all(re.search(p, raw_answer) for p in case.get('must_if_ok', ())),
@@ -1396,7 +1457,8 @@ def main() -> int:
                          'n = N* (chuỗi từng năm, ghi chú app, 2026-10-17); b7 = K* (held-out router, nghiệm thu AI4, '
                           '2026-10-18); l4 = L4* (phân rã model B4b, bộ phát triển); l4b = L4B* (đã đo); '
                          'l4c = L4C* (bộ mới sau sửa guard L4B5); l4d = L4D* (S9b trình bày L4); '
-                         'l4e = L4E* (đã chạy); l4f = L4F* (đã chạy); l4g = L4G* (thứ tự mảnh nối, chưa chạy); rag = RAG* (B5); '
+                         'l4e = L4E* (đã chạy); l4f = L4F* (đã chạy); l4g = L4G* (đã chạy); '
+                         'l4h = L4H* (chiều động từ tách, chưa chạy); rag = RAG* (B5); '
                          'b5b_paraphrase = B5BP* (định nghĩa, đã chạy một lượt); '
                          'def_so = DS* (luật chữ số câu định nghĩa, chưa chạy model); '
                          'các bộ dự báo cần chế độ versioned')
@@ -1406,10 +1468,10 @@ def main() -> int:
     pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
     by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F + ACCEPT_G
-              + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C + ACCEPT_L4D + ACCEPT_L4E + ACCEPT_L4F + ACCEPT_L4G
+              + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C + ACCEPT_L4D + ACCEPT_L4E + ACCEPT_L4F + ACCEPT_L4G + ACCEPT_L4H
               + ACCEPT_RAG
               + ACCEPT_B5B_PARAPHRASE + ACCEPT_DEF_SO}
-    if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c', 'l4d', 'l4e', 'l4f', 'l4g')
+    if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c', 'l4d', 'l4e', 'l4f', 'l4g', 'l4h')
                                   else _forecast_ready(a.backend)):
         print(f'Không chạy bộ {a.set}: {why}.')
         return 2
