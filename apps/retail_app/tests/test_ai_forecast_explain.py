@@ -1085,7 +1085,7 @@ def test_l4g_luot7_thu_3_chi_che_chu_so_thu_hang(published):
     assert not ai_live_eval._l4g_ranked_ok(answer, rubric_turn)
 
 
-def _l4h_probe(args, question, answer, claims):
+def _l4h_probe(args, question, answer, claims, expected_direction=0):
     from types import SimpleNamespace
 
     from scripts.ops import ai_live_eval
@@ -1095,7 +1095,7 @@ def _l4h_probe(args, question, answer, claims):
     turn = _s9b_turn(args, question, answer, claims)
     rubric_turn = SimpleNamespace(results={'T1': result},
                                   values={cid: ('T1.' + path, None, '') for cid, path in claims.items()})
-    return turn, ai_live_eval._l4g_ranked_ok(answer, rubric_turn)
+    return turn, ai_live_eval._l4g_ranked_ok(answer, rubric_turn, expected_direction)
 
 
 L4H_DAY = {'period': 'day', 'year': 2024, 'month': 4, 'day': 12}
@@ -1138,12 +1138,63 @@ def test_l4h_dong_tu_tach_dung_chieu(published, phrase, args, good, bad, questio
 
 @pytest.mark.parametrize('phrase', ['kéo, lên', 'kéo G dự báo trong ngày lên'])
 def test_l4h_khong_noi_qua_dau_cau_hoac_qua_bon_chu(published, phrase):
-    answer = (f'Nhóm đứng thứ hai trong các nhóm {phrase} là chế độ sau 2018 ({{c1}}). '
+    from ai_explain.evidence import _explain_said_direction
+
+    assert _explain_said_direction(phrase)[0] == 0
+    answer = (f'Nhóm đứng thứ hai trong các nhóm {phrase} là lịch Urban Blowout ({{c1}}). '
               'Đây là phân rã model, không phải nguyên nhân.')
     turn, rubric_ok = _l4h_probe(L4H_DAY, L4H_QUESTION, answer,
-                                 {'c1': 'rows[che_do_sau_2018].pct_vs_base'})
+                                 {'c1': 'rows[promo_urban_blowout].pct_vs_base'}, 1)
     assert turn.status == 'ok', turn.validation_errors
     assert rubric_ok
+
+
+@pytest.mark.parametrize('case,body,groups,correct', [
+    ('K1', 'Nhóm đứng thứ hai trong các nhóm kéo G dự báo lên là chế độ sau 2018 ({c1}).',
+     ('che_do_sau_2018',), False),
+    ('K2', 'Nhóm đứng thứ hai trong các nhóm kéo G dự báo lên là lịch Urban Blowout ({c1}).',
+     ('promo_urban_blowout',), True),
+    ('K3', 'Hai nhóm kéo G dự báo lên mạnh nhất là mùa vụ ({c1}) và chế độ sau 2018 ({c2}).',
+     ('mua_vu', 'che_do_sau_2018'), False),
+    ('K4', 'Hai nhóm kéo G dự báo lên mạnh nhất là mùa vụ ({c1}) và lịch Urban Blowout ({c2}).',
+     ('mua_vu', 'promo_urban_blowout'), True),
+    ('K6', 'Nhóm đứng thứ hai trong các nhóm kéo G dự báo ngày 12/04/2024 lên là lịch Urban Blowout ({c1}).',
+     ('promo_urban_blowout',), True),
+    ('K6w', 'Nhóm đứng thứ hai trong các nhóm kéo G dự báo ngày 12/04/2024 lên là chế độ sau 2018 ({c1}).',
+     ('che_do_sau_2018',), False),
+    ('K7', 'Nhóm đứng thứ hai trong các nhóm kéo mức G dự báo của ngày này lên là lịch Urban Blowout ({c1}).',
+     ('promo_urban_blowout',), True),
+    ('K8', 'Nhóm đứng thứ hai trong các nhóm có ảnh hưởng dương là lịch Urban Blowout ({c1}).',
+     ('promo_urban_blowout',), True),
+    ('K8w', 'Nhóm đứng thứ hai trong các nhóm có ảnh hưởng dương là chế độ sau 2018 ({c1}).',
+     ('che_do_sau_2018',), False),
+    ('K10', 'Đứng đầu là mùa vụ ({c1}); nhóm đứng thứ hai là lịch Urban Blowout ({c2}).',
+     ('mua_vu', 'promo_urban_blowout'), True),
+])
+def test_l4h_luot8b_chieu_cau_hoi_va_chieu_noi(published, case, body, groups, correct):
+    answer = 'Đây là phân rã model dự báo G, không phải nguyên nhân. ' + body
+    claims = {f'c{i}': f'rows[{group}].pct_vs_base' for i, group in enumerate(groups, 1)}
+    turn, rubric_ok = _l4h_probe(L4H_DAY, L4H_QUESTION, answer, claims, 1)
+    assert (turn.status == 'ok') == correct, (case, turn.validation_errors)
+    assert rubric_ok == correct, case
+    if case in ('K1', 'K3', 'K6w'):
+        assert any('lịch Urban Blowout' in error and 'chiều dương' in error
+                   for error in turn.validation_errors), (case, turn.validation_errors)
+
+
+@pytest.mark.parametrize('phrase,direction', [
+    ('kéo G dự báo ngày 12/04/2024 lên', 1),
+    ('đẩy G dự báo 04/2024 lên', 1),
+    ('có ảnh hưởng dương', 1),
+    ('theo chiều âm', -1),
+    ('kéo G dự báo, lên', 0),
+    ('kéo G dự báo {c1} lên', 0),
+    ('kéo G dự báo trong ngày này lên', 0),
+])
+def test_l4h_luot8b_nhan_chieu_khong_vuot_dau_cau_cho_dat(phrase, direction):
+    from ai_explain.evidence import _explain_said_direction
+
+    assert _explain_said_direction(phrase)[0] == direction
 
 
 def test_l4h_chi_bo_qua_ten_nhom_cho_path_chi_so_hop_le(published):
