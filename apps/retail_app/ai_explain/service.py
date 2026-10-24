@@ -25,6 +25,7 @@ from dwh.releases import pinned_read
 from ai_explain.contracts import ToolCall, ToolResult
 from ai_explain.evidence import (DATE_RE, Checked, allowed_years, check_digits, definition_question_errors,
                                   definition_text_numbers,
+                                  _explain_said_direction,
                                   forecast_question_errors,
                                   invalid_period_errors, question_numbers, rag_literal_errors, reference_answer,
                                   stated_period_errors, validate)
@@ -310,10 +311,10 @@ def parse_final(content: str | None) -> dict | None:
     return d if isinstance(d, dict) else None
 
 
-def _safe_validate(answer, claims, results, extra) -> Checked:
+def _safe_validate(answer, claims, results, extra, question_direction=0) -> Checked:
     """Lỗi bất ngờ khi kiểm (claim lạ, kiểu dữ liệu lạ) thành lỗi kiểm để model sửa / trang hiện bảng số, không crash."""
     try:
-        return validate(answer, claims, results, extra)
+        return validate(answer, claims, results, extra, question_direction)
     except Exception as e:      # noqa: BLE001 — mọi lỗi kiểm đều phải về answer_validation_failed
         return Checked(False, [f'không kiểm được câu trả lời ({type(e).__name__}); trỏ claim vào một ô số hoặc chữ'])
 
@@ -389,11 +390,14 @@ def _check_final(d: dict | None, results: dict, question: str,
     if status not in ('ok', 'needs_clarification', 'unsupported', 'no_data'):
         return None, [f'status {status!r} không hợp lệ'], None
     answer, claims = d.get('answer'), d.get('claims', [])
+    asked_direction = _explain_said_direction(question)[0]
+    if asked_direction == 2:
+        asked_direction = 0
     rag_errors = rag_literal_errors(answer, question, results, rag_used=rag_used)
     if status == 'ok':
         if not any(r.ok for r in results.values()):
             return status, ['status ok nhưng lượt này không có kết quả tool ok nào'], None
-        chk = _safe_validate(answer, claims, results, extra)
+        chk = _safe_validate(answer, claims, results, extra, asked_direction)
         extra_errs = (_group_filter_errors(status, chk, question, groups)
                       + _safe_forecast_errors(question, chk.values, results, answer, context_periods)
                       + _safe_definition_errors(question, chk.values, results, answer, status, history)) if chk.ok else []
@@ -402,7 +406,7 @@ def _check_final(d: dict | None, results: dict, question: str,
     # không dẫn số nào, kể cả "trong lúc chờ" (RV10); số kỳ khác do app dẫn theo khuôn (RV12 lượt 5); các ràng buộc
     # model / thước khác vẫn chỉ áp cho status ok
     if claims:
-        chk = _safe_validate(answer, claims, results, extra)
+        chk = _safe_validate(answer, claims, results, extra, asked_direction)
         if not chk.ok:
             return status, list(dict.fromkeys(chk.errors + rag_errors)), chk
         errs, md = _safe_reference_answer(question, status, chk.values, results, answer)
