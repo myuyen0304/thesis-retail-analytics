@@ -1101,7 +1101,8 @@ def _l4f_ranked_ok(raw_answer: str, t: service.TurnResult) -> bool:
     return True
 
 
-def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult, expected_direction: int = 0) -> bool:
+def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult, expected_direction: int = 0,
+                   require_expected_ranked: bool = False) -> bool:
     """Chấm độc lập thứ tự L4 theo hàng tool, kể cả mảnh nối sau dấu chấm/phẩy."""
     claims = {}
     for cid, (path, _value, _shown) in t.values.items():
@@ -1124,6 +1125,7 @@ def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult, expected_direction: i
     ordinal_bare = re.compile(r'(?:^|,|\s+(?:và|rồi|còn))\s*(?:(?:và|rồi|còn)\s+)?thứ\s+(hai|nhì|ba|2|3)\s+là\b(?!\s*(?:ngày\b|\d))', re.I)
     ordinal_list = re.compile(r'(?:^|,)\s*(?:và\s+)?thứ\s+(hai|nhì|ba|2|3)\s*,(?!\s*(?:\d|ngày\b|\{))\s*', re.I)
     chain = None
+    saw_expected_rank = False
     for sentence in re.split(r'[.;!?\n]', raw_answer):
         words = re.sub(r'\{c\d+\}', ' ', sentence).casefold()
         is_strong = any(word in words for word in strong)
@@ -1140,6 +1142,20 @@ def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult, expected_direction: i
         split_down = r'\b(?:kéo|đẩy)\s+(?:[^\W\d_]+\s+){0,4}xuống\b|\blàm\s+(?:[^\W\d_]+\s+){0,4}giảm\b|\bhạ\b'
         up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', words) or re.search(split_up, sentence.casefold()))
         down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', words) or re.search(split_down, sentence.casefold()))
+        if expected_direction:
+            # Chỉ L4H nhận thêm dạng chiều này; nhánh L4G (expected_direction=0) giữ nguyên.
+            token = r'(?:[^\W\d_]+|\d{1,2}/\d{1,2}/\d{4}|\d{1,2}/\d{4})'
+
+            def said_split(verbs: str, ending: str) -> bool:
+                pattern = rf'\b(?:{verbs})[ \t]+(?P<middle>(?:{token}[ \t]+){{0,5}}){ending}\b'
+                return any(sum(not re.fullmatch(r'\d{1,2}/(?:\d{1,2}/)?\d{4}', word)
+                               for word in match.group('middle').split()) <= 4
+                           for match in re.finditer(pattern, sentence.casefold()))
+
+            up = (up or bool(re.search(r'\b(?:ảnh\s+hưởng|chiều)\s+dương\b', words))
+                  or said_split('kéo|đẩy|nâng', 'lên') or said_split('làm', 'tăng'))
+            down = (down or bool(re.search(r'\b(?:ảnh\s+hưởng|chiều)\s+âm\b', words))
+                    or said_split('kéo|đẩy', 'xuống') or said_split('làm', 'giảm'))
         if up and down:
             if any(word in words for word in strong) or connector.search(words) or ordinal.search(words):
                 return False
@@ -1158,10 +1174,16 @@ def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult, expected_direction: i
         positions = [m for i, m in enumerate(positions)
                      if i == 0 or m.start() >= positions[i - 1].end()]
         position = bool(positions)
+        ranked = bool(is_strong or next_word or position)
+        if expected_direction and ranked and not direction:
+            direction = expected_direction
         if chain and direction and chain[1] and direction != chain[1] and not next_word:
-            # Rubric giữ chuỗi để kiểm mảnh nối sau đó; guard E14 giữ giới hạn cũ.
-            continue
-        if not (is_strong or next_word or position):
+            if expected_direction:
+                chain = None  # L4H: câu đổi chiều có xếp hạng được chấm như một chuỗi mới.
+            else:
+                # Rubric L4G giữ chuỗi để kiểm mảnh nối sau đó; guard E14 giữ giới hạn cũ.
+                continue
+        if not ranked:
             if chain and refs == {chain[0]}:
                 old_ref, old_direction, old_order = chain
                 if not direction and old_direction:
@@ -1169,11 +1191,6 @@ def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult, expected_direction: i
                     order = [group for group in order if row_signs[group] * old_direction > 0]
                 chain = (old_ref, old_direction, list(dict.fromkeys(old_order + order)))
             continue
-        # Chỉ bộ L4H truyền chiều câu hỏi đã chốt; L4G giữ nguyên cách chấm cũ.
-        if expected_direction:
-            if direction and direction != expected_direction:
-                return False
-            direction = expected_direction
         if len(refs) != 1:
             return False
         ref = next(iter(refs))
@@ -1203,9 +1220,11 @@ def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult, expected_direction: i
                 return False
         if (is_strong or extended) and order != [r['feature_group'] for r in candidates[:len(order)]]:
             return False
+        if expected_direction and direction == expected_direction:
+            saw_expected_rank = True
         if is_strong or extended:
             chain = (ref, direction, order)
-    return True
+    return not (expected_direction and require_expected_ranked) or saw_expected_rank
 
 
 def grade(case, t: service.TurnResult) -> dict:
@@ -1291,7 +1310,9 @@ def grade(case, t: service.TurnResult) -> dict:
                         groups.add(row['feature_group'])
             checks['toi_da_3_nhom'] = 1 <= len(groups) <= 3
     if case.get('l4g_rule'):
-        checks['xep_hang_doc_lap'] = _l4g_ranked_ok(raw_answer, t, case.get('l4h_direction', 0))
+        direction = case.get('l4h_direction', 0)
+        checks['xep_hang_doc_lap'] = _l4g_ranked_ok(raw_answer, t, direction,
+                                                   bool(direction and not case.get('l4g_why')))
         if case.get('l4g_why'):
             groups = set()
             for path, _value, _shown in t.values.values():
