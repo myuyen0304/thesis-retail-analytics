@@ -526,7 +526,25 @@ def _explain_group_mentions(text: str) -> list[tuple[int, int, str]]:
     return chosen
 
 
-def _verified_explain_rank(sent: str, by_id: dict, results: dict) -> str | None:
+def _explain_said_direction(sent: str) -> tuple[int, int | None, int | None]:
+    """Chiều L4 và vị trí chữ chỉ chiều; ngày trong động từ tách không tính là một chữ."""
+    plain = _PLACEHOLDER.sub(lambda m: ' ' * len(m.group()), sent).casefold()
+    up = [m.start() for m in re.finditer(r'\b(?:cao|tăng|kéo\s+lên|(?:ảnh\s+hưởng|chiều)\s+dương)\b', plain)]
+    down = [m.start() for m in re.finditer(r'\b(?:thấp|giảm|kéo\s+xuống|hạ|(?:ảnh\s+hưởng|chiều)\s+âm)\b', plain)]
+    # Chỉ token chữ và ngày/tháng dạng số được nằm giữa động từ và chiều. Dấu câu, {cN} không khớp.
+    token = r'(?:[^\W\d_]+|\d{1,2}/\d{1,2}/\d{4}|\d{1,2}/\d{4})'
+    for verbs, ending, hits in ((r'kéo|đẩy|nâng', 'lên', up), (r'làm', 'tăng', up),
+                                (r'kéo|đẩy', 'xuống', down), (r'làm', 'giảm', down)):
+        pattern = rf'\b(?:{verbs})[ \t]+(?P<middle>(?:{token}[ \t]+){{0,5}}){ending}\b'
+        for match in re.finditer(pattern, sent.casefold()):
+            words = match.group('middle').split()
+            if sum(not re.fullmatch(r'\d{1,2}/(?:\d{1,2}/)?\d{4}', word) for word in words) <= 4:
+                hits.append(match.start())
+    return (2 if up and down else 1 if up else -1 if down else 0,
+            min(up) if up else None, min(down) if down else None)
+
+
+def _verified_explain_rank(sent: str, by_id: dict, results: dict, question_direction: int = 0) -> str | None:
     """Trả lý do chặn câu xếp hạng L4; None khi từng claim đúng tên, chiều và top-k."""
     refs = {}
     cited = []
@@ -550,9 +568,7 @@ def _verified_explain_rank(sent: str, by_id: dict, results: dict) -> str | None:
     if None in groups or not groups:
         return prefix + 'claim không xác định được nhóm để kiểm top-k theo rank_dir'
     rows = results[ref].rows
-    said = _PLACEHOLDER.sub(' ', sent).casefold()
-    up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', said))
-    down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', said))
+    said_direction, first_up, first_down = _explain_said_direction(sent)
     selected = [r for r in rows if r['feature_group'] in groups]
 
     def top_text(direction: int, count: int) -> tuple[list[str], str]:
@@ -567,10 +583,8 @@ def _verified_explain_rank(sent: str, by_id: dict, results: dict) -> str | None:
         return [r['feature_group'] for r in top], scope + ' là ' + ', '.join(
             f'"{r.get("feature_label") or FEATURE_GROUP_LABEL[r["feature_group"]]}"' for r in top)
 
-    if up and down:
-        first_up = re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', said)
-        first_down = re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', said)
-        direction = 1 if first_up.start() < first_down.start() else -1
+    if said_direction == 2:
+        direction = 1 if first_up < first_down else -1
         same = [r for r in selected if r['contribution_log'] * direction > 0]
         other = ', '.join(r.get('feature_label') or FEATURE_GROUP_LABEL[r['feature_group']]
                           for r in selected if r['contribution_log'] * direction < 0)
@@ -579,8 +593,8 @@ def _verified_explain_rank(sent: str, by_id: dict, results: dict) -> str | None:
         _, expected_text = top_text(direction, len({r['feature_group'] for r in same}))
         return (prefix + f'trộn hai chiều trong một câu xếp hạng; {expected_text}; '
                 f'nhóm ngược chiều ({other}) đặt ở câu riêng')
-    if up or down:
-        direction = 1 if up else -1
+    if said_direction or question_direction:
+        direction = said_direction or question_direction
         if len(selected) != len(groups) or any(r['contribution_log'] * direction <= 0 for r in selected):
             _, expected_text = top_text(direction, len(groups))
             return prefix + f'có nhóm sai chiều; {expected_text}. Nhóm ngược chiều đặt ở câu riêng'
@@ -645,17 +659,11 @@ def _explain_rank_piece(sent: str, by_id: dict, results: dict) -> tuple[set[str]
             group = row.get('feature_group')
             if group and group not in groups:
                 groups.append(group)
-    plain = _PLACEHOLDER.sub(' ', sent).casefold()
-    # Động từ và chiều có thể cách nhau tối đa bốn chữ; chỉ khớp chữ, không vượt dấu câu hay {cN}.
-    split_up = r'\b(?:kéo|đẩy|nâng)\s+(?:[^\W\d_]+\s+){0,4}lên\b|\blàm\s+(?:[^\W\d_]+\s+){0,4}tăng\b'
-    split_down = r'\b(?:kéo|đẩy)\s+(?:[^\W\d_]+\s+){0,4}xuống\b|\blàm\s+(?:[^\W\d_]+\s+){0,4}giảm\b|\bhạ\b'
-    up = bool(re.search(r'\b(?:cao|tăng|kéo\s+lên)\b', plain) or re.search(split_up, sent.casefold()))
-    down = bool(re.search(r'\b(?:thấp|giảm|kéo\s+xuống)\b', plain) or re.search(split_down, sent.casefold()))
-    return refs, groups, 2 if up and down else 1 if up else -1 if down else 0
+    return refs, groups, _explain_said_direction(sent)[0]
 
 
 def _verified_explain_ordinal(sent: str, by_id: dict, results: dict, inherited: int,
-                              matches: list) -> str | None:
+                              matches: list, question_direction: int = 0) -> str | None:
     """Đối chiếu từng cụm thứ hai/ba với claim ngay sau nó trong cùng mảnh."""
     if not matches:
         return None
@@ -667,7 +675,7 @@ def _verified_explain_ordinal(sent: str, by_id: dict, results: dict, inherited: 
         return prefix + 'chỉ dùng một kết quả explain_forecast và một chiều trong mảnh xếp hạng'
     if direction and inherited and direction != inherited:
         return prefix + 'mảnh đổi chiều; tách khỏi chuỗi xếp hạng trước'
-    direction = direction or inherited
+    direction = direction or inherited or question_direction
     ref = next(iter(refs))
     rank_field = 'rank_dir' if direction else 'rank'
     rows = results[ref].rows
@@ -1932,7 +1940,8 @@ def forecast_question_errors(question: str, values: dict, results: dict, answer:
 
 
 
-def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset = frozenset()) -> Checked:
+def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset = frozenset(),
+             question_direction: int = 0) -> Checked:
     errors = []
     if not isinstance(answer, str) or not answer.strip():
         return Checked(False, ['thiếu câu trả lời'])
@@ -2019,14 +2028,14 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             inherited = (explain_chain[1] if explain_chain and refs == {explain_chain[0]}
                          and not (piece_direction and explain_chain[1] and piece_direction != explain_chain[1]) else 0)
             if ordinal and (problem := _verified_explain_ordinal(
-                    sent, by_id, results, inherited, ordinal)):
+                    sent, by_id, results, inherited, ordinal, question_direction)):
                 errors.append(problem)
             if ordinal and not next_word and explain_chain and piece_direction and piece_direction != explain_chain[1]:
                 explain_chain = None
             elif ordinal and not next_word and explain_chain and not problem and refs == {explain_chain[0]}:
                 old_ref, old_direction, old_text = explain_chain
                 combined = old_text + ' ' + sent
-                if problem := _verified_explain_rank(combined, by_id, results):
+                if problem := _verified_explain_rank(combined, by_id, results, question_direction):
                     errors.append(problem + '; không bỏ qua vị trí giữa')
                 else:
                     explain_chain = (old_ref, old_direction or piece_direction, combined)
@@ -2038,7 +2047,7 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
                     errors.append('nhóm phân rã nói "tiếp theo": mảnh nối phải cùng chiều với chuỗi xếp hạng trước')
                 else:
                     _, old_groups, _ = _explain_rank_piece(old_text, by_id, results)
-                    direction = old_direction or piece_direction
+                    direction = old_direction or piece_direction or question_direction
                     field = 'rank_dir' if direction else 'rank'
                     expected = next((row for row in results[old_ref].rows
                                      if row.get(field) == len(old_groups) + 1
@@ -2052,7 +2061,7 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
                     combined = old_text + ' ' + sent
                     if any(group in old_groups for group in groups):
                         errors.append('nhóm phân rã nói "tiếp theo" phải là nhóm mới; ' + hint)
-                    elif problem := _verified_explain_rank(combined, by_id, results):
+                    elif problem := _verified_explain_rank(combined, by_id, results, question_direction):
                         errors.append(problem + '; ' + hint + '; không bỏ qua vị trí giữa')
                     else:
                         explain_chain = (old_ref, direction, combined)
@@ -2069,12 +2078,12 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
                           'bỏ chữ xếp hạng phía nhỏ (nhỏ nhất/ít nhất/nhẹ nhất/chậm nhất/yếu nhất)')
             continue
         if explain_groups and any(w in low for w in ('chủ yếu',) + STRONG_WORDS):
-            problem = _verified_explain_rank(sent, by_id, results)
+            problem = _verified_explain_rank(sent, by_id, results, question_direction)
             if problem:
                 errors.append(problem)
                 explain_chain = None
             elif len(refs) == 1 and piece_direction != 2:
-                explain_chain = (next(iter(refs)), piece_direction, sent)
+                explain_chain = (next(iter(refs)), piece_direction or question_direction, sent)
             continue
         if not ranks and _verified_driver_rank(sent, results):
             continue
