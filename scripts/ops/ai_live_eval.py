@@ -930,11 +930,16 @@ ACCEPT_L4H = [
       tools=[(FX, {'period': 'month', 'year': 2024, 'month': 4})],
       paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4H',
       hand='Câu vì sao cao: tối đa ba nhóm có số, nếu xếp hạng thì đúng chiều dương.'),
+    C('L4H7', 'Ngày 11/4/2024, hai nhóm nào kéo G dự báo lên mạnh nhất?', {'ok'},
+      tools=[(FX, {'period': 'day', 'year': 2024, 'month': 4, 'day': 11})],
+      paths=[({FX}, _L4E_GROUP_PATHS)], labels=['Phân rã model, không phải nguyên nhân'], group='L4H',
+      hand='Top-2 chiều dương là mùa vụ rồi lịch Urban Blowout; không thay bằng nhóm âm có rank chung cao.'),
 ]
 for _case in ACCEPT_L4H:
     _case['l4g_rule'] = 'ranked_if_said'
     _case['paths_index_ok'] = True
-ACCEPT_L4H[-1]['l4g_why'] = True
+    _case['l4h_direction'] = -1 if _case['id'] == 'L4H5' else 1
+ACCEPT_L4H[5]['l4g_why'] = True
 
 # B5b lượt 2: soạn các câu dưới đây trước khi thêm alias AOV/U/P. Chưa chạy model.
 ACCEPT_B5B_PARAPHRASE = [
@@ -1096,7 +1101,7 @@ def _l4f_ranked_ok(raw_answer: str, t: service.TurnResult) -> bool:
     return True
 
 
-def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult) -> bool:
+def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult, expected_direction: int = 0) -> bool:
     """Chấm độc lập thứ tự L4 theo hàng tool, kể cả mảnh nối sau dấu chấm/phẩy."""
     claims = {}
     for cid, (path, _value, _shown) in t.values.items():
@@ -1164,6 +1169,11 @@ def _l4g_ranked_ok(raw_answer: str, t: service.TurnResult) -> bool:
                     order = [group for group in order if row_signs[group] * old_direction > 0]
                 chain = (old_ref, old_direction, list(dict.fromkeys(old_order + order)))
             continue
+        # Chỉ bộ L4H truyền chiều câu hỏi đã chốt; L4G giữ nguyên cách chấm cũ.
+        if expected_direction:
+            if direction and direction != expected_direction:
+                return False
+            direction = expected_direction
         if len(refs) != 1:
             return False
         ref = next(iter(refs))
@@ -1281,7 +1291,7 @@ def grade(case, t: service.TurnResult) -> dict:
                         groups.add(row['feature_group'])
             checks['toi_da_3_nhom'] = 1 <= len(groups) <= 3
     if case.get('l4g_rule'):
-        checks['xep_hang_doc_lap'] = _l4g_ranked_ok(raw_answer, t)
+        checks['xep_hang_doc_lap'] = _l4g_ranked_ok(raw_answer, t, case.get('l4h_direction', 0))
         if case.get('l4g_why'):
             groups = set()
             for path, _value, _shown in t.values.values():
