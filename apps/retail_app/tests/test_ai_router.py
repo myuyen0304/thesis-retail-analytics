@@ -25,10 +25,12 @@ def test_prompt_co_muc_router_tro_toi_quy_tac_chi_tiet():
     for x in ('Thực tế tới 2022', 'quy tắc 16', 'Vẽ: 17', 'Trộn thực tế và dự báo', '"unsupported"', 'Mơ hồ: 2',
               'Tiếp nối: 9', 'quy tắc 18',
               '2016–2018', 'get_revenue_trend phases',     # K02 (b7 §7): khoảng năm trùng giai đoạn
-              'cả 2023 và 2024', 'hỏi lại năm'):           # K22: tháng dự báo không kèm năm
+              'hỏi lại năm', 'không tự chọn', 'lượt ngay trước'):  # NY: ngày/tháng dự báo thiếu năm
         assert x in router, x
     assert 'hai câu riêng' in p and 'không đặt cạnh nhau' in p and 'CÙNG định nghĩa' in p
-    assert service.PROMPT_VERSION == 'b5b-2026-10-20' and 'explain_forecast' in p
+    assert service.PROMPT_VERSION == 'ny-2026-10-27' and 'explain_forecast' in p
+    assert 'năm sau/tới' in router and 'tháng/ngày ngoài kỳ dự báo chỉ báo không có' in router
+    assert 'hoặc trả cả hai năm' not in p
     assert 'bắt buộc get_metric_definition cho từng mã' in router
     assert 'thêm search_knowledge' in router
     assert '"Define gross revenue" = G' in p
