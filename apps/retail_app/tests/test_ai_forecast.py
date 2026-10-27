@@ -856,11 +856,18 @@ _KY = {_ROW: 'Tháng 08/2023', _TOT: 'Cả vùng dự báo 01/01/2023 → 01/07/
     ('R năm 2019 là bao nhiêu?', ('get_revenue_summary', dict(metric='R', year=2018), 'T1.rows[0].r'), 'ok',
      'R năm 2019 là {c1}.'),                                                                   # cùng lớp lỗi, tool PS
 ])
-def test_rv12b_so_ky_khac_ok_chan_khac_ok_theo_khuon(versioned, q, src, status, answer):
+def test_rv12b_so_ky_khac_ok_chan_khac_ok_theo_khuon(versioned, monkeypatch, q, src, status, answer):
     tool, args, path = src
     rep = final(status, answer, [{'id': 'c1', 'path': path}])
+    if q == 'Dự báo doanh thu tháng 8/2025?':
+        monkeypatch.setattr(tools, 'run', lambda *_a, **_k: pytest.fail('đã đọc kho dự báo'))
     t = _turn(q, call(tool, **args), rep, rep)
-    if status == 'ok':                        # nhánh ok giữ luật chặn của lượt 2
+    if q == 'Dự báo doanh thu tháng 8/2025?':
+        assert t.status == 'no_data' and not t.values and not t.answer_md
+        assert '8/2025' in t.message and '01/01/2023' in t.message and '01/07/2024' in t.message
+        assert 'năm nào' not in t.message.lower()
+        assert t.results['T1'].status == 'no_data' and not t.results['T1'].rows
+    elif status == 'ok':                     # nhánh ok giữ luật chặn của lượt 2
         assert t.status == 'answer_validation_failed', (t.status, t.answer_md)
     else:                                     # khác ok: câu mô hình không hiện, app dẫn số theo khuôn (lượt 5)
         _khuon(t, status, asked='8/2025' if '8/2025' in q else '2025', ky=(_KY[path],))
@@ -993,10 +1000,19 @@ def test_rv12c_cau_gan_lai_khong_hien(versioned, q, src, answer):
     (Q25, 'Mình chưa có dự báo năm 2025 và cũng không thể suy ra năm 2025 từ số này. ' + _REF),
     (Q25, 'Riêng tháng 8/2023, dự báo G là {c1}, số này chỉ để tham khảo vì năm 2025 chưa có dự báo.'),
 ])
-def test_rv12c_moi_lan_nhac_co_phu_dinh_van_hien(versioned, q, answer):
+def test_rv12c_moi_lan_nhac_co_phu_dinh_van_hien(versioned, monkeypatch, q, answer):
     rep = final('no_data', answer, [{'id': 'c1', 'path': _ROW}])
+    if q == 'Dự báo doanh thu tháng 1 và tháng 2/2025?':
+        monkeypatch.setattr(tools, 'run', lambda *_a, **_k: pytest.fail('đã đọc kho dự báo'))
     t = _turn(q, call(*_M8[:1], **_M8[1]), rep, rep)
-    _khuon(t, 'no_data')
+    if q == 'Dự báo doanh thu tháng 1 và tháng 2/2025?':
+        assert t.status == 'no_data' and not t.values and not t.answer_md
+        assert 'tháng 1 và tháng 2/2025' in t.message
+        assert '01/01/2023' in t.message and '01/07/2024' in t.message
+        assert 'năm nào' not in t.message.lower()
+        assert t.results['T1'].status == 'no_data' and not t.results['T1'].rows
+    else:
+        _khuon(t, 'no_data')
 
 
 # RV12 lượt 4 (Codex §9.8): câu hỏi có trỏ số, phủ định sai phạm vi và mốc tham khảo đúng nghĩa. cu: kỳ vọng của
