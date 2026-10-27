@@ -25,13 +25,14 @@ from dwh.releases import pinned_read
 from ai_explain.contracts import ToolCall, ToolResult
 from ai_explain.evidence import (DATE_RE, Checked, allowed_years, check_digits, definition_question_errors,
                                   definition_text_numbers,
-                                  _explain_said_direction,
-                                  forecast_question_errors,
-                                  invalid_period_errors, question_numbers, rag_literal_errors, reference_answer,
+                                  _MONTH_WORD, _explain_said_direction,
+                                  forecast_prior_periods, forecast_question_errors,
+                                  invalid_period_errors, question_numbers, question_periods, rag_literal_errors,
+                                  reference_answer,
                                   stated_period_errors, validate)
 from ai_explain.provider import ProviderError, openai_tools, parse_arguments
 
-PROMPT_VERSION = 'b5b-2026-10-20'  # B5b: khái niệm ngoài catalog và alias mơ hồ cần hỏi lại
+PROMPT_VERSION = 'ny-2026-10-27'  # NY lượt 9: câu đáp trần bằng năm sau câu hỏi lại kèm gợi ý kỳ đã hỏi
                                    # s9b-2026-10-20b: S9b lượt 2; lượt đầu s9b-2026-10-20
                                    # b5-2026-10-20b: PM chốt A: mã chỉ tiêu lấy định nghĩa từ catalog, RAG chỉ bổ sung
                                    # b5-2026-10-20: mở router RAG cho câu định nghĩa / quy ước / theo tài liệu
@@ -120,7 +121,12 @@ CHỌN TOOL (router)
   Kèm số thì gọi thêm tool L1/L3/L4 đúng kỳ. RAG không cấp số.
 - Khoảng nhiều năm trùng một giai đoạn (2013–2016, 2016–2018, 2018–2019, 2019–2022): get_revenue_trend phases
   (quy tắc 13), không ghép từng năm. Khoảng khác: nói chưa có tổng khoảng.
-- Dự báo một tháng không kèm năm mà tháng đó có ở cả 2023 và 2024 (tháng 1–7): hỏi lại năm, hoặc trả cả hai năm.
+- Dự báo ngày/tháng cụ thể thiếu năm: hỏi lại năm cho mọi tháng, kể cả tháng chỉ có ở một năm; không tự chọn
+  năm hay trả số của nhiều năm. Câu nối tiếp chỉ lấy năm nếu câu người dùng ở lượt ngay trước ghi đúng một năm
+  bằng bốn chữ số trong kỳ dự báo; năm thực tế tới 2022 không cấp năm dự báo. Không lấy năm từ tham số tool.
+  Người dùng đáp ngắn bằng năm sau câu hỏi lại thì dùng ngày/tháng đã hỏi; câu trả số phải ghi rõ năm.
+  "Năm nay/sau/tới", "4/24", "T4/23", "T4" và tháng bằng chữ chưa đủ năm.
+  Câu nối tiếp "năm sau/tới" phải hỏi năm cụ thể; tháng/ngày ngoài kỳ dự báo chỉ báo không có, không dẫn số năm khác.
   Mơ hồ: 2. Tiếp nối: 9.
 
 QUY TẮC BẮT BUỘC
@@ -379,16 +385,273 @@ def _context_periods(ctx: list[dict]) -> frozenset:
     return frozenset(out)
 
 
+_YEAR = re.compile(r'(?<!\d)(?:19|20)\d{2}(?!\d)')
+_YEAR_REPLY = re.compile(r'\s*(?:(?:lấy|chọn)\s+)?(?:năm\s+)?((?:19|20)\d{2})'
+                         r'(?:\s+(?:nhé|nha|ạ|đi))?\s*[?!.]?\s*', re.I)
+_MONTH_WORD_PATTERN = '|'.join(sorted(map(re.escape, _MONTH_WORD), key=len, reverse=True))
+_SPECIFIC_PERIOD = re.compile(
+    rf'\b(?:tháng|ngày)\s+\d{{1,2}}\b|(?<!\d)\d{{1,2}}/\d{{1,2}}(?!\d)'
+    rf'|(?<!\w)T(?:1[0-2]|[1-9])(?!\w)|\btháng\s+(?:{_MONTH_WORD_PATTERN})\b', re.I)
+_FORECAST_WORD = re.compile(r'dự\s*báo|dự\s*kiến|forecast', re.I)
+_FORECAST_TOOLS = frozenset(('get_forecast', 'explain_forecast'))
+_FORECAST_YEARS = frozenset((2023, 2024))
+
+
+def _user_years(question: str) -> set[int]:
+    return {int(m.group()) for m in _YEAR.finditer(question or '')}
+
+
+def _question_forecast_years(question: str) -> set[int]:
+    """Năm đến 2022 luôn thuộc dữ liệu lịch sử, không cấp năm cho dự báo."""
+    return {year for year in _user_years(question) if year > 2022}
+
+
+def _clarification_year(question: str, previous: dict) -> str | None:
+    """Nhận câu đáp ngắn bằng một năm hợp lệ sau đúng câu hỏi lại về kỳ dự báo."""
+    match = _YEAR_REPLY.fullmatch(question or '')
+    if (match and int(match.group(1)) in _FORECAST_YEARS
+            and previous.get('status') == 'needs_clarification'
+            and _specific_forecast_request(previous.get('question', ''), [])):
+        return match.group(1)
+    return None
+
+
+def _forecast_years(question: str, history: list[dict]) -> set[int]:
+    """Chỉ tin năm người dùng gõ ở câu hiện tại hoặc đúng một năm của câu ngay trước."""
+    current = _question_forecast_years(question)
+    if current:
+        return current
+    previous = history[-1] if history and isinstance(history[-1], dict) else {}
+    previous_years = _question_forecast_years(previous.get('question', ''))
+    if len(previous_years) == 1 and previous_years <= _FORECAST_YEARS:
+        return previous_years
+    return set()
+
+
+def _tool_forecast_years(question: str, history: list[dict]) -> set[int]:
+    """Tool ngày/tháng chỉ đọc năm hiện tại hoặc đúng một năm ở câu ngay trước."""
+    years = _forecast_years(question, history)
+    previous = history[-1] if history and isinstance(history[-1], dict) else {}
+    previous_years = _question_forecast_years(previous.get('question', ''))
+    if _question_forecast_years(question) and len(previous_years) == 1 and previous_years <= _FORECAST_YEARS:
+        years |= previous_years
+    years.update(spec[0] for spec in forecast_prior_periods(question) if spec[0] in _FORECAST_YEARS)
+    return years
+
+
+def _has_specific_period(question: str) -> bool:
+    """Phát hiện ngày/tháng được hỏi, kể cả câu nối tiếp lược chữ dự báo."""
+    period_text = re.sub(r'\bcùng\s+tháng\s+năm\s+\d{4}\b', ' ', question or '', flags=re.I)
+    parsed = question_periods(period_text)
+    return (any(spec[0] == 'range' or (isinstance(spec[0], (int, type(None))) and spec[1] is not None)
+                for spec in parsed)
+            or bool(_SPECIFIC_PERIOD.search(period_text)))
+
+
+def _explicit_forecast_year_mismatch(question: str, history: list[dict], args: dict) -> bool:
+    """Giữ năm đã gõ ngay cả khi chưa nhận dạng được cách viết kỳ; không áp cho Q25."""
+    return bool(_user_years(question) & _FORECAST_YEARS
+                and isinstance(args.get('year'), int)
+                and args['year'] not in (_tool_forecast_years(question, history) | _user_years(question)))
+
+
+def _asked_forecast_label(question: str) -> str:
+    years = _user_years(question)
+    labels = []
+    for spec in question_periods(question):
+        if isinstance(spec[0], int):
+            year, month, day = spec
+            labels.append(f'ngày {day}/{month}/{year}' if day is not None else
+                          f'tháng {month}/{year}' if month is not None else f'năm {year}')
+        elif spec[0] == 'range':
+            labels.append(spec[3])
+    return ' và '.join(labels) or ('năm ' + ', '.join(map(str, sorted(years))))
+
+
+def _forecast_year_message(question: str) -> str:
+    """Lời cho mô hình (tool message): phân biệt thiếu năm với chưa trả đúng kỳ người dùng đã chọn."""
+    if not _user_years(question):
+        return 'Bạn muốn dự báo năm nào? Hãy ghi năm bằng bốn chữ số.'
+    return (f'Bạn đã yêu cầu {_asked_forecast_label(question)}. Chưa có câu trả lời dự báo hợp lệ cho kỳ này. '
+            'Cần dùng đúng kỳ/năm đã nêu; không dùng số dự báo của năm khác thay thế.')
+
+
+def _forecast_year_user_message(question: str) -> str:
+    """Lời cho người dùng (NY lượt 8, R11c): nêu kỳ đã gõ, không chép lời dặn mô hình."""
+    if not _user_years(question):
+        return 'Bạn muốn dự báo năm nào? Hãy ghi năm bằng bốn chữ số.'
+    return (f'Bạn đã hỏi {_asked_forecast_label(question)}. Mô hình chưa diễn giải đúng kỳ này nên app không hiện '
+            'câu trả lời; hãy hỏi lại.')
+
+
+# lỗi kiểm thật sự về kỳ/năm (evidence.stated_period_errors, _unnamed_period_errors, forecast_question_errors)
+_PERIOD_ERROR = re.compile(r'không gán số kỳ này cho kỳ khác|không gán cho kỳ được hỏi|kỳ / grain khác')
+
+
+def _unresolved_forecast_year_request(question: str, history: list[dict]) -> bool:
+    """Câu hỏi nêu năm nhưng chưa có năm dự báo nào do người dùng chọn."""
+    if (not re.search(r'\bnăm\s+[^\W\d_]+', question or '', re.I)
+            or _forecast_years(question, history)):
+        return False
+    return _forecast_context(question, history)
+
+
+def _forecast_context(question: str, history: list[dict]) -> bool:
+    """Câu hiện tại hoặc lượt ngay trước đang hỏi dự báo, kể cả câu nối tiếp lược chữ dự báo."""
+    previous = history[-1] if history and isinstance(history[-1], dict) else {}
+    return bool(_FORECAST_WORD.search(question or '') or _FORECAST_WORD.search(previous.get('question', ''))
+                or any(c.get('tool') in _FORECAST_TOOLS for c in previous.get('tool_calls', [])
+                       if isinstance(c, dict)))
+
+
+def _outside_forecast_period(question: str, history: list[dict]) -> tuple[str, str] | None:
+    """Trả nhãn kỳ tháng/ngày hoàn toàn ngoài horizon cần báo không có dữ liệu."""
+    if not _has_specific_period(question):
+        return None
+    dated, undated = [], []
+    for spec in question_periods(question):
+        if spec[0] == 'range':
+            dated.append((spec[1], spec[2], spec[3]))
+        elif isinstance(spec[0], int) and spec[1] is not None:
+            year, month, day = spec
+            start = dt.date(year, month, day or 1)
+            end = start if day is not None else (dt.date(year + month // 12, month % 12 + 1, 1)
+                                                 - dt.timedelta(days=1))
+            label = (f'ngày {day}/{month}/{year}' if day is not None else f'tháng {month}/{year}')
+            dated.append((start, end, label))
+        elif spec[0] is None and spec[1] is not None:
+            undated.append(spec)
+    # question_periods chưa tách riêng T4 không năm; giữ nó như một kỳ chưa có năm khi xét ngoài horizon.
+    undated.extend((None, int(match.group(1)), None) for match in
+                   re.finditer(r'(?<!\w)T(1[0-2]|[1-9])(?![\w/])', question or '', re.I))
+    if not dated:
+        return None
+    # "tháng 1 và tháng 2/2025" dùng chung năm; kỳ so sánh "tháng 4 so với 4/2022" thì không.
+    if undated and len({start.year for start, _, _ in dated}) == 1 and not re.search(r'\bso\s+với\b', question, re.I):
+        year = dated[0][0].year
+        for _, month, day in undated:
+            start = dt.date(year, month, day or 1)
+            end = start if day is not None else (dt.date(year + month // 12, month % 12 + 1, 1)
+                                                 - dt.timedelta(days=1))
+            label = (f'ngày {day}/{month}/{year}' if day is not None else f'tháng {month}/{year}')
+            dated.append((start, end, label))
+        undated = []
+    if undated:
+        return None
+    after = all(start > tools.FORECAST_END for start, _, _ in dated)
+    before = all(end < tools.FORECAST_START for _, end, _ in dated)
+    if not after and not (before and _FORECAST_WORD.search(question or '')):
+        return None
+    dated.sort(key=lambda item: item[0])
+    if (len(dated) > 1 and len({start.year for start, _, _ in dated}) == 1
+            and all(label.startswith('tháng ') for _, _, label in dated)):
+        label = 'tháng ' + ' và tháng '.join(str(start.month) for start, _, _ in dated)
+        label += f'/{dated[0][0].year}'
+    else:
+        label = ' và '.join(label for _, _, label in dated)
+    return label, ('after' if after else 'before')
+
+
+def _period_after_horizon(args: dict) -> str | None:
+    """Nhãn kỳ ngày/tháng trong tham số tool khi kỳ đó nằm hẳn sau kỳ dự báo."""
+    y, m, d = args.get('year'), args.get('month'), args.get('day')
+    try:
+        if args.get('period') == 'day' and dt.date(y, m, d) > tools.FORECAST_END:
+            return f'ngày {d}/{m}/{y}'
+        if args.get('period') == 'month' and dt.date(y, m, 1) > tools.FORECAST_END:
+            return f'tháng {m}/{y}'
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def _outside_forecast_message(asked: str, direction: str) -> str:
+    start, end = tools.FORECAST_START, tools.FORECAST_END
+    detail = ('không có dữ liệu thực tế hoặc dự báo cho kỳ này.' if direction == 'after'
+              else 'không có dự báo cho kỳ này; bạn có thể hỏi số thực tế.')
+    return (f'Kỳ được hỏi ({asked}) nằm ngoài kỳ dự báo '
+            f'{start:%d/%m/%Y} → {end:%d/%m/%Y}; {detail}')
+
+
+def _specific_forecast_request(question: str, history: list[dict], results: dict | None = None) -> bool:
+    """Nhận câu hỏi kỳ ngày/tháng cụ thể; câu nối tiếp có thể lược chữ 'dự báo'."""
+    if not _has_specific_period(question):
+        return False
+    if _FORECAST_WORD.search(question or ''):
+        return True
+    if results and any(r.evidence and r.evidence.tool in _FORECAST_TOOLS for r in results.values()):
+        return True
+    previous = history[-1] if history and isinstance(history[-1], dict) else {}
+    return bool(re.match(r'\s*(?:còn|vậy|thế|tháng|ngày)\b', question or '', re.I)
+                and _FORECAST_WORD.search(previous.get('question', '')))
+
+
+def _forecast_year_error(d: dict, question: str, history: list[dict], results: dict,
+                         forecast_called: bool = False) -> list[str]:
+    """Chặn cả đường vòng year/horizon khi câu cuối dẫn số của kỳ cụ thể thiếu năm."""
+    forecast_claimed = any(
+        isinstance(claim, dict) and isinstance(claim.get('path'), str)
+        and (result := results.get(claim['path'].split('.', 1)[0])) is not None
+        and result.evidence and result.evidence.tool in _FORECAST_TOOLS
+        for claim in d.get('claims', []))
+    if ((forecast_called or forecast_claimed) and _unresolved_forecast_year_request(question, history)
+            and (d.get('status') != 'needs_clarification' or d.get('claims'))):
+        return ['câu dự báo chưa có năm do người dùng chọn: hỏi lại năm bằng bốn chữ số, không dẫn số dự báo']
+    previous = history[-1] if history and isinstance(history[-1], dict) else {}
+    bare_reply = bool(_clarification_year(question, previous))
+    period_question = previous.get('question', '') if bare_reply else question
+    if not _specific_forecast_request(period_question, history, results):
+        return []
+    years = _forecast_years(question, history)
+    if not years:
+        if d.get('status') != 'needs_clarification' or d.get('claims'):
+            return ['câu dự báo ngày/tháng chưa có năm do người dùng chọn: hỏi lại năm, không dẫn số dự báo']
+        return []
+    if not _question_forecast_years(period_question) and d.get('status') == 'ok':
+        answer_years = _user_years(d.get('answer', ''))
+        if not years <= answer_years:
+            return ['câu trả lời dự báo nối tiếp phải ghi rõ năm người dùng đã nêu']
+    return []
+
+
+def _answered_forecast_question(previous_question: str, year: str) -> str:
+    """Ghép năm người dùng vừa trả lời vào đúng mốc ngày/tháng để kiểm grain của claim."""
+    short_month = re.compile(r'\bT?(\d{1,2})/(?:23|24)\b', re.I)
+    if short_month.search(previous_question):
+        return short_month.sub(lambda m: f'tháng {m.group(1)}/{year}', previous_question, count=1)
+    short_named = re.compile(r'(?<!\w)T(1[0-2]|[1-9])(?!\w)', re.I)
+    if short_named.search(previous_question):
+        return short_named.sub(lambda m: f'tháng {m.group(1)}/{year}', previous_question, count=1)
+    day = re.compile(r'(?<!\d)\d{1,2}/\d{1,2}(?![\d/])')
+    if day.search(previous_question):
+        return day.sub(lambda m: f'{m.group()}/{year}', previous_question, count=1)
+    month = re.compile(r'\btháng\s+\d{1,2}\b(?!/\d{4})', re.I)
+    if month.search(previous_question):
+        return month.sub(lambda m: f'{m.group()}/{year}', previous_question, count=1)
+    month_word = re.compile(rf'\btháng\s+({_MONTH_WORD_PATTERN})\b', re.I)
+    if month_word.search(previous_question):
+        return month_word.sub(lambda m: f'tháng {_MONTH_WORD[m.group(1).lower()]}/{year}', previous_question, count=1)
+    return f'{previous_question} năm {year}'
+
+
 def _check_final(d: dict | None, results: dict, question: str,
                  groups: frozenset = frozenset(), context_periods: frozenset = frozenset(),
-                 rag_used: bool = False, history=()) -> tuple[str | None, list[str], object]:
+                 rag_used: bool = False, history=(), forecast_called: bool = False) -> tuple[str | None, list[str], object]:
     """(status, lỗi, Checked|None). status None nếu JSON hỏng."""
     extra = frozenset(question_numbers(question))
+    if _specific_forecast_request(question, history, results) and not _forecast_years(question, history):
+        extra |= frozenset(str(year) for year in _FORECAST_YEARS)
     if d is None:
         return None, ['không phải JSON đúng định dạng'], None
     status = d.get('status')
     if status not in ('ok', 'needs_clarification', 'unsupported', 'no_data'):
         return None, [f'status {status!r} không hợp lệ'], None
+    if year_errors := _forecast_year_error(d, question, history, results, forecast_called):
+        return status, year_errors, None
+    previous = history[-1] if history and isinstance(history[-1], dict) else {}
+    reply_year = _clarification_year(question, previous)
+    evidence_question = (_answered_forecast_question(previous['question'], reply_year)
+                         if reply_year else question)
     answer, claims = d.get('answer'), d.get('claims', [])
     asked_direction = _explain_said_direction(question)[0]
     if asked_direction == 2:
@@ -399,7 +662,7 @@ def _check_final(d: dict | None, results: dict, question: str,
             return status, ['status ok nhưng lượt này không có kết quả tool ok nào'], None
         chk = _safe_validate(answer, claims, results, extra, asked_direction)
         extra_errs = (_group_filter_errors(status, chk, question, groups)
-                      + _safe_forecast_errors(question, chk.values, results, answer, context_periods)
+                      + _safe_forecast_errors(evidence_question, chk.values, results, answer, context_periods)
                       + _safe_definition_errors(question, chk.values, results, answer, status, history)) if chk.ok else []
         return status, list(dict.fromkeys(chk.errors + extra_errs + rag_errors)), chk
     # câu hỏi lại / từ chối: được dẫn số đã kiểm nếu có, nhưng không được tự viết số. Kỳ được hỏi không có thật thì
@@ -443,10 +706,20 @@ def run_turn(question: str, history: list[dict], backend: str, provider, *, sess
         turn.status, turn.message = 'unsupported', f'Chat chưa hỗ trợ backend {backend}. Chọn DuckDB, PostgreSQL hoặc Databricks.'
         return turn
     ctx = history[-CONTEXT_TURNS:]
+    outside_period = _outside_forecast_period(question, ctx)
+    outside_forecast = bool(outside_period)
+    outside_message = _outside_forecast_message(*outside_period) if outside_period else ''
+    unresolved_forecast_year = _unresolved_forecast_year_request(question, ctx)
+    clarified_year = _clarification_year(question, ctx[-1] if ctx and isinstance(ctx[-1], dict) else {})
     messages = [{'role': 'system', 'content': system_prompt(today or dt.date.today())}]
     if ctx:
         messages.append({'role': 'system', 'content': 'NGỮ CẢNH CÁC LƯỢT TRƯỚC (dữ liệu có cấu trúc, cũ → mới; số của '
                          'các lượt đó KHÔNG dùng lại được, phải gọi tool lại):\n' + json.dumps(ctx, ensure_ascii=False)})
+        # NY lượt 9: ngữ cảnh không có câu hỏi lại của mô hình, nên câu đáp trần "Năm 2024" dễ bị hỏi xác nhận lần nữa
+        if clarified_year:
+            messages.append({'role': 'system', 'content': f'Câu "{question}" là năm người dùng đáp cho câu hỏi lại ở '
+                             f'lượt ngay trước ("{ctx[-1]["question"]}"): hiểu là câu đó với năm {clarified_year}; '
+                             'gọi tool ngay, không hỏi xác nhận lại.'})
     messages.append({'role': 'user', 'content': question})
     schemas = chat_schemas()
     repaired = False
@@ -502,13 +775,45 @@ def run_turn(question: str, history: list[dict], backend: str, provider, *, sess
                     continue
                 ref = f'T{len(turn.calls) + 1}'
                 args = parse_arguments(c.arguments_json)
-                res = tools.run(ToolCall(c.name, args), backend)
+                allowed_years_for_turn = _tool_forecast_years(question, ctx)
+                previous = ctx[-1] if ctx and isinstance(ctx[-1], dict) else {}
+                bare_year_followup = bool(_clarification_year(question, previous))
+                requested_specific = _specific_forecast_request(question, ctx) or bare_year_followup
+                specific_period = args.get('period') in ('month', 'day')
+                asked_specific = _has_specific_period(question) or bare_year_followup
+                allowed_month_day_years = allowed_years_for_turn | _user_years(question)
+                missing_tool_year = (isinstance(args.get('year'), int)
+                                     and _forecast_context(question, ctx)
+                                     and not _question_forecast_years(question)
+                                     and (not re.search(r'(?<!\d)\d{4}(?!\d)', question or '') or bool(ctx))
+                                     and args['year'] not in allowed_years_for_turn)
+                if outside_forecast:
+                    res = ToolResult('no_data', outside_message)
+                elif (c.name in _FORECAST_TOOLS
+                        and (unresolved_forecast_year
+                             or missing_tool_year
+                             or _explicit_forecast_year_mismatch(question, ctx, args)
+                             or (specific_period and asked_specific
+                              and args.get('year') not in allowed_month_day_years)
+                             or (requested_specific and not specific_period
+                                 and not allowed_years_for_turn))):
+                    res = ToolResult('needs_clarification', _forecast_year_message(question),
+                                     missing=['year'])
+                elif (clarified_year and c.name in _FORECAST_TOOLS and args.get('year') == int(clarified_year)
+                        and (asked := _period_after_horizon(args))):
+                    # NY lượt 9: năm vừa đáp ghép với tháng/ngày đã hỏi mà nằm sau kỳ dự báo → chỉ báo không có (lượt 3)
+                    outside_forecast, outside_message = True, _outside_forecast_message(asked, 'after')
+                    res = ToolResult('no_data', outside_message)
+                else:
+                    res = tools.run(ToolCall(c.name, args), backend)
                 turn.results[ref] = res
                 turn.calls.append((ref, c.name, args))
                 messages.append({'role': 'tool', 'tool_call_id': c.id, 'content': tool_payload(ref, res)})
             continue
 
         turn.raw_final = reply.content
+        if outside_forecast:
+            return finish('no_data', outside_message)
         try:        # chỉ cần khi có số từ kho; lỗi đọc thì không đoán "câu hỏi không lọc nhóm"
             groups = tools.known_groups(backend) if any(r.ok and r.evidence and
                        r.evidence.tool != 'search_knowledge' for r in turn.results.values()) else frozenset()
@@ -518,7 +823,18 @@ def run_turn(question: str, history: list[dict], backend: str, provider, *, sess
         status, errors, chk = _check_final(parse_final(reply.content), turn.results, question, groups,
                                             _context_periods(ctx),
                                             rag_used=any(name == 'search_knowledge' for _, name, _ in turn.calls),
-                                            history=ctx)
+                                            history=ctx,
+                                            forecast_called=any(name in _FORECAST_TOOLS for _, name, _ in turn.calls))
+        blocked_forecast = any(name in _FORECAST_TOOLS and turn.results[ref].status == 'needs_clarification'
+                               for ref, name, _ in turn.calls)
+        valid_forecast = any(name in _FORECAST_TOOLS and turn.results[ref].ok
+                             for ref, name, _ in turn.calls)
+        if blocked_forecast and (errors or status != 'ok' or not valid_forecast):
+            return finish('needs_clarification', _forecast_year_user_message(question),
+                          errors=errors)
+        if errors and _specific_forecast_request(question, ctx, turn.results) and not _forecast_years(question, ctx):
+            return finish('needs_clarification', 'Bạn muốn dự báo năm nào? Hãy ghi năm bằng bốn chữ số.',
+                          errors=errors)
         if not errors:
             msg = '' if chk is not None else (parse_final(reply.content) or {}).get('answer', '')
             if status != 'ok' and chk is None:
@@ -531,6 +847,11 @@ def run_turn(question: str, history: list[dict], backend: str, provider, *, sess
         if repaired:
             tail = ('Bảng số bên dưới lấy thẳng từ kho.' if any(r.ok for r in turn.results.values())
                     else 'Lượt này chưa đọc được dữ liệu nào từ kho; hãy hỏi lại cụ thể hơn (chỉ tiêu, năm).')
+            # câu báo nêu kỳ chỉ khi lỗi thật sự về kỳ/năm; lỗi khác (xếp hạng, số tự viết...) giữ câu báo chung
+            if (_user_years(question) and any(name in _FORECAST_TOOLS for _, name, _ in turn.calls)
+                    and any(_PERIOD_ERROR.search(e) for e in errors)):
+                return finish('answer_validation_failed', _forecast_year_user_message(question) + ' ' + tail,
+                              errors=errors)
             return finish('answer_validation_failed', 'Câu diễn giải của mô hình không qua bước kiểm số, nên không hiện. '
                           + tail, errors=errors)
         repaired = True
