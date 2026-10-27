@@ -1006,13 +1006,65 @@ for _case in ACCEPT_DEF_SO:
     _case['def_so_rule'] = 'digits'
 ACCEPT_DEF_SO[0]['def_so_cogs'] = True
 
+# NY (2026-10-25): câu dự báo ngày/tháng thiếu năm. Chốt bộ trước lượt DeepSeek đầu tiên.
+ACCEPT_NY = [
+    C('NY01', 'Cho mình số dự báo doanh thu gộp tháng 4 nhé?', {'needs_clarification'},
+      hand='Hỏi người dùng chọn năm; không hiện số dự báo.'),
+    C('NY02', 'Tháng 4 sắp tới dự báo G bao nhiêu?', {'needs_clarification'},
+      hand='Không tự đổi chữ tương đối thành 2023 hay 2024.'),
+    C('NY03', 'Dự báo doanh thu tháng 9 là bao nhiêu?', {'needs_clarification'},
+      hand='Tháng 9 chỉ có ở 2023 nhưng vẫn hỏi năm.'),
+    C('NY04', 'Ngày 14/8, G dự báo thế nào?', {'needs_clarification'},
+      hand='Hỏi năm trước khi đọc dự báo ngày.'),
+    C('NY05', 'Vì sao dự báo G tháng 8 thấp?', {'needs_clarification'},
+      hand='L4 cũng hỏi năm; không hiện phân rã model.'),
+    C('NY06', 'Giá vốn dự báo tháng 4 khoảng bao nhiêu?', {'needs_clarification'},
+      hand='COGS cũng hỏi năm, không hiện số tiền.'),
+    C('NY07', 'Tổng dự báo G của tháng 4 là bao nhiêu?', {'needs_clarification'},
+      hand='Không đi vòng qua horizon để dẫn số của tháng.'),
+    C('NY08', 'Dự báo tháng 4 là bao nhiêu?', {'needs_clarification'},
+      hand='Câu PM thử trên public: hỏi năm, không trả cả hai năm.'),
+    C('NY09', 'Tháng 4/2024 dự báo G là bao nhiêu?', {'ok'},
+      tools=[(FC, {'metric': 'G', 'period': 'month', 'year': 2024, 'month': 4})],
+      paths=[({FC}, '.g_forecast')], hand='Giữ đường có năm; số từ 04/2024.'),
+    C('NY10', 'Dự báo doanh thu gộp tháng 10/2023 là bao nhiêu?', {'ok'},
+      tools=[(FC, {'metric': 'G', 'period': 'month', 'year': 2023, 'month': 10})],
+      paths=[({FC}, '.g_forecast')], hand='Lượt trước cho NY11, có đúng một năm do người dùng gõ.'),
+    C('NY11', 'Còn tháng 4 thì sao?', {'ok'},
+      tools=[(FC, {'metric': 'G', 'period': 'month', 'year': 2023, 'month': 4})],
+      paths=[({FC}, '.g_forecast')], after='NY10', labels=['2023'],
+      hand='Kế thừa 2023 từ câu người dùng ngay trước; câu trả lời ghi rõ năm.'),
+    C('NY12', 'So sánh dự báo G tháng 4/2023 và tháng 4/2024.', {'ok'},
+      hand='Lượt trước cho NY13, câu người dùng nêu hai năm.'),
+    C('NY13', 'Thế tháng 5?', {'needs_clarification'}, after='NY12',
+      hand='Lượt trước nêu hai năm; phải hỏi lại.'),
+    C('NY14', 'Năm 2024', {'ok'},
+      tools=[(FC, {'metric': 'G', 'period': 'month', 'year': 2024, 'month': 4})],
+      paths=[({FC}, '.g_forecast')], after='NY08', labels=['2024'],
+      hand='Trả lời câu hỏi lại bằng năm: đọc đúng tháng 4/2024 và ghi năm.'),
+    C('NY15', 'Dự báo G tháng 4 năm sau khoảng bao nhiêu?', {'needs_clarification'},
+      hand='Năm tương đối không phải số năm bốn chữ số.'),
+    C('NY16', 'Doanh thu R thực tế năm 2019 là bao nhiêu?', {'ok'},
+      tools=[(SUM, {'metric': 'R', 'year': 2019})], paths=[({SUM}, '.r')],
+      hand='Câu PS1 thực tế không bị luật dự báo ảnh hưởng.'),
+    C('NY17', 'Dự báo G ngày 14/8 thế nào?', {'needs_clarification'},
+      hand='Lượt trước cho NY18, câu hỏi lại ngày thiếu năm.'),
+    C('NY18', '2023', {'ok'},
+      tools=[(FC, {'metric': 'G', 'period': 'day', 'year': 2023, 'month': 8, 'day': 14})],
+      paths=[({FC}, '.g_forecast')], after='NY17', labels=['2023'],
+      hand='Năm trả lời riêng phải gắn vào đúng ngày 14/8.'),
+]
+for _case in ACCEPT_NY:
+    if _case['status'] == {'needs_clarification'}:
+        _case['ny_clarify'] = True
+
 SETS = {'chuan': CASES, 'moi': HOLDOUT, 'ai3': ACCEPT_AI3, 'ai3b': ACCEPT_AI3B, 'ai3c': ACCEPT_AI3C, 'd': ACCEPT_D,
         'f': ACCEPT_F, 'g': ACCEPT_G, 'gm': ACCEPT_GM, 'v': ACCEPT_V, 'n': ACCEPT_N, 'b7': ACCEPT_B7,
         'l4': ACCEPT_L4, 'l4b': ACCEPT_L4B, 'l4c': ACCEPT_L4C, 'l4d': ACCEPT_L4D, 'l4e': ACCEPT_L4E,
         'l4f': ACCEPT_L4F, 'l4g': ACCEPT_L4G, 'l4h': ACCEPT_L4H,
         'rag': ACCEPT_RAG,
-        'b5b_paraphrase': ACCEPT_B5B_PARAPHRASE, 'def_so': ACCEPT_DEF_SO}
-FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'l4d', 'l4e', 'l4f', 'l4g', 'l4h', 'rag')  # rag có ca trộn dự báo
+        'b5b_paraphrase': ACCEPT_B5B_PARAPHRASE, 'def_so': ACCEPT_DEF_SO, 'ny': ACCEPT_NY}
+FORECAST_SETS = ('g', 'gm', 'v', 'n', 'b7', 'l4', 'l4b', 'l4c', 'l4d', 'l4e', 'l4f', 'l4g', 'l4h', 'rag', 'ny')
 
 
 def _match(tool, a, alternatives) -> bool:
@@ -1248,6 +1300,13 @@ def grade(case, t: service.TurnResult) -> dict:
                       and not re.search(r'(?<![\d.])[12]\.\d{3}(?![\d.,]| VND)', text),   # năm có dấu nghìn ("2.019")
         'bieu_do': _chart_ok(case, t),
     }
+    if case.get('ny_clarify'):
+        visible = t.answer_md or t.message or ''
+        checks['hoi_nam_sach'] = (t.status == 'needs_clarification' and not t.values
+                                  and not re.search(r'\d[\d.,\s]*\s*(?:VND|đồng|triệu|tỷ)\b', visible, re.I)
+                                  and not re.search(r'(?<!\d)(?:\d{1,3}(?:[.,]\d{3})+|\d{5,})(?!\d)', visible)
+                                  and not any(name in (FC, FX) and t.results[ref].ok
+                                              for ref, name, _ in t.calls))
     if case.get('sources'):
         got_sources = {row.get('citation') for r in t.results.values() if r.ok and r.evidence
                        and r.evidence.tool == SK for row in r.rows}
@@ -1477,6 +1536,93 @@ def _explain_ready(backend: str) -> str | None:
     return None if res.ok else f'bản dữ liệu đang phục vụ không đọc được phân rã ({res.status}: {res.message[:120]})'
 
 
+def replay_old_logs() -> int:
+    """Phát lại JSON model/calls đã lưu; không gọi LLM, không ghi lại log cũ."""
+    from ai_explain.provider import Reply
+    from tests.test_ai_chat import FakeProvider, call
+
+    files = sorted(path for path in OUT.glob('live_*.jsonl') if '_ny_' not in path.name)
+    changed, logged_changed, skipped, total = [], 0, [], 0
+    original_run, original_groups = tools.run, tools.known_groups
+    original_years = service._forecast_years
+    original_specific = service._specific_forecast_request
+    original_year_error = service._forecast_year_error
+    result_cache, group_cache = {}, {}
+    mode = None
+
+    def cached_run(request, backend):
+        name = request.tool if hasattr(request, 'tool') else request['tool']
+        args = request.arguments if hasattr(request, 'arguments') else request['arguments']
+        key = (mode, backend, name, json.dumps(args, sort_keys=True, ensure_ascii=False, default=str))
+        if key not in result_cache:
+            result_cache[key] = original_run(request, backend)
+        return result_cache[key]
+
+    def cached_groups(backend):
+        key = (mode, backend)
+        if key not in group_cache:
+            group_cache[key] = original_groups(backend)
+        return group_cache[key]
+
+    tools.run, tools.known_groups = cached_run, cached_groups
+    for file_no, path in enumerate(files, 1):
+        print(f'Phát lại {file_no}/{len(files)}: {path.name}', flush=True)
+        for line_no, line in enumerate(path.read_text(encoding='utf-8', errors='replace').splitlines(), 1):
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                skipped.append((path.name, line_no, 'JSON hỏng'))
+                continue
+            if not rec.get('raw_final') or not rec.get('question'):
+                skipped.append((path.name, line_no, 'thiếu raw_final/question'))
+                continue
+            total += 1
+            next_mode = 'versioned' if rec.get('release') else 'legacy'
+            if next_mode != mode:
+                mode = next_mode
+                releases.reset()
+            if mode == 'versioned':
+                os.environ['RETAIL_RELEASE_MODE'] = 'versioned'
+                os.environ['RETAIL_RELEASE_STATE'] = str(ROOT / 'warehouse/pipeline/state.json')
+            else:
+                os.environ.pop('RETAIL_RELEASE_MODE', None)
+                os.environ.pop('RETAIL_RELEASE_STATE', None)
+            answers = [rec['raw_first'], rec['raw_final']] if rec.get('raw_first') else [rec['raw_final']]
+            steps = [call(c['tool'], **c['arguments']) for c in rec.get('calls', [])]
+            steps += [Reply(s, [], {'role': 'assistant', 'content': s}, 200, 50) for s in answers]
+            if len(answers) == 1:
+                steps.append(steps[-1])  # model được cho sửa một lần khi validator mới chặn
+            try:
+                t = service.run_turn(rec['question'], rec.get('history') or [], 'duckdb', FakeProvider(*steps))
+            except Exception as exc:  # noqa: BLE001
+                skipped.append((path.name, line_no, type(exc).__name__))
+                continue
+            logged_changed += t.status != rec.get('status')
+            service._forecast_years = lambda _q, _h: set(range(1900, 2100))
+            service._specific_forecast_request = lambda *_a, **_k: False
+            service._forecast_year_error = lambda *_a, **_k: []
+            try:
+                old = service.run_turn(rec['question'], rec.get('history') or [], 'duckdb', FakeProvider(*steps))
+            except Exception as exc:  # noqa: BLE001
+                skipped.append((path.name, line_no, f'baseline {type(exc).__name__}'))
+                continue
+            finally:
+                service._forecast_years = original_years
+                service._specific_forecast_request = original_specific
+                service._forecast_year_error = original_year_error
+            if t.status != old.status:
+                changed.append((path.name, line_no, rec.get('case_id'), rec.get('run'), old.status,
+                                t.status, rec['question']))
+    tools.run, tools.known_groups = original_run, original_groups
+    print(f'Phát lại {total} dòng có raw_final từ {len(files)} log; khác trạng thái log lịch sử {logged_changed}; '
+          f'riêng luật NY đổi {len(changed)}; không phát lại được {len(skipped)}.')
+    for name, line_no, case_id, run, old, new, question in changed:
+        print(f'ĐỔI {name}:{line_no} {case_id} lần {run}: {old} → {new} | {question}')
+    for name, line_no, reason in skipped:
+        print(f'BỎ QUA {name}:{line_no}: {reason}')
+    return 1 if any(re.search(r'(?<!\d)(?:19|20)\d{2}(?!\d)', row[6]) for row in changed) else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', type=int, default=1)
@@ -1494,14 +1640,17 @@ def main() -> int:
                          'def_so = DS* (luật chữ số câu định nghĩa, chưa chạy model); '
                          'các bộ dự báo cần chế độ versioned')
     ap.add_argument('--kiem-rubric', action='store_true', help='chỉ kiểm rubric bằng tool, không gọi mô hình')
+    ap.add_argument('--phat-lai-log', action='store_true', help='phát lại log live cũ bằng FakeProvider, không gọi mô hình')
     ap.add_argument('--backend', default='duckdb', choices=service.CHAT_BACKENDS)
     a = ap.parse_args()
+    if a.phat_lai_log:
+        return replay_old_logs()
     pool = CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F if a.set == 'tat_ca' else SETS[a.set]
     cases = [c for c in pool if not a.cases or c['id'] in a.cases]
     by_id = {c['id']: c for c in CASES + HOLDOUT + ACCEPT_AI3 + ACCEPT_AI3B + ACCEPT_AI3C + ACCEPT_D + ACCEPT_F + ACCEPT_G
               + ACCEPT_GM + ACCEPT_B7 + ACCEPT_L4 + ACCEPT_L4B + ACCEPT_L4C + ACCEPT_L4D + ACCEPT_L4E + ACCEPT_L4F + ACCEPT_L4G + ACCEPT_L4H
               + ACCEPT_RAG
-              + ACCEPT_B5B_PARAPHRASE + ACCEPT_DEF_SO}
+              + ACCEPT_B5B_PARAPHRASE + ACCEPT_DEF_SO + ACCEPT_NY}
     if a.set in FORECAST_SETS and (why := _explain_ready(a.backend) if a.set in ('l4', 'l4b', 'l4c', 'l4d', 'l4e', 'l4f', 'l4g', 'l4h')
                                   else _forecast_ready(a.backend)):
         print(f'Không chạy bộ {a.set}: {why}.')
