@@ -1131,9 +1131,10 @@ def question_periods(question: str) -> list[tuple]:
         return ('range', _day(y1, m1, 1), _day(y2, m2, _month_end_day(y2, m2)), f'{m1}/{y1}–{m2}/{y2}')
 
     words = '|'.join(sorted(map(re.escape, _MONTH_WORD), key=len, reverse=True))
-    # một ngày: 1/8/2023, 2023-08-01, ngày 1 tháng 8 năm 2023
+    # một ngày: 1/8/2023, 2023-08-01, 2023/08/01, ngày 1 tháng 8 năm 2023
     take(r'(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)', lambda m: one(m[1], m[2], m[3]))
-    take(r'(?<!\d)(\d{1,2})/(\d{1,2})/(\d{4})(?!\d)', lambda m: one(m[3], m[2], m[1]))
+    take(r'(?<!\d)(\d{4})/(\d{1,2})/(\d{1,2})(?!\d)', lambda m: one(m[1], m[2], m[3]))
+    take(r'(?<!\d)(\d{1,2})([./-])(\d{1,2})\2(\d{4})(?!\d)', lambda m: one(m[4], m[3], m[1]))
     take(r'ngày\s+(\d{1,2})\s+tháng\s+(\d{1,2})\s+(?:năm\s+)?(\d{4})', lambda m: one(m[3], m[2], m[1]))
     take(r'(?:từ\s+)?(?:tháng\s+)?(?<![\d/])(\d{1,2})\s*/\s*(\d{4})\s*(?:đến|tới|→|-|–)\s*(?:hết\s+)?(?:tháng\s+)?'
          r'(\d{1,2})\s*/\s*(\d{4})(?!\d)', lambda m: span2(m[2], m[1], m[4], m[3]))
@@ -1153,8 +1154,11 @@ def question_periods(question: str) -> list[tuple]:
          lambda m: span(m[2], 1, 6, f'nửa đầu {m[2]}') if m[1] == 'đầu' else span(m[2], 7, 12, f'nửa cuối {m[2]}'))
     take(r'(?:từ\s+)?tháng\s+(\d{1,2})\s*(?:đến|tới|-|–)\s*(?:tháng\s+)?(\d{1,2})\s*(?:/|năm)?\s*(\d{4})',
          lambda m: span(m[3], m[1], m[2], f'tháng {int(m[1])}–{int(m[2])}/{m[3]}'))
-    # một tháng: 8/2023, T8/2023, 2023-08, tháng 8 năm 2023, tháng 8 2023, tháng tám năm 2023
+    # một tháng: 8/2023, 8-2023, 2023/08, 2023-08, tháng 8 năm 2023
+    take(r'(?<![\d.])(\d{1,2})\.(\d{4})(?!\d)', lambda m: one(m[2], m[1]))
     take(r'(?<!\d)(\d{4})-(\d{1,2})(?![\d-])', lambda m: one(m[1], m[2]))
+    take(r'(?<![\d/])(\d{4})\s*/\s*(\d{1,2})(?![\d/])', lambda m: one(m[1], m[2]))
+    take(r'(?<![\d/-])(\d{1,2})\s*-\s*(\d{4})(?![\d/-])', lambda m: one(m[2], m[1]))
     take(r'(?:tháng\s+)?(?<![\d/])(\d{1,2})\s*/\s*(\d{4})(?!\d)', lambda m: one(m[2], m[1]))
     take(r'tháng\s+(\d{1,2})\s+(?:năm\s+)?(\d{4})', lambda m: one(m[2], m[1]))
     take(rf'tháng\s+({words})\s+(?:năm\s+)?(\d{{4}})', lambda m: one(m[2], _MONTH_WORD[m[1]]))
@@ -1162,6 +1166,28 @@ def question_periods(question: str) -> list[tuple]:
     take(r'năm\s+(\d{4})|(?<![\d.,])(20\d\d)(?![\d.,])', lambda m: one(m[1] or m[2]))
     take(r'tháng\s+(\d{1,2})(?!\d)', lambda m: one(None, m[1]))
     return out
+
+
+def forecast_prior_periods(question: str) -> list[tuple]:
+    """Kỳ dự báo cùng kỳ năm liền trước, suy từ đúng một năm người dùng gõ."""
+    # Chuẩn hóa cách gọi năm liền trước trước khi xét quan hệ so sánh và kỳ đã gõ.
+    question = re.sub(r'\bnăm\s+ngoái\b', 'năm trước', question or '', flags=re.I)
+    question = re.sub(r'\bnăm\s+(?:liền\s+trước|vừa\s+rồi|vừa\s+qua)\b', 'năm trước', question, flags=re.I)
+    # NY lượt 8 (R10c): "cùng kỳ" trần và "YoY" cũng là cùng kỳ năm liền trước; vẫn cần đúng một năm đã gõ.
+    # Chỉ "cùng kỳ" đứng cuối vế: "cùng kỳ tháng trước / quý trước / của tháng 3" không phải năm trước.
+    question = re.sub(r'\bcùng\s+kỳ(?=\s*(?:[?.!,;]|$|thì\b|nhé\b|ra\s+sao|thế\s+nào))', 'cùng kỳ năm trước',
+                      question, flags=re.I)
+    question = re.sub(r'\byoy\b', 'so với cùng kỳ năm trước', question, flags=re.I)
+    years = {int(year) for year in re.findall(r'(?<!\d)((?:19|20)\d{2})(?!\d)', question or '')}
+    if len(years) != 1 or not re.search(r'\bso\s+(?:sánh\s+)?với\b.*\bnăm\s+trước\b'
+                                      r'|\bcùng\s+kỳ\s+năm\s+trước\b', question or '', re.I):
+        return []
+    year = next(iter(years))
+    prior = year - 1
+    if prior < _FC_START.year:
+        return []  # năm lịch sử chỉ được đọc bằng tool thực tế
+    return [(prior, spec[1], spec[2]) for spec in question_periods(question)
+            if isinstance(spec[0], int) and spec[0] == year and spec[1] is not None]
 
 
 def _spec_label(x: tuple) -> str:
@@ -1843,8 +1869,9 @@ def forecast_question_errors(question: str, values: dict, results: dict, answer:
                     errs.append('% của từng nhóm nhân với nhau, không cộng')
             errs += _small_groups_errors(sent, answer, values, results)
     specs = question_periods(q)
+    forecast_specs = specs + forecast_prior_periods(q)
     explain_used = [u for u in used if u[3] == 'explain_forecast' and u[2] is not None]
-    if explain_used and specs and any(not any(_period_match(s, _claim_period(u[2])) for s in specs)
+    if explain_used and forecast_specs and any(not any(_period_match(s, _claim_period(u[2])) for s in forecast_specs)
                                       for u in explain_used):
         errs.append('phân rã model dẫn từ ngày / tháng khác kỳ được hỏi; gọi explain_forecast đúng kỳ')
     # Câu hỏi vừa có kỳ thiếu dự báo vừa xin kỳ tham khảo: status ok có thể khiến
@@ -1866,7 +1893,7 @@ def forecast_question_errors(question: str, values: dict, results: dict, answer:
         tổng cả vùng chỉ khi các năm / khoảng được hỏi phủ trọn vùng dự báo VÀ mọi câu dẫn số gọi tên vùng dự báo (vùng
         dừng ở 01/07/2024 nên không phải tổng 2023–2024)."""
         if not (m := _REF_DERIVED.search(u[0])):
-            return any(_period_match(s, _claim_period(u[2])) for s in specs)
+            return any(_period_match(s, _claim_period(u[2])) for s in forecast_specs)
         d = results[u[0].split('.')[0]].derived.get(m[1]) or {}
         if m[1] != 'horizon_total':
             gots = [(int(p[3:]), int(p[:2]), None) for p in d.get('months', []) if re.fullmatch(r'\d\d/\d{4}', p)]
