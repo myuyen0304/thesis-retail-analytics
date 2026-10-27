@@ -105,6 +105,7 @@ Dùng Jupyter Lab/Notebook thì kernel mặc định chạy ở thư mục của
 | `notebooks/01_exploration/eda.ipynb` | Tìm cấu trúc sinh dữ liệu — 5 phát hiện chính, không xây model |
 | `notebooks/02_design/data_model.ipynb` | Kiểm chứng các quyết định trong `docs/star_schema.md` |
 | `notebooks/02_design/normalization.ipynb` | Kiểm chứng các phụ thuộc hàm trong `docs/normalized_schema.md` |
+| `notebooks/02_design/schema_evolution.ipynb` | Kiểm chứng `docs/tien_hoa_schema.md`: dữ liệu mới của giảng viên (`data/student_data/`) và cách hệ thống hiện tại xử lý |
 | `notebooks/04_forecasting/baseline.ipynb` | Baseline seasonal average + trend — **có lỗi đã biết**, chỉ dùng làm mốc so sánh |
 | `docs/star_schema_tu_ps.md` | Dẫn star schema từ 5 PS: PS → KPI → grain → fact → dimension, bus matrix |
 | `docs/star_schema.md` | Dimensional model + ERD |
@@ -123,7 +124,7 @@ Mỗi khẳng định trong `.md` có một cell tương ứng trong notebook. S
 
 | Người | Notebook phụ trách |
 |---|---|
-| myuyen | `notebooks/01_exploration/eda.ipynb`, `notebooks/02_design/data_model.ipynb`, `notebooks/02_design/normalization.ipynb`, `notebooks/04_forecasting/baseline.ipynb`, `notebooks/04_forecasting/so_sanh_model.ipynb` |
+| myuyen | `notebooks/01_exploration/eda.ipynb`, `notebooks/02_design/data_model.ipynb`, `notebooks/02_design/normalization.ipynb`, `notebooks/02_design/schema_evolution.ipynb`, `notebooks/04_forecasting/baseline.ipynb`, `notebooks/04_forecasting/so_sanh_model.ipynb` |
 | *(bạn cùng nhóm)* | *(điền khi nhận việc)* |
 
 ### Vòng lặp hằng ngày
