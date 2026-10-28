@@ -306,13 +306,13 @@ Ba quy tắc không đổi, áp cho cả §6:
 
 | File | Tầng 3NF (silver) | Tầng star (dbt marts) | Lý do |
 |---|---|---|---|
-| `orders_enriched` | `orders` giữ nguyên 8 cột. Thêm `sales_employees(sales_employee_id PK, name, marital_status, education_level, years_experience)`, 200 dòng. Thêm `order_sales_rep(order_id PK/FK, sales_employee_id FK, comment)`. **Bỏ** `city, region, district` | Thêm `dim_sales_employee`. Giữ mã nhân viên, trình độ, tình trạng hôn nhân, số năm kinh nghiệm; **không đưa tên** vào mart (PM chốt 2026-10-27, §10 câu 3). Thêm cột `sales_employee_key` vào `fact_order` (grain một dòng mỗi đơn; mỗi đơn đúng một nhân viên). `comment` **chưa lên star** | Nhân viên là thực thể mới, phụ thuộc hàm đúng. City/region/district là phụ thuộc bắc cầu qua zip. Comment chỉ có 18 câu mẫu và chưa có câu hỏi nghiệp vụ nào dùng, nên dừng ở silver |
-| `shipments_realistic` | `shipments` giữ nguyên 4 cột. Thêm `shippers(shipper_id PK, company, vehicle, ...)`, 80 dòng. Thêm `shipment_shipper(order_id PK/FK, shipper_id FK)` | Thêm `dim_shipper` **Type 1**. **Bỏ hẳn tên và SĐT** khỏi mart (PM chốt 2026-10-27, §10 câu 3). Thêm `shipper_key` vào `fact_order`, được rỗng, vì `fact_order` đã mang thông tin giao hàng (`fact_order.sql:10–18`) và không phải đơn nào cũng có shipment | Shipper là thực thể mới. `join_date` sau `ship_date` ở ≈92% dòng chứng tỏ thuộc tính là ảnh chụp hiện tại; ghi chú trên dim để không ai phân tích "kinh nghiệm shipper lúc giao" |
+| `orders_enriched` | `orders` giữ nguyên 8 cột. Thêm `sales_employees(sales_employee_id PK, name, marital_status, education_level, years_experience)`, 200 dòng. Thêm `order_sales_rep(order_id PK/FK, sales_employee_id FK, comment)`. **Bỏ** `city, region, district` | Thêm `dim_sales_employee`. Giữ mã nhân viên, **tên**, số năm kinh nghiệm; **không đưa** tình trạng hôn nhân và trình độ học vấn vào mart (§10 câu 3, PM sửa 2026-10-28). Thêm cột `sales_employee_key` vào `fact_order` (grain một dòng mỗi đơn; mỗi đơn đúng một nhân viên). `comment` **chưa lên star** | Nhân viên là thực thể mới, phụ thuộc hàm đúng. City/region/district là phụ thuộc bắc cầu qua zip. Comment chỉ có 18 câu mẫu và chưa có câu hỏi nghiệp vụ nào dùng, nên dừng ở silver |
+| `shipments_realistic` | `shipments` giữ nguyên 4 cột. Thêm `shippers(shipper_id PK, company, vehicle, ...)`, 80 dòng. Thêm `shipment_shipper(order_id PK/FK, shipper_id FK)` | Thêm `dim_shipper` **Type 1**. Giữ **tên và SĐT** shipper trên mart; không đưa tình trạng hôn nhân và học vấn (§10 câu 3, PM sửa 2026-10-28). Thêm `shipper_key` vào `fact_order`, được rỗng, vì `fact_order` đã mang thông tin giao hàng (`fact_order.sql:10–18`) và không phải đơn nào cũng có shipment | Shipper là thực thể mới. `join_date` sau `ship_date` ở ≈92% dòng chứng tỏ thuộc tính là ảnh chụp hiện tại; ghi chú trên dim để không ai phân tích "kinh nghiệm shipper lúc giao" |
 | `eprom.json` | Nguồn riêng `promotions_ext` có cột `source_system`; **không** trộn vào `promotions` | **Không đưa vào** `dim_promotion` | Không đơn nào tham chiếu, nên không đóng góp vào doanh thu hay câu hỏi PS nào. Id mới không va chạm. PM chốt 2026-10-27 giữ ở silver, không lên star (§10 câu 4) |
 | `epd.json` | **Không cập nhật `products`.** Xuất báo cáo xung đột. Nếu BA cần nguồn này: thêm bảng ánh xạ khóa `product_key_map(source_system, source_id, product_id)` dựng bằng khớp đủ thuộc tính (995 dòng khớp đúng một sản phẩm); 5 dòng giá trị cấy và các id rỗng/trùng vào quarantine | Không | epd không chứa sản phẩm mới: 995/1.000 là sản phẩm cũ mang id mới. Nếu nạp theo id, `order_items` của sản phẩm 1 sẽ nhận `cogs` của sản phẩm 1902, kéo COGS ngày sai. Notebook phần 7: nạp theo id ghi đè `cogs` của 997 sản phẩm, COGS lệch ở **cả 3.833/3.833 ngày**, tổng COGS thấp hơn **17,69%**, ngày lệch nhiều nhất ≈3,63 triệu; Revenue không đổi vì dùng `order_items.unit_price`. Cổng `validate` sẽ chặn ở bước 6 |
 | `tf.json` | Bỏ hậu tố `Variant`. Ngày đã có thì **giữ bản gốc**, khác giá trị thì vào báo cáo xung đột. Ngày mới (nếu có) và đạt hợp đồng, kể cả luật miền, thì nhận | `fact_web_traffic` không đổi grain | Phát lại 998 ngày, và mọi chỗ lệch đều là giá trị cấy. Grain `date` là khóa idempotent |
 
-**Ảnh hưởng tới chat AI và RAG.** Không đưa PII (tên, SĐT nhân viên hay shipper) vào ngữ cảnh LLM hay vào kho RAG.
+**Ảnh hưởng tới chat AI và RAG.** Không đưa tình trạng hôn nhân hay học vấn (của nhân viên và shipper) vào ngữ cảnh LLM hay vào kho RAG. Tên nhân viên bán hàng, tên và SĐT shipper thì được hiện (PM chốt 2026-10-28, §10 câu 3).
 Chat chỉ được mở câu hỏi về nhân viên hoặc shipper sau khi backend đã kiểm chứng (nguyên tắc AI0/AI1 ở
 `docs/ai_explain_plan.md`), nên các dim mới **chưa tự động** thành câu hỏi chat được.
 
@@ -358,7 +358,7 @@ data" ngày 2026-10-27. Ô "Raw Data" giữ nguyên: câu "code chưa làm" vẫ
    - cell (a): chạy `snapshot.prepare` hiện tại, cho thấy hệ thống dừng;
    *Ba ý trên đã làm 2026-10-27 (phần 1–8 của notebook, chạy sạch). Cell (b) làm khi có prototype.*
    - cell (b): chạy prototype, cho thấy nhận được và có quarantine.
-3. Prototype local, **không publish**:
+3. Prototype, làm và kiểm ở local trước (từ 2026-10-28 phải lên được production, xem bước 6):
    - `scripts/ingest/adapters.py`: CSV `utf-8-sig`, JSON thành bảng toàn chuỗi;
    - `scripts/ingest/schema_diff.py`: phân loại additive/breaking;
    - `scripts/ingest/auto_mapping.py`: sinh `mapping_de_xuat.yml` + `bao_cao_mapping.md` theo §5b; chỉ đề xuất, không nạp;
@@ -378,6 +378,40 @@ data" ngày 2026-10-27. Ô "Raw Data" giữ nguyên: câu "code chưa làm" vẫ
    - test auto mapping theo bảng nghiệm thu §5b; ánh xạ chưa duyệt không được nạp.
 5. Release candidate local trên DuckDB: `dbt build` xanh, cổng `validate` G/COGS khớp `sales`. Việc nặng thì đưa lệnh
    để PM tự chạy.
+6. **Production Databricks** (PM chốt 2026-10-28, §10 mục 6; bước 3–5 vẫn làm local trước).
+   - **Vì sao phía cloud gần như không phải làm mới.**
+     - Adapter, cách ly và ánh xạ đã duyệt đều chạy ở `prepare`, trong container Airflow, và ra parquet ghi trong manifest.
+     - `runtime.ingest` (`scripts/pipeline/runtime.py`) lặp qua `manifest['sources']` cho mọi nguồn rồi nạp vào schema riêng `r_<release_id>_raw`.
+     - Vì vậy JSON không bao giờ lên Databricks, và không cần Auto Loader.
+   - **Cổng phải qua trước lượt cloud đầu** (đã kiểm chỉ đọc ngày 2026-10-28, chưa sửa gì):
+     1. **Ánh xạ đã duyệt phải nằm trong Git.**
+        - Hiện `mapping_de_xuat.yml` nằm ở `warehouse/`, thư mục bị gitignore.
+        - Bản BA duyệt phải commit, để vào image và được `code_version` bao.
+     2. **Đếm dòng khi có cách ly.**
+        - `snapshot.py` buộc `_src_row` chạy liền 1..N, và `runtime.ingest` buộc số dòng trên Delta bằng `rows` của manifest.
+        - Manifest của nguồn mở rộng phải ghi riêng số dòng nhận và số dòng cách ly, đánh `_src_row` trên phần nhận, và giữ số dòng gốc của file.
+     3. **Phiên bản DuckDB.** Image dùng `duckdb==1.5.6` (`deploy/airflow/requirements-pipeline.txt`), còn `.venv` dùng 1.5.5.
+        Phải chạy `scripts/ingest/tests` trong image, vì đọc JSON dựa vào `json_each`. Image đã có `PyYAML`.
+     4. **Dữ liệu trong container.**
+        - Airflow mount `./data` chỉ đọc (`docker-compose.airflow.yml`).
+        - `data/student_data/` của worktree chính hiện chỉ có file zip, nên phải giải nén ở đó trước khi chạy.
+     5. **dbt trên Databricks.** Model mở rộng phải qua `dbt compile --target databricks` khi bật `extension`, vì macro `cross_db` khác DuckDB.
+     6. **PII ở raw trên cloud.**
+        - Tên và SĐT sẽ nằm trong `r_<id>_raw`.
+        - Chỉ service principal của pipeline được đọc raw; chat và RAG chỉ đọc mart.
+        - Không cấp cho `account users` (bẫy 2026-10-25: cấp cho cả nhóm làm khóa chat).
+     7. **Nhánh.** Commit 9fa4c1c, gốc của image cloud đang phục vụ, đã nằm trong `main`, và `schema/myuyen` tách từ `main` (8bffc1d), nên không vướng thứ tự merge.
+        Vẫn phải PR vào `main` rồi dựng lại image từ `main`.
+   - **Thứ tự chạy cloud.** PM tự trigger; Claude đưa lệnh và theo dõi tới `validate`.
+     1. Chạy target databricks với `extension` **tắt**. Phải cho ra cùng snapshot_id, và `validate` qua: chứng minh bộ Datathon không đổi.
+     2. Bật `extension`: ra snapshot_id mới, qua `validate`, rồi `publish`. Lệnh rollback về release trước phải sẵn trước khi publish.
+   - Registry của target databricks nằm trên cloud: `publish` đổi con trỏ đang phục vụ app và chat. Không có lượt "chạy thử riêng".
+   - **Lát app/chat** (PM chốt 2026-10-28: app/chat phải hiển thị chiều nhân viên bán hàng). Làm sau khi DWH có `dim_sales_employee`:
+     - trước tiên, BA định câu hỏi nghiệp vụ, metric, grain và tiêu chí nghiệm thu, theo skill `retail-metric-design`;
+     - BI: thêm bộ lọc hoặc trang theo nhân viên, theo skill `retail-bi-product`;
+     - chat: chỉ mở loại câu hỏi mà backend đã kiểm chứng (`docs/ai_explain_plan.md` AI0–AI1).
+     - App/chat hiện mã `sales_employee_id`, tên `sales_employee_name` và `years_experience`. Không hiện tình trạng hôn nhân và học vấn.
+     - Cổng cloud có thêm: app/chat đọc release mới vẫn qua bộ kiểm hồi quy hiện có.
 
 ## 10. Câu hỏi PM/BA đã chốt (2026-10-27)
 
@@ -385,8 +419,9 @@ data" ngày 2026-10-27. Ô "Raw Data" giữ nguyên: câu "code chưa làm" vẫ
 |---|---|---|
 | 1 | Ngưỡng lỗi cho nguồn mới | **1% số dòng** của nguồn; không thêm ngưỡng tuyệt đối. 14 nguồn Datathon giữ 0 |
 | 2 | Master data dùng id riêng (kiểu epd) | **Tự khớp, BA duyệt**: máy đề xuất `(source_system, source_id) → product_id` bằng khớp đủ thuộc tính; BA duyệt bảng này; không bao giờ nạp theo id của nguồn |
-| 3 | PII (tên nhân viên, tên và SĐT shipper) | **Bỏ hẳn khỏi mart**; chỉ nằm ở raw/silver; không vào ngữ cảnh chat hay kho RAG. *Bổ sung 2026-10-28:* tình trạng hôn nhân và trình độ học vấn (của nhân viên và shipper) cũng tính là nhạy cảm, xử lý như PII |
+| 3 | PII (tên nhân viên, tên và SĐT shipper) | **Bỏ hẳn khỏi mart**; chỉ nằm ở raw/silver; không vào ngữ cảnh chat hay kho RAG. *Bổ sung 2026-10-28:* tình trạng hôn nhân và trình độ học vấn (của nhân viên và shipper) cũng tính là nhạy cảm, xử lý như PII. *Sửa 2026-10-28 (PM):* **tên nhân viên bán hàng được đưa lên mart và hiện trên app/chat**; **tên và SĐT shipper cũng được hiện**; chỉ tình trạng hôn nhân và học vấn (của nhân viên và shipper) vẫn ẩn, không lên mart, app, chat hay RAG |
 | 4 | `eprom` | **Giữ ở silver** (`promotions_ext`), không lên star |
 | 5 | `comment` của đơn | **Giữ ở silver** (`order_sales_rep`), không lên star cho tới khi có câu hỏi nghiệp vụ cần |
+| 6 | Phạm vi chạy (2026-10-28) | **Phải chạy được trên production Databricks.** Bỏ giới hạn "chỉ local, không publish" của lúc chọn phạm vi. Bước 3–5 vẫn làm local trước; đường lên cloud ở §9 bước 6. **Phạm vi production gồm:** bảng mới trong DWH Databricks, và app/chat trên Databricks hiển thị chiều nhân viên bán hàng. Theo mục 3 (sửa 2026-10-28), `dim_sales_employee` trên mart gồm `sales_employee_id`, `sales_employee_name` và `years_experience`; tình trạng hôn nhân và học vấn không lên mart hay app/chat |
 
 Thêm: mức tự động của auto mapping là **tự đề xuất, BA duyệt** (§5b).
