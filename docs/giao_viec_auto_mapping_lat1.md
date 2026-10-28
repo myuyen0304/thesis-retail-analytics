@@ -271,7 +271,128 @@ trong báo cáo, không tự giảm phạm vi test.
 
 | Lượt | Ngày | Kết quả | Phát hiện (mức nặng) | GPT đã sửa |
 |---|---|---|---|---|
-| | | | | |
+| 1 | 2026-10-28 | **Đạt**, không có lỗi chặn commit | A1 (nhẹ), A2 (nhẹ) | A1, A2 (lượt 2) |
+| 2 | 2026-10-28 | **Đạt**, A1 và A2 đã sửa đúng | không có lỗi mới; 1 ghi nhận | |
+
+### Lượt 1 (2026-10-28): rà theo 5 bước
+
+**1. Phạm vi diff: đạt.**
+- `git status` chỉ có 4 mục untracked: `adapters.py`, `schema_diff.py`, `auto_mapping.py` và `scripts/ingest/tests/`.
+  Không file nào đã được Git theo dõi bị sửa.
+- `data/student_data/` không đổi: sha256 của `orders_enriched.csv` trùng giá trị ghi trong YAML, mtime các file vẫn là ngày 2026-04 và 2026-08.
+- Code chỉ import `duckdb`, `yaml` và thư viện chuẩn. Không có `eval`/`pickle`, không đọc dữ liệu từng dòng bằng Python.
+
+**2. Test trượt khi tắt code: đạt.**
+Claude tự thử 14 phép vô hiệu trên bản sao trong scratchpad, độc lập với `verification/mutations.json` của GPT, chỉ chạy
+test đơn vị. 13/13 phép có nghĩa đều làm test trượt:
+- khóa nguồn luôn coi là không trùng;
+- PII so chuỗi con;
+- bỏ lọc vi phạm phụ thuộc hàm;
+- ngưỡng cột thừa bằng 0;
+- bỏ kiểm khóa của bảng tham chiếu;
+- bỏ dò BOM;
+- tính thứ tự gồm cả cột thêm;
+- bỏ dấu hiệu định dạng số điện thoại;
+- biên giữa hai nguồn bằng 0;
+- bỏ nhóm thuộc tính nhạy cảm;
+- phụ thuộc hàm bỏ qua NULL;
+- JSON đổi `''` thành NULL;
+- cột thừa chỉ ghi đường suy ra đầu tiên.
+
+Phép thứ 14 (tắt kiểm thư mục trong `main`) không làm test trượt. Đó không phải lỗ hổng: `write_proposal` vẫn kiểm lại, và file được
+mở bằng chế độ `'x'`, nên vẫn còn hai lớp chặn ghi đè.
+
+**3. Đối chiếu số độc lập: đạt.**
+- Các số ở I1 khớp §3. Claude đã đo §3 ngày 2026-10-27 bằng script riêng.
+- Claude tính tay điểm hai nguồn đầu theo trọng số trong code, khớp YAML:
+  - `orders` = 0,55·1 + 0,25·8/17 + 0,15·1 + 0,05·0,5714 = **0,8462**;
+  - `geography` = 0,55·1 + 0,25·4/17 + 0 + 0,05·0,25 = **0,6213**.
+
+**4. Điều kiện bắt buộc: đạt.** Claude chạy lại ngày 2026-10-28:
+
+| Bộ test | Kết quả |
+|---|---|
+| `scripts/ingest/tests` | 58 đạt, 32 giây |
+| Test đơn vị | 41 đạt, 2,6 giây |
+| `scripts/pipeline/tests` | 54 đạt, 2 skip, đúng mốc I4 với cùng hai lý do |
+| `pytest scripts` | 144 đạt, 3 skip; hai `conftest.py` không đụng nhau |
+
+YAML không chứa đường dẫn tuyệt đối. Mọi mục cần quyết đều có `trang_thai: de_xuat`.
+
+**5. Báo cáo của GPT khớp bằng chứng: đạt.**
+- Số test, thời gian, điểm nguồn và toàn văn `bao_cao_mapping.md` khớp với lần Claude chạy lại và với file YAML.
+- GPT đã tự ghi chỗ làm khác phiếu: kiểm header rỗng hoặc trùng.
+
+**A1 (nhẹ): 6/7 file mới lưu kèm BOM UTF-8.**
+- Sáu file bị: `adapters.py`, `auto_mapping.py`, `schema_diff.py`, `tests/conftest.py`, `tests/test_adapters.py`, `tests/test_schema_diff.py`.
+  Chỉ `test_auto_mapping.py` sạch.
+- Các file `.py` có sẵn (`scripts/ingest/*.py`, `scripts/pipeline/*.py`) đều không có BOM.
+- Python vẫn chạy được, nhưng lệch quy ước repo và làm dòng 1 của diff có ký tự ẩn.
+- Sửa: lưu lại sáu file dạng UTF-8 không BOM. Không đổi nội dung.
+
+**A2 (nhẹ): JSON có khóa trùng trong cùng một đối tượng bị chọn giá trị ngầm.**
+- Ca: `[{"a": "y", "a": "x"}]`. Bảng ra `'y'`, vì SQL gộp bằng `max`. Trong khi `json.loads` ra `'x'` (giữ giá trị cuối), và
+  không có báo lỗi nào.
+- Như vậy trái nguyên tắc giữ nguyên giá trị, và lệch với CSV: CSV có header trùng thì `_check_columns` dừng.
+- Ba file JSON trong zip có 0 khóa trùng (Claude kiểm bằng `object_pairs_hook`), nên lỗi này không ảnh hưởng dữ liệu hiện có.
+- Sửa: khi kiểm cấu trúc, dùng `json.loads(..., object_pairs_hook=...)` để phát hiện khóa trùng, rồi dừng với lỗi rõ (tên file,
+  tên khóa). Thêm một test, và test đó phải trượt khi bỏ phần kiểm.
+
+**Ghi nhận, không cần sửa ở lát 1:**
+- **Phụ thuộc hàm tầm thường:** một cột `*_id` không trùng ở mọi dòng sẽ "giải thích" mọi cột còn lại.
+  - Ví dụ: file `chua_ro` gồm `order_id, shipper_id, note` cho ra thực thể `order` với thuộc tính `note`.
+  - `orders_enriched` không bị, vì `order_id` là cột khớp.
+  - Lát sau, khi xét `shipments_realistic` và file `chua_ro`: gắn cờ khi `so_khoa` bằng số dòng có khóa khác rỗng.
+- **Mẫu điện thoại gắn cờ chuỗi 9–12 chữ số có số 0 đầu** (ví dụ mã `0012345678`). Đúng luật §4.3(d); BA gỡ cờ khi duyệt.
+- **DuckDB chuẩn hóa cách viết số JSON** (`1.50` → `1.5`, `1e3` → `1000.0`). Giá trị không đổi, giống `json` của Python,
+  và sha256 vẫn tính trên file gốc.
+- **Adapter trả bảng tạm thay vì view hoặc relation.** Vẫn truy vấn được bằng DuckDB đúng như §4.1, và nhanh hơn khi phải quét nhiều lần.
+
+**Kết luận lượt 1:**
+- Lát 1 đạt yêu cầu phiếu.
+- A1 và A2 đều nhỏ. Claude đề xuất GPT sửa cả hai trước khi commit, rồi Claude chỉ rà phần diff sửa.
+- **PM chốt 2026-10-28: GPT sửa A1 và A2 trước, rồi mới commit.**
+- Khi commit: mỗi file một commit, không commit `warehouse/`.
+
+### Lượt 2 (2026-10-28): chỉ rà phần GPT sửa A1, A2
+
+**A1: đạt.**
+- Cả 7 file `.py` mới đều bắt đầu bằng `22 22 22` (`"""`), không còn `EF BB BF`.
+- Ngoài BOM, nội dung không đổi:
+  - số dòng của `auto_mapping.py` (323) và `schema_diff.py` (48) giữ nguyên;
+  - 14 đoạn code mà script vô hiệu của lượt 1 thay thế đều vẫn khớp đúng một lần.
+
+**A2: đạt.**
+- `adapters.py` thêm hàm `unique_object` làm `object_pairs_hook` của `json.loads`.
+  - Hook chạy ở mọi cấp, nên bắt được cả khóa trùng ở đối tượng lồng nhau.
+  - Gặp khóa trùng thì dừng bằng `ValueError` ghi tên file và tên khóa, và không chọn giá trị nào.
+  - Lỗi đi qua nhánh `except` sẵn có: bảng tạm bị xóa, kết nối tự mở thì được đóng.
+- `test_adapters.py` thêm `test_json_reject_duplicate_keys` gồm hai ca, `[{"a": "y", "a": "x"}]` và `[{"o": {"k": 1, "k": 2}}]`.
+  Mỗi ca kiểm cả tên file lẫn tên khóa trong thông báo.
+- Claude thử vô hiệu trên bản sao, thêm hai phép vào script của lượt 1:
+  - **bỏ hook:** test trượt;
+  - **hook chỉ báo khi hai giá trị khác nhau:** test không trượt (xem ghi nhận bên dưới).
+  - 13 phép có nghĩa của lượt 1 vẫn làm test trượt; phép 14 vẫn không, cùng lý do như lượt 1.
+- Ba file JSON trong zip vẫn đọc được qua `read_file`: `epd`, `eprom` và `tf`, mỗi file 1.000 dòng.
+
+**Điều kiện bắt buộc**, Claude chạy lại ngày 2026-10-28:
+
+| Bộ test | Kết quả |
+|---|---|
+| `scripts/ingest/tests` | 60 đạt (58 cũ + 2 ca mới) |
+| `scripts/pipeline/tests` | 54 đạt, 2 skip, đúng mốc I4 |
+| `pytest scripts` | 146 đạt, 3 skip (144 của lượt 1 + 2 ca mới) |
+| CLI chạy lại trên `orders_enriched.csv` | `bao_cao_mapping.md` trùng từng byte với bản lượt 1; YAML chỉ khác dòng `sinh_luc_utc` |
+
+`git status` chỉ có `docs/giao_viec_auto_mapping_lat1.md` (sửa §9) và 4 mục untracked của lát 1.
+
+**Báo cáo của GPT khớp bằng chứng.** Kết quả kiểm BOM, số test và việc hai ca mới trượt khi bỏ hook đều khớp lần Claude chạy lại.
+
+**Ghi nhận, không cần sửa:** hai ca test đều có giá trị trùng khác nhau.
+- Nếu ai đó nới luật thành "chỉ báo khi khác giá trị", test vẫn qua.
+- Có thể thêm ca `[{"a": 1, "a": 1}]` khi sửa file này lần sau. Không chặn commit.
+
+**Kết luận lượt 2:** lát 1 sẵn sàng commit. Commit mỗi file một lần, không commit `warehouse/`. Phiếu này là docs, phải hỏi PM trước.
 
 ## 10. Quyết định của PM
 
