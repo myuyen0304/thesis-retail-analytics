@@ -15,6 +15,7 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from dwh import connection, queries
+from scripts.ingest.source_contract import SOURCES
 from tests.test_backends import PER_BACKEND, PER_BUILD, _double_columns, assert_same
 from tests.test_smoke import APP, PAGES
 
@@ -31,12 +32,25 @@ def test_databricks_cung_so_duckdb(name):
     assert_same(db.drop(columns=drop), dk.drop(columns=drop), _double_columns(table))
 
 
+_CORE_SOURCES = frozenset(SOURCES)
+_EXTENSION_SOURCES = frozenset(p.stem for p in (Path(__file__).resolve().parents[3]
+                                              / 'scripts/ingest/extensions').glob('*.yml'))
+
+
+def assert_ingest_sources(names, n_sources_ingested):
+    """Kiểm log nguồn của cả bản lõi và bản có hợp đồng mở rộng."""
+    unique = set(names)
+    assert _CORE_SOURCES <= unique, f'Thiếu nguồn lõi: {_CORE_SOURCES - unique}'
+    assert unique - _CORE_SOURCES <= _EXTENSION_SOURCES, f'Nguồn chưa có hợp đồng: {unique - _CORE_SOURCES - _EXTENSION_SOURCES}'
+    assert n_sources_ingested == len(names) == len(unique), 'Số nguồn không khớp log hoặc log trùng nguồn'
+
+
 @cloud
 def test_databricks_suc_khoe_tot():
-    # nhật ký nạp + test của chính kho Databricks: kho đạt, đủ 14 nguồn trong log nạp
+    # Nhật ký nạp phải đủ nguồn lõi; nguồn dư phải có hợp đồng mở rộng.
     s = queries.health_summary('databricks').iloc[0]
-    assert s['status_code'] == 'tot' and s['ingest_mode'] == 'log' and s['n_sources_ingested'] == 14
-    assert len(queries.health_ingest('databricks')) == 14
+    assert s['status_code'] == 'tot' and s['ingest_mode'] == 'log'
+    assert_ingest_sources(queries.health_ingest('databricks')['source'].tolist(), s['n_sources_ingested'])
 
 
 @cloud
