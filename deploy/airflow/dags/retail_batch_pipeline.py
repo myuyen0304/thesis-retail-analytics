@@ -2,11 +2,19 @@
 from datetime import timedelta
 import hashlib
 import os
+import re
 import subprocess
 
 import pendulum
 from airflow.sdk import DAG, Param, get_current_context, task
 from airflow.exceptions import AirflowFailException
+
+
+def default_extensions():
+    names = [name.strip() for name in os.getenv('RETAIL_PIPELINE_DEFAULT_EXTENSIONS', '').split(',') if name.strip()]
+    if any(not re.fullmatch(r'[a-z][a-z0-9_]*', name) for name in names):
+        raise ValueError('RETAIL_PIPELINE_DEFAULT_EXTENSIONS có tên không hợp lệ')
+    return sorted(set(names))
 
 
 def command(stage, context):
@@ -18,6 +26,9 @@ def command(stage, context):
         args += ['--snapshot-id', params['snapshot_id']]
     if params.get('force'):
         args.append('--force')
+    if stage == 'prepare':
+        for name in sorted(set(params.get('extensions', []))):
+            args += ['--extension', name]
     return args
 
 
@@ -35,7 +46,10 @@ with DAG(
     # .env.airflow.local; không đặt thì giữ duckdb. PM chốt 2026-10-19: máy chạy demo đặt databricks để lịch chạy production.
     params={'target': Param(os.getenv('RETAIL_PIPELINE_DEFAULT_TARGET', 'duckdb'), enum=['duckdb', 'databricks']),
             'snapshot_id': Param(None, type=['null', 'string'], pattern='^[a-f0-9]{12}$'),
-            'force': Param(False, type='boolean')},
+            'force': Param(False, type='boolean'),
+            # Lịch không truyền conf: giữ phần mở rộng qua biến mặc định; rollback bản tắt phải xóa biến rồi nạp lại DAG.
+            'extensions': Param(default_extensions(), type='array',
+                                items={'type': 'string', 'pattern': '^[a-z][a-z0-9_]*$'})},
     tags=['retail', 'batch'],
 ) as dag:
     @task
