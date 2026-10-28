@@ -206,8 +206,8 @@ Kỳ vọng lấy từ §2 và §7; số đã có cell ở notebook phần 1–6
 
 | File | Đề xuất auto mapping phải ra |
 |---|---|
-| `orders_enriched.csv` | Nguồn `orders`; nhận ra BOM; 8 cột khớp tên; `city, region, district` là thừa (khớp `geography` qua `zip`); 5 cột nhân viên là thực thể mới theo `sales_employee_id`, `sales_employee_name` bị gắn nghi PII; `comment` là thuộc tính lẻ |
-| `shipments_realistic.csv` | Nguồn `shipments`; 4 cột khớp; 80 shipper là thực thể mới; tên, số điện thoại, tuổi, giới tính bị gắn nghi PII |
+| `orders_enriched.csv` | Nguồn `orders`; nhận ra BOM; 8 cột khớp tên; `city, region, district` là thừa (khớp `geography` qua `zip`); 5 cột nhân viên là thực thể mới theo `sales_employee_id`, `sales_employee_name`, `marital_status`, `education_level` bị gắn nghi PII; `comment` là thuộc tính lẻ |
+| `shipments_realistic.csv` | Nguồn `shipments`; 4 cột khớp; 80 shipper là thực thể mới; tên, số điện thoại, tuổi, giới tính, hôn nhân, học vấn bị gắn nghi PII |
 | `eprom.json` | Cấu trúc khớp `promotions` nhưng id không thuộc bảng đó, nên đề xuất nguồn mở rộng `promotions_ext` (chỉ ở silver, không trộn vào `promotions`, §7 và §10 câu 4); id không va chạm; 0 dòng `order_items` tham chiếu; báo giá trị lạ `'twenty percent'`, `'30%%'` |
 | `epd.json` | Nguồn `products`; **đánh lại khóa**; bảng ánh xạ đề xuất 995 dòng khớp đúng 1 sản phẩm; 5 dòng giá trị cấy, cùng các id rỗng/trùng, vào quarantine |
 | `tf.json` | Nguồn `web_traffic`; 998 ngày phát lại; báo hậu tố `Variant` và các giá trị cấy |
@@ -385,7 +385,7 @@ data" ngày 2026-10-27. Ô "Raw Data" giữ nguyên: câu "code chưa làm" vẫ
 |---|---|---|
 | 1 | Ngưỡng lỗi cho nguồn mới | **1% số dòng** của nguồn; không thêm ngưỡng tuyệt đối. 14 nguồn Datathon giữ 0 |
 | 2 | Master data dùng id riêng (kiểu epd) | **Tự khớp, BA duyệt**: máy đề xuất `(source_system, source_id) → product_id` bằng khớp đủ thuộc tính; BA duyệt bảng này; không bao giờ nạp theo id của nguồn |
-| 3 | PII (tên nhân viên, tên và SĐT shipper) | **Bỏ hẳn khỏi mart**; chỉ nằm ở raw/silver; không vào ngữ cảnh chat hay kho RAG |
+| 3 | PII (tên nhân viên, tên và SĐT shipper) | **Bỏ hẳn khỏi mart**; chỉ nằm ở raw/silver; không vào ngữ cảnh chat hay kho RAG. *Bổ sung 2026-10-28:* tình trạng hôn nhân và trình độ học vấn (của nhân viên và shipper) cũng tính là nhạy cảm, xử lý như PII |
 | 4 | `eprom` | **Giữ ở silver** (`promotions_ext`), không lên star |
 | 5 | `comment` của đơn | **Giữ ở silver** (`order_sales_rep`), không lên star cho tới khi có câu hỏi nghiệp vụ cần |
 
