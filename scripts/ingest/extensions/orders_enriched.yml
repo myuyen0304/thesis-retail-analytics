@@ -1,0 +1,33 @@
+phien_ban: 1
+ten: orders_enriched
+file: student_data/orders_enriched.csv
+trang_thai: da_duyet
+duyet_boi: PM (myuyen0304)
+ngay_duyet: '2026-10-28'
+nguong_cach_ly: 0.01
+khoa_noi: {cot: order_id, nguon: orders, cot_nguon: order_id}
+header: [order_id, order_date, customer_id, zip, city, region, district, order_status, payment_method, device_type,
+         order_source, sales_employee_id, sales_employee_name, marital_status, education_level, years_experience, comment]
+cot:
+  - {ten: order_id, xu_ly: khoa_noi, kieu: integer, duoc_rong: false, trang_thai: da_duyet}
+  - {ten: order_date, xu_ly: doi_chieu_loi, trang_thai: da_duyet}
+  - {ten: customer_id, xu_ly: doi_chieu_loi, trang_thai: da_duyet}
+  - {ten: zip, xu_ly: doi_chieu_loi, trang_thai: da_duyet}
+  - {ten: order_status, xu_ly: doi_chieu_loi, trang_thai: da_duyet}
+  - {ten: payment_method, xu_ly: doi_chieu_loi, trang_thai: da_duyet}
+  - {ten: device_type, xu_ly: doi_chieu_loi, trang_thai: da_duyet}
+  - {ten: order_source, xu_ly: doi_chieu_loi, trang_thai: da_duyet}
+  - {ten: city, xu_ly: bo, ly_do: 'thừa, suy từ geography qua zip', trang_thai: da_duyet}
+  - {ten: region, xu_ly: bo, ly_do: 'thừa, suy từ geography qua zip', trang_thai: da_duyet}
+  - {ten: district, xu_ly: bo, ly_do: 'thừa, suy từ geography qua zip', trang_thai: da_duyet}
+  - {ten: sales_employee_id, xu_ly: nap, kieu: string, duoc_rong: false, hien_thi: mart, trang_thai: da_duyet}
+  - {ten: sales_employee_name, xu_ly: nap, kieu: string, duoc_rong: false, hien_thi: mart, trang_thai: da_duyet}
+  - {ten: marital_status, xu_ly: nap, kieu: string, duoc_rong: false, hien_thi: silver, trang_thai: da_duyet}
+  - {ten: education_level, xu_ly: nap, kieu: string, duoc_rong: false, hien_thi: silver, trang_thai: da_duyet}
+  - {ten: years_experience, xu_ly: nap, kieu: integer, duoc_rong: false, hien_thi: mart, trang_thai: da_duyet}
+  - {ten: comment, xu_ly: nap, kieu: string, duoc_rong: true, hien_thi: silver, trang_thai: da_duyet}
+thuc_the:
+  - ten: sales_employee
+    khoa: sales_employee_id
+    thuoc_tinh: [sales_employee_name, marital_status, education_level, years_experience]
+    trang_thai: da_duyet
