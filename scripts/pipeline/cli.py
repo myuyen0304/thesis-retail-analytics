@@ -277,13 +277,13 @@ def _entry(stage, run_id, target, started, result, source=None, error=None):
             'finished_at': _utc(), 'result': result, 'error_type': type(error).__name__ if error is not None else None}
 
 
-def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False):
+def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=()):
     """Chạy một stage và để lại một dòng lịch sử: dat (stage tiến lên), bo_qua (run bỏ qua hoặc stage đã xong từ trước), loi."""
     started = _utc()
     context_path = Path(root).resolve() / 'runs' / str(run_id) / 'context.json'
     before = _read_json(context_path)
     try:
-        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force)
+        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force, extensions=extensions)
     except Exception as error:
         record_history(Path(root).resolve(), _entry(stage, run_id, target, started, 'loi', _read_json(context_path) or before,
                                                     error))
@@ -294,7 +294,7 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
     return context
 
 
-def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False):
+def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=()):
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', run_id):
         raise ValueError('run_id chỉ gồm chữ, số, gạch nối/gạch dưới; tối đa 100 ký tự')
     root = Path(root).resolve()
@@ -308,6 +308,8 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                     context = json.loads(context_path.read_text(encoding='utf-8'))
                     if context['target'] != target:
                         raise ValueError('run_id đã dùng cho target khác')
+                    if set(context.get('extensions', [])) != set(extensions):
+                        raise ValueError('run_id đã dùng cho tập --extension khác')
                     return context
                 if target == 'databricks':
                     cloud = Databricks()
@@ -322,11 +324,15 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                     manifest = snapshot.validate(path)
                 else:
                     try:
-                        path = snapshot.prepare(data, landing)
+                        path = snapshot.prepare(data, landing, extensions=extensions) if extensions else snapshot.prepare(data, landing)
                     except ValueError as error:      # header / số dòng / số field sai: chưa có snapshot, vẫn để lại lý do
-                        contract.write_quarantine(quarantine, {}, error=error)
+                        contract.write_quarantine(quarantine, getattr(error, 'summary', {}),
+                                                  getattr(error, 'evidence', None), error=error)
                         raise
                     manifest = snapshot.validate(path)
+                extended = {n: e for n, e in manifest['sources'].items() if e.get('mo_rong')}
+                if set(extended) != set(extensions):
+                    raise ValueError('Tập --extension không khớp manifest snapshot')
                 # A3 (S4): kiểu, not-null, khóa chính trên snapshot, trước build; dòng sai thì dừng, không bỏ dòng chạy tiếp
                 violations = contract.check(path, quarantine)
                 if violations:
@@ -344,6 +350,9 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                            'schema': f'r_{rid}_reporting', 'expected_active': state['active'],
                            'started_at': dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
                            'stage': 'skipped' if skip else 'prepared'}
+                if extensions:
+                    context['extensions'] = sorted(set(extensions))
+                    context['so_dong_cach_ly'] = {n: extended[n]['so_dong_cach_ly'] for n in sorted(extended)}
                 atomic_json(context_path, context)
                 return context
             context = json.loads(context_path.read_text(encoding='utf-8'))
@@ -450,6 +459,11 @@ def print_history(root, target='duckdb', limit=20):
     for row in [head, *table]:
         print('  '.join(str(v).ljust(w) for v, w in zip(row, widths)).rstrip())
 
+    for row in rows:
+        context = _read_json(Path(root) / 'runs' / str(row.get('run_id')) / 'context.json') or {}
+        if context.get('extensions'):
+            print(f"{row['run_id']}: cách ly " + json.dumps(context['so_dong_cach_ly'], ensure_ascii=False))
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
@@ -459,10 +473,13 @@ def main():
     ap.add_argument('--root', default='warehouse/pipeline')
     ap.add_argument('--data', default='data')
     ap.add_argument('--snapshot-id')
+    ap.add_argument('--extension', action='append', default=[], metavar='TEN')
     ap.add_argument('--force', action='store_true')
     ap.add_argument('--release-id')
     ap.add_argument('--limit', type=int, default=20, help='history: số lần chạy gần nhất cần in')
     a = ap.parse_args()
+    if a.extension and a.stage not in ('prepare', 'run'):
+        ap.error('--extension chỉ dùng với prepare hoặc run')
     if a.stage == 'history':
         print_history(a.root, a.target, a.limit)
         return
@@ -500,7 +517,7 @@ def main():
         return
     for stage in STAGES if a.stage == 'run' else (a.stage,):
         result = execute(stage, run_id=a.run_id, target=a.target, root=a.root, data=a.data,
-                         snapshot_id=a.snapshot_id, force=a.force)
+                         snapshot_id=a.snapshot_id, force=a.force, extensions=a.extension)
         print(json.dumps({k: result[k] for k in ('run_id', 'release_id', 'snapshot_id', 'stage')}, ensure_ascii=False))
 
 
