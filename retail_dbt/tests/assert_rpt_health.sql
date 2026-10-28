@@ -63,15 +63,15 @@ where (status_code = 'loi_test') <> (coalesce(n_tests_fail + n_tests_error, 0) >
 union all
 -- 4. Log nạp nguồn
 {% if target.type in ('postgres', 'databricks') %}
-select 'ingest: du 14 nguon, cung 1 lan nap', count(*)
+select 'ingest: du {{ 14 + (1 if extension_enabled('orders_enriched') else 0) }} nguon, cung 1 lan nap', count(*)
 from (select count(*) as k, count(distinct loaded_at_utc) as t from {{ ref('rpt_health_ingest') }}) x
-where k > 0 and (k <> 14 or t <> 1)
+where k > 0 and (k <> {{ 14 + (1 if extension_enabled('orders_enriched') else 0) }} or t <> 1)
 union all
 select 'ingest: so dong trong log = so dong bang raw', count(*)
 from {{ ref('rpt_health_ingest') }} g
 join (
     {%- set nguon = ['customers', 'geography', 'products', 'promotions', 'orders', 'order_items', 'payments',
-                     'shipments', 'returns', 'reviews', 'inventory', 'web_traffic', 'sales', 'sample_submission'] %}
+                     'shipments', 'returns', 'reviews', 'inventory', 'web_traffic', 'sales', 'sample_submission'] + (['orders_enriched'] if extension_enabled('orders_enriched') else []) %}
     {%- for t in nguon %}
     select '{{ t }}' as source, count(*) as n from {{ source('raw', t) }}{% if not loop.last %} union all{% endif %}
     {%- endfor %}

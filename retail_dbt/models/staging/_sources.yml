@@ -33,6 +33,15 @@ sources:
       - name: sales
       - name: sample_submission
 
+  # Nguồn mở rộng khai báo riêng, giữ danh sách 14 nguồn lõi của hợp đồng.
+  - name: raw
+    schema: "{{ ('r_' ~ var('release_id') ~ '_raw') if var('release_id', '') else 'raw' }}"
+    config:
+      meta:
+        external_location: "read_parquet('{{ var(\"snapshot_path\", \"\") }}/{name}.parquet')"
+    tables:
+      - name: orders_enriched
+
   # Kết quả stage dự báo của pipeline (scripts/forecast/stage.py). Chỉ dùng khi pipeline truyền var forecast_path
   # (models reporting/rpt_forecast_* tắt khi không có var này, nên build cũ không đổi).
   # - target duckdb    : đọc thẳng parquet trong thư mục run

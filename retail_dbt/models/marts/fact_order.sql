@@ -9,7 +9,8 @@ select
     {{ date_sk('o.order_date') }}                                   as order_date_sk,
     {{ date_sk('o.ship_date') }}                                    as ship_date_sk,      -- NULL nếu chưa gửi
     {{ date_sk('o.delivery_date') }}                                as delivery_date_sk,
-    c.customer_sk,
+    c.customer_sk,{% if extension_enabled('orders_enriched') %}
+    e.sales_employee_sk,{% endif %}
     j.order_junk_sk,
     n.payment_value,                                    -- = Σ net_amount; khớp payments.payment_value (test)
     o.installments,                                     -- thông tin DUY NHẤT mới từ payments (§5.2)
@@ -21,4 +22,6 @@ join net n on n.order_id = o.order_id
 join {{ ref('dim_customer') }} c on c.customer_id = o.customer_id
 join {{ ref('dim_order_junk') }} j
   on  j.order_status = o.order_status and j.payment_method = o.payment_method
-  and j.device_type = o.device_type   and j.order_source = o.order_source
+  and j.device_type = o.device_type   and j.order_source = o.order_source{% if extension_enabled('orders_enriched') %}
+left join {{ ref('stg_orders_enriched') }} oe on oe.order_id = o.order_id
+left join {{ ref('dim_sales_employee') }} e on e.sales_employee_id = oe.sales_employee_id{% endif %}

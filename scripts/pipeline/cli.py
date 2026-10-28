@@ -46,6 +46,8 @@ def dbt_build(context, target, cloud=None):
     vars_ = {k: context[k] for k in ('release_id', 'snapshot_id', 'code_version', 'snapshot_path')}
     if context.get('forecast_path'):   # bật rpt_forecast_* và test của chúng (retail_dbt/models/reporting/_forecast.yml)
         vars_['forecast_path'] = context['forecast_path']
+    if 'extensions' in context:
+        vars_['extensions'] = context['extensions']
     dbt = os.getenv('RETAIL_DBT_EXECUTABLE') or str(Path(sys.executable).with_name('dbt.exe' if os.name == 'nt' else 'dbt'))
     env = {**os.environ, 'PYTHONUTF8': '1', 'RETAIL_DUCKDB_BUILD_PATH': context['duckdb_path']}
     if cloud:
@@ -145,9 +147,43 @@ def validate_data(context, cloud=None):
                 errors = compare(name, local_query(statement), fetch(statement))
                 if errors:
                     raise ValueError(f'Parity {name}: ' + '; '.join(errors[:3]))
-        return {'daily_rows': len(actual), 'relations_checked': len(names), 'cloud_parity': bool(cloud)}
+        result = {'daily_rows': len(actual), 'relations_checked': len(names), 'cloud_parity': bool(cloud)}
+        if 'extensions' in context:
+            result.update(validate_extension_visibility(context, fetch))
+        return result
     finally:
         baseline.close()
+
+
+def validate_extension_visibility(context, fetch):
+    """Đối chiếu cột vật lý của mọi bảng/view với quyền hiển thị đã duyệt."""
+    from scripts.ingest import extension_contract
+    rid = context['release_id'].replace("'", "''")
+    marts, reporting = f'r_{rid}_marts', f'r_{rid}_reporting'
+    _, rows = fetch("select table_schema, table_name, column_name from information_schema.columns "
+                    f"where lower(table_schema) in ('{marts}', '{reporting}')")
+    columns = [(str(s).lower(), str(t).lower(), str(c).lower()) for s, t, c in rows]
+    hidden = set()
+    required = set()
+    for name in context['extensions']:
+        doc = extension_contract.load(name)
+        for col in doc['cot']:
+            if col['xu_ly'] != 'nap':
+                continue
+            if col.get('hien_thi') not in ('mart', 'silver'):
+                raise ValueError(f"Cột {col['ten']}: hien_thi phải là mart hoặc silver")
+            if col.get('hien_thi') == 'silver':
+                hidden.add(col['ten'].lower())
+            elif col.get('hien_thi') == 'mart':
+                required.add(col['ten'].lower())
+    for schema, table, col in columns:
+        if col in hidden:
+            raise ValueError(f'Cột {col} chỉ được hiện ở silver nhưng có trong {schema}.{table}')
+    available = {col for schema, _, col in columns if schema == marts}
+    missing = required - available
+    if missing:
+        raise ValueError(f'Thiếu cột mart trong {marts}: ' + ', '.join(sorted(missing)))
+    return {'hidden_columns_checked': len(hidden), 'mart_columns_checked': len(required)}
 
 
 def _vars():
