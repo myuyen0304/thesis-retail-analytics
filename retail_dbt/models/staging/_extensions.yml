@@ -1,0 +1,6 @@
+version: 2
+models:
+  - name: stg_orders_enriched
+    description: 'Một dòng mỗi đơn được nhận từ phần mở rộng; chứa thuộc tính silver và dấu vết dòng nguồn.'
+  - name: dim_sales_employee
+    description: 'SCD Type 1, một dòng mỗi nhân viên; chỉ hiện mã, tên và số năm kinh nghiệm đã duyệt.'
