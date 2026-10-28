@@ -291,7 +291,8 @@ D:/retail-analytics/.venv/Scripts/python.exe -B -m pytest scripts -q -p no:cache
 
 | Lượt | Ngày | Kết quả | Phát hiện (mức nặng) | GPT đã sửa |
 |---|---|---|---|---|
-| 1 | 2026-10-28 | **Chưa đạt, sửa nhẹ**; phần lõi đúng, dữ liệu thật đạt | B1, B3 sửa theo phiếu; B2 thêm test; B4–B7 ghi nhận | |
+| 1 | 2026-10-28 | **Chưa đạt, sửa nhẹ**; phần lõi đúng, dữ liệu thật đạt | B1, B3 sửa theo phiếu; B2 thêm test; B4–B7 ghi nhận | B1–B4 (lượt 2) |
+| 2 | 2026-10-28 | **Đạt**, B1–B4 đã sửa đúng | không có lỗi mới; 1 ghi nhận (C18) | |
 
 ### Lượt 1 (2026-10-28)
 
@@ -328,6 +329,24 @@ D:/retail-analytics/.venv/Scripts/python.exe -B -m pytest scripts -q -p no:cache
 **Kết luận lượt 1:** sửa B1, B3; thêm test B1, B2, B3 và các test chọn ở B4; chạy lại ba lệnh §7 và hai lệnh §6.3 (kỳ vọng
 `5bd9a84aaf73` và `47e7cbe765d9` không đổi, vì dữ liệu thật không có ô khoảng trắng và không có khóa hỏng). Không cần
 sửa `runtime.py`, hợp đồng, hay phần nối CLI.
+
+### Lượt 2 (2026-10-28)
+
+GPT sửa `extension_prepare.py` (B1: R2 thêm `typed_key is not null`; B3: parquet ghi từ `original`, chỉ `nullif(x, '')`,
+kiểm R1–R6 vẫn trên giá trị chuẩn hóa) và tạo `scripts/ingest/tests/test_extensions_review.py` (14 test cho B1–B4).
+Không đổi `snapshot.py`, `cli.py`, YAML, test cũ, `runtime.py`; B5 để nguyên (untracked); B6 tùy chọn, chưa làm.
+
+**Claude kiểm:**
+- Hai file sửa/tạo không BOM. Ba lệnh §7: 114 đạt; 61 đạt, 2 skip; 207 đạt, 3 skip (khớp báo cáo).
+- Thử vô hiệu trên bản sao, 18 phép (17 phép lượt 1, với C13/C14 đảo lại thành bỏ bản sửa B1/B3, cộng C18):
+  **17 bị bắt**, gồm cả 8 chốt ở B4. Lọt 1: **C18** bỏ `nullif(x, '')` khi ghi parquet. Ghi nhận, không chặn: adapter
+  đọc CSV đã đưa ô rỗng về NULL nên `nullif` hiện là phòng hờ thừa (khác `prepare` lõi đọc bằng `csv` của Python).
+- Báo cáo GPT ghi §6.3 chạy lại trên context/snapshot có sẵn, tức là chưa dựng lại parquet bằng code mới. Claude dựng lại từ
+  đầu vào thư mục mới (`prepare --run-id l2-bat --root warehouse/pipeline/lat2-luot2-claude --extension orders_enriched`):
+  vẫn ra `47e7cbe765d9`; `manifest.json`, `orders_enriched.parquet`, `cach_ly/orders_enriched.csv`, `orders.parquet`
+  **trùng từng byte** với lượt 1. Đường tắt phần mở rộng không đổi code ở lượt này (mốc `5bd9a84aaf73` lượt 1 vẫn giữ).
+
+**Kết luận lượt 2: Đạt.** Commit theo từng file, trừ `verify_extension_mutations.py` (PM chốt không commit, B5).
 
 ## 10. Câu hỏi PM chốt trước khi giao
 
