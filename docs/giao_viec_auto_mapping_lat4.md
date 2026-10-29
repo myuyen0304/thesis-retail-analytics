@@ -286,6 +286,22 @@ Kỳ vọng, PM gửi Claude `warehouse/pipeline/docker/runs/<run>/context.json`
 P5 thay cho lượt local §6.5 của phiếu lát 3 (PM chưa chạy): stage `build` trong container dựng cả DuckDB lẫn Databricks, và `validate`
 so hai bên. Mốc của §6.5 lát 3 (dbt 224 node, `dim_sales_employee` 200 dòng) đọc trên log của P5.
 
+**Kết quả chạy (2026-10-28 → 10-29).**
+- P1–P3 đạt.
+- P4 đạt: release `5d32a10432ad4e338975a23a` ở trạng thái `ready`, chưa publish, là đích rollback. dbt 225/225 trên cả DuckDB và
+  Databricks; `cloud_parity: true`.
+- P5:
+  - `prepare` và `forecast` đạt: release `dbb80f5674af47fe9c98f796`, snapshot `47e7cbe765d9`, 0 dòng cách ly.
+  - `build` trượt ở bước nạp raw lên cloud với lỗi `QUOTA_EXCEEDED.UC_RESOURCE_QUOTA_EXCEEDED`. Databricks Free cho mỗi metastore
+    tối đa 500 bảng, trong khi catalog `retail_lab` có 552 bảng: 6 bộ `r_<release_id>_*`, mỗi bộ khoảng 80 bảng, chưa bộ nào được dọn.
+  - PM duyệt xóa 3 bộ cũ (236 bảng): `16bfafc5…` (không có trong registry), `cfe19211…` và `b25b3e47…`. Còn lại 316 bảng.
+  - Chạy lại `build` vẫn trượt, Databricks báo "estimated count 553": bảng đã xóa vẫn bị tính quota trong khoảng 7 ngày giữ để
+    `UNDROP`, và không có lệnh tự phục vụ để xóa hẳn ngay.
+  - PM chốt 2026-10-29: chờ Databricks xóa hẳn (khoảng 2026-11-05), rồi chạy lại `build` → `validate` với cùng run-id.
+    Từ giờ tới khi publish, DAG giữ tạm dừng; app/chat vẫn đọc `03ad08c0…`.
+- Hệ quả cho quy định giữ bản (chưa làm): một bản chiếm khoảng 80 bảng, bảng đã xóa còn chiếm quota thêm khoảng 7 ngày. Vì vậy
+  phải dọn bản cũ trước ít nhất một tuần, hoặc chỉ giữ khoảng 4 bản.
+
 **P6. Publish**, sau khi Claude rà P5 đạt. Lấy sẵn mã release đang phục vụ (`03ad08c0…`, đủ 24 ký tự) để rollback:
 
 ```powershell
