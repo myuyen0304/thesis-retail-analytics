@@ -9,7 +9,7 @@ Bảng email → role chỉ nằm trong secrets của bản deploy, không nằm
     [roles]
     admin = ["a@example.com"]
     quan_ly = ["b@example.com", "c@example.com"]
-Một email có ở nhiều role thì lấy role thấp nhất.
+Một email có ở nhiều role thì lấy role thấp nhất. Admin chọn được "Xem như role" ở thanh bên (chỉ hạ quyền).
 """
 import datetime as dt
 import json
@@ -49,6 +49,7 @@ PAGES_BY_ROLE = {
 DEFAULT_PAGE = {'khach': 'tong_quan', 'quan_ly': 'tong_quan', 'phan_tich': 'ps1_do_dung',
                 'ky_su': 'suc_khoe_du_lieu', 'admin': 'suc_khoe_du_lieu'}
 BACKEND_ROLES = ('ky_su', 'admin')       # được đổi backend ở thanh bên
+PREVIEW_KEY = 'xem_nhu_role'             # session_state của ô "Xem như role" (chỉ admin)
 
 # Mức nhạy cảm của cột (§7.1). Cột không có mức coi như 'cam'.
 LEVELS = ('cong_khai', 'noi_bo', 'lien_he', 'cam')
@@ -102,28 +103,42 @@ def logged_in_email() -> str | None:
     return st.user.get('email')
 
 
-def current_role() -> str:
+def real_role() -> str:
+    """Role thật của người đang xem, theo đăng nhập (có [auth]) hoặc RETAIL_APP_ROLE (chạy local)."""
     if auth_configured():
         return role_for(logged_in_email(), role_table())
     r = os.environ.get('RETAIL_APP_ROLE', 'khach').strip()
     return r if r in ROLES else 'khach'
 
 
+def current_role() -> str:
+    """Role dùng để hiện app: role thật, trừ khi admin chọn "Xem như" một role khác. Admin là role cao nhất nên ô này chỉ
+    hạ quyền; role khác chọn gì (session_state còn sót sau khi đăng xuất...) cũng bị bỏ qua."""
+    real = real_role()
+    xem = st.session_state.get(PREVIEW_KEY)
+    return xem if real == 'admin' and xem in ROLES else real
+
+
 def account_box(role: str) -> None:
-    """Ô tài khoản ở thanh bên: đăng nhập/đăng xuất khi có [auth], còn chạy local thì ghi role đang dùng."""
+    """Ô tài khoản ở thanh bên: đăng nhập/đăng xuất khi có [auth], còn chạy local thì ghi role đang dùng.
+    Admin có thêm ô "Xem như role" để kiểm hoặc demo app dưới mắt từng role bằng một tài khoản."""
     box = st.sidebar.container(border=True)
+    real = real_role()
     if not auth_configured():
-        box.caption(f'Role: **{LABEL[role]}** (chạy local, đặt bằng `RETAIL_APP_ROLE`)')
-        return
-    email = logged_in_email()
-    if email:
-        box.caption(f'{email}  \nRole: **{LABEL[role]}**')
+        box.caption(f'Role: **{LABEL[real]}** (chạy local, đặt bằng `RETAIL_APP_ROLE`)')
+    elif email := logged_in_email():
+        box.caption(f'{email}  \nRole: **{LABEL[real]}**')
         if box.button('Đăng xuất', icon=':material/logout:'):
             st.logout()
     else:
         box.caption('Bạn đang xem với quyền **Khách**. Đăng nhập để dùng thêm chức năng theo role.')
         if box.button('Đăng nhập bằng Google', icon=':material/login:'):
             st.login()
+    if real == 'admin':
+        box.selectbox('Xem như role', ROLES[::-1], key=PREVIEW_KEY, format_func=LABEL.get,
+                      help='Chỉ đổi cách app hiện ra cho bạn trong phiên này, không đổi quyền của ai.')
+        if role != real:
+            box.caption(f'Đang xem như **{LABEL[role]}**. Chọn lại Admin để về đủ quyền.')
 
 
 def column_view(role: str, level: str) -> str:
@@ -167,7 +182,7 @@ def audit(page: str, levels) -> None:
         _audit.propagate = False
     _audit.setLevel(logging.INFO)
     _audit.info(json.dumps({'ts': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'),
-                            'email': logged_in_email(), 'role': current_role(), 'page': page,
+                            'email': logged_in_email(), 'role': real_role(), 'xem_nhu': current_role(), 'page': page,
                             'levels': sorted(levels)}, ensure_ascii=False))
 
 
