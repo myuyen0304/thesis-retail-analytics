@@ -186,8 +186,47 @@ def test_ban_deploy_co_auth_chua_dang_nhap_la_khach(monkeypatch):
     at = AppTest.from_file(str(APP), default_timeout=60)
     at.secrets['auth'] = AUTH
     at.secrets['roles'] = BANG
+    at.session_state[roles.PREVIEW_KEY] = 'admin'                               # còn sót từ phiên admin trước
     at.run()                                                                    # env RETAIL_APP_ROLE=admin từ conftest
     assert not at.exception, at.exception
     assert _pages(at) == set(roles.PAGES_BY_ROLE['khach'])
-    assert not at.sidebar.radio
+    assert not at.sidebar.radio and not at.sidebar.selectbox
     assert [b.label for b in at.sidebar.button] == ['Đọc lại dữ liệu', 'Đăng nhập bằng Google']
+
+
+# --- Admin "Xem như role" ---
+
+def test_admin_xem_nhu_tung_role(monkeypatch):
+    monkeypatch.setenv('RETAIL_BACKEND', 'duckdb')
+    at = AppTest.from_file(str(APP), default_timeout=60).run()                 # role admin từ conftest
+    (chon,) = at.sidebar.selectbox
+    assert chon.label == 'Xem như role' and chon.value == 'admin'
+    for role in roles.ROLES:
+        chon.set_value(role).run()
+        assert not at.exception, at.exception
+        assert _pages(at) == set(roles.PAGES_BY_ROLE[role]), role
+        assert (len(at.sidebar.radio) == 1) == (role in roles.BACKEND_ROLES), role
+        (chon,) = at.sidebar.selectbox                                          # ô chọn vẫn còn để quay về admin
+        assert ('Đang xem như' in at.sidebar.caption[-1].value) == (role != 'admin'), role
+
+
+@pytest.mark.parametrize('role', [r for r in roles.ROLES if r != 'admin'])
+def test_khong_phai_admin_khong_nang_quyen_bang_xem_nhu(monkeypatch, role):
+    monkeypatch.setenv('RETAIL_BACKEND', 'duckdb')
+    monkeypatch.setenv('RETAIL_APP_ROLE', role)
+    at = AppTest.from_file(str(APP), default_timeout=60)
+    at.session_state[roles.PREVIEW_KEY] = 'admin'
+    at.run()
+    assert not at.exception, at.exception
+    assert _pages(at) == set(roles.PAGES_BY_ROLE[role])
+    assert not at.sidebar.selectbox
+
+
+def test_nhat_ky_ghi_ca_role_that_va_role_dang_xem(monkeypatch):
+    rows = []
+    h = logging.Handler()
+    h.emit = lambda rec: rows.append(rec.getMessage())
+    monkeypatch.setattr(roles._audit, 'handlers', [h])
+    monkeypatch.setattr(roles, 'current_role', lambda: 'quan_ly')
+    roles.audit('trang_thu', {'lien_he'})
+    assert '"role": "admin"' in rows[0] and '"xem_nhu": "quan_ly"' in rows[0]
