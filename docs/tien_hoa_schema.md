@@ -332,6 +332,27 @@ Prototype ở §9 chỉ chứng minh cơ chế trên bộ zip. Muốn nhận d�
 4. **Nạp tăng dần, idempotent**: dedup theo khóa nghiệp vụ, xử lý bản ghi đến muộn. Nhánh Kafka/A5 trong
    `docs/kien_truc_pipeline_tong.md` đang hoãn.
 
+### 8.1 Nhận thêm ngày doanh thu mới để model dự báo học lại (rà code 2026-10-29, chưa làm)
+
+Stage `forecast` đã train lại mỗi khi snapshot đổi, nhưng chỉ học từ `sales` và `promotions`, với feature suy ra từ lịch.
+Field mới như nhân viên không thành feature, vì tương lai không có giá trị của nó. Phần nặng không phải việc cho model học
+lại, mà là cả hệ thống đang mặc định dữ liệu dừng ở 2022-12-31. Có 4 phần:
+
+| Phần | Đang cố định ở đâu | Mức |
+|---|---|---|
+| 1. Nạp: bỏ số dòng cố định | `scripts/ingest/source_contract.py:21`: `sales` phải đúng 3.833 dòng; thêm 4 chỗ khác (`build_silver`, `ingest_raw`, `ingest/snapshot`, `assert_row_counts.sql`). Thay bằng kiểm theo manifest: ngày liền nhau, không trùng, không quay lùi | Vừa |
+| 2. Lịch | `retail_dbt/models/marts/dim_date.sql`: dải ngày cố định 2012-01-01 → 2024-07-01, `is_forecast_period` từ 2023-01-01. Cần suy ra từ ngày thực tế cuối | Nhẹ |
+| 3. Dự báo | `scripts/forecast/core.py:19` `H = 548`; vùng dự báo lấy từ `sample_submission` (cố định 2023-01-01, kiểm ở `scripts/forecast/stage.py:144`); backtest cố định 2020–2022; tiêu chí nghiệm thu so tháng 8/2023 với 8/2022 (`core.py:512`). Đổi sang tương đối theo ngày cuối; hợp đồng dự báo (`docs/hop_dong_du_bao.md`) phải duyệt lại | Vừa–nặng |
+| 4. Reporting, app, chat | Kỳ phân tích "2013–2022" viết cứng ở `apps/retail_app/ai_explain/tools.py` (`ANALYSIS_WINDOW`) và khoảng 6 model reporting; 4 giai đoạn PS2 BA chốt tới 2022; năm chưa đủ (vd. 2023) xử lý ra sao | Nặng, và là việc BA/BI |
+
+- "Nạp tăng dần" theo nghĩa thật (dbt incremental, chỉ xử lý phần mới) **không cần**: dữ liệu nhỏ, mỗi lượt dựng lại toàn
+  bộ từ snapshot vẫn nhanh và giữ được rollback. Chỉ cần cho phép snapshot dài thêm. Mục 4 ở trên dành cho lúc nhận batch thật.
+- Chưa có dữ liệu mới thật để thử. Cách chứng minh: phát lại, cắt dữ liệu tới 2021-12-31, chạy, rồi nạp thêm 2022. Hệ thống
+  phải tự nhận, model tự train lại, vùng dự báo tự dịch.
+- **Đề xuất chưa làm lúc này** (2026-10-29): sắp gặp giảng viên hướng dẫn, quota cloud đang sát, P5/P6 chưa xong; phần 4
+  thuộc BA/BI/DA, ngoài phạm vi data engineering PM đã chốt (§9 bước 6). Làm phần 1–3 mà không làm phần 4 thì hệ thống nhận
+  được dữ liệu mới nhưng app và chat vẫn chỉ hiện tới 2022.
+
 Ghi chú: bảng ở `docs/kien_truc_pipeline_tong.md` L59–61 ghi "chưa có hợp đồng dữ liệu… chưa xử lý đổi schema" và
 "tài liệu ghi kiểm header nhưng code chưa làm". Hai câu này **đã lỗi thời một phần**: header check đã có ở
 `scripts/pipeline/snapshot.py:53`, hợp đồng kiểu/khóa đã có ở `contract.py`. PM đồng ý, đã sửa dòng ô "Automation mapping
