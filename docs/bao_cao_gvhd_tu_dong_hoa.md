@@ -24,7 +24,7 @@ Lỗi ở bất kỳ bước nào thì không công bố, app tiếp tục đọ
 | **Lưu trữ** | DuckDB (local) và Databricks (production). Mỗi lượt dựng schema riêng `r_<release_id>_*`. Registry giữ danh sách bản đã đạt và con trỏ bản đang phục vụ | `cli history --target databricks` | Chạy thật |
 | **Cập nhật** | Airflow chạy lúc 08:00 mỗi ngày. Dữ liệu và code không đổi thì bỏ qua (`bo_qua`), đổi thì dựng bản mới. Dữ liệu mới có cấu trúc khác thì đi qua quy trình tiến hóa schema (§2) | `docs/automation_batch.md` mục Airflow Docker | Chạy thật với bộ Datathon. Bộ có nhân viên: đạt local, **chờ quota cloud** |
 | **Chính xác, nhất quán** | Cổng `validate`: Revenue/COGS từng ngày khớp `sales.csv`; trên cloud so từng dòng các bảng nghiệp vụ với bản DuckDB cùng snapshot (`cloud_parity`); chặn cột nhạy cảm lọt lên marts/reporting | P4: `cloud_parity: true`, 37 relation được so | Chạy thật |
-| **Sẵn sàng phục vụ** | App PS1–PS5, chat AI Explain và trang dự báo đọc cùng một bản đã công bố; stage `forecast` ghi dự báo vào `reporting.rpt_forecast_*` | App Databricks (`docs/databricks_app_van_hanh.md`) | Chạy thật với bộ Datathon. **Chiều nhân viên chưa có trên app/chat** (lát 5) |
+| **Sẵn sàng phục vụ** | App PS1–PS5, chat AI Explain và trang dự báo đọc cùng một bản đã công bố; stage `forecast` ghi dự báo vào `reporting.rpt_forecast_*` | App trên Streamlit Cloud (https://retail-analytics-ps.streamlit.app/, deploy từ nhánh `app/myuyen`), đọc bản đang phục vụ trên Databricks | Chạy thật với bộ Datathon. Chiều nhân viên dừng ở DWH, không đưa lên app/chat (phạm vi đề tài là data engineering) |
 
 ## 2. Câu hỏi riêng của giảng viên: dữ liệu mới thêm field hoặc JSON thì sao
 
@@ -71,7 +71,7 @@ Kể theo thứ tự này:
 |---|---|---|
 | Nạp tăng dần (incremental); hiện mỗi lượt dựng lại toàn bộ từ snapshot | Dữ liệu Datathon tĩnh; ưu tiên tính đúng và rollback | `docs/tien_hoa_schema.md` §8 |
 | Quy định giữ bản trên cloud | Mới lộ ra qua sự cố quota | §3 ở trên |
-| App/chat theo nhân viên bán hàng (lát 5) | Phải chờ DWH có `dim_sales_employee` trên cloud; BA định câu hỏi và metric trước | `docs/tien_hoa_schema.md` §9 bước 6 |
+| Phân tích theo nhân viên bán hàng trên app/chat | Ngoài phạm vi: phần tiến hóa schema chỉ chứng minh hệ thống tự nhận dữ liệu mới vào DWH; phân tích là việc của BA/BI, làm riêng nếu cần | `docs/tien_hoa_schema.md` §9 bước 6 |
 | Streaming (Kafka) | Hoãn theo quyết định 2026-10-11; pipeline chạy batch theo lịch | `docs/kien_truc_pipeline_tong.md` §4 |
 | Điều phối không phụ thuộc máy bật | Airflow chạy Docker trên laptop; máy tắt lúc 08:00 thì lỡ lượt, bản đang phục vụ giữ nguyên | `docs/automation_batch.md` mục Airflow Docker |
 
@@ -84,14 +84,16 @@ Kể theo thứ tự này:
 | 3 | `cli history --target databricks` | Mỗi stage một dòng: đạt, bỏ qua, lỗi (có dòng lỗi quota) |
 | 4 | `docs/tien_hoa_schema.md` §1 và báo cáo đề xuất ánh xạ của lát 1 | Trả lời câu hỏi dữ liệu mới thêm field hoặc JSON |
 | 5 | Kết quả lượt bật trên DuckDB (§2) | Có chiều nhân viên; cột nhạy cảm bị chặn; số Datathon không đổi |
-| 6 | App Databricks: trang Sức khỏe dữ liệu (thẻ "Bản dữ liệu đang phục vụ"), một trang PS, trang dự báo, hỏi chat một câu | Phân tích, trực quan hóa, dự báo đọc cùng một bản đã kiểm chứng |
+| 6 | App trên Streamlit Cloud, đăng nhập admin: trang Sức khỏe dữ liệu (thẻ "Bản dữ liệu đang phục vụ"), một trang PS, trang dự báo, hỏi chat một câu | Phân tích, trực quan hóa, dự báo đọc cùng một bản đã kiểm chứng |
 | 7 | §3 và §4 | Tình hình, sự cố quota, việc tiếp theo |
 
 ## 6. Chuẩn bị trước buổi gặp
 
 - Bật Docker Desktop và các container Airflow. **Không bỏ tạm dừng DAG**: nếu bật lại, lượt 08:00 sẽ thấy code mới khác bản
   đang phục vụ, sẽ build lại và trượt quota.
-- Trước giờ demo ít nhất 30 phút, bật app Databricks và bấm qua một lượt (`docs/databricks_app_van_hanh.md` §5).
+- Trước giờ demo ít nhất 30 phút, mở https://retail-analytics-ps.streamlit.app/ để đánh thức app, đăng nhập admin và bấm qua
+  một lượt. Khách không có trang chat và Sức khỏe dữ liệu (`docs/phan_quyen.md`), nên lúc demo dùng tài khoản admin; muốn cho
+  thấy từng role thì dùng ô "Xem như role". App trên Databricks tạm thời không dùng (PM chốt 2026-10-29).
 - Xem quota hiện tại (chỉ đọc):
 
   ```powershell
