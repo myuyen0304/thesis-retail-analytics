@@ -182,6 +182,10 @@ Phần còn lại:
   cần DB tài khoản để xem).
 - App public mở không cần đăng nhập, nên ai có link cũng thấy tên nhân viên và tên shipper (khi lát 5 đưa lên). PM chấp nhận
   (2026-10-29). `student_data` hiện là dữ liệu giả lập do giảng viên giao; hệ thống vẫn áp chuẩn dữ liệu thật ở §7.
+- Phân quyền chỉ bật trên bản public Streamlit Cloud (PM chốt 2026-10-29: app dùng để demo và kiểm là bản này). App trên
+  Databricks Apps chưa nối Neon (`deploy/databricks_app/app.yaml` không có `RETAIL_APP_DB_URL`), nên **không deploy lại app
+  Databricks bằng code phân quyền**: thiếu DB tài khoản thì mọi người là khách, mất trang chat và Sức khỏe dữ liệu. Muốn bật
+  thì đưa chuỗi kết nối Neon vào secret scope, thêm `RETAIL_APP_DB_URL` (valueFrom) vào `app.yaml` và kiểm app ra được Neon.
 - Không dựng lại image Airflow có code phân quyền trước khi lát 4 auto mapping publish xong: sửa `apps/retail_app` đổi
   `code_version`, pipeline sẽ build thêm một bộ khoảng 80 bảng trong khi catalog đang vượt quota 500 bảng (2026-10-28).
 
