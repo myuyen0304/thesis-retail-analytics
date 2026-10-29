@@ -406,12 +406,11 @@ data" ngày 2026-10-27. Ô "Raw Data" giữ nguyên: câu "code chưa làm" vẫ
      1. Chạy target databricks với `extension` **tắt**. Phải cho ra cùng snapshot_id, và `validate` qua: chứng minh bộ Datathon không đổi.
      2. Bật `extension`: ra snapshot_id mới, qua `validate`, rồi `publish`. Lệnh rollback về release trước phải sẵn trước khi publish.
    - Registry của target databricks nằm trên cloud: `publish` đổi con trỏ đang phục vụ app và chat. Không có lượt "chạy thử riêng".
-   - **Lát app/chat** (PM chốt 2026-10-28: app/chat phải hiển thị chiều nhân viên bán hàng). Làm sau khi DWH có `dim_sales_employee`:
-     - trước tiên, BA định câu hỏi nghiệp vụ, metric, grain và tiêu chí nghiệm thu, theo skill `retail-metric-design`;
-     - BI: thêm bộ lọc hoặc trang theo nhân viên, theo skill `retail-bi-product`;
-     - chat: chỉ mở loại câu hỏi mà backend đã kiểm chứng (`docs/ai_explain_plan.md` AI0–AI1).
-     - App/chat hiện mã `sales_employee_id`, tên `sales_employee_name` và `years_experience`. Không hiện tình trạng hôn nhân và học vấn.
-     - Cổng cloud có thêm: app/chat đọc release mới vẫn qua bộ kiểm hồi quy hiện có.
+   - **Phạm vi dừng ở data engineering** (PM chốt 2026-10-29, thay cho "lát app/chat" chốt 2026-10-28). Mục tiêu là chứng minh
+     hệ thống tự động nhận được dữ liệu mới từ bên ngoài và đồng bộ với thiết kế, tới `dim_sales_employee` trên DWH Databricks.
+     Không làm phần BA/BI/DA cho chiều này: không thêm metric, trang, bộ lọc hay câu hỏi chat theo nhân viên.
+     - Sau `publish`, app và chat vẫn chạy như cũ trên release mới: số PS1–PS5 của bộ Datathon không đổi.
+     - Nếu sau này cần phân tích theo nhân viên thì làm thành việc riêng, bắt đầu từ BA (skill `retail-metric-design`).
 
 ## 10. Câu hỏi PM/BA đã chốt (2026-10-27)
 
@@ -422,6 +421,6 @@ data" ngày 2026-10-27. Ô "Raw Data" giữ nguyên: câu "code chưa làm" vẫ
 | 3 | PII (tên nhân viên, tên và SĐT shipper) | **Bỏ hẳn khỏi mart**; chỉ nằm ở raw/silver; không vào ngữ cảnh chat hay kho RAG. *Bổ sung 2026-10-28:* tình trạng hôn nhân và trình độ học vấn (của nhân viên và shipper) cũng tính là nhạy cảm, xử lý như PII. *Sửa 2026-10-28 (PM):* **tên nhân viên bán hàng được đưa lên mart và hiện trên app/chat**; **tên và SĐT shipper cũng được hiện**; chỉ tình trạng hôn nhân và học vấn (của nhân viên và shipper) vẫn ẩn, không lên mart, app, chat hay RAG |
 | 4 | `eprom` | **Giữ ở silver** (`promotions_ext`), không lên star |
 | 5 | `comment` của đơn | **Giữ ở silver** (`order_sales_rep`), không lên star cho tới khi có câu hỏi nghiệp vụ cần |
-| 6 | Phạm vi chạy (2026-10-28) | **Phải chạy được trên production Databricks.** Bỏ giới hạn "chỉ local, không publish" của lúc chọn phạm vi. Bước 3–5 vẫn làm local trước; đường lên cloud ở §9 bước 6. **Phạm vi production gồm:** bảng mới trong DWH Databricks, và app/chat trên Databricks hiển thị chiều nhân viên bán hàng. Theo mục 3 (sửa 2026-10-28), `dim_sales_employee` trên mart gồm `sales_employee_id`, `sales_employee_name` và `years_experience`; tình trạng hôn nhân và học vấn không lên mart hay app/chat |
+| 6 | Phạm vi chạy (2026-10-28) | **Phải chạy được trên production Databricks.** Bỏ giới hạn "chỉ local, không publish" của lúc chọn phạm vi. Bước 3–5 vẫn làm local trước; đường lên cloud ở §9 bước 6. **Phạm vi production gồm:** bảng mới trong DWH Databricks, và app/chat trên Databricks hiển thị chiều nhân viên bán hàng. *Sửa 2026-10-29 (PM):* phạm vi dừng ở data engineering, tức bảng mới trong DWH Databricks; **không** đưa chiều nhân viên lên app/chat (§9 bước 6). Theo mục 3 (sửa 2026-10-28), `dim_sales_employee` trên mart gồm `sales_employee_id`, `sales_employee_name` và `years_experience`; tình trạng hôn nhân và học vấn không lên mart hay app/chat |
 
 Thêm: mức tự động của auto mapping là **tự đề xuất, BA duyệt** (§5b).
