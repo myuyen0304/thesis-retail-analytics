@@ -9,6 +9,7 @@ from dwh import forecast_queries
 from dwh import queries
 from dwh import releases
 from dwh.connection import default_backend, describe, enabled_backends, release_for_read
+from ui import roles
 from ui.fmt import num, pct, ty
 
 BACKEND_LABEL = {'postgres': 'PostgreSQL (Docker)', 'duckdb': 'DuckDB (file, dự phòng)',
@@ -23,17 +24,21 @@ def backend() -> str:
     return st.session_state.backend
 
 
-def sidebar() -> None:
+def sidebar(role: str) -> None:
     releases.reset()
     backend()
     st.session_state._reads = {}          # bảng đã đọc trong lượt chạy này (report_reads liệt kê lại)
     st.session_state._collapse_source = False
-    st.sidebar.radio('Nguồn dữ liệu', enabled_backends(), key='backend', format_func=BACKEND_LABEL.get)
+    if role in roles.BACKEND_ROLES:
+        st.sidebar.radio('Nguồn dữ liệu', enabled_backends(), key='backend', format_func=BACKEND_LABEL.get)
+    else:                                 # người dùng nghiệp vụ luôn đọc backend mặc định của bản deploy
+        st.session_state.backend = default_backend()
     if st.session_state.get('ai_backend') != backend():
         st.session_state.ai_turns, st.session_state.ai_tokens, st.session_state.ai_backend = [], 0, backend()
     if st.sidebar.button('Đọc lại dữ liệu'):
         st.cache_data.clear()
         st.session_state.reloaded = True   # report_reads sẽ báo thành công sau khi trang đọc xong
+    roles.account_box(role)
 
 
 @st.cache_data(ttl=600, show_spinner=False)

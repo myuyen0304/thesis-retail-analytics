@@ -12,6 +12,7 @@ dbt-duckdb==1.11.0      # target dev
 dbt-postgres==1.11.0    # target dev chính (PostgreSQL local, docker-compose.yml)
 psycopg[binary]==3.3.6  # scripts/ingest/ingest_raw.py
 streamlit==1.64.0       # app phân tích GĐ 2: apps/retail_app/ (docs/gd2_app_plan.md)
+Authlib==1.9.1          # st.login cho đăng nhập theo role (docs/phan_quyen.md §5), cài 2026-10-29
 databricks-sql-connector==4.4.0  # app đọc DWH Databricks lab (backend 'databricks'), đăng nhập OAuth
 databricks-sdk==0.117.0           # lấy token từ profile Databricks CLI cho app + scripts/parity
 openai==3.24.0          # AI Explain: client chuẩn OpenAI, dev gọi DeepSeek (apps/retail_app/ai_explain/provider.py)
