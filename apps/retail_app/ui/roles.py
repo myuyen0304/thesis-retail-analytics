@@ -1,24 +1,29 @@
 """Phân quyền theo role trong app (docs/phan_quyen.md §3.1, §5, §7).
 
-Role xác định một lần mỗi lượt chạy, theo thứ tự (fail closed, §4 mục 7):
-- có `[auth]` trong secrets: đã đăng nhập (st.login, OIDC) → tra email trong `[roles]`; chưa đăng nhập, email lạ,
-  email chưa xác minh → khách. Lúc này biến môi trường RETAIL_APP_ROLE không có tác dụng;
-- không có `[auth]` (chạy local để dev): đọc RETAIL_APP_ROLE, mặc định khách.
+Tài khoản là username + mật khẩu do admin tạo, lưu ở Postgres riêng của app (ui/auth_store.py). Chuỗi kết nối:
+biến môi trường RETAIL_APP_DB_URL, hoặc secrets
+    [app_db]
+    url = "postgresql://..."
 
-Bảng email → role chỉ nằm trong secrets của bản deploy, không nằm trong repo:
-    [roles]
-    admin = ["a@example.com"]
-    quan_ly = ["b@example.com", "c@example.com"]
-Một email có ở nhiều role thì lấy role thấp nhất. Admin chọn được "Xem như role" ở thanh bên (chỉ hạ quyền).
+Role xác định một lần mỗi lượt chạy, theo thứ tự (fail closed, §4 mục 7):
+- có chuỗi kết nối: đã đăng nhập trong phiên này → role của tài khoản, đọc lại từ DB (cache 30 giây); chưa đăng nhập,
+  tài khoản bị khóa / không còn, chưa đổi mật khẩu tạm, DB lỗi → khách. Lúc này RETAIL_APP_ROLE không có tác dụng;
+- không có (chạy local để dev): đọc RETAIL_APP_ROLE, mặc định khách.
+
+Phiên chỉ nằm trong session_state trên server: tải lại trang (F5) là phải đăng nhập lại (PM chấp nhận 2026-10-29).
+Admin chọn được "Xem như role" ở thanh bên (chỉ hạ quyền).
 """
 import datetime as dt
 import json
 import logging
 import os
 import re
+import time
 
 import pandas as pd
 import streamlit as st
+
+from ui import auth_store
 
 ROLES = ('khach', 'quan_ly', 'phan_tich', 'ky_su', 'admin')          # thấp → cao
 LABEL = {'khach': 'Khách', 'quan_ly': 'Quản lý', 'phan_tich': 'DA/BI', 'ky_su': 'Data engineer', 'admin': 'Admin'}
@@ -50,6 +55,7 @@ DEFAULT_PAGE = {'khach': 'tong_quan', 'quan_ly': 'tong_quan', 'phan_tich': 'ps1_
                 'ky_su': 'suc_khoe_du_lieu', 'admin': 'suc_khoe_du_lieu'}
 BACKEND_ROLES = ('ky_su', 'admin')       # được đổi backend ở thanh bên
 PREVIEW_KEY = 'xem_nhu_role'             # session_state của ô "Xem như role" (chỉ admin)
+SESSION_KEY = 'tai_khoan'                # session_state: username đã đăng nhập trong phiên này
 
 # Mức nhạy cảm của cột (§7.1). Cột không có mức coi như 'cam'.
 LEVELS = ('cong_khai', 'noi_bo', 'lien_he', 'cam')
@@ -64,49 +70,85 @@ def _rank(role: str) -> int:
     return ROLES.index(role)
 
 
-def role_for(email: str | None, table) -> str:
-    """Role của một email theo bảng {role: [email, ...]}. Không phân biệt hoa thường; email lạ → khách."""
-    if not email:
-        return 'khach'
-    e = email.strip().lower()
-    for role in ROLES[1:]:                        # thấp → cao: email có ở nhiều role thì lấy role thấp nhất
-        if any(e == str(x).strip().lower() for x in (table.get(role) or ())):
-            return role
-    return 'khach'
-
-
 def allowed(role: str, key: str) -> bool:
     return key in PAGES_BY_ROLE.get(role, ())
 
 
+def db_url() -> str | None:
+    """Chuỗi kết nối DB tài khoản: RETAIL_APP_DB_URL, hoặc [app_db] url trong secrets. Không có file secrets thì Streamlit
+    raise, coi như không có."""
+    url = os.environ.get('RETAIL_APP_DB_URL', '').strip()
+    if url:
+        return url
+    try:
+        return str(st.secrets['app_db']['url']).strip() or None
+    except Exception:
+        return None
+
+
 def auth_configured() -> bool:
-    """Bản deploy có cấu hình đăng nhập không. Không có file secrets thì Streamlit raise, coi như không có."""
-    try:
-        return 'auth' in st.secrets
-    except Exception:
-        return False
+    """Bản deploy có bật đăng nhập không (có DB tài khoản)."""
+    return bool(db_url())
 
 
-def role_table() -> dict:
-    try:
-        return {k: list(v) for k, v in st.secrets['roles'].items()}
-    except Exception:
-        return {}
+@st.cache_resource(show_spinner=False)
+def _store(url: str) -> auth_store.Store:
+    s = auth_store.Store(url)
+    s.init()                                    # tạo schema/bảng nếu chưa có; lỗi thì không cache, lượt sau thử lại
+    return s
 
 
-def logged_in_email() -> str | None:
-    """Email đã xác minh của người đang đăng nhập; chưa đăng nhập hoặc nhà cung cấp báo email chưa xác minh → None."""
-    if not auth_configured() or not st.user.get('is_logged_in'):
+_db_down_until = 0.0     # DB vừa lỗi thì 60 giây không thử lại: khách không phải chờ timeout kết nối ở mỗi lượt bấm
+
+
+def store() -> auth_store.Store | None:
+    """Kho tài khoản; None khi chưa cấu hình hoặc không kết nối được (khi đó mọi người là khách)."""
+    global _db_down_until
+    url = db_url()
+    if not url or time.monotonic() < _db_down_until:
         return None
-    if st.user.get('email_verified') is False:
+    try:
+        return _store(url)
+    except Exception:
+        _db_down_until = time.monotonic() + 60
         return None
-    return st.user.get('email')
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def _account(url: str, username: str) -> dict | None:
+    s = store()
+    if s is None:
+        raise RuntimeError('không kết nối được DB tài khoản')    # raise để không cache
+    return s.get(username)
+
+
+def logged_in_user() -> dict | None:
+    """Tài khoản đang đăng nhập trong phiên, đọc lại từ DB mỗi 30 giây: admin khóa hay đổi role thì có hiệu lực nhanh.
+    Tài khoản không còn / bị khóa / role lạ → bỏ phiên. DB lỗi → None (khách) nhưng giữ phiên, DB lên lại thì dùng tiếp."""
+    name = st.session_state.get(SESSION_KEY)
+    if not name or not auth_configured():
+        return None
+    try:
+        u = _account(db_url(), name)
+    except Exception:
+        return None
+    if not u or u['disabled'] or u['role'] not in ROLES[1:]:
+        logout()
+        return None
+    return u
+
+
+def logout() -> None:
+    st.session_state.pop(SESSION_KEY, None)
+    st.session_state.pop(PREVIEW_KEY, None)
 
 
 def real_role() -> str:
-    """Role thật của người đang xem, theo đăng nhập (có [auth]) hoặc RETAIL_APP_ROLE (chạy local)."""
+    """Role thật của người đang xem, theo tài khoản đăng nhập (có DB tài khoản) hoặc RETAIL_APP_ROLE (chạy local).
+    Tài khoản còn mật khẩu tạm (must_change) là khách tới khi đổi xong."""
     if auth_configured():
-        return role_for(logged_in_email(), role_table())
+        u = logged_in_user()
+        return u['role'] if u and not u['must_change'] else 'khach'
     r = os.environ.get('RETAIL_APP_ROLE', 'khach').strip()
     return r if r in ROLES else 'khach'
 
@@ -119,21 +161,66 @@ def current_role() -> str:
     return xem if real == 'admin' and xem in ROLES else real
 
 
+def _login_form(box) -> None:
+    s = store()
+    if s is None:
+        box.warning('Đăng nhập tạm không dùng được (không kết nối được cơ sở dữ liệu tài khoản). Bạn vẫn xem được với '
+                    'quyền **Khách**.')
+        return
+    box.caption('Bạn đang xem với quyền **Khách**. Đăng nhập để dùng thêm chức năng theo role.')
+    with box.expander('Đăng nhập', icon=':material/login:'):
+        with st.form('dang_nhap', border=False, clear_on_submit=True):
+            ten = st.text_input('Tên đăng nhập', autocomplete='username')
+            mk = st.text_input('Mật khẩu', type='password', autocomplete='current-password')
+            gui = st.form_submit_button('Đăng nhập')
+        if gui:
+            u, err = s.login(ten, mk)
+            if u:
+                logout()                         # bỏ trạng thái của phiên trước (Xem như role...)
+                st.session_state[SESSION_KEY] = u['username']
+                _account.clear()
+                st.rerun()
+            st.error(err)
+
+
+def _change_password_form(box, username: str, *, expanded: bool) -> None:
+    with box.expander('Đổi mật khẩu', icon=':material/key:', expanded=expanded):
+        with st.form('doi_mat_khau', border=False, clear_on_submit=True):
+            cu = st.text_input('Mật khẩu hiện tại', type='password', autocomplete='current-password')
+            moi = st.text_input(f'Mật khẩu mới (ít nhất {auth_store.MIN_LEN} ký tự)', type='password',
+                                autocomplete='new-password')
+            lai = st.text_input('Nhập lại mật khẩu mới', type='password', autocomplete='new-password')
+            gui = st.form_submit_button('Đổi mật khẩu')
+        if gui:
+            s = store()
+            err = ('Hai lần nhập mật khẩu mới không khớp.' if moi != lai else
+                   'Không kết nối được cơ sở dữ liệu tài khoản.' if s is None else s.change_password(username, cu, moi))
+            if err is None:
+                st.session_state['_doi_mk_xong'] = True
+                _account.clear()
+                st.rerun()
+            st.error(err)
+
+
 def account_box(role: str) -> None:
-    """Ô tài khoản ở thanh bên: đăng nhập/đăng xuất khi có [auth], còn chạy local thì ghi role đang dùng.
-    Admin có thêm ô "Xem như role" để kiểm hoặc demo app dưới mắt từng role bằng một tài khoản."""
+    """Ô tài khoản ở thanh bên: form đăng nhập / đổi mật khẩu / đăng xuất khi có DB tài khoản, còn chạy local thì ghi role
+    đang dùng. Admin có thêm ô "Xem như role" để kiểm hoặc demo app dưới mắt từng role bằng một tài khoản."""
     box = st.sidebar.container(border=True)
     real = real_role()
     if not auth_configured():
         box.caption(f'Role: **{LABEL[real]}** (chạy local, đặt bằng `RETAIL_APP_ROLE`)')
-    elif email := logged_in_email():
-        box.caption(f'{email}  \nRole: **{LABEL[real]}**')
-        if box.button('Đăng xuất', icon=':material/logout:'):
-            st.logout()
+    elif (u := logged_in_user()) is None:
+        _login_form(box)
     else:
-        box.caption('Bạn đang xem với quyền **Khách**. Đăng nhập để dùng thêm chức năng theo role.')
-        if box.button('Đăng nhập bằng Google', icon=':material/login:'):
-            st.login()
+        box.caption(f'**{u["username"]}**  \nRole: **{LABEL[u["role"]]}**')
+        if st.session_state.pop('_doi_mk_xong', False):
+            box.success('Đã đổi mật khẩu.')
+        if u['must_change']:
+            box.warning('Bạn đang dùng mật khẩu tạm. Đổi mật khẩu để dùng chức năng của role.')
+        _change_password_form(box, u['username'], expanded=u['must_change'])
+        if box.button('Đăng xuất', icon=':material/logout:'):
+            logout()
+            st.rerun()
     if real == 'admin':
         box.selectbox('Xem như role', ROLES[::-1], key=PREVIEW_KEY, format_func=LABEL.get,
                       help='Chỉ đổi cách app hiện ra cho bạn trong phiên này, không đổi quyền của ai.')
@@ -181,9 +268,17 @@ def audit(page: str, levels) -> None:
         _audit.addHandler(h)
         _audit.propagate = False
     _audit.setLevel(logging.INFO)
+    u = logged_in_user()
+    name = u['username'] if u else None
     _audit.info(json.dumps({'ts': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'),
-                            'email': logged_in_email(), 'role': real_role(), 'xem_nhu': current_role(), 'page': page,
+                            'user': name, 'role': real_role(), 'xem_nhu': current_role(), 'page': page,
                             'levels': sorted(levels)}, ensure_ascii=False))
+    s = store()
+    if s and name:                              # bản deploy: ghi thêm vào app_auth.audit (trang Phân quyền đọc lại)
+        try:
+            s.log(name, 'xem_nhay_cam', {'page': page, 'levels': sorted(levels), 'xem_nhu': current_role()})
+        except Exception:
+            pass                                # đã có dòng stderr ở trên; lỗi DB không làm hỏng trang
 
 
 def view_frame(df: pd.DataFrame, levels: dict, page: str) -> pd.DataFrame:
