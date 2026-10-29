@@ -275,6 +275,17 @@ def test_admin_tao_tai_khoan_tren_trang_phan_quyen(monkeypatch, co_auth):
     assert mk.value not in str(co_auth.recent_log(100))
 
 
+def test_trang_phan_quyen_hien_trang_thai_tai_khoan(monkeypatch, co_auth):
+    for _ in range(auth_store.MAX_FAIL):
+        co_auth.login('de1', 'sai-mat-khau-1')
+    at = _app(monkeypatch).run()
+    _dang_nhap(at, 'admin1', MK)
+    at.switch_page('views/phan_quyen.py').run()
+    assert not at.exception, at.exception
+    bang = at.main.dataframe[0].value.set_index('Tên đăng nhập')['Trạng thái'].to_dict()
+    assert bang == {'admin1': 'Đang dùng', 'de1': 'Tạm khóa (sai mật khẩu nhiều lần)', 'ql1': 'Chưa đổi mật khẩu tạm'}
+
+
 def test_admin_khoa_tai_khoan_dang_dung(monkeypatch, co_auth):
     at = _app(monkeypatch).run()
     _dang_nhap(at, 'de1', MK)
