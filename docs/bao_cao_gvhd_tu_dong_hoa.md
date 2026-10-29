@@ -41,7 +41,16 @@ Trả lời chi tiết: `docs/tien_hoa_schema.md` §1 và §5. Tóm lại có 4 
 4. **Bộ Datathon không bị ảnh hưởng:** chạy với phần mở rộng tắt thì ra đúng snapshot cũ `5bd9a84aaf73`; lượt tắt trên Databricks
    (P4) qua mọi cổng.
 
-**Lượt bật trên DuckDB (bằng chứng mới nhất, code đang ở `main`):** ⏳ đang chạy, Claude điền số khi xong.
+**Lượt bật trên DuckDB (bằng chứng mới nhất, code đang ở `main`).** Chạy 2026-10-29 trong container Airflow, run
+`demo-lat4-bat-01`, root `warehouse/pipeline/demo-lat4`, `code_version` `3b75826ca5b6…`. Không đụng Databricks.
+- `prepare` → `forecast` → `build` → `validate` đều đạt. Release `49f48974a5fe4c3a8bfe60c7`, snapshot `47e7cbe765d9`,
+  phần mở rộng `orders_enriched`.
+- dbt 231/231 node đạt: 65 model và seed, 166 test.
+- Cổng `validate`: G/COGS khớp `sales` ở cả 3.833 ngày; 38 relation được kiểm; 3 cột nhạy cảm được kiểm là không lọt lên
+  marts/reporting; 3 cột hiển thị của chiều nhân viên có mặt.
+- `dim_sales_employee` có 200 dòng, gồm `sales_employee_sk`, `sales_employee_id`, `sales_employee_name`, `years_experience`.
+  Không có cột `marital_status` hay `education_level` ở marts/reporting.
+- Cả 646.945 đơn trong `fact_order` đều gắn được nhân viên: `sales_employee_sk` không có dòng nào null.
 
 ## 3. Báo cáo tình hình: sự cố quota trên Databricks
 
