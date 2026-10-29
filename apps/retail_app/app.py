@@ -3,7 +3,8 @@
 Chạy từ root repo:
     .venv/Scripts/streamlit.exe run apps/retail_app/app.py
 Chọn backend mặc định bằng biến môi trường RETAIL_BACKEND=postgres|duckdb|databricks (role kỹ thuật đổi được ở thanh bên).
-Role (docs/phan_quyen.md): bản deploy đăng nhập bằng st.login; chạy local thì đặt RETAIL_APP_ROLE=khach|quan_ly|phan_tich|ky_su|admin.
+Role (docs/phan_quyen.md): bản deploy đăng nhập bằng tài khoản admin tạo (ui/roles.py, DB tài khoản [app_db]);
+chạy local không có DB tài khoản thì đặt RETAIL_APP_ROLE=khach|quan_ly|phan_tich|ky_su|admin.
 """
 import streamlit as st
 
