@@ -13,6 +13,7 @@ import streamlit as st
 from ai_explain import links, page_explain, provider, service, tools
 from dwh.connection import release_for_read
 from dwh.guarded import ai_databricks_principal
+from ui import roles
 from ui.common import BACKEND_LABEL, backend, load_or_stop
 from ui.fmt import arrow_safe
 
@@ -120,4 +121,5 @@ def ai_panel(req: page_explain.PageRequest) -> None:
     with st.container(border=True, key=key):
         st.markdown(':violet[**:material/auto_awesome: AI diễn giải**]')
         _body(req)
-    st.page_link(CHAT_PAGE, label='Muốn hỏi câu khác? Mở trang Hỏi dữ liệu (AI)', icon=':material/forum:')
+    if roles.allowed(roles.current_role(), 'ai_explain'):     # khách không có trang chat (docs/phan_quyen.md §3.1)
+        st.page_link(CHAT_PAGE, label='Muốn hỏi câu khác? Mở trang Hỏi dữ liệu (AI)', icon=':material/forum:')
