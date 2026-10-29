@@ -51,6 +51,10 @@ Cách làm: dev và test ở local (DuckDB/PostgreSQL) trước, đạt rồi m�
 không chạy cloud, không sửa hay đối soát nhánh Snowflake. Code Snowflake đã xóa khỏi repo ngày 2026-10-21 (PM chốt D4). Tài liệu cũ gọi Snowflake là production / đích demo GĐ3 là lịch sử.
 Chữ "snowflake schema" (kiểu mô hình dữ liệu, `docs/star_schema.md`) là chuyện khác, không đổi.
 
+**Thêm ngày 2026-10-29 (PM chốt):** app có thêm **một Postgres ngoài trên Neon, chỉ để lưu tài khoản đăng nhập và nhật ký
+truy cập** của app (`docs/phan_quyen.md` §5). Đây không phải DWH: **Databricks vẫn là kho dữ liệu duy nhất**, không đưa bảng
+nghiệp vụ nào sang Neon.
+
 **Đổi ngày 2026-10-11 (thầy hướng dẫn giao GĐ2, PM/BA chốt):** dự báo trở lại thành **lõi của GĐ2**.
 Theo sơ đồ `docs/references/pipeline-gd2.jpg`, thứ tự ưu tiên là:
 - ① dự báo time series (ARIMA, log + SARIMAX, LSTM là model **thầy gợi ý, không bắt buộc**; PM xác nhận 2026-10-13 được dùng model khác, chọn bằng backtest, xem `docs/chon_model_du_bao.md`);

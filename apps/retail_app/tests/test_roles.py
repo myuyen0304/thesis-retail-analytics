@@ -8,28 +8,14 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 import conftest
-from ui import roles
+from ui import auth_store, roles
 
 APP = Path(__file__).resolve().parents[1] / 'app.py'
 VIEWS = Path(__file__).resolve().parents[1] / 'views'
-BANG = {'admin': ['Admin@Shop.vn'], 'quan_ly': ['ql@shop.vn', 'hai@shop.vn'], 'phan_tich': ['hai@shop.vn'],
-        'ky_su': [' de@shop.vn '], 'giam_doc': ['gd@shop.vn']}
-AUTH = {'redirect_uri': 'http://localhost:8501/oauth2callback', 'cookie_secret': 'x' * 32, 'client_id': 'id',
-        'client_secret': 'secret', 'server_metadata_url': 'https://accounts.google.com/.well-known/openid-configuration'}
+MK = 'mat-khau-dai-1'
 
 
 # --- Hàm thuần ---
-
-@pytest.mark.parametrize('email, role', [
-    ('admin@shop.vn', 'admin'),                  # không phân biệt hoa thường
-    ('de@shop.vn', 'ky_su'),                     # bỏ khoảng trắng thừa trong secrets
-    ('hai@shop.vn', 'quan_ly'),                  # có ở hai role → lấy role thấp hơn
-    ('gd@shop.vn', 'khach'),                     # tên role lạ trong secrets bị bỏ qua
-    ('la@shop.vn', 'khach'), (None, 'khach'), ('', 'khach'),
-])
-def test_role_for(email, role):
-    assert roles.role_for(email, BANG) == role
-
 
 def test_ma_tran_trang(monkeypatch):
     monkeypatch.setattr(roles, 'DEFAULT_PAGE', conftest.DEFAULT_PAGE)
@@ -116,24 +102,65 @@ class _SecretsHong:
 
 def test_khong_co_file_secrets_thi_khong_auth(monkeypatch):
     monkeypatch.setattr(roles.st, 'secrets', _SecretsHong())
-    assert conftest.AUTH_CONFIGURED() is False
+    assert roles.db_url() is None and conftest.AUTH_CONFIGURED() is False
     monkeypatch.setattr(roles, 'auth_configured', conftest.AUTH_CONFIGURED)
-    assert roles.role_table() == {} and roles.current_role() == 'admin'       # env của conftest, vì không có [auth]
+    assert roles.store() is None and roles.current_role() == 'admin'           # env của conftest, vì không có DB tài khoản
 
 
-@pytest.mark.parametrize('user, role', [
-    ({}, 'khach'),                                                              # chưa đăng nhập
-    ({'is_logged_in': True, 'email': 'ADMIN@shop.vn', 'email_verified': True}, 'admin'),
-    ({'is_logged_in': True, 'email': 'admin@shop.vn', 'email_verified': False}, 'khach'),   # email chưa xác minh
-    ({'is_logged_in': True, 'email': 'la@gmail.com', 'email_verified': True}, 'khach'),
-    ({'is_logged_in': True, 'email': 'ql@shop.vn'}, 'quan_ly'),
+def test_chuoi_ket_noi_tu_env_hoac_secrets(monkeypatch):
+    monkeypatch.setattr(roles.st, 'secrets', {'app_db': {'url': ' postgresql://tu-secrets '}})
+    assert roles.db_url() == 'postgresql://tu-secrets'
+    monkeypatch.setenv('RETAIL_APP_DB_URL', 'postgresql://tu-env')
+    assert roles.db_url() == 'postgresql://tu-env'
+    monkeypatch.setattr(roles.st, 'secrets', {'auth': {}, 'roles': {'admin': ['a@b.c']}})    # cấu hình Google cũ: không còn tác dụng
+    monkeypatch.delenv('RETAIL_APP_DB_URL')
+    assert roles.db_url() is None
+
+
+@pytest.fixture
+def co_auth(monkeypatch, kho_tai_khoan):
+    """Bật đăng nhập với kho tài khoản tạm: admin1 (admin), de1 (data engineer, đã đổi mật khẩu), ql1 (quản lý, còn mật khẩu
+    tạm). RETAIL_APP_ROLE=admin của conftest vẫn còn để kiểm env không nâng quyền."""
+    s = kho_tai_khoan
+    s.create('admin1', 'admin', MK, None, must_change=False)
+    s.create('de1', 'ky_su', MK, 'admin1', must_change=False)
+    s.create('ql1', 'quan_ly', MK, 'admin1')
+    monkeypatch.setattr(roles, 'db_url', lambda: 'postgresql://kho-test')
+    monkeypatch.setattr(roles, 'store', lambda: s)
+    monkeypatch.setattr(roles, 'auth_configured', conftest.AUTH_CONFIGURED)
+    return s
+
+
+@pytest.mark.parametrize('phien, role', [
+    ({}, 'khach'),                                # chưa đăng nhập: env admin không có tác dụng
+    ({'tai_khoan': 'admin1'}, 'admin'),
+    ({'tai_khoan': 'de1'}, 'ky_su'),
+    ({'tai_khoan': 'ql1'}, 'khach'),              # còn mật khẩu tạm
+    ({'tai_khoan': 'khong_co'}, 'khach'),
 ])
-def test_co_auth_env_khong_nang_quyen(monkeypatch, user, role):
-    monkeypatch.setattr(roles, 'auth_configured', lambda: True)
-    monkeypatch.setattr(roles, 'role_table', lambda: BANG)
-    monkeypatch.setattr(roles.st, 'user', user)
-    monkeypatch.setenv('RETAIL_APP_ROLE', 'admin')                             # env admin không có tác dụng
+def test_co_auth_role_theo_tai_khoan(monkeypatch, co_auth, phien, role):
+    monkeypatch.setattr(roles.st, 'session_state', dict(phien))
     assert roles.current_role() == role
+
+
+def test_tai_khoan_bi_khoa_hoac_doi_role_co_hieu_luc(monkeypatch, co_auth):
+    phien = {'tai_khoan': 'de1', roles.PREVIEW_KEY: 'admin'}
+    monkeypatch.setattr(roles.st, 'session_state', phien)
+    assert roles.current_role() == 'ky_su'                                     # Xem như role chỉ có tác dụng với admin thật
+    co_auth.set_role('de1', 'phan_tich', 'admin1')
+    roles._account.clear()                                                      # trang Phân quyền xóa cache sau mỗi thao tác
+    assert roles.current_role() == 'phan_tich'
+    co_auth.set_disabled('de1', True, 'admin1')
+    roles._account.clear()
+    assert roles.current_role() == 'khach' and 'tai_khoan' not in phien        # bỏ phiên
+
+
+def test_db_loi_la_khach_nhung_giu_phien(monkeypatch, co_auth):
+    phien = {'tai_khoan': 'admin1'}
+    monkeypatch.setattr(roles.st, 'session_state', phien)
+    monkeypatch.setattr(roles, 'store', lambda: None)
+    roles._account.clear()
+    assert roles.current_role() == 'khach' and phien == {'tai_khoan': 'admin1'}
 
 
 # --- App thật theo từng role ---
@@ -180,18 +207,104 @@ def test_role_khong_ky_thuat_doc_backend_mac_dinh(monkeypatch):
     assert not at.exception and at.session_state['backend'] == 'duckdb'
 
 
-def test_ban_deploy_co_auth_chua_dang_nhap_la_khach(monkeypatch):
+def _app(monkeypatch) -> AppTest:
     monkeypatch.setenv('RETAIL_BACKEND', 'duckdb')
-    monkeypatch.setattr(roles, 'auth_configured', conftest.AUTH_CONFIGURED)   # đọc [auth] thật từ at.secrets
-    at = AppTest.from_file(str(APP), default_timeout=60)
-    at.secrets['auth'] = AUTH
-    at.secrets['roles'] = BANG
+    return AppTest.from_file(str(APP), default_timeout=60)
+
+
+def _dang_nhap(at, ten, mk):
+    o_ten, o_mk = at.sidebar.text_input
+    o_ten.input(ten)
+    o_mk.input(mk)
+    next(b for b in at.sidebar.button if b.label == 'Đăng nhập').click().run()
+
+
+def test_ban_deploy_chua_dang_nhap_la_khach(monkeypatch, co_auth):
+    at = _app(monkeypatch)
     at.session_state[roles.PREVIEW_KEY] = 'admin'                               # còn sót từ phiên admin trước
     at.run()                                                                    # env RETAIL_APP_ROLE=admin từ conftest
     assert not at.exception, at.exception
     assert _pages(at) == set(roles.PAGES_BY_ROLE['khach'])
     assert not at.sidebar.radio and not at.sidebar.selectbox
-    assert [b.label for b in at.sidebar.button] == ['Đọc lại dữ liệu', 'Đăng nhập bằng Google']
+    assert [t.label for t in at.sidebar.text_input] == ['Tên đăng nhập', 'Mật khẩu']    # form trong expander "Đăng nhập"
+
+
+def test_dang_nhap_sai_roi_dung(monkeypatch, co_auth):
+    at = _app(monkeypatch).run()
+    _dang_nhap(at, 'admin1', 'sai-mat-khau-1')
+    assert not at.exception and [e.value for e in at.sidebar.error] == [auth_store.SAI]
+    assert _pages(at) == set(roles.PAGES_BY_ROLE['khach'])
+    _dang_nhap(at, 'khong_co', MK)
+    assert [e.value for e in at.sidebar.error] == [auth_store.SAI]              # cùng một câu: không dò được tài khoản
+    _dang_nhap(at, 'Admin1', MK)
+    assert not at.exception, at.exception
+    assert _pages(at) == set(roles.PAGES_BY_ROLE['admin']) and at.session_state['tai_khoan'] == 'admin1'
+    assert at.sidebar.selectbox[0].label == 'Xem như role'
+    next(b for b in at.sidebar.button if b.label == 'Đăng xuất').click().run()
+    assert _pages(at) == set(roles.PAGES_BY_ROLE['khach'])
+
+
+def test_mat_khau_tam_phai_doi_moi_co_quyen(monkeypatch, co_auth):
+    at = _app(monkeypatch).run()
+    _dang_nhap(at, 'ql1', MK)
+    assert _pages(at) == set(roles.PAGES_BY_ROLE['khach'])                      # còn mật khẩu tạm
+    assert any('mật khẩu tạm' in w.value for w in at.sidebar.warning)
+    cu, moi, lai = at.sidebar.text_input
+    cu.input(MK)
+    moi.input('mat-khau-moi-22')
+    lai.input('mat-khau-moi-22')
+    next(b for b in at.sidebar.button if b.label == 'Đổi mật khẩu').click().run()
+    assert not at.exception, at.exception
+    assert _pages(at) == set(roles.PAGES_BY_ROLE['quan_ly'])
+    assert [s.value for s in at.sidebar.success] == ['Đã đổi mật khẩu.']
+
+
+def test_admin_tao_tai_khoan_tren_trang_phan_quyen(monkeypatch, co_auth):
+    at = _app(monkeypatch).run()
+    _dang_nhap(at, 'admin1', MK)
+    at.switch_page('views/phan_quyen.py').run()
+    assert not at.exception, at.exception
+    ten = next(t for t in at.main.text_input if t.label == 'Tên đăng nhập')
+    ten.input('de2')
+    next(s for s in at.main.selectbox if s.label == 'Role').select('ky_su')
+    next(b for b in at.main.button if b.label == 'Tạo').click().run()
+    assert not at.exception, at.exception
+    (mk,) = at.main.code
+    u, err = co_auth.login('de2', mk.value)
+    assert err is None and u['role'] == 'ky_su' and u['must_change'] is True and u['created_by'] == 'admin1'
+    assert mk.value not in str(co_auth.recent_log(100))
+
+
+def test_trang_phan_quyen_hien_trang_thai_tai_khoan(monkeypatch, co_auth):
+    for _ in range(auth_store.MAX_FAIL):
+        co_auth.login('de1', 'sai-mat-khau-1')
+    at = _app(monkeypatch).run()
+    _dang_nhap(at, 'admin1', MK)
+    at.switch_page('views/phan_quyen.py').run()
+    assert not at.exception, at.exception
+    bang = at.main.dataframe[0].value.set_index('Tên đăng nhập')['Trạng thái'].to_dict()
+    assert bang == {'admin1': 'Đang dùng', 'de1': 'Tạm khóa (sai mật khẩu nhiều lần)', 'ql1': 'Chưa đổi mật khẩu tạm'}
+
+
+def test_admin_khoa_tai_khoan_dang_dung(monkeypatch, co_auth):
+    at = _app(monkeypatch).run()
+    _dang_nhap(at, 'de1', MK)
+    assert _pages(at) == set(roles.PAGES_BY_ROLE['ky_su'])
+    assert co_auth.set_disabled('de1', True, 'admin1') is None
+    roles._account.clear()
+    at.run()
+    assert _pages(at) == set(roles.PAGES_BY_ROLE['khach']) and 'tai_khoan' not in at.session_state
+
+
+def test_db_khong_ket_noi_duoc_van_xem_nhu_khach(monkeypatch):
+    monkeypatch.setenv('RETAIL_APP_DB_URL', 'postgresql://khong-co:1/x?connect_timeout=1')
+    monkeypatch.setattr(roles, 'auth_configured', conftest.AUTH_CONFIGURED)
+    monkeypatch.setattr(roles, '_db_down_until', 0.0)                          # monkeypatch trả lại giá trị cũ sau test
+    at = _app(monkeypatch).run()
+    assert not at.exception, at.exception
+    assert _pages(at) == set(roles.PAGES_BY_ROLE['khach'])
+    assert any('tạm không dùng được' in w.value for w in at.sidebar.warning)
+    assert roles._db_down_until > 0                                              # lượt sau không thử kết nối lại ngay
 
 
 # --- Admin "Xem như role" ---
