@@ -28,11 +28,19 @@ elif s is None:
     st.error('Không kết nối được DB tài khoản.')
 else:
     users = s.list_users()
+    now = pd.Timestamp.now(tz='UTC')
+
+    def _trang_thai(u: dict) -> str:
+        if u['disabled']:
+            return 'Bị khóa'
+        if u['locked_until'] is not None and u['locked_until'] > now:
+            return 'Tạm khóa (sai mật khẩu nhiều lần)'          # Khóa → Mở khóa hoặc Đặt lại mật khẩu thì mở ngay
+        return 'Chưa đổi mật khẩu tạm' if u['must_change'] else 'Đang dùng'
+
     st.dataframe(pd.DataFrame({
         'Tên đăng nhập': [u['username'] for u in users],
         'Role': [roles.LABEL[u['role']] for u in users],
-        'Trạng thái': ['Bị khóa' if u['disabled'] else 'Chưa đổi mật khẩu tạm' if u['must_change'] else 'Đang dùng'
-                       for u in users],
+        'Trạng thái': [_trang_thai(u) for u in users],
         'Đăng nhập gần nhất': [u['last_login'] for u in users],
         'Tạo bởi': [u['created_by'] for u in users],
     }), hide_index=True)
