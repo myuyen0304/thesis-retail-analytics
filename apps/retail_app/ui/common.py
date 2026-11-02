@@ -184,15 +184,17 @@ def page_header(title: str, question: str) -> None:
 
 
 def kpi(col, label: str, value: str, help: str | None = None,
-        delta: str | None = None, delta_sign: float | None = None, delta_desc: str | None = None) -> None:
+        delta: str | None = None, delta_sign: float | None = None, delta_desc: str | None = None,
+        chart: list | None = None) -> None:
     """Thẻ KPI. delta: dòng nhỏ dưới số lớn. Màu lấy từ delta_sign (số thật), vì Streamlit chỉ nhận '-' ASCII là âm
-    mà num() in dấu '−' (U+2212): để Streamlit tự đoán thì số âm sẽ tô xanh."""
+    mà num() in dấu '−' (U+2212): để Streamlit tự đoán thì số âm sẽ tô xanh. chart: chuỗi giá trị vẽ đường nhỏ trong thẻ."""
+    extra = {'chart_data': chart, 'chart_type': 'area'} if chart else {}
     if delta is None:
-        col.metric(label, value, help=help, border=True, delta_description=delta_desc)
+        col.metric(label, value, help=help, border=True, delta_description=delta_desc, **extra)
         return
     color = 'off' if delta_sign is None or pd.isna(delta_sign) or delta_sign == 0 else ('green' if delta_sign > 0 else 'red')
     col.metric(label, value, delta, delta_color=color, delta_arrow='off', delta_description=delta_desc,
-               help=help, border=True)
+               help=help, border=True, **extra)
 
 
 def hang_the(key: str, n: int) -> list:
