@@ -174,6 +174,54 @@ def entity_candidates(data, remaining):
     return result
 
 
+def key_conflicts(data, source, data_dir):
+    """So thuộc tính theo schema_evolution §5, cell 20–21 (0-based).
+
+    Chuỗi trim/rỗng; số thực so sai số < 1e-6, khóa số ép theo hợp đồng.
+    """
+    keys = KEYS.get(source) or ()
+    names = {normalize(c): c for c in data.columns}
+    if len(keys) != 1 or normalize(keys[0]) not in names:
+        return {'da_kiem': False, 'ly_do': 'Nguồn chưa rõ hoặc không có khóa đơn trong file'}
+    path = Path(data_dir) / f'{source}.csv'
+    if not path.exists():
+        return {'da_kiem': False, 'ly_do': 'Thiếu file tham chiếu'}
+    key = keys[0]
+    with read_file(path, con=data.con) as ref:
+        attrs = [c for c in COLUMNS[source] if c != key and normalize(c) in names]
+        if not attrs:
+            return {'da_kiem': False, 'ly_do': 'Không có thuộc tính chung ngoài khóa'}
+        def value(col, alias):
+            return _value(names[normalize(col)] if alias == 'f' else col, alias)
+        def key_value(alias):
+            return f'try_cast({value(key, alias)} as {COLUMNS[source][key][0]})'
+        comparisons = []
+        for col in attrs:
+            left, right = value(col, 'f'), value(col, 'r')
+            kind = COLUMNS[source][col][0]
+            if kind == 'double' or kind.startswith('decimal'):
+                comparisons.append(f'abs(try_cast({left} as double) - try_cast({right} as double)) < 1e-6')
+            else:
+                comparisons.append(f'{left} = {right}')
+        same = ' and '.join(comparisons)
+        fk, rk = key_value('f'), key_value('r')
+        # LATERAL giữ đúng một dòng cho mỗi bản ghi gửi lên.
+        rows = data.con.execute(f"""
+            select count(*) filter(where a.n = 1),
+                   count(*) filter(where a.n = 1 and {value(key, 'f')} = a.pid),
+                   count(*) filter(where b.n > 0),
+                   count(*) filter(where b.n > 0 and b.identical = 0),
+                   count(*) filter(where a.n = 1 and {value(key, 'f')} <> a.pid)
+            from {quote(data.table)} f,
+            lateral (select count(*) n, min({value(key, 'r')}) pid from {quote(ref.table)} r where {same}) a,
+            lateral (select count(*) n, count(*) filter(where {same}) identical
+                     from {quote(ref.table)} r where {fk} = {rk}) b
+        """).fetchone()
+        return dict(zip(('khop_dung_1', 'khop_va_cung_id', 'id_trung_nguon',
+                         'id_trung_khac_noi_dung', 'danh_lai_khoa'), rows),
+                    da_kiem=True, khoa=key, thuoc_tinh=attrs)
+
+
 def propose(path, data_dir='data'):
     """Một cấu trúc bằng chứng duy nhất cho cả YAML và Markdown."""
     with read_file(path) as data:
@@ -220,7 +268,8 @@ def propose(path, data_dir='data'):
                 'nguon': source,
                 'schema_diff': {'loai': diff['kind'], 'doi_thu_tu': diff['order_changed'], 'cot_khop': diff['matched'],
                                 'cot_them': diff['added'], 'cot_thieu': diff['missing'], 'ung_vien_doi_ten': diff['rename_candidates']},
-                'cot': columns, 'thuc_the_moi': entities, 'tham_chieu_thieu': absent}
+                'cot': columns, 'thuc_the_moi': entities, 'tham_chieu_thieu': absent,
+                'xung_dot_khoa': key_conflicts(data, name, data_dir)}
 
 
 def _md(value):
@@ -278,6 +327,13 @@ def render_report(body):
     for c in cols:
         if c['loai'] == 'khop':
             lines.append(f"| {_md(c['ten_trong_file'])} | {_md(c['cot_hop_dong'])} | {c['kieu_hop_dong']} | {c['khong_ep_duoc']} |")
+    conflict = body.get('xung_dot_khoa', {})
+    lines += ['', '## 8. Xung đột khóa', '']
+    if conflict.get('da_kiem'):
+        lines += [f'- {key}: {conflict[key]}.' for key in
+                  ('khop_dung_1', 'khop_va_cung_id', 'id_trung_nguon', 'id_trung_khac_noi_dung', 'danh_lai_khoa')]
+    else:
+        lines.append(_md(conflict.get('ly_do', 'Chưa kiểm.')))
     lines += ['', 'Máy chỉ đề xuất; chưa có gì được nạp. Sửa `trang_thai` trong `mapping_de_xuat.yml`.', '']
     return '\n'.join(lines)
 

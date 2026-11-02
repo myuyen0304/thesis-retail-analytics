@@ -13,6 +13,7 @@ Role xác định một lần mỗi lượt chạy, theo thứ tự (fail closed
 Phiên chỉ nằm trong session_state trên server: tải lại trang (F5) là phải đăng nhập lại (PM chấp nhận 2026-10-29).
 Admin chọn được "Xem như role" ở thanh bên (chỉ hạ quyền).
 """
+from collections.abc import Mapping
 import datetime as dt
 import json
 import logging
@@ -40,17 +41,37 @@ PAGES = {
     'suc_khoe_du_lieu': ('views/suc_khoe_du_lieu.py', 'Sức khỏe dữ liệu'),
     'ai_explain': ('views/ai_explain.py', 'Hỏi dữ liệu (AI)'),
     'phan_quyen': ('views/phan_quyen.py', 'Phân quyền'),
+    'gui_du_lieu': ('views/gui_du_lieu.py', 'Gửi dữ liệu'),
+    'duyet_du_lieu': ('views/duyet_du_lieu.py', 'Duyệt dữ liệu'),
 }
 
 # Ma trận §3.1. Trang mới phải thêm vào đây, chưa thêm thì không role nào thấy.
 _KHACH = ('tong_quan', 'ps1_do_dung', 'ps2_xu_huong', 'ps3_nhip_lich', 'ps4_don_mon_gia', 'ps5_nhom', 'du_bao')
-PAGES_BY_ROLE = {
+_PAGE_CHOICES = {
     'khach': _KHACH,
-    'quan_ly': _KHACH + ('ai_explain',),
-    'phan_tich': _KHACH + ('suc_khoe_du_lieu', 'ai_explain'),
-    'ky_su': _KHACH + ('suc_khoe_du_lieu', 'ai_explain'),
-    'admin': _KHACH + ('suc_khoe_du_lieu', 'ai_explain', 'phan_quyen'),
+    'quan_ly': _KHACH + ('ai_explain', 'gui_du_lieu'),
+    'phan_tich': _KHACH + ('suc_khoe_du_lieu', 'ai_explain', 'gui_du_lieu'),
+    'ky_su': _KHACH + ('suc_khoe_du_lieu', 'ai_explain', 'gui_du_lieu', 'duyet_du_lieu'),
+    'admin': _KHACH + ('suc_khoe_du_lieu', 'ai_explain', 'phan_quyen', 'gui_du_lieu', 'duyet_du_lieu'),
 }
+
+
+class _RolePages(Mapping):
+    """Ma trận luôn phản ánh cờ hiện tại, kể cả khi phiên Streamlit tải lại."""
+    def __getitem__(self, role):
+        pages = _PAGE_CHOICES[role]
+        if os.getenv('RETAIL_APP_NHAP_DU_LIEU') != '1':
+            return tuple(k for k in pages if k not in ('gui_du_lieu', 'duyet_du_lieu'))
+        return pages
+
+    def __iter__(self):
+        return iter(_PAGE_CHOICES)
+
+    def __len__(self):
+        return len(_PAGE_CHOICES)
+
+
+PAGES_BY_ROLE = _RolePages()
 DEFAULT_PAGE = {'khach': 'tong_quan', 'quan_ly': 'tong_quan', 'phan_tich': 'ps1_do_dung',
                 'ky_su': 'suc_khoe_du_lieu', 'admin': 'suc_khoe_du_lieu'}
 BACKEND_ROLES = ('ky_su', 'admin')       # được đổi backend ở thanh bên

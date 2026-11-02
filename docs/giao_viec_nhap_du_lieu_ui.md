@@ -226,11 +226,11 @@ D:\retail-analytics\.venv\Scripts\python.exe -m streamlit run apps\retail_app\ap
 1. Admin tạo tài khoản `chushop` (Quản lý) và `de1` (Data engineer) nếu chưa có.
 2. `chushop` gửi `data\student_data\orders_enriched.csv` → thấy tóm tắt nghiệp vụ, trạng thái chờ duyệt. Không thấy trang Duyệt.
 3. `de1` mở Duyệt, sửa theo `orders_enriched.yml`, Duyệt → `da_duyet`. Bấm Chạy → theo dõi đủ 4 stage (khoảng 6 phút) →
-   `da_kiem`: 0 dòng cách ly, `daily_rows` 3833, 3 cột ẩn, 3 cột mart, `dim_sales_employee` 200 dòng, 646.945 đơn có nhân viên.
+   `da_kiem`: 0 dòng cách ly, `daily_rows` 3833, 3 cột ẩn, 3 cột mart, `dim_sales_employee` 200 dòng, số đơn có nhân viên theo file gửi (file đầy đủ 646.945/646.945; file 2022 36.004/646.945).
 4. `chushop` gửi `epd.json` → tóm tắt có cảnh báo xung đột khóa; `de1` Từ chối kèm lý do → `chushop` thấy lý do.
 5. Admin Công bố yêu cầu ở bước 3 → `chushop` thấy "đã cập nhật".
-6. Trên yêu cầu đã công bố ở bước 5, bấm "Chạy lại để kiểm" → "Không có gì mới, bỏ qua" trong vài giây.
-7. Tắt cờ, chạy lại app → hai trang biến mất với mọi role.
+6. Trên yêu cầu đã công bố ở bước 5, bấm "Chạy lại để kiểm" → "Không có gì mới, bỏ qua" (đo được khoảng 21 giây).
+7. ~~Tắt cờ, chạy lại app → hai trang biến mất với mọi role.~~ PM đổi 2026-11-01: bật cứng hai trang, bỏ cờ; thay bằng phiếu T1 §3.12.
 8. Trang Phân quyền → nhật ký có các dòng gửi/duyệt/từ chối/chạy/công bố.
 
 ## 7. Báo cáo của GPT khi xong (PM dán cho Claude rà)
@@ -256,7 +256,51 @@ D:\retail-analytics\.venv\Scripts\python.exe -m streamlit run apps\retail_app\ap
 
 | Lượt | Ngày | Kết quả | Phát hiện | GPT đã sửa |
 |---|---|---|---|---|
-| | | | | |
+| 1 | 2026-10-31 | Chưa đạt | N1 (chặn), N2–N4 (không chặn), xem dưới | Lượt 2: N1–N4 |
+| 2 | 2026-10-31 | Đạt N1–N4; còn N5 (nhỏ) | N5, xem dưới | Lượt 3: N5 |
+| 3 | 2026-10-31 | **Đạt** | Không còn phát hiện; chờ PM nghiệm thu §6 | |
+
+**Lượt 1, Claude rà độc lập (2026-10-31).** Claude chạy lại: `pytest scripts` 234 đạt/17 skip; sau khi chép đủ
+`data/student_data/`, `pytest scripts/ingest` 126 đạt/0 skip (test lát 1 đạt nguyên); 51 test UI đạt; bốn số xung đột khóa với
+`epd.json` khớp §3.3 (`danh_lai_khoa` = 993 vì 2 bản ghi id rỗng, chấp nhận). Tự thử 3 vô hiệu trên bản sao (bỏ thư mục ở
+`validate_extension_visibility`, PII→mart, bỏ cờ): cả 3 bị bắt. Mọi chỗ `extension_contract.load` đều nhận thư mục; nếu sót,
+`extension_prepare.validate` so `file`/`hop_dong_sha256` sẽ chặn, nên trùng tên `orders_enriched` với hợp đồng repo là fail-closed.
+`propose` với `orders_enriched.csv` mất 14,5 giây (chấp nhận cho demo).
+
+- **N1 (chặn): worker chết thì kẹt vĩnh viễn.** `active.json` chỉ được xóa ở `finally` của `run_worker` và khi `Popen` lỗi; hai lối
+  ra sớm (`'Lượt chạy không còn hiệu lực'`, `'Không lấy được khóa khởi động worker'`) nằm trước `try`. Worker bị giết (RAM, sleep,
+  tắt máy) thì `active.json` còn → `busy_reason` khóa Chạy/Công bố của mọi yêu cầu; yêu cầu nằm mãi `dang_chay`, không có nút nào
+  ra khỏi trạng thái này. `worker_pid` ghi nhưng không đọc. Sửa: worker giữ một khóa OS (`writer_lock`) suốt đời sống của nó (OS tự
+  nhả khi tiến trình chết); `busy_reason` kiểm khóa đó thay vì kiểm file tồn tại; yêu cầu `dang_chay` mà khóa đã nhả thì đối soát
+  sang `loi` với thông báo "worker dừng bất thường" (cho phép chạy lại). Đưa hai lối ra sớm vào trong `try/finally`. Test bắt buộc:
+  worker giả thoát bằng `os._exit` (không qua `finally`) rồi `start` vẫn chạy được và yêu cầu cũ thành `loi`.
+- **N2: trang Duyệt tự làm mới mọi lúc.** `@st.fragment(run_every='5s')` bọc cả trang, gồm form duyệt và `st.data_editor`; phiếu
+  §3.6 chỉ yêu cầu làm mới khi có yêu cầu `dang_chay`. Rủi ro DE đang sửa bảng cột thì bị vẽ lại. Sửa: form duyệt/từ chối nằm ngoài
+  fragment; chỉ phần trạng thái chạy tự làm mới, và chỉ khi yêu cầu đang chọn là `dang_chay`. Trang Gửi cũng vậy.
+- **N3: câu tóm tắt dễ hiểu sai.** Với `epd.json`, "Khớp khóa với 998 sản phẩm đã có." đọc như tin tốt ngay trước cảnh báo. Khi
+  `id_trung_khac_noi_dung > 0` hoặc `danh_lai_khoa > 0`, viết rõ: "998 mã trùng với sản phẩm đã có nhưng khác nội dung; 993 bản ghi
+  giống sản phẩm cũ nhưng mang mã khác." Chỉ giữ câu "khớp với N … đã có" khi không có xung đột. Số dùng dấu chấm ngăn cách nghìn
+  (646.945) như phần còn lại của project; sửa test theo.
+- **N4: cửa sổ console bật lên khi chạy.** Worker chạy `DETACHED_PROCESS`, rồi `_stage` gọi `subprocess.run` không có
+  `creationflags`, nên trên Windows mỗi stage có thể mở một cửa sổ console; người dùng tắt cửa sổ là giết stage. Sửa: truyền
+  `creationflags=subprocess.CREATE_NO_WINDOW` khi `os.name == 'nt'` ở `_stage`.
+
+Hồi quy `apps/retail_app`: Claude so **từng test** giữa `main` 2e77094 và nhánh, cùng `RETAIL_DUCKDB_PATH` kho chính chỉ đọc và
+`RETAIL_RELEASE_MODE=legacy`:
+- toàn bộ, cờ tắt: 0 test đạt ở `main` mà không đạt ở nhánh (`main` 637 đạt/376 trượt/23 lỗi/605 skip; nhánh 740/338/8/604, gồm
+  49 test mới; Postgres bật giữa lượt nhánh nên nhánh đạt thêm 54 test, không phải do code);
+- 7 file cần Postgres (`test_auth_store`, `test_roles`, `test_tao_admin`, `test_smoke`, `test_ai_tools`, `test_ai_databricks`,
+  `test_b8_ai_trang`), Postgres bật từ đầu: `main`, nhánh cờ tắt, nhánh cờ bật đều 340 đạt/6 trượt/83 skip, trùng từng test.
+  6 test trượt giống nhau ở cả `main` (5 `test_ai_tools`, 1 `test_smoke` duckdb) nên không thuộc phiếu này.
+Kết luận: không có hồi quy; gồm cả 13 ca tài khoản `co_auth` GPT chưa chạy được.
+
+**Nghiệm thu §6 (2026-11-01 → 11-02): ĐẠT.** PM chạy trên UI, file `demo_2022/orders_enriched.csv`; Claude chỉ đọc kết quả, không thao tác thay.
+- Bước 1–6 đạt theo ảnh PM gửi và lịch sử yêu cầu `20261101T003823Z_0192a0`, `20261101T012138Z_5fe0a3`: `chushop` gửi; `minh` duyệt 00:49, chạy 00:50–00:57; `minh` từ chối `epd.json` kèm lý do;
+  `uyen` công bố 01:25; chạy lại 2 lần đều bỏ qua (khoảng 21 giây). Giờ ghi UTC.
+- Bước 7: thay bằng phiếu T1 §3.12 (PM đổi 2026-11-01).
+- Bước 8: PM không thấy dòng trên trang (2026-11-02). Claude đọc trực tiếp bảng `app_auth.audit` trên Neon (chỉ SELECT): có đủ `nhap_gui` (id 29, 34), `nhap_duyet` của `minh` (id 31, 00:49:13), `nhap_chay`
+  (id 32, 42, 43), `nhap_tu_choi` (id 36), `nhap_cong_bo` của `uyen` (id 39), khớp lịch sử yêu cầu. Bảng có 46 dòng nên vẫn nằm trong "Nhật ký 50 dòng gần nhất"; mục này thu gọn mặc định
+  (`views/phan_quyen.py:89`) và hiện giờ UTC. Chưa kiểm PM đã mở trang ở bản nào.
 
 ## 10. Câu hỏi PM chốt trước khi giao
 
@@ -279,3 +323,24 @@ git worktree add -b nhap-ui/myuyen D:/retail-analytics-nhap origin/main   # 2e77
 cp -r D:/retail-analytics/data D:/retail-analytics-nhap/
 cp D:/retail-analytics-schema/data/student_data/epd.json D:/retail-analytics-nhap/data/student_data/
 ```
+
+**Lượt 2, Claude rà (2026-10-31).** Claude chạy lại: `pytest scripts` 248 đạt/3 skip; `test_nhap_du_lieu.py` + toàn bộ
+`test_roles.py` (Postgres bật, `RETAIL_DUCKDB_PATH` kho chính chỉ đọc, `RETAIL_RELEASE_MODE=legacy`) 99 đạt; `test_roles.py` với cờ
+bật 43 đạt. N1: worker giữ khóa `worker` suốt lượt; `_active_busy` đối soát `dang_chay` → `loi` khi khóa nhả và PID chết hoặc quá
+30 giây; hai lối ra sớm đã vào `try/finally`; test `os._exit(23)` dùng tiến trình thật. N2: fragment 5 giây chỉ bọc trạng thái của
+yêu cầu `dang_chay`, form duyệt nằm ngoài. N3: câu tóm tắt và dấu chấm nghìn đúng. N4: `_stage` có `CREATE_NO_WINDOW`.
+
+- **N5 (nhỏ): worker có thể chết ngay lúc khởi động nếu đụng khóa.** `run_worker` mở `writer_lock(store.root / 'worker')` một lần,
+  không chờ, và nằm ngoài `try`. Mỗi lần trang làm mới (fragment 5 giây ở cả hai trang, mọi phiên đang mở) đều gọi `busy_reason`,
+  hàm này cũng lấy khóa `worker` trong vài mili giây. Nếu hai việc trùng nhau đúng lúc worker vừa khởi động, worker nhận
+  `PermissionError` và thoát ngay; sau 30 giây yêu cầu thành `loi` "worker dừng bất thường" dù không có gì hỏng. Claude tái hiện
+  bằng cách giữ khóa `worker` rồi gọi `run_worker`: worker chết ngay, `_finish_worker` không chạy. Xác suất thấp và tự gỡ được (bấm
+  Chạy lại), nhưng lúc demo thì khó giải thích. Sửa: lấy khóa `worker` bằng vòng thử lại có giới hạn, như vòng lấy khóa `dispatch`
+  ngay bên dưới (vd 100 lần × 0,1 giây). Test: giữ khóa `worker` 0,5 giây ở luồng khác rồi gọi `run_worker` với `_stage` giả, worker
+  phải chạy xong bình thường.
+
+**Lượt 3, Claude rà (2026-10-31).** `worker_slot` thử lấy khóa `worker` 100 lần × 0,1 giây rồi mới báo lỗi; test giữ khóa 0,5 giây ở
+luồng khác đạt. Claude chạy lại: `pytest scripts` 248 đạt/3 skip; `test_nhap_du_lieu.py` + `test_roles.py` (Postgres bật, kho chính
+chỉ đọc, `legacy`) 100 đạt; `test_roles.py` cờ bật 43 đạt; `git diff --check` sạch. Giữ khóa liên tục quá 10 giây thì worker báo
+"Không lấy được khóa worker sau 10 giây" và được đối soát sang `loi` sau 30 giây; trường hợp này chỉ xảy ra khi có worker khác thật
+sự đang chạy, mà `start` đã chặn. Phần code đạt; còn nghiệm thu thủ công §6 do PM chạy.

@@ -166,7 +166,7 @@ def validate_extension_visibility(context, fetch):
     hidden = set()
     required = set()
     for name in context['extensions']:
-        doc = extension_contract.load(name)
+        doc = extension_contract.load(name, context.get('extension_dir'))
         for col in doc['cot']:
             if col['xu_ly'] != 'nap':
                 continue
@@ -313,13 +313,13 @@ def _entry(stage, run_id, target, started, result, source=None, error=None):
             'finished_at': _utc(), 'result': result, 'error_type': type(error).__name__ if error is not None else None}
 
 
-def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=()):
+def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None):
     """Chạy một stage và để lại một dòng lịch sử: dat (stage tiến lên), bo_qua (run bỏ qua hoặc stage đã xong từ trước), loi."""
     started = _utc()
     context_path = Path(root).resolve() / 'runs' / str(run_id) / 'context.json'
     before = _read_json(context_path)
     try:
-        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force, extensions=extensions)
+        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force, extensions=extensions, extension_directory=extension_directory)
     except Exception as error:
         record_history(Path(root).resolve(), _entry(stage, run_id, target, started, 'loi', _read_json(context_path) or before,
                                                     error))
@@ -330,9 +330,12 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
     return context
 
 
-def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=()):
+def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None):
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', run_id):
         raise ValueError('run_id chỉ gồm chữ, số, gạch nối/gạch dưới; tối đa 100 ký tự')
+    if extension_directory and not extensions:
+        raise ValueError('--extension-dir cần --extension')
+    extension_directory = str(Path(extension_directory).resolve()) if extension_directory else None
     root = Path(root).resolve()
     directory = root / 'runs' / run_id
     context_path = directory / 'context.json'
@@ -346,6 +349,8 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                         raise ValueError('run_id đã dùng cho target khác')
                     if set(context.get('extensions', [])) != set(extensions):
                         raise ValueError('run_id đã dùng cho tập --extension khác')
+                    if context.get('extension_dir') != extension_directory:
+                        raise ValueError('run_id đã dùng cho --extension-dir khác')
                     return context
                 if target == 'databricks':
                     cloud = Databricks()
@@ -353,19 +358,20 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                 registry.initialize()
                 landing = root / 'snapshots'
                 quarantine = directory / 'quarantine'
+                ext_options = {'extension_directory': extension_directory} if extension_directory else {}
                 if snapshot_id:
                     if not re.fullmatch('[a-f0-9]{12}', snapshot_id):
                         raise ValueError('snapshot_id sai định dạng')
                     path = landing / snapshot_id
-                    manifest = snapshot.validate(path)
+                    manifest = snapshot.validate(path, **ext_options)
                 else:
                     try:
-                        path = snapshot.prepare(data, landing, extensions=extensions) if extensions else snapshot.prepare(data, landing)
+                        path = snapshot.prepare(data, landing, extensions=extensions, **ext_options) if extensions else snapshot.prepare(data, landing)
                     except ValueError as error:      # header / số dòng / số field sai: chưa có snapshot, vẫn để lại lý do
                         contract.write_quarantine(quarantine, getattr(error, 'summary', {}),
                                                   getattr(error, 'evidence', None), error=error)
                         raise
-                    manifest = snapshot.validate(path)
+                    manifest = snapshot.validate(path, **ext_options)
                 extended = {n: e for n, e in manifest['sources'].items() if e.get('mo_rong')}
                 if set(extended) != set(extensions):
                     raise ValueError('Tập --extension không khớp manifest snapshot')
@@ -386,6 +392,8 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                            'schema': f'r_{rid}_reporting', 'expected_active': state['active'],
                            'started_at': dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
                            'stage': 'skipped' if skip else 'prepared'}
+                if extension_directory:
+                    context['extension_dir'] = extension_directory
                 if extensions:
                     context['extensions'] = sorted(set(extensions))
                     context['so_dong_cach_ly'] = {n: extended[n]['so_dong_cach_ly'] for n in sorted(extended)}
@@ -398,7 +406,8 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                 return context
             if context['code_version'] != code_version():
                 raise ValueError('Code đổi giữa các stage; tạo run_id mới')
-            manifest = snapshot.validate(context['snapshot_path'])
+            manifest = snapshot.validate(context['snapshot_path'], **({'extension_directory': context['extension_dir']}
+                                        if context.get('extension_dir') else {}))
             if stage == 'forecast':
                 # task riêng forecast_train_score (S2): không cần cloud hay registry; chỉ đọc snapshot, ghi runs/<id>/forecast
                 if context['stage'] in ('forecasted', 'built', 'validated'):
@@ -510,10 +519,13 @@ def main():
     ap.add_argument('--data', default='data')
     ap.add_argument('--snapshot-id')
     ap.add_argument('--extension', action='append', default=[], metavar='TEN')
+    ap.add_argument('--extension-dir')
     ap.add_argument('--force', action='store_true')
     ap.add_argument('--release-id')
     ap.add_argument('--limit', type=int, default=20, help='history: số lần chạy gần nhất cần in')
     a = ap.parse_args()
+    if a.extension_dir and (not a.extension or a.stage not in ('prepare', 'run')):
+        ap.error('--extension-dir chỉ dùng cùng --extension ở prepare hoặc run')
     if a.extension and a.stage not in ('prepare', 'run'):
         ap.error('--extension chỉ dùng với prepare hoặc run')
     if a.stage == 'history':
@@ -553,7 +565,7 @@ def main():
         return
     for stage in STAGES if a.stage == 'run' else (a.stage,):
         result = execute(stage, run_id=a.run_id, target=a.target, root=a.root, data=a.data,
-                         snapshot_id=a.snapshot_id, force=a.force, extensions=a.extension)
+                         snapshot_id=a.snapshot_id, force=a.force, extensions=a.extension, extension_directory=a.extension_dir)
         print(json.dumps({k: result[k] for k in ('run_id', 'release_id', 'snapshot_id', 'stage')}, ensure_ascii=False))
 
 
