@@ -75,6 +75,10 @@ _CSS = """
 }
 [class*="st-key-bi_khoi_"] [data-testid="stPageLink"] a:hover {background: rgba(91, 75, 214, 0.08);}
 [class*="st-key-bi_khoi_"] [data-testid="stPageLink"] a :is(p, span) {white-space: normal; overflow: visible; text-overflow: clip; font-size: 0.82rem;}
+/* Hàng Kiểm tra tiếp: nút rộng theo tên trang, đủ một dòng và bằng nhau giữa các hàng; câu hỏi nhận phần còn lại và xuống dòng nếu cần */
+[class*="st-key-bi_doi_tiep_"] [data-testid="stColumn"]:first-child {flex: 1 1 0; width: auto; min-width: 0;}
+[class*="st-key-bi_doi_tiep_"] [data-testid="stColumn"]:last-child {flex: 0 0 auto; width: auto; min-width: 13rem;}
+[class*="st-key-bi_doi_tiep_"] [data-testid="stPageLink"] a :is(p, span) {white-space: nowrap;}
 [class*="st-key-bi_khoi_"] [data-testid="stExpander"] details {border-color: rgba(128, 128, 128, 0.28);}
 [class*="st-key-bi_khoi_"] [data-testid="stExpander"] summary p {font-size: 0.82rem;}
 @container (max-width: 820px) {
