@@ -36,7 +36,7 @@ PAGES = {
     'ps2_xu_huong': ('views/ps2_xu_huong.py', 'PS2: Xu hướng'),
     'ps3_nhip_lich': ('views/ps3_nhip_lich.py', 'PS3: Nhịp lịch'),
     'ps4_don_mon_gia': ('views/ps4_don_mon_gia.py', 'PS4: Số đơn, số món, giá'),
-    'ps5_nhom': ('views/ps5_nhom.py', 'PS5: Nhóm kéo lên/xuống'),
+    'ps5_nhom': ('views/ps5_nhom.py', 'PS5: Ngành hàng, khu vực, kênh'),
     'du_bao': ('views/du_bao.py', 'Dự báo'),
     'suc_khoe_du_lieu': ('views/suc_khoe_du_lieu.py', 'Sức khỏe dữ liệu'),
     'ai_explain': ('views/ai_explain.py', 'Hỏi dữ liệu (AI)'),

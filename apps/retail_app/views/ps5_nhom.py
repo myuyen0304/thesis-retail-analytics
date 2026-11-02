@@ -11,7 +11,7 @@ from ui.fmt import AXIS_PCT1, num, pct, trieu
 
 bi.nap_css()
 c_ten, c_loc = bi.hang_doi('dau', (1, 1))
-c_ten.title('PS5 · Nhóm đóng góp vào biến động doanh thu')
+c_ten.title('PS5 · Ngành hàng, khu vực và kênh')
 
 seg = load_or_stop('segment_yearly')  # Một nhóm của một chiều trong một năm
 yearly = load_or_stop('revenue_yearly')
