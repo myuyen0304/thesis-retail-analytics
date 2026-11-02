@@ -151,7 +151,7 @@ def test_tham_so_link_ps5_mo_dung_lua_chon(monkeypatch):
 
 def test_trang_khong_thuoc_quyen_thi_bo_ca_cau_hoi(monkeypatch):
     con = tuple(k for k in roles.PAGES_BY_ROLE['admin'] if k != 'ps3_nhip_lich')
-    monkeypatch.setitem(roles.PAGES_BY_ROLE, 'admin', con)
+    monkeypatch.setitem(roles._PAGE_CHOICES, 'admin', con)
     at = _ps4(monkeypatch)
     assert not any(roles.PAGES['ps3_nhip_lich'][1] in x for x in _links(at))
     assert not any('tháng 8 năm lẻ' in m.value for m in at.markdown)
@@ -160,7 +160,7 @@ def test_trang_khong_thuoc_quyen_thi_bo_ca_cau_hoi(monkeypatch):
 
 def test_khong_quyen_trang_nao_thi_bao_ro(monkeypatch):
     con = tuple(k for k in roles.PAGES_BY_ROLE['admin'] if k not in ('ps2_xu_huong', 'ps3_nhip_lich', 'ps5_nhom'))
-    monkeypatch.setitem(roles.PAGES_BY_ROLE, 'admin', con)
+    monkeypatch.setitem(roles._PAGE_CHOICES, 'admin', con)
     at = _ps4(monkeypatch)
     assert any('Quyền hiện tại chưa mở trang phân tích liên quan' in c.value for c in at.caption)
 
@@ -324,7 +324,7 @@ def test_ps2_noi_dung_giai_doan_dang_noi_toi(monkeypatch):
 def test_cac_trang_khac_cung_an_link_khong_thuoc_quyen(monkeypatch, page):
     bo = {'ps2_xu_huong', 'ps4_don_mon_gia', 'ps5_nhom', 'ps1_do_dung', 'ps3_nhip_lich'} - {page.split('/')[1][:-3]}
     con = tuple(k for k in roles.PAGES_BY_ROLE['admin'] if k not in bo)
-    monkeypatch.setitem(roles.PAGES_BY_ROLE, 'admin', con)
+    monkeypatch.setitem(roles._PAGE_CHOICES, 'admin', con)
     at = _trang(monkeypatch, page)
     assert any('Quyền hiện tại chưa mở trang phân tích liên quan' in c.value for c in at.caption)
 
