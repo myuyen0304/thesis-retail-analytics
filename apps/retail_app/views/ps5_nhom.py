@@ -3,13 +3,15 @@ import pandas as pd
 import streamlit as st
 
 from ai_explain import page_explain
+from ui import bi
 from ui.ai_panel import ai_panel
 from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, need_keys, pick, url_choice
-from ui.fmt import AXIS_PCT1, AXIS_TRIEU, num, pct, trieu
+from ui.fmt import AXIS_PCT1, num, pct, trieu
 
 
-st.title('PS5 · Nhóm đóng góp vào biến động doanh thu')
-st.markdown('Ngành hàng, khu vực hoặc kênh nào đóng góp nhiều nhất vào mức tăng/giảm?')
+bi.nap_css()
+c_ten, c_loc = bi.hang_doi('dau', (1, 1))
+c_ten.title('PS5 · Nhóm đóng góp vào biến động doanh thu')
 
 seg = load_or_stop('segment_yearly')  # Một nhóm của một chiều trong một năm
 yearly = load_or_stop('revenue_yearly')
@@ -24,20 +26,12 @@ dims = [d for d in DIM if d in set(seg['dimension_name'])]
 # Bảng lệch (chỉ còn năm đầu, chưa có xếp hạng đóng góp): không có năm nào để chọn → cảnh báo rồi dừng.
 nams = sorted(need(seg[seg['delta_r_rank'].notna()], 'segment_yearly',
                    'có xếp hạng đóng góp so với năm trước')['year'].unique().tolist())
-c_dim, c_nam = st.columns([2, 1], gap='medium')
+c_dim, c_nam = c_loc.columns([2, 1], gap='small')
 dim = c_dim.radio('Chiều phân tích', dims, index=url_choice('chieu', dims, 0, 'chiều'),
                   format_func=DIM.get, horizontal=True)
 nam = c_nam.selectbox('Năm so với năm trước', nams,
                       index=url_choice('nam', nams, nams.index(2019) if 2019 in nams else len(nams) - 1, 'năm'))
 ten_chieu = DIM[dim].lower()
-st.caption(f'Đang xem: R · {DIM[dim]} · {nam - 1} → {nam} · Đơn vị tiền: VND (triệu = triệu đồng)')
-st.caption('Mỗi chiều là một cách phân chia cùng doanh thu R; không cộng đóng góp giữa các chiều.')
-with st.expander('Định nghĩa & phạm vi dữ liệu'):
-    # Dải thông tin chung do report_reads vẽ trong "Nguồn dữ liệu & kết nối" (_collapse_source bên dưới), như PS3/PS4.
-    st.markdown('**R** là doanh thu đơn đã giao sau chiết khấu, gom theo ngày đặt hàng. '
-                'Mỗi nhóm trong một chiều cộng thành R toàn công ty cùng năm. '
-                'Chiều khu vực dùng nhãn Central / East / West của dữ liệu mô phỏng; '
-                'kênh thu hút khách gắn với khách hàng, không phải nguồn của từng đơn.')
 st.session_state._collapse_source = True
 
 y = pick(yearly.set_index('year'), nam, 'revenue_yearly', f'của năm {nam}')
@@ -67,34 +61,21 @@ def hien_ty_le_dong_gop(c) -> str:
 
 
 def the_nhom(col, label: str, r, co: bool, khong_co: str, so: int, huong: str) -> None:
+    # Đường nhỏ: R của chính nhóm qua các năm trong kỳ phân tích
+    duong = seg[(seg['dimension_name'] == dim) & (seg['dimension_value'] == r['dimension_value'])
+                & seg['is_analysis_period']].sort_values('year')['r'].tolist()
     if co:
         kpi(col, label, r['dimension_value'],
             f'R {nam - 1}: {trieu(r["r_prior_year"], 1)}; R {nam}: {trieu(r["r"], 1)}. '
             f'Mức đổi của nhóm: {trieu(r["delta_r"], 1, signed=True)}. '
             f'% đóng góp = mức đổi nhóm ÷ mức đổi R toàn công ty; âm khi ngược chiều. '
             f'Không xác định nếu R không đổi; không ổn định nếu R đổi dưới {nguong} R năm trước.',
-            delta=trieu(r['delta_r'], 1, signed=True), delta_sign=r['delta_r'], delta_desc=dong_gop(r))
+            delta=trieu(r['delta_r'], 1, signed=True), delta_sign=r['delta_r'], delta_desc=dong_gop(r), chart=duong)
     else:
         kpi(col, label, 'Không có',
             khong_co, delta=f'{so}/{so_nhom} nhóm {huong}', delta_sign=None,
             delta_desc=f'Không có nhóm {huong}')
 
-
-# Bốn số chính cùng kỳ và cùng chiều. Thẻ C/F nằm trong tab vì chỉ có phạm vi toàn công ty.
-c1, c2, c3, c4 = hang_the('the_ps5', 4)
-kpi(c1, 'Thay đổi R toàn công ty', trieu(y['delta_r'], 1, signed=True),
-    f'R {nam - 1}: {num(y["r_prior_year"], 2)}; R {nam}: {num(y["r"], 2)}. '
-    'Tổng mức đổi của các nhóm trong một chiều bằng mức này.',
-    delta=pct(y['yoy_rate'], 1, signed=True), delta_sign=y['yoy_rate'],
-    delta_desc=f'R: {num(y["r_prior_year"] / 1e6)} → {num(y["r"] / 1e6)} triệu')
-the_nhom(c2, f'{DIM[dim]} tăng nhiều nhất', dau, dau['delta_r'] > 0,
-         f'Năm {nam} không có {ten_chieu} tăng.', so_tang, 'tăng')
-the_nhom(c3, f'{DIM[dim]} giảm nhiều nhất', cuoi, cuoi['delta_r'] < 0,
-         f'Năm {nam} không có {ten_chieu} giảm.', so_giam, 'giảm')
-kpi(c4, 'Số nhóm tăng / giảm', f'{so_tang} tăng / {so_giam} giảm',
-    f'Trong {so_nhom} {ten_chieu}; nhóm có mức đổi bằng 0 không tính là tăng hoặc giảm.',
-    delta=f'{so_nhom} nhóm', delta_sign=None,
-    delta_desc=f'{so_nhom - so_tang - so_giam} không đổi')
 
 # Số nhóm là biến động R bằng tiền; hạng trong bảng reporting xếp từ tăng nhiều nhất đến giảm nhiều nhất.
 s['Nhóm'] = s['dimension_value']
@@ -104,80 +85,101 @@ chart_data = s.sort_values('delta_r', key=lambda v: v.abs(), ascending=False)
 chart_data['moc_nhan'] = 0  # Nhãn phần giảm đặt sát mốc 0 để không đè tên nhóm trên màn hình hẹp.
 order = chart_data['Nhóm'].tolist()
 peak = max(float(s['delta_r'].abs().max()), 1)
-axis = alt.X('delta_r:Q', title='Thay đổi R (triệu đồng)', axis=alt.Axis(labelExpr=AXIS_TRIEU),
-             scale=alt.Scale(domain=[-peak * 1.28, peak * 1.28]))
+# Trục vừa khít dữ liệu, chừa chỗ cho nhãn: nhãn phần giảm đặt bên phải mốc 0 nên luôn cần khoảng trống ở đó.
+truc_x = [min(float(s['delta_r'].min()) * 1.28, -peak * 0.04), max(float(s['delta_r'].max()) * 1.28, peak * 0.4)]
+axis = alt.X('delta_r:Q', title=None, axis=alt.Axis(labelExpr=bi.AXIS_SO_TRIEU),
+             scale=alt.Scale(domain=truc_x))
 group = alt.Y('Nhóm:N', sort=order, title=None,
               axis=alt.Axis(labelLimit=140, labelFontSize=11))
 bars = alt.Chart(chart_data).mark_bar(size=24).encode(
     x=axis, y=group,
     color=alt.Color('Hướng:N', scale=alt.Scale(domain=['Tăng', 'Giảm', 'Không đổi'],
-                                            range=['#2a9d8f', '#d1495b', '#8d99a6']),
+                                            range=[bi.MAU_TANG, bi.MAU_GIAM, bi.MAU_NOI]),
                     legend=alt.Legend(title=None, orient='top')),
     tooltip=[alt.Tooltip('Nhóm:N'), alt.Tooltip('Hướng:N'),
              alt.Tooltip('Đổi:N', title='Thay đổi R')])
-zero = alt.Chart(pd.DataFrame({'moc': [0]})).mark_rule(color='#687480', strokeWidth=1.5).encode(x='moc:Q')
+zero = alt.Chart(pd.DataFrame({'moc': [0]})).mark_rule(color=bi.MAU_NOI, strokeWidth=1.5).encode(x='moc:Q')
 positive = alt.Chart(chart_data[chart_data['delta_r'] >= 0]).mark_text(
-    align='left', dx=5, fontSize=11).encode(x=axis, y=group, text='Đổi:N')
+    align='left', dx=5, fontSize=11, color=bi.mau_chu()).encode(x=axis, y=group, text='Đổi:N')
 negative = alt.Chart(chart_data[chart_data['delta_r'] < 0]).mark_text(
-    align='left', dx=5, fontSize=11).encode(
-        x=alt.X('moc_nhan:Q', axis=None, scale=alt.Scale(domain=[-peak * 1.28, peak * 1.28])),
+    align='left', dx=5, fontSize=11, color=bi.mau_chu()).encode(
+        x=alt.X('moc_nhan:Q', axis=None, scale=alt.Scale(domain=truc_x)),
         y=group, text='Đổi:N')
 
-st.subheader(f'Thay đổi R theo {ten_chieu}')
-left, side = st.columns([2, 1], gap='medium')
-with left:
-    st.caption(f'{nam - 1} → {nam} · Xếp theo độ lớn tuyệt đối của mức đổi R; '
-               'thanh xanh tăng, thanh đỏ giảm, đường dọc là 0. Số cạnh thanh: triệu đồng.')
-    st.altair_chart(alt.layer(zero, bars, positive, negative).properties(
-        height=max(280, 43 * len(s) + 50)), width='stretch')
-    if y['delta_r'] == 0:
-        st.info('R toàn công ty không đổi; % đóng góp không xác định vì mẫu số bằng 0. Đọc số tiền từng nhóm.')
-    elif nho:
-        st.info(f'R cả công ty đổi dưới {nguong} R năm trước; % đóng góp không ổn định. Đọc số tiền của từng nhóm.')
-    # deck slide 12 (plan §3, tiêu chí 4): luôn hiện ngay dưới biểu đồ, không chỉ trong phần mở rộng
-    st.caption('Mức đổi của từng nhóm là phần chia số học của cùng mức đổi R, chưa phải nguyên nhân.')
-    if dim == 'region':
-        st.caption('Central / East / West chỉ là nhãn khu vực mô phỏng, không phải tỉnh/thành thực.')
-    elif dim == 'acquisition_channel':
-        st.caption('Kênh thu hút khách gắn với khách hàng, không phải kênh của từng đơn hàng.')
-    with st.expander('Xem số liệu làm căn cứ'):
-        can_cu = s[['Nhóm', 'Đổi']].rename(columns={'Đổi': 'Thay đổi R'})
-        can_cu['% đóng góp vào mức đổi tổng'] = s['contribution_to_delta'].map(hien_ty_le_dong_gop)
-        st.dataframe(can_cu, hide_index=True, width='stretch', height='content')
-        st.caption('% đóng góp = thay đổi R của nhóm ÷ thay đổi R toàn công ty; '
-                   'có thể âm hoặc trên 100% khi các nhóm bù trừ. Mức đổi toàn công ty bằng 0 thì tỷ lệ không xác định.')
-with side:
-    with st.container(border=True):
-        st.markdown('**Tóm tắt từ số liệu**')
-        st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
+
+
+def cau_tra_loi() -> str:
+    """Câu trả lời thẳng câu hỏi của trang, ghép từ cột reporting; không do AI viết."""
+    tong = f'R toàn công ty {bi.mau(trieu(y["delta_r"], 1, signed=True), y["delta_r"])}'
+    if s['delta_r'].abs().max() == 0:
+        return f'Không nhóm nào thay đổi R; {tong}'
+    r = chart_data.iloc[0]
+    gop = (f', bằng {pct(r["contribution_to_delta"])} mức {huong_ct}'
+           if not nho and pd.notna(r['contribution_to_delta']) else '')
+    return f'{r["Nhóm"]} đổi nhiều nhất: {bi.mau(r["Đổi"], r["delta_r"])}{gop}; {tong}'
+
+
+with bi.khoi('01', 'Ngành hàng, khu vực hoặc kênh nào đóng góp nhiều nhất vào mức tăng/giảm?'):
+    st.markdown(f'#### {cau_tra_loi()}')
+    # Bốn số chính cùng kỳ và cùng chiều. Thẻ C/F nằm trong tab vì chỉ có phạm vi toàn công ty.
+    c1, c2, c3, c4 = hang_the('the_ps5', 4)
+    kpi(c1, 'Thay đổi R toàn công ty', trieu(y['delta_r'], 1, signed=True),
+        f'R {nam - 1}: {num(y["r_prior_year"], 2)}; R {nam}: {num(y["r"], 2)}. '
+        'Tổng mức đổi của các nhóm trong một chiều bằng mức này.',
+        delta=pct(y['yoy_rate'], 1, signed=True), delta_sign=y['yoy_rate'],
+        delta_desc=f'R: {num(y["r_prior_year"] / 1e6)} → {num(y["r"] / 1e6)} triệu',
+        chart=yearly[yearly['is_analysis_period']]['r'].tolist())
+    the_nhom(c2, f'{DIM[dim]} tăng nhiều nhất', dau, dau['delta_r'] > 0,
+             f'Năm {nam} không có {ten_chieu} tăng.', so_tang, 'tăng')
+    the_nhom(c3, f'{DIM[dim]} giảm nhiều nhất', cuoi, cuoi['delta_r'] < 0,
+             f'Năm {nam} không có {ten_chieu} giảm.', so_giam, 'giảm')
+    kpi(c4, 'Số nhóm tăng / giảm', f'{so_tang} tăng / {so_giam} giảm',
+        f'Trong {so_nhom} {ten_chieu}; nhóm có mức đổi bằng 0 không tính là tăng hoặc giảm.',
+        delta=f'{so_nhom} nhóm', delta_sign=None,
+        delta_desc=f'{so_nhom - so_tang - so_giam} không đổi')
+
+with bi.khoi('02', f'Thay đổi R theo {ten_chieu}, {nam - 1} → {nam} (triệu đồng)'):
+    c_thanh, c_bang = bi.hang_doi('bang_chung', (7, 5))
+    with c_thanh:
+        st.altair_chart(bi.dinh_dang_bieu_do(alt.layer(zero, bars, positive, negative).properties(
+            height=max(250, 43 * len(s) + 50))), width='stretch')
         if y['delta_r'] == 0:
-            st.markdown(f'- **R toàn công ty không đổi** từ {nam - 1} đến {nam}.')
-        else:
-            st.markdown(f'- **R toàn công ty {huong_ct}** {trieu(abs(y["delta_r"]), 1)} '
-                        f'({pct(y["yoy_rate"], 1, signed=True)}).')
-        if s['delta_r'].abs().max() == 0:
-            st.markdown('- **Các nhóm:** không nhóm nào thay đổi R.')
-        else:
-            main = chart_data.iloc[0]
-            contribution = (f' ({pct(main["contribution_to_delta"])} mức {huong_ct} của cả công ty)'
-                            if not nho and pd.notna(main['contribution_to_delta']) else '')
-            st.markdown(f'- **Đổi nhiều nhất:** {main["dimension_value"]} '
-                        f'{"tăng" if main["delta_r"] > 0 else "giảm"} '
-                        f'{trieu(abs(main["delta_r"]), 1)}{contribution}.')
-            opposite = cuoi if y['delta_r'] > 0 else dau
-            if y['delta_r'] == 0:
-                st.markdown('- **Bù trừ:** thay đổi giữa các nhóm triệt tiêu nhau trong tổng R.')
-            elif opposite['delta_r'] * y['delta_r'] < 0:
-                st.markdown(f'- **Bù trừ:** {opposite["dimension_value"]} '
-                            f'{"tăng" if opposite["delta_r"] > 0 else "giảm"} '
-                            f'{trieu(abs(opposite["delta_r"]), 1)} ngược chiều R toàn công ty.')
-        if y['delta_r'] == 0:
-            st.markdown('- **Giới hạn:** % đóng góp không xác định khi R toàn công ty không đổi.')
+            st.info('R toàn công ty không đổi; % đóng góp không xác định vì mẫu số bằng 0. Đọc số tiền từng nhóm.')
         elif nho:
-            st.markdown('- **Giới hạn:** mức đổi R nhỏ làm % đóng góp không ổn định; ưu tiên số tiền.')
-        else:
-            st.markdown('- **Giới hạn:** đây là phần đóng góp số học, chưa chứng minh nguyên nhân.')
-    ai_panel(page_explain.request_ps5(dim, nam))
+            st.info(f'R cả công ty đổi dưới {nguong} R năm trước; % đóng góp không ổn định. Đọc số tiền của từng nhóm.')
+        # deck slide 12 (plan §3, tiêu chí 4): luôn hiện ngay dưới biểu đồ, không chỉ trong phần mở rộng
+        st.caption('Mức đổi của từng nhóm là phần chia số học của cùng mức đổi R, chưa phải nguyên nhân.')
+        if dim == 'region':
+            st.caption('Central / East / West chỉ là nhãn khu vực mô phỏng, không phải tỉnh/thành thực.')
+        elif dim == 'acquisition_channel':
+            st.caption('Kênh thu hút khách gắn với khách hàng, không phải kênh của từng đơn hàng.')
+    with c_bang:
+        bi.bang_doi_chung(pd.DataFrame({
+            'Nhóm': ['Toàn công ty', *chart_data['Nhóm']],
+            str(nam - 1): [num(v / 1e6, 1) for v in [y['r_prior_year'], *chart_data['r_prior_year']]],
+            str(nam): [num(v / 1e6, 1) for v in [y['r'], *chart_data['r']]],
+            'Đổi': [num(v / 1e6, 1, signed=True) for v in [y['delta_r'], *chart_data['delta_r']]],
+            '%': [pct(v, 1, signed=True) for v in [y['yoy_rate'], *chart_data['yoy_rate']]],
+        }), 'Đổi', [y['delta_r'], *chart_data['delta_r']])
+        with st.expander('Xem số liệu làm căn cứ'):
+            can_cu = s[['Nhóm', 'Đổi']].rename(columns={'Đổi': 'Thay đổi R'})
+            can_cu['% đóng góp vào mức đổi tổng'] = s['contribution_to_delta'].map(hien_ty_le_dong_gop)
+            st.dataframe(can_cu, hide_index=True, width='stretch', height='content')
+            st.caption('% đóng góp = thay đổi R của nhóm ÷ thay đổi R toàn công ty; '
+                       'có thể âm hoặc trên 100% khi các nhóm bù trừ. Mức đổi toàn công ty bằng 0 thì tỷ lệ không xác định.')
+
+c_ai, c_tiep = bi.hang_doi('ai_tiep', (5, 7))
+with c_ai:
+    with bi.khoi('03', 'AI giải thích'):
+        ai_panel(page_explain.request_ps5(dim, nam))
+with c_tiep:
+    with bi.khoi('04', 'Kiểm tra tiếp'):
+        bi.hoi_tiep([bi.CauHoi(f'Năm {nam}: số đơn, số món hay giá?', 'ps4_don_mon_gia', f'năm {nam} so với {nam - 1}',
+                               {'ky': str(nam)}),
+                     bi.CauHoi(f'Năm {nam} trong xu hướng dài hạn?', 'ps2_xu_huong', 'mọi năm, trang không lọc theo kỳ'),
+                     bi.CauHoi(f'Từ G đến R năm {nam}?', 'ps1_do_dung', f'năm {nam}', {'ky': str(nam)})])
+
+o_sau = bi.khoi('', 'Phân tích sâu')
 
 # Bảng đầy đủ chỉ xuất hiện một lần; bảng ngắn ở trên là căn cứ trực tiếp cho biểu đồ.
 tb = s[['delta_r_rank', 'Nhóm']].rename(columns={'delta_r_rank': 'Hạng'})
@@ -191,22 +193,24 @@ tb['Dịch chuyển tỷ trọng'] = s['share_shift_pp'].map(lambda v: num(v, 2,
 tb['% đóng góp vào mức đổi tổng'] = s['contribution_to_delta'].map(hien_ty_le_dong_gop)
 right = st.column_config.TextColumn(alignment='right')
 
-tab_share, tab_cf, tab_data = st.tabs(['Tỷ trọng qua năm', 'Khách hàng & tần suất', 'Bảng số liệu'])
+tab_share, tab_cf, tab_data = o_sau.tabs(['Tỷ trọng qua năm', 'Khách hàng & tần suất', 'Bảng số liệu'])
 with tab_share:
     sh = seg[(seg['dimension_name'] == dim) & seg['is_analysis_period']].copy()
     sh['Nhóm'] = sh['dimension_value']
     sh['Năm'] = sh['year'].astype(str)
     sh['Tỷ trọng'] = sh['share'].map(pct)
-    palette = ['#1f5f8b', '#2a9d8f', '#d1495b', '#8e6c8a', '#e9a23b', '#667f3f', '#496e91', '#9c6940']
     names = sorted(sh['Nhóm'].unique())
+    # Tối đa 4 nhóm thì một hàng; 6 nhóm thì hai hàng đều nhau, không để nhóm cuối rớt dòng một mình.
+    cot_chu_giai = len(names) if len(names) <= 4 else 3
     line = alt.Chart(sh).mark_line(point=True).encode(
         x=alt.X('Năm:O', title=None, axis=alt.Axis(labelAngle=0)),
-        y=alt.Y('share:Q', title='Tỷ trọng R', axis=alt.Axis(labelExpr=AXIS_PCT1)),
-        color=alt.Color('Nhóm:N', scale=alt.Scale(domain=names, range=palette[:len(names)]),
-                        legend=alt.Legend(title='Nhóm', orient='bottom', direction='horizontal',
-                                          columns=2, labelLimit=140)),
+        y=alt.Y('share:Q', title=None, axis=alt.Axis(labelExpr=AXIS_PCT1)),
+        color=alt.Color('Nhóm:N', scale=alt.Scale(domain=names, range=bi.MAU_NHOM[:len(names)]),
+                        legend=alt.Legend(title=None, orient='top', columns=cot_chu_giai, labelLimit=140, columnPadding=6, symbolSize=50, labelFontSize=11)),
+        # Màu thứ 6 khó tách với mù màu đỏ-lục: hình điểm là tín hiệu thứ hai, gộp chung một chú giải
+        shape=alt.Shape('Nhóm:N', scale=alt.Scale(domain=names), legend=alt.Legend(title=None, orient='top', columns=cot_chu_giai, labelLimit=140, columnPadding=6, symbolSize=50, labelFontSize=11)),
         tooltip=['Năm', 'Nhóm', 'Tỷ trọng'])
-    st.altair_chart(line.properties(height=320), width='stretch')
+    st.altair_chart(bi.dinh_dang_bieu_do(line.properties(height=300)), width='stretch')
     st.caption('Tỷ trọng = R nhóm ÷ R toàn công ty cùng năm. Tỷ trọng tăng không bảo đảm R của nhóm tăng bằng tiền.')
 
 with tab_cf:
@@ -235,12 +239,12 @@ with tab_cf:
                    axis=alt.Axis(labelExpr="replace(format(datum.value, ',.0f'), ',', '.')")),
         y2='bar_end:Q',
         color=alt.Color('loai:N', scale=alt.Scale(domain=['Tổng', 'Tăng', 'Giảm'],
-                                                range=['#1f5f8b', '#2a9d8f', '#d1495b']),
+                                                range=[bi.MAU_TONG, bi.MAU_TANG, bi.MAU_GIAM]),
                         legend=alt.Legend(title=None, orient='top')),
         tooltip=['Cột', 'Số đơn'])
     chu = alt.Chart(w).transform_calculate(top='max(datum.bar_start, datum.bar_end)').mark_text(
-        dy=-8, fontSize=12).encode(x=x, y='top:Q', text='Số đơn:N')
-    st.altair_chart((thac + chu).properties(height=320), width='stretch')
+        dy=-8, fontSize=12, color=bi.mau_chu()).encode(x=x, y='top:Q', text='Số đơn:N')
+    st.altair_chart(bi.dinh_dang_bieu_do((thac + chu).properties(height=280, padding={'top': 20})), width='stretch')
     st.caption('N = C × F. C là số khách có đơn đã giao trong năm; C giảm chưa đủ kết luận khách hàng rời bỏ. '
                'Tách số đơn thành số khách và tần suất là phép chia số học, chưa phải nguyên nhân.')
     yr = dp[dp['period_type'] == 'year'].copy()
@@ -265,7 +269,45 @@ with tab_data:
     st.download_button('Tải bảng nhóm (CSV)', data=tb.to_csv(index=False).encode('utf-8-sig'),
                        file_name=f'ps5_{dim}_{nam}.csv', mime='text/csv')
 
-with st.expander('Cách đọc & phương pháp'):
+with o_sau.expander('Tóm tắt bằng chữ, định nghĩa và giới hạn'):
+    st.caption(f'Đang xem: R · {DIM[dim]} · {nam - 1} → {nam} · Đơn vị tiền: VND (triệu = triệu đồng)')
+    st.caption('Mỗi chiều là một cách phân chia cùng doanh thu R; không cộng đóng góp giữa các chiều.')
+    st.caption('Thanh xếp theo độ lớn tuyệt đối của mức đổi R. Đường nhỏ trên thẻ: R của nhóm từng năm trong kỳ phân tích.')
+    st.markdown('**Tóm tắt từ số liệu**')
+    st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
+    if y['delta_r'] == 0:
+        st.markdown(f'- **R toàn công ty không đổi** từ {nam - 1} đến {nam}.')
+    else:
+        st.markdown(f'- **R toàn công ty {huong_ct}** {trieu(abs(y["delta_r"]), 1)} '
+                    f'({pct(y["yoy_rate"], 1, signed=True)}).')
+    if s['delta_r'].abs().max() == 0:
+        st.markdown('- **Các nhóm:** không nhóm nào thay đổi R.')
+    else:
+        main = chart_data.iloc[0]
+        contribution = (f' ({pct(main["contribution_to_delta"])} mức {huong_ct} của cả công ty)'
+                        if not nho and pd.notna(main['contribution_to_delta']) else '')
+        st.markdown(f'- **Đổi nhiều nhất:** {main["dimension_value"]} '
+                    f'{"tăng" if main["delta_r"] > 0 else "giảm"} '
+                    f'{trieu(abs(main["delta_r"]), 1)}{contribution}.')
+        opposite = cuoi if y['delta_r'] > 0 else dau
+        if y['delta_r'] == 0:
+            st.markdown('- **Bù trừ:** thay đổi giữa các nhóm triệt tiêu nhau trong tổng R.')
+        elif opposite['delta_r'] * y['delta_r'] < 0:
+            st.markdown(f'- **Bù trừ:** {opposite["dimension_value"]} '
+                        f'{"tăng" if opposite["delta_r"] > 0 else "giảm"} '
+                        f'{trieu(abs(opposite["delta_r"]), 1)} ngược chiều R toàn công ty.')
+    if y['delta_r'] == 0:
+        st.markdown('- **Giới hạn:** % đóng góp không xác định khi R toàn công ty không đổi.')
+    elif nho:
+        st.markdown('- **Giới hạn:** mức đổi R nhỏ làm % đóng góp không ổn định; ưu tiên số tiền.')
+    else:
+        st.markdown('- **Giới hạn:** đây là phần đóng góp số học, chưa chứng minh nguyên nhân.')
+    st.markdown('**Định nghĩa & phạm vi dữ liệu**')
+    st.markdown('**R** là doanh thu đơn đã giao sau chiết khấu, gom theo ngày đặt hàng. '
+                'Mỗi nhóm trong một chiều cộng thành R toàn công ty cùng năm. '
+                'Chiều khu vực dùng nhãn Central / East / West của dữ liệu mô phỏng; '
+                'kênh thu hút khách gắn với khách hàng, không phải nguồn của từng đơn.')
+    st.markdown('**Cách đọc & phương pháp**')
     st.markdown('\n'.join(f'- {item}' for item in [
         'Mỗi lần xem một chiều. Mức đổi R của các nhóm cùng chiều cộng đúng bằng mức đổi R toàn công ty; '
         'không cộng các chiều với nhau.',
@@ -274,7 +316,7 @@ with st.expander('Cách đọc & phương pháp'):
         'đơn vị điểm phần trăm.',
         'N = C × F ở cấp toàn công ty. Phần C = (C₁ − C₀) × F₀; phần F = C₁ × (F₁ − F₀).',
     ]))
-with st.expander('Giới hạn chi tiết'):
+    st.markdown('**Giới hạn chi tiết**')
     st.markdown('\n'.join(f'- {item}' for item in [
         'Region là nhãn Central / East / West của dữ liệu mô phỏng; không ánh xạ thành tỉnh/thành thực.',
         'acquisition_channel là kênh thu hút khách gắn với khách hàng, khác nguồn của từng đơn.',

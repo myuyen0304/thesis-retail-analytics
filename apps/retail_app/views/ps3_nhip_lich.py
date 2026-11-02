@@ -3,13 +3,15 @@ import pandas as pd
 import streamlit as st
 
 from ai_explain import page_explain
+from ui import bi
 from ui.ai_panel import ai_panel
 from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, need_keys, pick
 from ui.fmt import num, pct, pp
 
 
-st.title('PS3 · Nhịp lịch doanh thu')
-st.markdown('Doanh thu phân bố theo tháng và thời điểm trong tháng như thế nào?')
+bi.nap_css()
+c_ten, c_nhip = bi.hang_doi('dau', (1, 1))
+c_ten.title('PS3 · Nhịp lịch doanh thu')
 
 # Trang chỉ đổi cách trình bày; ba nhịp và phép kiểm vẫn đọc từ reporting.
 build = load_or_stop('build_info').iloc[0]
@@ -29,36 +31,11 @@ period = need(total[total['is_analysis_period']], 'revenue_total', 'của kỳ p
 need_keys(m['year'], yr.set_index('year'), 'revenue_yearly', 'của năm có trong bảng tháng')
 period_label = f'{period["start_year"]}–{period["end_year"]}'
 
-st.caption(f'Kỳ phân tích: {period_label} · R: doanh thu đơn đã giao · Đơn vị tiền: VND')
-with st.expander('Định nghĩa & phạm vi dữ liệu'):
-    st.markdown('**R** là doanh thu đơn đã giao sau chiết khấu, gom theo ngày đặt hàng; '
-                'không phải dòng tiền thanh toán. Tiền tính bằng VND. '
-                'Chỉ số tháng so R của một tháng với R bình quân 12 tháng cùng năm; '
-                'mốc **1** là mức bình quân, không phải số tiền. Năm '
-                f'{build["data_start_date"].year} chưa đủ 12 tháng nên không dùng để so nhịp năm. '
-                'Các chỉ số trong ba thẻ đại diện cho toàn kỳ phân tích. '
-                f'Snapshot có đơn cuối cùng ngày {build["data_end_date"]:%d/%m/%Y}; '
-                'trạng thái đơn là trạng thái lúc trích dữ liệu.')
 st.session_state._collapse_source = True
 
 season = pick(stab.set_index('rhythm_code'), 'mua_vu', 'calendar_stability', 'của nhịp mùa vụ')
 end_month = pick(stab.set_index('rhythm_code'), 'cuoi_thang', 'calendar_stability', 'của nhịp cuối tháng')
 august = pick(stab.set_index('rhythm_code'), 'thang_8', 'calendar_stability', 'của nhịp tháng 8')
-
-c1, c2, c3 = hang_the('the_ps3', 3)
-kpi(c1, f'Chênh chỉ số T8: lẻ / chẵn ({period_label})', pct(aug['august_odd_vs_even']),
-    f'TB chỉ số tháng 8 của {n_odd} năm lẻ ÷ TB của {n_even} năm chẵn − 1. '
-    f'Năm lẻ: {num(aug["august_index_odd"], 2)}; năm chẵn: {num(aug["august_index_even"], 2)}. '
-    'Đây là tỷ lệ chênh chỉ số đã chuẩn hóa, không phải chênh doanh thu VND.')
-kpi(c2, f'Tỷ số tháng cao / thấp ({period_label})', num(season['metric_value'], 2) + ' lần',
-    'Gộp R của cùng tháng qua các năm trong kỳ; lấy R tháng cao nhất ÷ R tháng thấp nhất. '
-    'Đây là tỷ số, không phải phần trăm hay chênh tiền.')
-kpi(c3, f'Mức dồn cuối tháng ({period_label})', pp(period['eom_excess']),
-    f'Tỷ trọng R từ ngày 26 trở đi: {pct(period["eom_share"])}. Mức so sánh {pct(period["eom_expected_share"])} '
-    '= nếu R rải đều theo ngày trong từng tháng, giữ nguyên doanh thu mỗi tháng '
-    '(mỗi tháng (D − 25)/D, cộng lại theo trọng số R tháng). '
-    'Hiệu hai tỷ trọng có đơn vị điểm phần trăm; không phải tốc độ tăng R.')
-st.caption('Ba KPI tính cho toàn kỳ phân tích; lựa chọn nhịp bên dưới chỉ thay biểu đồ và phần giải thích.')
 
 # Bảng nhiệt theo năm và giai đoạn dùng chung thang màu đối xứng quanh mốc chỉ số 1.
 m['nam'] = m['year'].astype(str)
@@ -114,14 +91,14 @@ bars = alt.Chart(a8).mark_bar(size=28).encode(
     x=aug_x, y=alt.Y('month_index:Q', title=None,
                    axis=alt.Axis(labelExpr="replace(format(datum.value, '.1f'), '.', ',')")),
     color=alt.Color('loai:N', title=None,
-                    scale=alt.Scale(domain=['năm chẵn', 'năm lẻ'], range=['#1f5f8b', '#d1495b']),
+                    scale=alt.Scale(domain=['năm chẵn', 'năm lẻ'], range=[bi.MAU_TONG, bi.MAU_GIAM]),
                     legend=alt.Legend(orient='top')),
     tooltip=[alt.Tooltip('nam', title='Năm'), alt.Tooltip('loai:N', title='Nhóm'),
              alt.Tooltip('Chỉ số', title='Chỉ số tháng 8'), 'R (VND)'])
-bar_text = alt.Chart(a8).mark_text(dy=-8, fontSize=11).encode(x=aug_x, y='month_index:Q', text='Chỉ số:N')
-odd_avg = alt.Chart(ap).mark_rule(color='#d1495b', strokeDash=[4, 3]).encode(y='august_index_odd:Q')
-even_avg = alt.Chart(ap).mark_rule(color='#1f5f8b', strokeDash=[4, 3]).encode(y='august_index_even:Q')
-one = alt.Chart(ap).mark_rule(color='#888').encode(y=alt.datum(1))
+bar_text = alt.Chart(a8).mark_text(dy=-8, fontSize=11, color=bi.mau_chu()).encode(x=aug_x, y='month_index:Q', text='Chỉ số:N')
+odd_avg = alt.Chart(ap).mark_rule(color=bi.MAU_GIAM, strokeDash=[4, 3]).encode(y='august_index_odd:Q')
+even_avg = alt.Chart(ap).mark_rule(color=bi.MAU_TONG, strokeDash=[4, 3]).encode(y='august_index_even:Q')
+one = alt.Chart(ap).mark_rule(color=bi.MAU_NOI).encode(y=alt.datum(1))
 
 # Tháng cao / thấp cả kỳ đọc từ rpt_calendar_stability (cột thêm 2026-10-18, test assert_rpt_gap_peak), không gộp lại
 # trong app. Bản dữ liệu dựng trước đó chưa có cột này thì câu tóm tắt không nêu tên tháng; bảng nhiệt vẫn cho thấy.
@@ -130,15 +107,17 @@ peak_month, trough_month = (int(v) if v is not None and pd.notna(v) else None
 distinct_august = pd.notna(aug['max_index_odd']) and pd.notna(aug['min_index_even'])
 august_separated = distinct_august and aug['max_index_odd'] < aug['min_index_even']
 
-rhythm = st.segmented_control('Chọn nhịp lịch',
+rhythm = c_nhip.segmented_control('Chọn nhịp lịch',
                               ['Tháng cao / thấp', 'Dồn cuối tháng', 'Tháng 8: năm lẻ / chẵn'],
                               default='Tháng cao / thấp', required=True, wrap=True, key='ps3_rhythm')
 if rhythm == 'Tháng cao / thấp':
     chart_title = 'Tháng nào cao, tháng nào thấp?'
-    chart = (heat + heat_text).properties(height=390)
+    chart = (heat + heat_text).properties(height=350)
     chart_note = ('Chỉ số tháng = R tháng ÷ R bình quân 12 tháng cùng năm; 1 = bình quân. '
                   'Xanh là trên mốc 1, đỏ là dưới mốc 1. Mỗi ô là một tháng của một năm, không phải VND. '
                   'Số trong ô làm tròn một chữ số; tooltip giữ hai chữ số và R đầy đủ.')
+    tra_loi = ((f'T{peak_month} cao nhất, T{trough_month} thấp nhất: ' if peak_month and trough_month
+                else 'Tháng cao nhất so với tháng thấp nhất: ') + f'gấp {num(season["metric_value"], 2)} lần')
     explanation = [
         (f'**Mẫu quan sát:** gộp {int(season["n_years"])} năm, T{peak_month} có R cao nhất; T{trough_month} thấp nhất.'
          if peak_month and trough_month else
@@ -151,10 +130,12 @@ if rhythm == 'Tháng cao / thấp':
     ]
 elif rhythm == 'Dồn cuối tháng':
     chart_title = 'Doanh thu có dồn cuối tháng không?'
-    chart = (eom + eom_text).properties(height=390)
+    chart = (eom + eom_text).properties(height=350)
     chart_note = ('Mỗi ô = tỷ trọng R từ ngày 26 trở đi trừ mức rải đều (D − 25)/D, với D là số ngày của tháng. '
                   'Đơn vị: điểm %. Mốc 0 = bằng mức rải đều; dương là cao hơn mốc này. '
                   'Số trong ô làm tròn điểm %; tooltip giữ một chữ số thập phân.')
+    tra_loi = (f'R từ ngày 26 chiếm {pct(period["eom_share"])}, so với mức rải đều: '
+               f'{bi.mau(pp(period["eom_excess"]), period["eom_excess"])}')
     explanation = [
         f'**Mẫu quan sát:** toàn kỳ, R từ ngày 26 trở đi chiếm {pct(period["eom_share"])}; '
         f'mốc rải đều là {pct(period["eom_expected_share"])}.',
@@ -167,13 +148,15 @@ elif rhythm == 'Dồn cuối tháng':
     ]
 else:
     chart_title = 'Tháng 8 năm lẻ / chẵn: có khác biệt không?'
-    chart = (bars + bar_text + odd_avg + even_avg + one).properties(height=330)
+    chart = (bars + bar_text + odd_avg + even_avg + one).properties(height=310)
     chart_note = (f'Cột = chỉ số tháng 8 từng năm; nét đứt đỏ = TB {n_odd} năm lẻ '
-                  f'({num(aug["august_index_odd"], 2)}), nét đứt xanh = TB {n_even} năm chẵn '
+                  f'({num(aug["august_index_odd"], 2)}), nét đứt tím = TB {n_even} năm chẵn '
                   f'({num(aug["august_index_even"], 2)}); nét xám = mốc 1.')
     separation = ('năm lẻ nào cũng thấp hơn mọi năm chẵn.' if august_separated else
                   'có năm lẻ cao hơn năm chẵn, nhịp này không đều.' if distinct_august else
                   'chưa đủ hai nhóm năm để đối chiếu.')
+    tra_loi = (f'Chỉ số tháng 8 năm lẻ so với năm chẵn: '
+               f'{bi.mau(pct(aug["august_odd_vs_even"]), aug["august_odd_vs_even"])}')
     explanation = [
         f'**Mẫu quan sát:** TB chỉ số tháng 8 năm lẻ là {num(aug["august_index_odd"], 2)}, '
         f'năm chẵn là {num(aug["august_index_even"], 2)}; chênh {pct(aug["august_odd_vs_even"])}.',
@@ -185,24 +168,41 @@ else:
         'quy luật dự báo hay nguyên nhân khuyến mãi.',
     ]
 
-st.subheader(chart_title)
-left, side = st.columns([2, 1], gap='medium')
-with left:
-    st.altair_chart(chart, width='stretch')
-    st.caption(chart_note)
-    if rhythm == 'Tháng cao / thấp':
-        st.caption('Cạnh mỗi năm là mã giai đoạn ở PS2; năm ranh giới có thể mang hai mã, ví dụ A/B. '
-                   'Bảng nhiệt này và bảng nhiệt theo giai đoạn **dùng chung một thang màu**.')
-with side:
-    with st.container(border=True):
-        st.markdown('**Tóm tắt từ số liệu**')
-        st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
-        for item in explanation:
-            st.markdown(f'- {item}')
-    ai_panel(page_explain.request_ps3({'Tháng cao / thấp': 'mua_vu', 'Dồn cuối tháng': 'cuoi_thang',
-                                       'Tháng 8: năm lẻ / chẵn': 'thang_8'}[rhythm]))
+with bi.khoi('01', 'Doanh thu phân bố theo tháng và thời điểm trong tháng như thế nào?'):
+    st.markdown(f'#### {tra_loi}')
+    # Đường nhỏ trên thẻ: giá trị của chính chỉ số đó từng năm, đọc từ reporting.
+    c1, c2, c3 = hang_the('the_ps3', 3)
+    kpi(c1, f'Chênh chỉ số T8: lẻ / chẵn ({period_label})', pct(aug['august_odd_vs_even']),
+        f'TB chỉ số tháng 8 của {n_odd} năm lẻ ÷ TB của {n_even} năm chẵn − 1. '
+        f'Năm lẻ: {num(aug["august_index_odd"], 2)}; năm chẵn: {num(aug["august_index_even"], 2)}. '
+        'Đây là tỷ lệ chênh chỉ số đã chuẩn hóa, không phải chênh doanh thu VND.', chart=a8['month_index'].tolist())
+    kpi(c2, f'Tỷ số tháng cao / thấp ({period_label})', num(season['metric_value'], 2) + ' lần',
+        'Gộp R của cùng tháng qua các năm trong kỳ; lấy R tháng cao nhất ÷ R tháng thấp nhất. '
+        'Đây là tỷ số, không phải phần trăm hay chênh tiền.', chart=yr['season_peak_trough_ratio'].tolist())
+    kpi(c3, f'Mức dồn cuối tháng ({period_label})', pp(period['eom_excess']),
+        f'Tỷ trọng R từ ngày 26 trở đi: {pct(period["eom_share"])}. Mức so sánh {pct(period["eom_expected_share"])} '
+        '= nếu R rải đều theo ngày trong từng tháng, giữ nguyên doanh thu mỗi tháng '
+        '(mỗi tháng (D − 25)/D, cộng lại theo trọng số R tháng). '
+        'Hiệu hai tỷ trọng có đơn vị điểm phần trăm; không phải tốc độ tăng R.', chart=yr['eom_excess'].tolist())
 
-tab_repeat, tab_phase, tab_year = st.tabs(['Độ lặp lại', 'So sánh giai đoạn', 'Bảng theo năm'])
+with bi.khoi('02', chart_title):
+    st.altair_chart(bi.dinh_dang_bieu_do(chart), width='stretch')
+    if rhythm == 'Tháng 8: năm lẻ / chẵn':     # các đường này không có chú giải riêng trên biểu đồ
+        st.caption(chart_note)
+
+c_ai, c_tiep = bi.hang_doi('ai_tiep', (5, 7))
+with c_ai:
+    with bi.khoi('03', 'AI giải thích'):
+        ai_panel(page_explain.request_ps3({'Tháng cao / thấp': 'mua_vu', 'Dồn cuối tháng': 'cuoi_thang',
+                                           'Tháng 8: năm lẻ / chẵn': 'thang_8'}[rhythm]))
+with c_tiep:
+    with bi.khoi('04', 'Kiểm tra tiếp'):
+        bi.hoi_tiep([bi.CauHoi('Xu hướng dài hạn ra sao?', 'ps2_xu_huong', 'mọi năm, trang không lọc theo kỳ'),
+                     bi.CauHoi('R đổi ở số đơn, số món hay giá?', 'ps4_don_mon_gia', 'năm mặc định của trang'),
+                     bi.CauHoi('Nhóm nào đổi nhiều nhất?', 'ps5_nhom', 'năm mặc định của trang')])
+
+o_sau = bi.khoi('', 'Phân tích sâu')
+tab_repeat, tab_phase, tab_year = o_sau.tabs(['Độ lặp lại', 'So sánh giai đoạn', 'Bảng theo năm'])
 right = st.column_config.TextColumn(alignment='right')
 
 # Dùng nguyên chỉ số và phép bỏ từng năm do rpt_calendar_stability tính.
@@ -222,11 +222,11 @@ ts['Bỏ lần lượt từng năm'] = [f'{rhythm_names[c][2](a)} đến {rhythm
                               for c, a, b in zip(stab['rhythm_code'], stab['loo_min'], stab['loo_max'])]
 ts['Số năm tự có nhịp'] = [f'{int(k)}/{int(n)}' for k, n in zip(stab['n_years_with_pattern'], stab['n_years'])]
 with tab_repeat:
-    st.caption('Hai cách kiểm mô tả: xét từng năm và tính lại chỉ số sau khi bỏ lần lượt một năm. '
-               'Chưa có kiểm định để kết luận “có ý nghĩa thống kê”.')
     st.dataframe(ts[['Nhịp', 'Số năm tự có nhịp', 'Bỏ lần lượt từng năm']],
                  hide_index=True, height='content', width='stretch')
     with st.expander('Xem bảng đầy đủ & điều kiện kiểm'):
+        st.caption('Hai cách kiểm mô tả: xét từng năm và tính lại chỉ số sau khi bỏ lần lượt một năm. '
+                   'Chưa có kiểm định để kết luận “có ý nghĩa thống kê”.')
         st.dataframe(ts.drop(columns='rhythm_code'), hide_index=True, height='content', width='stretch',
                      column_config={c: right for c in [years_label, 'Bỏ lần lượt từng năm', 'Số năm tự có nhịp']})
         st.markdown('Năm được tính là “có nhịp” khi ' + '; '.join(
@@ -289,19 +289,19 @@ phase_notes = [
               for c, o in zip(missing_august['phase_code'], missing_august['n_odd_years'])) + '.',
 ]
 with tab_phase:
-    st.caption('**Quy ước riêng của phần so sánh này (chưa được BA chốt):** năm ranh giới được tính cho '
-               'giai đoạn kết thúc ở năm đó. Số năm: '
-               + '; '.join(f'{c}: {int(n)}' for c, n in zip(cp['phase_code'], cp['n_years'])) + '. '
-               'Giai đoạn một năm không đủ cả nhóm năm lẻ và chẵn để so tháng 8.')
-    st.altair_chart((phase_heat + phase_text).properties(height=260), width='stretch')
-    st.caption('Bảng nhiệt này và bảng theo năm **dùng chung một thang màu**. '
-               'Ở đây 1 = TB tháng của cả giai đoạn, tính từ tổng R; bảng theo năm lấy TB của từng năm.')
-    st.markdown('**Nhận xét so sánh:**\n' + '\n'.join(f'- {item}' for item in phase_notes))
-    st.caption('Giai đoạn ngắn (1–2 năm) kém chắc hơn. Xu hướng R trong năm có thể làm các tháng cuối thấp hơn; '
-               'chênh giữa giai đoạn không chứng minh tác động nhân quả.')
+    st.altair_chart(bi.dinh_dang_bieu_do((phase_heat + phase_text).properties(height=240)), width='stretch')
     with st.expander('Xem bảng chỉ số giai đoạn'):
         st.dataframe(tp, hide_index=True, height='content', width='stretch',
                      column_config={c: right for c in tp.columns if c not in ('Giai đoạn', 'Số năm')})
+        st.caption('**Quy ước riêng của phần so sánh này (chưa được BA chốt):** năm ranh giới được tính cho '
+                   'giai đoạn kết thúc ở năm đó. Số năm: '
+                   + '; '.join(f'{c}: {int(n)}' for c, n in zip(cp['phase_code'], cp['n_years'])) + '. '
+                   'Giai đoạn một năm không đủ cả nhóm năm lẻ và chẵn để so tháng 8.')
+        st.caption('Bảng nhiệt này và bảng theo năm **dùng chung một thang màu**. '
+                   'Ở đây 1 = TB tháng của cả giai đoạn, tính từ tổng R; bảng theo năm lấy TB của từng năm.')
+        st.markdown('**Nhận xét so sánh:**\n' + '\n'.join(f'- {item}' for item in phase_notes))
+        st.caption('Giai đoạn ngắn (1–2 năm) kém chắc hơn. Xu hướng R trong năm có thể làm các tháng cuối thấp hơn; '
+                   'chênh giữa giai đoạn không chứng minh tác động nhân quả.')
 
 tb = yr[['year']].rename(columns={'year': 'Năm'})
 tb['Giai đoạn'] = yr['ps2_phase_codes']
@@ -319,7 +319,29 @@ with tab_year:
     st.download_button('Tải bảng theo năm (CSV)', tb.to_csv(index=False).encode('utf-8-sig'),
                        file_name='ps3_bang_theo_nam.csv', mime='text/csv')
 
-with st.expander('Cách đọc & phương pháp'):
+with o_sau.expander('Tóm tắt bằng chữ, định nghĩa và giới hạn'):
+    st.caption(f'Kỳ phân tích: {period_label} · R: doanh thu đơn đã giao · Đơn vị tiền: VND')
+    st.caption('Ba KPI tính cho toàn kỳ phân tích; lựa chọn nhịp bên dưới chỉ thay biểu đồ và phần giải thích. '
+               'Đường nhỏ trên thẻ: giá trị của chỉ số đó từng năm.')
+    if rhythm != 'Tháng 8: năm lẻ / chẵn':
+        st.caption(chart_note)
+    if rhythm == 'Tháng cao / thấp':
+        st.caption('Cạnh mỗi năm là mã giai đoạn ở PS2; năm ranh giới có thể mang hai mã, ví dụ A/B. '
+                   'Bảng nhiệt này và bảng nhiệt theo giai đoạn **dùng chung một thang màu**.')
+    st.markdown('**Tóm tắt từ số liệu**')
+    st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
+    for item in explanation:
+        st.markdown(f'- {item}')
+    st.markdown('**Định nghĩa & phạm vi dữ liệu**')
+    st.markdown('**R** là doanh thu đơn đã giao sau chiết khấu, gom theo ngày đặt hàng; '
+                'không phải dòng tiền thanh toán. Tiền tính bằng VND. '
+                'Chỉ số tháng so R của một tháng với R bình quân 12 tháng cùng năm; '
+                'mốc **1** là mức bình quân, không phải số tiền. Năm '
+                f'{build["data_start_date"].year} chưa đủ 12 tháng nên không dùng để so nhịp năm. '
+                'Các chỉ số trong ba thẻ đại diện cho toàn kỳ phân tích. '
+                f'Snapshot có đơn cuối cùng ngày {build["data_end_date"]:%d/%m/%Y}; '
+                'trạng thái đơn là trạng thái lúc trích dữ liệu.')
+    st.markdown('**Cách đọc & phương pháp**')
     st.markdown('\n'.join(f'- {item}' for item in [
         'Chỉ số tháng = R tháng / bình quân R 12 tháng cùng năm. Tháng có chỉ số thấp không tự chứng minh '
         'kinh doanh sa sút; để xét cùng kỳ, so với chính tháng đó ở các năm khác.',
@@ -331,7 +353,7 @@ with st.expander('Cách đọc & phương pháp'):
         'Tháng 8 năm lẻ trùng thời gian đợt Urban Blowout trong dữ liệu; sự trùng thời gian '
         'không chứng minh tác động khuyến mãi. Nhịp lịch không phải kết quả dự báo.',
     ]))
-with st.expander('Giới hạn chi tiết'):
+    st.markdown('**Giới hạn chi tiết**')
     st.markdown('\n'.join(f'- {item}' for item in [
         'Chuẩn hóa tháng theo bình quân cùng năm chưa loại hết xu hướng trong năm; '
         'năm đang giảm có thể làm các tháng cuối thấp một phần vì xu hướng.',

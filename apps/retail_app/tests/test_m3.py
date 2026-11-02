@@ -69,7 +69,7 @@ def test_thang_8_nam_le_luon_thap_hon(monkeypatch):
     text = ' '.join(m.value for m in at.markdown)
     assert 'năm lẻ cao nhất 0,89, năm chẵn thấp nhất 1,21: năm lẻ nào cũng thấp hơn mọi năm chẵn.' in text
     assert '5 năm lẻ, 5 năm chẵn' in text
-    assert any(s.value == 'Tháng 8 năm lẻ / chẵn: có khác biệt không?' for s in at.subheader)
+    assert any('Tháng 8 năm lẻ / chẵn: có khác biệt không?' in s.value for s in at.subheader)
 
 
 def test_bang_nhiet_co_nhan_giai_doan(monkeypatch):
@@ -158,18 +158,18 @@ def test_hai_bang_nhiet_chi_so_thang_chung_thang_mau(monkeypatch, backend):
 def test_chuyen_nhip_doi_bieu_do_va_giai_thich(monkeypatch):
     at = _ps3(monkeypatch, 'duckdb')
     assert len(at.get('vega_lite_chart')) == 2  # một biểu đồ chính, một bảng nhiệt trong tab giai đoạn
-    assert any(s.value == 'Tháng nào cao, tháng nào thấp?' for s in at.subheader)
+    assert any('Tháng nào cao, tháng nào thấp?' in s.value for s in at.subheader)
     assert _thang_mau(at, 'month_index')
     assert not _thang_mau(at, 'eom_excess')
 
     at.segmented_control[0].set_value('Dồn cuối tháng').run()
     assert len(at.get('vega_lite_chart')) == 2
-    assert any(s.value == 'Doanh thu có dồn cuối tháng không?' for s in at.subheader)
+    assert any('Doanh thu có dồn cuối tháng không?' in s.value for s in at.subheader)
     assert _thang_mau(at, 'eom_excess')
     assert 'mốc rải đều là' in ' '.join(m.value for m in at.markdown)
 
     at.segmented_control[0].set_value('Tháng 8: năm lẻ / chẵn').run()
     assert len(at.get('vega_lite_chart')) == 2
-    assert any(s.value == 'Tháng 8 năm lẻ / chẵn: có khác biệt không?' for s in at.subheader)
+    assert any('Tháng 8 năm lẻ / chẵn: có khác biệt không?' in s.value for s in at.subheader)
     assert not _thang_mau(at, 'eom_excess')
     assert 'đây là chênh chỉ số chuẩn hóa' in ' '.join(m.value for m in at.markdown).lower()
