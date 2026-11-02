@@ -48,14 +48,20 @@ def _the(at) -> dict:
 # ---------------- trạng thái thật sau dbt build ----------------
 
 def _singular_build_thuong() -> list[str]:
-    """Test nghiệp vụ phải chạy ở build thường: mọi file assert_*.sql, trừ test chỉ bật trong pipeline có dự báo
-    (config enabled theo var forecast_path trong tests/_singular_tests.yml, B2b 2026-10-15)."""
+    """Test nghiệp vụ phải chạy ở build thường: mọi file assert_*.sql, trừ:
+    - test chỉ bật trong pipeline có dự báo (config enabled theo var forecast_path trong tests/_singular_tests.yml, B2b 2026-10-15);
+    - test của nguồn mở rộng, chỉ bật khi pipeline truyền var extensions (config(enabled=extension_enabled(...)) đầu file, 2026-10-28).
+    assert_rpt_health cũng gọi extension_enabled nhưng trong thân SQL nên vẫn chạy ở build thường, không bị trừ."""
+    import re
+
     import yaml
     tests = Path(__file__).resolve().parents[3] / 'retail_dbt' / 'tests'
     cfg = yaml.safe_load((tests / '_singular_tests.yml').read_text(encoding='utf-8'))
     pipeline_only = {d['name'] for d in cfg.get('data_tests', cfg.get('tests', []))
                      if 'forecast_path' in str((d.get('config') or {}).get('enabled', ''))}
-    return [f.stem for f in tests.glob('assert_*.sql') if f.stem not in pipeline_only]
+    chi_mo_rong = re.compile(r'config\(\s*enabled\s*=\s*extension_enabled\(')
+    return [f.stem for f in tests.glob('assert_*.sql')
+            if f.stem not in pipeline_only and not chi_mo_rong.search(f.read_text(encoding='utf-8'))]
 
 
 @pytest.mark.parametrize('backend', ['postgres', 'duckdb'])
