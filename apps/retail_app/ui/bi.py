@@ -44,14 +44,15 @@ _CSS = """
 [class*="st-key-the_"] [data-testid="stMetric"] {
     border: 1px solid rgba(128, 128, 128, 0.28); border-radius: 0.7rem; padding: 0.6rem 0.75rem;
     box-shadow: inset 0 3px 0 #5B4BD6;
-    display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: end; column-gap: 0.5rem;
+    /* align-content: thẻ không có đường xu hướng bị kéo cao bằng thẻ cao nhất; để mặc định thì các dòng giãn ra, lệch với thẻ bên cạnh */
+    display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; align-content: start; column-gap: 0.5rem;
 }
 /* Bỏ lớp bọc phần chữ để nhãn, số, dòng phụ thành ô riêng trên lưới: nhãn trải hết thẻ, không xuống dòng giữa cụm từ */
 [class*="st-key-the_"] [data-testid="stMetric"] > div:first-child {display: contents;}
 [class*="st-key-the_"] [data-testid="stMetricLabel"] {grid-column: 1 / -1;}
 [class*="st-key-the_"] [data-testid="stMetricValue"] {grid-column: 1; grid-row: 2;}
 [class*="st-key-the_"] [data-testid="stMetricValue"] + div {grid-column: 1; grid-row: 3;}
-[class*="st-key-the_"] [data-testid="stMetric"] > div:last-child {grid-column: 2; grid-row: 2 / span 2; min-width: 0; padding: 0;}
+[class*="st-key-the_"] [data-testid="stMetric"] > div:last-child {grid-column: 2; grid-row: 2 / span 2; align-self: end; min-width: 0; padding: 0;}
 [class*="st-key-the_"] [data-testid="stMetricChart"] svg {width: 100%;}
 [class*="st-key-the_"] [data-testid="stMetricLabel"] p {font-size: 0.78rem; opacity: 0.75;}
 [class*="st-key-the_"] [data-testid="stMetricValue"] {font-size: clamp(1.1rem, 8.6cqi, 1.65rem) !important; font-weight: 650;}
@@ -91,6 +92,10 @@ _CSS = """
     [class*="st-key-the_"] [data-testid="stMetricValue"],
     [class*="st-key-the_"] [data-testid="stMetricValue"] + div,
     [class*="st-key-the_"] [data-testid="stMetric"] > div:last-child {grid-column: 1 / -1; grid-row: auto;}
+}
+/* Thẻ rất hẹp (điện thoại): nhãn có thể 3 dòng, mọi thẻ chừa đủ 3 dòng để số vẫn thẳng hàng */
+@container (max-width: 140px) {
+    [class*="st-key-the_"] [data-testid="stMetric"] [data-testid="stMetricLabel"] {min-height: 4.4em;}
 }
 """
 
