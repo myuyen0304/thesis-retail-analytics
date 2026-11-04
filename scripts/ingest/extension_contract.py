@@ -11,6 +11,7 @@ CONTRACT_DIR = Path(__file__).with_name('extensions')
 APPROVED = 'da_duyet'
 ACTIONS = {'khoa_noi', 'doi_chieu_loi', 'bo', 'nap'}
 DEFAULT_TOLERANCE = 0.01
+VALID_TYPES = ('string', 'integer', 'date', 'double')
 
 
 def load(name, directory=None):
@@ -58,7 +59,7 @@ def load(name, directory=None):
             require(col['ten'] in core, field + '.doi_chieu_loi')
         elif col['xu_ly'] in ('nap', 'khoa_noi'):
             kind = col.get('kieu', '')
-            valid = kind in ('string', 'integer', 'date', 'double')
+            valid = kind in VALID_TYPES
             match = re.fullmatch(r'decimal\((\d+),(\d+)\)', kind) if isinstance(kind, str) else None
             valid = valid or bool(match and 1 <= int(match[1]) <= 38 and 0 <= int(match[2]) <= int(match[1]))
             require(valid, field + '.kieu')
