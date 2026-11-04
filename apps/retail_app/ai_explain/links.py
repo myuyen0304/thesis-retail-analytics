@@ -14,7 +14,7 @@ PAGES = {
     'ps2': ('views/ps2_xu_huong.py', 'PS2: Xu hướng'),
     'ps3': ('views/ps3_nhip_lich.py', 'PS3: Nhịp lịch'),
     'ps4': ('views/ps4_don_mon_gia.py', 'PS4: Số đơn, số món, giá'),
-    'ps5': ('views/ps5_nhom.py', 'PS5: Nhóm kéo lên/xuống'),
+    'ps5': ('views/ps5_nhom.py', 'PS5: Ngành hàng, khu vực, kênh'),
     'du_bao': ('views/du_bao.py', 'Dự báo'),
 }
 DIM_VI = {'category': 'ngành hàng', 'region': 'khu vực', 'acquisition_channel': 'kênh thu hút khách'}

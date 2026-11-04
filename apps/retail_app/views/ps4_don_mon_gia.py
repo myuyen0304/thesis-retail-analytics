@@ -1,13 +1,16 @@
 import altair as alt
+import pandas as pd
 import streamlit as st
 
 from ai_explain import page_explain
+from ui import bi
 from ui.ai_panel import ai_panel
 from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, url_choice
-from ui.fmt import AXIS_TRIEU, num, pct, trieu
+from ui.fmt import num, pct, trieu
 
-st.title('PS4 · Số đơn, số món và giá')
-st.markdown('Biến động doanh thu được phân rã theo N, U và P như thế nào?')
+bi.nap_css()
+c_ten, c_ky = bi.hang_doi('dau', (3, 2))
+c_ten.title('PS4 · Số đơn, số món và giá')
 
 dp = load_or_stop('driver_period')       # 1 dòng = 1 năm hoặc 1 giai đoạn PS2
 br = load_or_stop('driver_bridge')
@@ -26,42 +29,11 @@ ten_of = dict(zip(dp['period_code'], dp['ten']))
 
 # --- Chọn kỳ: 4 giai đoạn PS2 + từng năm 2014–2022 (mặc định 2019, năm sập) ---
 codes = list(dp['period_code'])
-code = st.selectbox('Kỳ', codes, index=url_choice('ky', codes, codes.index('2019') if '2019' in codes else 0, 'kỳ'),
-                    format_func=ten_of.get)
+code = c_ky.selectbox('Kỳ', codes, index=url_choice('ky', codes, codes.index('2019') if '2019' in codes else 0, 'kỳ'),
+                      format_func=ten_of.get)
 row = dp.set_index('period_code').loc[code]
 s0, s1 = int(row['start_year']), int(row['end_year'])
-st.caption(f'Đang so sánh: {ten_of[code]} · Đơn vị tiền: VND (triệu = triệu đồng)')
-with st.expander('Định nghĩa & phạm vi dữ liệu'):
-    st.markdown(
-        '**R = N × U × P**, với N là số đơn đã giao, U là số món mỗi đơn, '
-        'P là giá bình quân mỗi món sau chiết khấu. R tính theo ngày đặt hàng, không phải dòng tiền thanh toán.\n\n'
-        'Bộ lọc gồm so sánh từng năm và các giai đoạn PS2. Với giai đoạn, phần góp bằng tổng phần góp '
-        'của các năm trong giai đoạn; tỷ lệ biến động N/U/P so thẳng năm cuối với năm đầu.'
-    )
-st.warning('**Phân rã theo thứ tự N → U → P; thể hiện đóng góp số học, chưa chứng minh nguyên nhân.**')
 st.session_state._collapse_source = True
-
-# Feedback 2026-10-01 (F01): số lớn của thẻ đầu là MỨC ĐỔI R, không phải mức R → nhãn "Thay đổi R"; kỳ ghi ngay trên hàng thẻ.
-# Feedback PM 2026-10-02: số lớn có đơn vị; 4 thẻ một hàng, đều nhau (ui.common.hang_the).
-c0, c1, c2, c3 = hang_the('the_ps4', 4)
-kpi(c0, 'Thay đổi doanh thu R', trieu(row['delta_r'], 1, signed=True),
-    f'R {s0}: {num(row["r_start"], 2)}; R {s1}: {num(row["r_end"], 2)}. Ba thẻ bên cạnh cộng lại đúng bằng số này.',
-    delta=pct(row['r_change_rate'], 1, signed=True), delta_sign=row['r_change_rate'],
-    delta_desc=f'R: {num(row["r_start"] / 1e6)} → {num(row["r_end"] / 1e6)} triệu')
-kpi(c1, 'Tác động của số đơn N', trieu(row['contrib_n'], 1, signed=True),
-    '(N₁ − N₀) × U₀ × P₀: doanh thu đổi bao nhiêu nếu chỉ số đơn đổi, số món mỗi đơn và giá mỗi món giữ như năm đầu.',
-    delta=pct(row['n_change_rate'], 1, signed=True), delta_sign=row['n_change_rate'],
-    delta_desc=f'N: {num(row["n_start"])} → {num(row["n_end"])} đơn')
-kpi(c2, 'Tác động của số món/đơn U', trieu(row['contrib_u'], 1, signed=True),
-    'N₁ × (U₁ − U₀) × P₀: phần doanh thu đổi do số món mỗi đơn đổi (số đơn năm cuối, giá năm đầu).',
-    delta=pct(row['u_change_rate'], 1, signed=True), delta_sign=row['u_change_rate'],
-    delta_desc=f'U: {num(row["u_start"], 2)} → {num(row["u_end"], 2)} món/đơn')
-kpi(c3, 'Tác động của giá/món P', trieu(row['contrib_p'], 1, signed=True),
-    'N₁ × U₁ × (P₁ − P₀): phần doanh thu đổi do giá mỗi món (sau chiết khấu) đổi, với số đơn và số món năm cuối.',
-    delta=pct(row['p_change_rate'], 1, signed=True), delta_sign=row['p_change_rate'],
-    delta_desc=f'P: {num(row["p_start"])} → {num(row["p_end"])} mỗi món')
-st.caption('Số lớn là mức thay đổi hoặc đóng góp bằng tiền. Dòng % là biến động của chính R, N, U hoặc P; '
-           'không phải tỷ trọng đóng góp vào thay đổi R.')
 
 
 def mo_ta_phan(r, key: str) -> str:
@@ -80,12 +52,63 @@ def cau_keo(r) -> str:
     return '; '.join(t for _, t in sorted(parts, key=lambda x: -x[0]))
 
 
+def hoa_dau(t: str) -> str:
+    return t[0].upper() + t[1:]         # str.capitalize() hạ chữ N, U, P về thường
+
+
+def phan_chinh(r) -> str | None:
+    """Phần dbt đánh dấu kéo mạnh nhất theo đúng chiều đổi của R; không có thì lấy phần còn lại."""
+    chinh = r['top_down_driver'] if r['delta_r'] < 0 else r['top_up_driver']
+    if not isinstance(chinh, str):
+        chinh = r['top_up_driver'] if r['delta_r'] < 0 else r['top_down_driver']
+    return chinh if isinstance(chinh, str) else None
+
+
+def mau_tien(v) -> str:
+    """Số tiền kèm dấu, tô theo chiều tăng/giảm."""
+    return bi.mau(trieu(v, 1, signed=True), v)
+
+
+def cau_tra_loi(r) -> str:
+    """Một câu trả lời thẳng câu hỏi của trang, ghép từ cột dbt; không do AI viết."""
+    up, down = r['top_up_driver'], r['top_down_driver']
+    if r['delta_r_is_small'] and isinstance(up, str) and isinstance(down, str):
+        return (f'R gần như không đổi ({mau_tien(r["delta_r"])}): {PHAN[down]} {mau_tien(r["contrib_" + down])} '
+                f'và {PHAN[up]} {mau_tien(r["contrib_" + up])} bù trừ nhau')
+    chinh = phan_chinh(r)
+    if chinh is None:
+        return f'R đổi {mau_tien(r["delta_r"])}'
+    return f'R đổi {mau_tien(r["delta_r"])}; {PHAN[chinh]} góp nhiều nhất: {mau_tien(r["contrib_" + chinh])}'
+
+
+def cau_hoi_tiep(r) -> list[bi.CauHoi]:
+    """Ba câu theo kỳ đang xem, nối PS4 với PS5, PS2, PS3. Chỉ mở bằng tham số trang đọc được (PS5: chieu, nam; PS2, PS3
+    không có bộ lọc); nút ghi rõ trang hiện gì. Phần "chính" là phần dbt đánh dấu cùng chiều với mức đổi R."""
+    nam, la_gd = int(r['end_year']), r['period_type'] == 'phase'
+    pham_vi = f'năm {nam} so với {nam - 1}' + (' (năm cuối giai đoạn; PS5 so từng năm)' if la_gd else '')
+    chinh = phan_chinh(r)
+    if r['delta_r_is_small']:
+        cau_5 = bi.CauHoi('R đổi rất ít: ngành hàng nào bù trừ?', 'ps5_nhom',
+                          f'ngành hàng, {pham_vi}', {'chieu': 'category', 'nam': nam})
+    elif chinh == 'n':
+        cau_5 = bi.CauHoi(f'{hoa_dau(PHAN["n"])} đổi {pct(r["n_change_rate"], 1, signed=True)}: số khách hay tần suất?',
+                          'ps5_nhom', f'tab Khách hàng & tần suất, {pham_vi}', {'nam': nam})
+    else:
+        cau_5 = bi.CauHoi(f'{hoa_dau(PHAN[chinh])} đổi {pct(r[chinh + "_change_rate"], 1, signed=True)}: ngành hàng nào?',
+                          'ps5_nhom', f'ngành hàng, {pham_vi}', {'chieu': 'category', 'nam': nam})
+    cau_2 = (f'Giai đoạn {r["phase_code"]} so với trước và sau?' if la_gd else f'Năm {nam} trong xu hướng dài hạn?')
+    cau_3 = (f'Năm lẻ {nam}: tháng 8 năm lẻ có thấp hơn?' if not la_gd and nam % 2 else 'Nhịp lịch có lặp lại không?')
+    return [cau_5, bi.CauHoi(cau_2, 'ps2_xu_huong', 'mọi năm, trang không lọc theo kỳ'),
+            bi.CauHoi(cau_3, 'ps3_nhip_lich', 'mọi năm, trang không lọc theo kỳ')]
+
+
 # --- Thác R đầu → N → U → P → R cuối ---
 BUOC = {'n': 'Số đơn N', 'u': 'Số món mỗi đơn U', 'p': 'Giá mỗi món P'}
+NHAN_TRUC = {'n': 'Số đơn N', 'u': 'Món/đơn U', 'p': 'Giá/món P'}
 w = need(br[(br['period_code'] == code) & (br['bridge_code'] == 'r_nup')], 'driver_bridge',
          f'của thác doanh thu kỳ {code}').copy()
 w['Cột'] = [f'R {int(y)}' if c in ('r_start', 'r_end') else BUOC[c] for c, y in zip(w['step_code'], w['step_year'])]
-w['Nhãn'] = [f'R {int(y)}' if c in ('r_start', 'r_end') else c.upper() for c, y in zip(w['step_code'], w['step_year'])]
+w['Nhãn'] = [f'R {int(y)}' if c in ('r_start', 'r_end') else NHAN_TRUC[c] for c, y in zip(w['step_code'], w['step_year'])]
 w['loai'] = ['Tổng' if c in ('r_start', 'r_end') else ('Tăng' if a >= 0 else 'Giảm')
              for c, a in zip(w['step_code'], w['amount'])]
 w['Số đầy đủ'] = [num(a, 2) if c in ('r_start', 'r_end') else num(a, 2, signed=True) for c, a in zip(w['step_code'], w['amount'])]
@@ -93,48 +116,86 @@ w['nhan'] = [num(a / 1e6, 1) if c in ('r_start', 'r_end') else num(a / 1e6, 1, s
              for c, a in zip(w['step_code'], w['amount'])]
 w['Số tiền'] = [trieu(a, 1) if c in ('r_start', 'r_end') else trieu(a, 1, signed=True)
                 for c, a in zip(w['step_code'], w['amount'])]
-x = alt.X('Nhãn:N', sort=list(w['Nhãn']), title=None,
-          axis=alt.Axis(labelAngle=0, labelLimit=80, labelFontSize=10, labelOverlap=False))
-bars = alt.Chart(w).mark_bar().encode(
+thu_tu = list(w['Nhãn'])
+x = alt.X('Nhãn:N', sort=thu_tu, title=None,
+          axis=alt.Axis(labelAngle=0, labelLimit=80, labelFontSize=11, labelOverlap=False))
+# Đường nối mức R sau mỗi bước sang cột kế tiếp; bar_end là cột dbt, không tính lại trên trang.
+# Lớp này phải dùng đúng trục x của cột (cùng field, cùng sort): khác field thì Vega-Lite bỏ sort, cột xếp theo ABC.
+noi = alt.Chart(pd.DataFrame({'Nhãn': thu_tu[:-1], 'den': thu_tu[1:], 'muc': list(w['bar_end'])[:-1]})).mark_rule(
+    color=bi.MAU_NOI, strokeDash=[3, 3]).encode(x=x, x2='den:N', y='muc:Q')
+bars = alt.Chart(w).mark_bar(cornerRadius=3).encode(
     x=x,
-    y=alt.Y('bar_start:Q', title=None, axis=alt.Axis(labelExpr=AXIS_TRIEU)),
+    y=alt.Y('bar_start:Q', title=None, axis=alt.Axis(labelExpr=bi.AXIS_SO_TRIEU, tickCount=5)),
     y2='bar_end:Q',
-    color=alt.Color('loai:N', scale=alt.Scale(domain=['Tổng', 'Tăng', 'Giảm'], range=['#1f5f8b', '#2a9d8f', '#d1495b']),
-                    legend=alt.Legend(title=None, orient='top')),
+    color=alt.Color('loai:N', scale=alt.Scale(domain=['Tổng', 'Tăng', 'Giảm'], range=[bi.MAU_TONG, bi.MAU_TANG, bi.MAU_GIAM]),
+                    legend=alt.Legend(title=None, orient='top', direction='horizontal')),
     tooltip=['Cột', 'Số đầy đủ'],
 )
-text = alt.Chart(w).transform_calculate(top='max(datum.bar_start, datum.bar_end)').mark_text(dy=-8, fontSize=10).encode(
+text = alt.Chart(w).transform_calculate(top='max(datum.bar_start, datum.bar_end)').mark_text(dy=-9, fontSize=12, fontWeight=600, color=bi.mau_chu()).encode(
     x=x, y='top:Q', text='nhan:N')
 right = st.column_config.TextColumn(alignment='right')
-st.subheader('Từ R đầu kỳ đến R cuối kỳ')
-left, side = st.columns([2, 1], gap='medium')
-with left:
-    st.caption(f'{s0} → {s1} · Nhãn cột: triệu đồng. Rê chuột để xem số đầy đủ; N/U/P là phần đóng góp.')
-    st.altair_chart((bars + text).properties(height=420, padding={'top': 24}), width='stretch')
-    with st.expander('Xem số liệu làm căn cứ'):
-        st.dataframe(w[['Cột', 'Số tiền']], hide_index=True, width='stretch', column_config={'Số tiền': right})
-        st.caption('Cột đóng góp nhỏ vẫn có nhãn; số gốc xem qua tooltip. Số làm tròn có thể lệch 0,1 triệu.')
-with side:
-    with st.container(border=True):
-        st.markdown('**Tóm tắt từ số liệu**')
-        st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
-        st.markdown(f'- **R {"tăng" if row["delta_r"] > 0 else "giảm"}:** '
-                    f'{trieu(abs(row["delta_r"]), 1)} ({pct(row["r_change_rate"], 1, signed=True)}), '
-                    f'từ {trieu(row["r_start"], 1)} đến {trieu(row["r_end"], 1)}.')
-        if isinstance(row['top_down_driver'], str):
-            st.markdown(f'- **Giảm lớn nhất:** {mo_ta_phan(row, row["top_down_driver"])}.')
-        if isinstance(row['top_up_driver'], str):
-            st.markdown(f'- **Phần tăng/bù đắp:** {mo_ta_phan(row, row["top_up_driver"])}.')
-        if row['delta_r_is_small']:
-            st.markdown(f'- **Lưu ý:** ΔR dưới {nguong} R đầu kỳ; các phần ngược dấu bù trừ. '
-                        'Đọc số tiền từng phần, không đọc % đóng góp.')
-        else:
-            st.markdown('- **Giới hạn:** thứ tự N → U → P ảnh hưởng phần góp; P còn thay đổi theo '
-                        'chiết khấu và cơ cấu hàng bán.')
-    ai_panel(page_explain.request_ps4(code, row['period_type'], s0, s1, ten_of[code]))
+
+xu_huong = yearly[yearly['is_analysis_period']].sort_values('year')
+
+
+def duong(cot: str) -> list[float]:
+    """Đường nhỏ trong thẻ: chính cột của rpt_revenue_yearly theo năm, không tính thêm."""
+    return xu_huong[cot].astype(float).tolist()
+
+
+# --- 01 Nhận định: một câu trả lời và bốn thẻ ---
+with bi.khoi('01', 'Doanh thu thay đổi chủ yếu ở thành phần nào?'):
+    st.markdown(f'#### {cau_tra_loi(row)}')
+    # Feedback 2026-10-01 (F01): số lớn của thẻ đầu là MỨC ĐỔI R, không phải mức R → nhãn "Thay đổi R".
+    # Feedback PM 2026-10-02: số lớn có đơn vị; 4 thẻ một hàng, đều nhau (ui.common.hang_the).
+    c0, c1, c2, c3 = hang_the('the_ps4', 4)
+    kpi(c0, 'Thay đổi doanh thu R', trieu(row['delta_r'], 1, signed=True),
+        f'R {s0}: {num(row["r_start"], 2)}; R {s1}: {num(row["r_end"], 2)}. Ba thẻ bên cạnh cộng lại đúng bằng số này.',
+        delta=pct(row['r_change_rate'], 1, signed=True), delta_sign=row['r_change_rate'],
+        delta_desc=f'R: {num(row["r_start"] / 1e6)} → {num(row["r_end"] / 1e6)} triệu', chart=duong('r'))
+    kpi(c1, 'Tác động của số đơn N', trieu(row['contrib_n'], 1, signed=True),
+        '(N₁ − N₀) × U₀ × P₀: doanh thu đổi bao nhiêu nếu chỉ số đơn đổi, số món mỗi đơn và giá mỗi món giữ như năm đầu.',
+        delta=pct(row['n_change_rate'], 1, signed=True), delta_sign=row['n_change_rate'],
+        delta_desc=f'N: {num(row["n_start"])} → {num(row["n_end"])} đơn', chart=duong('n'))
+    kpi(c2, 'Tác động của số món/đơn U', trieu(row['contrib_u'], 1, signed=True),
+        'N₁ × (U₁ − U₀) × P₀: phần doanh thu đổi do số món mỗi đơn đổi (số đơn năm cuối, giá năm đầu).',
+        delta=pct(row['u_change_rate'], 1, signed=True), delta_sign=row['u_change_rate'],
+        delta_desc=f'U: {num(row["u_start"], 2)} → {num(row["u_end"], 2)} món/đơn', chart=duong('u'))
+    kpi(c3, 'Tác động của giá/món P', trieu(row['contrib_p'], 1, signed=True),
+        'N₁ × U₁ × (P₁ − P₀): phần doanh thu đổi do giá mỗi món (sau chiết khấu) đổi, với số đơn và số món năm cuối.',
+        delta=pct(row['p_change_rate'], 1, signed=True), delta_sign=row['p_change_rate'],
+        delta_desc=f'P: {num(row["p_start"])} → {num(row["p_end"])} mỗi món', chart=duong('p'))
+
+# --- 02 Bằng chứng: thác và bảng đối chứng ---
+with bi.khoi('02', f'Từ R {s0} đến R {s1} (triệu đồng)'):
+    c_thac, c_bang = bi.hang_doi('bang_chung', (7, 5))
+    with c_thac:
+        st.altair_chart(bi.dinh_dang_bieu_do((noi + bars + text).properties(height=270, padding={'top': 20})), width='stretch')
+    with c_bang:
+        bi.bang_doi_chung(pd.DataFrame({
+            'Thành phần': ['Doanh thu R (triệu)', 'Số đơn N', 'Số món/đơn U', 'Giá/món P (VND)'],
+            str(s0): [num(row['r_start'] / 1e6, 1), num(row['n_start']), num(row['u_start'], 2), num(row['p_start'])],
+            str(s1): [num(row['r_end'] / 1e6, 1), num(row['n_end']), num(row['u_end'], 2), num(row['p_end'])],
+            'Tác động lên R': [trieu(row[c], 1, signed=True) for c in ['delta_r', 'contrib_n', 'contrib_u', 'contrib_p']],
+            'Biến động yếu tố': [pct(row[c], 1, signed=True) for c in ['r_change_rate', 'n_change_rate', 'u_change_rate',
+                                                                        'p_change_rate']],
+        }), 'Tác động lên R', [row[c] for c in ['delta_r', 'contrib_n', 'contrib_u', 'contrib_p']])
+        with st.expander('Xem số liệu làm căn cứ'):
+            st.dataframe(w[['Cột', 'Số tiền']], hide_index=True, width='stretch', column_config={'Số tiền': right})
+            st.caption('Cột đóng góp nhỏ vẫn có nhãn; số gốc xem qua tooltip. Số làm tròn có thể lệch 0,1 triệu.')
+
+# --- 03 AI (chỉ chạy khi bấm nút, xem ui/ai_panel.py) và 04 câu hỏi kiểm tra tiếp ---
+c_ai, c_tiep = bi.hang_doi('ai_tiep', (5, 7))
+with c_ai:
+    with bi.khoi('03', 'AI giải thích'):
+        ai_panel(page_explain.request_ps4(code, row['period_type'], s0, s1, ten_of[code]))
+with c_tiep:
+    with bi.khoi('04', 'Kiểm tra tiếp'):
+        bi.hoi_tiep(cau_hoi_tiep(row))
 
 # --- Phân tích sâu: dữ liệu và cách cộng phần góp giữ theo reporting hiện có ---
-tab_year, tab_phase, tab_indices = st.tabs(['So sánh theo năm', 'So sánh theo giai đoạn', 'Chỉ số N/U/P/AOV'])
+o_sau = bi.khoi('', 'Phân tích sâu')
+tab_year, tab_phase, tab_indices = o_sau.tabs(['So sánh theo năm', 'So sánh theo giai đoạn', 'Chỉ số N/U/P/AOV'])
 
 yr = dp[dp['period_type'] == 'year'].copy()
 long = yr.melt(id_vars=['period_code', 'phase_code'], value_vars=['contrib_n', 'contrib_u', 'contrib_p'],
@@ -142,18 +203,22 @@ long = yr.melt(id_vars=['period_code', 'phase_code'], value_vars=['contrib_n', '
 long['Phần'] = long['phan'].map({'contrib_n': 'Số đơn N', 'contrib_u': 'Số món mỗi đơn U', 'contrib_p': 'Giá mỗi món P'})
 long['Số tiền'] = long['v'].map(lambda v: trieu(v, 1, signed=True))
 long['Năm'] = long['period_code']
-bar_nam = alt.Chart(long).mark_bar().encode(
+# Năm thuộc kỳ đang chọn đậm, năm khác mờ: chọn năm thì một cột, chọn giai đoạn thì các năm có phase_code đó.
+long['chon'] = long['period_code'].eq(code) | long['phase_code'].eq(code)
+bar_nam = alt.Chart(long).mark_bar(stroke=bi.mau_nen(), strokeWidth=1).encode(
     x=alt.X('Năm:O', title=None, axis=alt.Axis(labelAngle=0)),
-    y=alt.Y('v:Q', title=None, stack='zero', axis=alt.Axis(labelExpr=AXIS_TRIEU)),
+    y=alt.Y('v:Q', title=None, stack='zero', axis=alt.Axis(labelExpr=bi.AXIS_SO_TRIEU, tickCount=5)),
     color=alt.Color('Phần:N', sort=['Số đơn N', 'Số món mỗi đơn U', 'Giá mỗi món P'],
-                    scale=alt.Scale(range=['#1f5f8b', '#e9a23b', '#8e6c8a']),
-                    legend=alt.Legend(title=None, orient='top', direction='vertical', columns=1)),
+                    scale=alt.Scale(range=bi.MAU_NUP),
+                    legend=alt.Legend(title=None, orient='top', direction='horizontal')),
+    opacity=alt.condition('datum.chon', alt.value(1), alt.value(0.38)),
     order=alt.Order('phan:N'),
     tooltip=['Năm', 'Phần', 'Số tiền'],
 )
 yr['Năm'] = yr['period_code']
 yr['R đổi'] = yr['delta_r'].map(lambda v: trieu(v, 1, signed=True))
-diem = alt.Chart(yr).mark_point(shape='diamond', size=110, filled=True, color='black').encode(
+# Hình thoi tối viền trắng: thấy được trên nền trắng và khi đè lên cột.
+diem = alt.Chart(yr).mark_point(shape='diamond', size=110, filled=True, color=bi.mau_chu(), stroke=bi.mau_nen(), strokeWidth=1).encode(
     x='Năm:O', y='delta_r:Q', tooltip=['Năm', 'R đổi'])
 tn = yr[['period_code']].rename(columns={'period_code': 'Năm'})
 tn['Giai đoạn'] = yr['phase_code']
@@ -165,9 +230,8 @@ tn['Kéo lên nhiều nhất'] = yr['top_up_driver'].map(lambda k: k.upper() if 
 tn['Kéo xuống nhiều nhất'] = yr['top_down_driver'].map(lambda k: k.upper() if isinstance(k, str) else '–')
 tn['Ghi chú'] = yr['delta_r_is_small'].map(lambda b: 'R đổi rất nhỏ' if b else '')
 with tab_year:
-    st.altair_chart((bar_nam + diem).properties(height=320), width='stretch')
-    st.caption('Mỗi cột = ba phần góp của một năm so với năm trước (dương trên 0, âm dưới 0). '
-               'Hình thoi đen = mức đổi R, bằng tổng ba phần.')
+    st.altair_chart(bi.dinh_dang_bieu_do((bar_nam + diem).properties(height=250)), width='stretch')
+    st.caption('Triệu đồng · Năm thuộc kỳ đang chọn tô đậm · Hình thoi = mức đổi R, bằng tổng ba phần')
     with st.expander('Xem bảng đóng góp theo năm'):
         st.dataframe(tn, hide_index=True, height='content', width='stretch',
                      column_config={c: right for c in ['R đổi', 'Phần N', 'Phần U', 'Phần P']})
@@ -212,7 +276,38 @@ with tab_indices:
     st.caption('N: đơn; U: món/đơn; P: VND/món sau chiết khấu; AOV: VND/đơn. '
                'Tăng N/U/P/R là biến động so năm trước; R = N × U × P.')
 
-with st.expander('Cách đọc & phương pháp'):
+with o_sau.expander('Tóm tắt bằng chữ, định nghĩa và giới hạn'):
+    # Plan §3 tiêu chí 4: trang phải có câu này. PM 2026-11-01 bỏ dải vàng khỏi màn hình, nên đặt trong mục đóng sẵn.
+    st.warning('**Phân rã theo thứ tự N → U → P; thể hiện đóng góp số học, chưa chứng minh nguyên nhân.**')
+    st.caption(f'Đang so sánh: {ten_of[code]} · Đơn vị tiền: VND (triệu = triệu đồng)')
+    st.markdown('**Tóm tắt từ số liệu**')
+    y_tom_tat = [f'**R {"tăng" if row["delta_r"] > 0 else "giảm"}:** {trieu(abs(row["delta_r"]), 1)} '
+                 f'({pct(row["r_change_rate"], 1, signed=True)}), từ {trieu(row["r_start"], 1)} đến {trieu(row["r_end"], 1)}.']
+    if isinstance(row['top_down_driver'], str):
+        y_tom_tat.append(f'**Giảm lớn nhất:** {mo_ta_phan(row, row["top_down_driver"])}.')
+    if isinstance(row['top_up_driver'], str):
+        y_tom_tat.append(f'**Phần tăng/bù đắp:** {mo_ta_phan(row, row["top_up_driver"])}.')
+    y_tom_tat.append(f'**Lưu ý:** ΔR dưới {nguong} R đầu kỳ; các phần ngược dấu bù trừ. Đọc số tiền từng phần, không đọc % '
+                     'đóng góp.' if row['delta_r_is_small'] else
+                     '**Giới hạn:** thứ tự N → U → P ảnh hưởng phần góp; P còn thay đổi theo chiết khấu và cơ cấu hàng bán.')
+    st.markdown('\n'.join(f'- {t}' for t in y_tom_tat))
+    st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
+    # Bảng năm thiếu kỳ phân tích thì thẻ không có đường nhỏ; câu này cũng không nêu khoảng năm.
+    duong_nho = (f' Đường nhỏ: mức R, N, U, P từng năm {int(xu_huong["year"].iloc[0])}–{int(xu_huong["year"].iloc[-1])}.'
+                 if not xu_huong.empty else '')
+    st.caption('Số lớn là mức thay đổi hoặc đóng góp bằng tiền. Dòng % là biến động của chính R, N, U hoặc P; '
+               f'không phải tỷ trọng đóng góp vào thay đổi R.{duong_nho}')
+    st.caption('Tác động của N, U, P cộng lại bằng dòng R trên số gốc. Biến động là % đổi của chính yếu tố, không phải '
+               'phần chia của mức đổi R.')
+    st.markdown('**Định nghĩa & phạm vi dữ liệu**')
+    st.markdown(
+        '**R = N × U × P**, với N là số đơn đã giao, U là số món mỗi đơn, '
+        'P là giá bình quân mỗi món sau chiết khấu. R tính theo ngày đặt hàng, không phải dòng tiền thanh toán.\n\n'
+        'Bộ lọc gồm so sánh từng năm và các giai đoạn PS2. Với giai đoạn, phần góp bằng tổng phần góp '
+        'của các năm trong giai đoạn; tỷ lệ biến động N/U/P so thẳng năm cuối với năm đầu.'
+    )
+
+    st.markdown('**Cách đọc & phương pháp**')
     st.markdown('\n'.join(f'- {item}' for item in [
         'Số lớn ở thẻ là tiền: ΔR và phần góp N/U/P. Ba phần góp cộng bằng ΔR trên số gốc '
         '(dbt test `assert_rpt_decomposition_additive`); số làm tròn có thể lệch 0,1 triệu.',
@@ -226,7 +321,7 @@ with st.expander('Cách đọc & phương pháp'):
         '(1 + tăng N) × (1 + tăng U) × (1 + tăng P) = 1 + tăng R.',
     ]))
 
-with st.expander('Giới hạn chi tiết'):
+    st.markdown('**Giới hạn chi tiết**')
     st.markdown('\n'.join(f'- {item}' for item in [
         'Thứ tự N → U → P ảnh hưởng kết quả vì phần tương tác dồn vào phần tách sau. '
         'Đây là phân rã số học, chưa chứng minh nguyên nhân.',

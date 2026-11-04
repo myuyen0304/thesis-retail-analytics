@@ -3,13 +3,17 @@ import pandas as pd
 import streamlit as st
 
 from ai_explain import page_explain
+from ui import bi
 from ui.ai_panel import ai_panel
-from ui.common import GIOI_HAN_CHUNG, info_strip, kpi, load_or_stop, need, period_label, pick, url_choice
-from ui.fmt import AXIS_PCT1, AXIS_TRIEU, AXIS_TY, num, pct, pp, trieu, ty
+from ui.common import GIOI_HAN_CHUNG, hang_the, kpi, load_or_stop, need, period_label, pick, url_choice
+from ui.fmt import AXIS_PCT1, AXIS_TRIEU, num, pct, pp, trieu, ty
 
-st.title('PS1 · Từ tổng tiền hàng đến doanh thu')
-st.markdown('Phần chênh giữa G và R đến từ đâu?')
+bi.nap_css()
+c_ten, c_ky = bi.hang_doi('dau', (3, 2))
+c_ten.title('PS1 · Từ tổng tiền hàng đến doanh thu')
 
+# Xác nhận metadata có dữ liệu trước khi vẽ KPI; phần trình bày nguồn đặt ở cuối trang.
+load_or_stop('build_info')
 bridge = load_or_stop('revenue_bridge')
 total = load_or_stop('revenue_total').set_index('period_code')
 yearly = load_or_stop('revenue_yearly')
@@ -19,57 +23,41 @@ monthly = load_or_stop('revenue_monthly')
 periods = bridge.drop_duplicates('period_code')
 labels = {r.period_code: period_label(r.period_code, r.period_type, bool(r.is_analysis_period))
           for r in periods.itertuples()}
-code = st.selectbox('Kỳ', list(labels), index=url_choice('ky', list(labels), 0, 'kỳ'), format_func=labels.get)
+code = c_ky.selectbox('Kỳ', list(labels), index=url_choice('ky', list(labels), 0, 'kỳ'), format_func=labels.get)
 kind = periods.set_index('period_code').loc[code, 'period_type']
 row = (pick(total, code, 'revenue_total', f'của kỳ {code}') if kind == 'total'
        else pick(yearly.set_index(yearly['year'].astype(str)), code, 'revenue_yearly', f'của năm {code}'))
-st.caption(f'Đang xem: {labels[code]} · Đơn vị tiền: VND (tỷ = tỷ đồng, triệu = triệu đồng)')
-
-with st.expander('Định nghĩa & phạm vi dữ liệu'):
-    info_strip()
-    st.markdown(
-        '**Cách đọc:** R/G là tỷ lệ doanh thu đơn đã giao trên tiền hàng mọi đơn. '
-        'G−R gồm hủy, trả, chưa giao và chiết khấu; không đồng nhất với thất thoát. '
-        'Bốn khoản trên thác cộng lại đúng bằng G−R (dbt test `assert_rpt_total`); '
-        'số làm tròn có thể lệch ở chữ số cuối.\n\n'
-        'Cột đỏ là phần bị trừ khỏi G. Tỷ lệ hủy càng thấp càng tốt; đây là tỷ trọng **giá trị**, '
-        'khác tỷ lệ số đơn hủy. '
-        'Chiết khấu trên thác chia cho G, còn tỷ lệ chiết khấu chia cho tiền hàng đơn đã giao. '
-        'Tăng trưởng R = R năm nay / R năm trước − 1, dương là tăng; '
-        'tính từ năm có năm trước đủ 12 tháng.'
-    )
-    st.markdown('**Giới hạn:**')
-    st.markdown('\n'.join(f'- {item}' for item in [
-        'R khớp 100% số tiền khách thanh toán (`payment_value`) của đơn đã giao (dbt test `assert_rpt_reconciles`).',
-        'Không trừ thêm tiền hoàn (`refund`) vì đơn returned đã bị loại hẳn khỏi R.',
-        'Chiết khấu (`discount_amount`) tính cho cả dòng hàng (deck slide 3).',
-        *GIOI_HAN_CHUNG,
-    ]))
+st.session_state._collapse_source = True     # dải thông tin chung nằm trong "Nguồn dữ liệu & kết nối" cuối trang
 
 # --- Bốn số chính của kỳ đã chọn ---
 # G − R đọc từ cột gap_g_minus_r (dbt, test assert_rpt_gap_peak), không trừ trong app. Bản dữ liệu dựng trước khi có cột
 # này (bản public cũ, bản để rollback) thì không hiện thẻ đó, trang vẫn chạy.
 gap = row.get('gap_g_minus_r')
 has_gap = gap is not None and pd.notna(gap)
-cols = st.columns(4 if has_gap else 3)
-kpi(cols[0], 'G: tiền hàng mọi đơn', ty(row['g'], 2),
-    f'Mọi đơn, chưa trừ chiết khấu (= sales.csv). Số đầy đủ: {num(row["g"], 2)}.')
-kpi(cols[1], 'R: doanh thu đơn đã giao', ty(row['r'], 2),
-    f'Chỉ đơn đã giao, sau chiết khấu, theo ngày đặt hàng. Số đầy đủ: {num(row["r"], 2)}.')
-if has_gap:
-    kpi(cols[2], 'Chênh lệch G − R', ty(gap, 2),
-        f'Phần tiền hàng không thành doanh thu cùng kỳ; gồm bốn khoản trên thác. Số đầy đủ: {num(gap, 2)}.')
-kpi(cols[-1], 'Tỷ lệ R/G', pct(row['capture_rate'], 1),
-    'Doanh thu đơn đã giao chia cho tiền hàng mọi đơn cùng kỳ.')
+# Đường nhỏ trên thẻ: mức của chỉ số qua các năm đủ 12 tháng, đọc nguyên từ rpt_revenue_yearly.
+theo_nam = yearly[yearly['is_analysis_period']]
+o_01 = bi.khoi('01', 'Phần chênh giữa G và R đến từ đâu?')
+with o_01:
+    o_tra_loi = st.empty()
+    cols = hang_the('the_ps1', 4 if has_gap else 3)
+    kpi(cols[0], 'G: tiền hàng mọi đơn', ty(row['g'], 2),
+        f'Mọi đơn, chưa trừ chiết khấu (= sales.csv). Số đầy đủ: {num(row["g"], 2)}.', chart=theo_nam['g'].tolist())
+    kpi(cols[1], 'R: doanh thu đơn đã giao', ty(row['r'], 2),
+        f'Chỉ đơn đã giao, sau chiết khấu, theo ngày đặt hàng. Số đầy đủ: {num(row["r"], 2)}.', chart=theo_nam['r'].tolist())
+    if has_gap:
+        kpi(cols[2], 'Chênh lệch G − R', ty(gap, 2),
+            f'Phần tiền hàng không thành doanh thu cùng kỳ; gồm bốn khoản trên thác. Số đầy đủ: {num(gap, 2)}.',
+            chart=theo_nam['gap_g_minus_r'].tolist())
+    kpi(cols[-1], 'Tỷ lệ R/G', pct(row['capture_rate'], 1),
+        'Doanh thu đơn đã giao chia cho tiền hàng mọi đơn cùng kỳ.', chart=theo_nam['capture_rate'].tolist())
 
 # --- Thác G → R ---
-st.subheader('Từ G đến R')
 # Feedback PM 2026-10-02: số gọn 2–3 chữ số. Kỳ nhiều năm: tỷ, 2 số lẻ (16,43 tỷ). Một năm: các phần bị trừ chỉ vài chục
 # triệu, theo tỷ chỉ còn 1 chữ số (−0,04 tỷ) → ghi theo triệu, 1 số lẻ, như bảng tháng bên dưới.
 if kind == 'total':
-    gon, don_vi, truc = (lambda a: ty(a, 2, signed=a < 0)), 'tỷ, 2 số lẻ', AXIS_TY
+    gon, don_vi, truc = (lambda a: ty(a, 2, signed=a < 0)), 'tỷ, 2 số lẻ', bi.AXIS_SO_TY
 else:
-    gon, don_vi, truc = (lambda a: trieu(a, 1, signed=a < 0)), 'triệu, 1 số lẻ', AXIS_TRIEU
+    gon, don_vi, truc = (lambda a: trieu(a, 1, signed=a < 0)), 'triệu, 1 số lẻ', bi.AXIS_SO_TRIEU
 STEP = {'g': 'G: tiền hàng mọi đơn', 'cancelled': 'Đơn hủy', 'returned': 'Đơn trả',
         'undelivered': 'Đơn chưa giao', 'discount': 'Chiết khấu đơn đã giao', 'r': 'R: doanh thu đơn đã giao'}
 SHORT_STEP = {'g': 'G', 'cancelled': 'Hủy', 'returned': 'Trả', 'undelivered': 'Chưa giao',
@@ -93,35 +81,56 @@ bars = alt.Chart(w).mark_bar().encode(
     x=x,
     y=alt.Y('bar_start:Q', title=None, axis=alt.Axis(labelExpr=truc)),
     y2='bar_end:Q',
-    color=alt.Color('loai:N', scale=alt.Scale(domain=['Tổng', 'Bị trừ'], range=['#1f5f8b', '#d1495b']),
+    color=alt.Color('loai:N', scale=alt.Scale(domain=['Tổng', 'Bị trừ'], range=[bi.MAU_TONG, bi.MAU_GIAM]),
                     legend=alt.Legend(title=None, orient='top')),
     tooltip=['Bước', 'Số đầy đủ', '% G'],
 )
-text = alt.Chart(w).transform_calculate(top='max(datum.bar_start, datum.bar_end)').mark_text(dy=-8, fontSize=10).encode(x=x, y='top:Q', text='nhan:N')
+text = alt.Chart(w).transform_calculate(top='max(datum.bar_start, datum.bar_end)').mark_text(dy=-8, fontSize=11, color=bi.mau_chu()).encode(x=x, y='top:Q', text='nhan:N')
 right = st.column_config.TextColumn(alignment='right')
-left, side = st.columns([2, 1], gap='medium')
-with left:
-    st.caption(f'{labels[code]} · Nhãn cột: {don_vi}; CK = chiết khấu. '
-               'Rê chuột để xem số đầy đủ và % của G.')
-    st.altair_chart((bars + text).properties(height=420), width='stretch')
-    with st.expander('Xem số liệu làm căn cứ'):
-        st.dataframe(w[['Bước', 'Số tiền', '% G']], hide_index=True, width='stretch',
-                     column_config={'Số tiền': right, '% G': right})
-        st.caption(f'Tỷ lệ tiền hàng bị hủy: {pct(row["cancelled_rate"])} (đơn hủy / G). '
-                   f'Tỷ lệ chiết khấu: {pct(row["discount_rate"])} (chiết khấu / tiền hàng đơn đã giao).')
-with side:
-    with st.container(border=True):
-        st.markdown('**Tóm tắt từ số liệu**')
-        st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
-        parts = w[w['step_code'].isin(['cancelled', 'returned', 'undelivered', 'discount'])]
-        largest = parts.loc[parts['amount'].abs().idxmax()]
-        st.markdown(f'- **Chênh lệch:** G cao hơn R {ty(gap, 2)}; R bằng {pct(row["capture_rate"])} của G.' if has_gap
-                    else f'- **Tỷ lệ:** R bằng {pct(row["capture_rate"])} của G.')
-        st.markdown(f'- **Khoản lớn nhất:** {largest["Bước"].lower()} {gon(abs(largest["amount"]))}, '
-                    f'bằng {pct(largest["share_of_g"])} của G.')
-        st.markdown('- **Giới hạn:** đây là phân rã theo trạng thái đơn và chiết khấu, '
-                    'không phải thất thoát hay dòng tiền theo ngày thanh toán.')
-    ai_panel(page_explain.request_ps1(code, kind))
+parts = w[w['step_code'].isin(['cancelled', 'returned', 'undelivered', 'discount'])].copy()
+largest = parts.loc[parts['amount'].abs().idxmax()]
+o_tra_loi.markdown(f'#### R bằng {pct(row["capture_rate"])} của G; khoản trừ lớn nhất là {largest["Bước"].lower()}: '
+                   f'{bi.mau(gon(largest["amount"]), largest["amount"])} ({pct(largest["share_of_g"])} G)')
+
+# Trên thác, các khoản trừ nhỏ so với G; bảng xếp hạng cùng số này cho thấy khoản nào lớn hơn.
+parts['Khoản'] = parts['Bước']
+xep_hang = alt.X('share_of_g:Q', title=None, axis=None, scale=alt.Scale(domain=[0, float(parts['share_of_g'].max()) * 1.3]))
+khoan = alt.Y('Khoản:N', title=None, sort='-x', axis=alt.Axis(labelLimit=170, labelFontSize=12, domain=False))
+thanh = alt.Chart(parts).mark_bar(size=26, color=bi.MAU_GIAM, cornerRadiusEnd=3).encode(
+    x=xep_hang, y=khoan, tooltip=['Khoản', 'Số tiền', '% G'])
+so_thanh = alt.Chart(parts).mark_text(align='left', dx=5, fontSize=12, color=bi.mau_chu()).encode(
+    x=xep_hang, y=khoan, text='% G:N')
+
+with bi.khoi('02', f'Từ G đến R ({"tỷ" if kind == "total" else "triệu"} đồng)'):
+    c_thac, c_khoan = bi.hang_doi('bang_chung', (7, 5))
+    with c_thac:
+        st.altair_chart(bi.dinh_dang_bieu_do((bars + text).properties(height=290, padding={'top': 20})), width='stretch')
+    with c_khoan:
+        st.markdown('**Mỗi khoản trừ bằng bao nhiêu % của G**')
+        st.altair_chart(bi.dinh_dang_bieu_do((thanh + so_thanh).properties(height=210)), width='stretch')
+        with st.expander('Xem số liệu làm căn cứ'):
+            st.dataframe(w[['Bước', 'Số tiền', '% G']], hide_index=True, width='stretch',
+                         column_config={'Số tiền': right, '% G': right})
+            st.caption(f'Tỷ lệ tiền hàng bị hủy: {pct(row["cancelled_rate"])} (đơn hủy / G). '
+                       f'Tỷ lệ chiết khấu: {pct(row["discount_rate"])} (chiết khấu / tiền hàng đơn đã giao).')
+
+
+def cau_hoi_tiep() -> list[bi.CauHoi]:
+    """Chỉ truyền năm sang PS4, PS5 khi năm đó có năm trước đủ 12 tháng; hai trang đó không có năm khác."""
+    nam = int(code) if kind == 'year' and pd.notna(row['yoy_rate']) else None
+    pham_vi = f'năm {nam} so với {nam - 1}' if nam else 'năm mặc định của trang, vì kỳ đang xem không so được'
+    return [bi.CauHoi('R đổi thế nào qua các năm?', 'ps2_xu_huong', 'mọi năm, trang không lọc theo kỳ'),
+            bi.CauHoi('R đổi ở số đơn, số món hay giá?', 'ps4_don_mon_gia', pham_vi, {'ky': str(nam)} if nam else {}),
+            bi.CauHoi('Nhóm nào đổi nhiều nhất?', 'ps5_nhom', pham_vi, {'nam': nam} if nam else {})]
+
+
+c_ai, c_tiep = bi.hang_doi('ai_tiep', (5, 7))
+with c_ai:
+    with bi.khoi('03', 'AI giải thích'):
+        ai_panel(page_explain.request_ps1(code, kind))
+with c_tiep:
+    with bi.khoi('04', 'Kiểm tra tiếp'):
+        bi.hoi_tiep(cau_hoi_tiep())
 
 # --- Chỉ lọc các dòng reporting theo kỳ đã chọn; không tính lại KPI ---
 if kind == 'total':
@@ -138,15 +147,15 @@ tooltip = ['Tháng', 'G', 'R', 'R/G']
 if kind == 'total':
     base = alt.Chart(mm).encode(
         x=alt.X('month_start_date:T', title=None, axis=alt.Axis(format='%Y', tickCount='year')), tooltip=tooltip)
-    chart = (base.mark_line(color='#c9ced6').encode(y=alt.Y('g:Q', title=None, axis=alt.Axis(labelExpr=AXIS_TRIEU)))
-             + base.mark_line(color='#1f5f8b').encode(y='r:Q'))
+    chart = (base.mark_line(color=bi.MAU_NOI).encode(y=alt.Y('g:Q', title=None, axis=alt.Axis(labelExpr=AXIS_TRIEU)))
+             + base.mark_line(color=bi.MAU_TONG, strokeWidth=2).encode(y='r:Q'))
 else:
     first, last = mm['month'].min(), mm['month'].max()
     note = f' Dữ liệu năm này chỉ có từ T{first} đến T{last}.' if len(mm) < 12 else ''
     base = alt.Chart(mm).encode(
         x=alt.X('thang:N', sort=list(mm['thang']), title=None, axis=alt.Axis(labelAngle=0)), tooltip=tooltip)
-    chart = (base.mark_bar(color='#c9ced6').encode(y=alt.Y('g:Q', title=None, axis=alt.Axis(labelExpr=AXIS_TRIEU)))
-             + base.mark_bar(color='#1f5f8b', size=12).encode(y='r:Q'))
+    chart = (base.mark_bar(color='#C9CDDC').encode(y=alt.Y('g:Q', title=None, axis=alt.Axis(labelExpr=AXIS_TRIEU)))
+             + base.mark_bar(color=bi.MAU_TONG, size=12).encode(y='r:Q'))
 tbl = mm[['thang', 'R/G']].rename(columns={'thang': 'Tháng'})
 if kind == 'total':
     tbl['Tháng'] = mm['Tháng']
@@ -162,7 +171,7 @@ y['nam'] = y['year'].astype(str)
 y['R/G'] = y['capture_rate'].map(pct)
 y['Tỷ lệ hủy'] = y['cancelled_rate'].map(pct)
 opacity = alt.condition('datum.is_analysis_period', alt.value(1.0), alt.value(0.4))
-line_opts = dict(point=True, color='#1f5f8b')
+line_opts = dict(point=True, color=bi.MAU_TONG)
 show = yearly[['year']].rename(columns={'year': 'Năm'})
 show['G'] = yearly['g'].map(lambda v: ty(v, 2))     # feedback PM 2026-10-02: ghi gọn theo tỷ
 show['R'] = yearly['r'].map(lambda v: ty(v, 2))
@@ -172,11 +181,12 @@ show['Tỷ lệ hủy so năm trước'] = yearly['cancelled_rate_change'].map(p
 show['Tỷ lệ chiết khấu'] = yearly['discount_rate'].map(pct)
 show['Tăng trưởng R'] = yearly['yoy_rate'].map(lambda v: pct(v, 1, signed=True))
 
-tab_month, tab_year, tab_table = st.tabs(['Theo tháng', 'Tỷ lệ theo năm', 'Bảng số liệu'])
+o_sau = bi.khoi('', 'Phân tích sâu')
+tab_month, tab_year, tab_table = o_sau.tabs(['Theo tháng', 'Tỷ lệ theo năm', 'Bảng số liệu'])
 with tab_month:
     st.caption(f'{labels[code]} · {len(mm)} tháng.' + (note if kind == 'year' else ' Chọn một năm để xem từng tháng rõ hơn.'))
     st.altair_chart(chart.properties(height=300), width='stretch')
-    st.caption('Xám: G (mọi đơn). Xanh: R (doanh thu đơn đã giao). Rê chuột để xem số đầy đủ.')
+    st.caption('Xám: G (mọi đơn). Tím: R (doanh thu đơn đã giao). Rê chuột để xem số đầy đủ.')
 
 with tab_year:
     st.caption('Luôn hiện mọi năm để so sánh; năm 2012 chưa đủ năm.'
@@ -190,7 +200,7 @@ with tab_year:
             opacity=opacity, tooltip=['nam', title],
         )
         if kind == 'year':
-            line += alt.Chart(y[y['nam'] == code]).mark_rule(color='#d1495b', strokeDash=[4, 3]).encode(x='nam:O')
+            line += alt.Chart(y[y['nam'] == code]).mark_rule(color=bi.MAU_GIAM, strokeDash=[4, 3]).encode(x='nam:O')
         col.altair_chart(line.properties(height=240), width='stretch')
     st.caption('Tỷ lệ hủy là tỷ trọng tiền hàng đơn hủy / G; năm 2012 chỉ để tham khảo.')
 
@@ -206,3 +216,33 @@ with tab_table:
                                 **{c: right for c in show.columns if c != 'Năm'}})
     st.download_button('Tải bảng năm (CSV)', show.to_csv(index=False).encode('utf-8-sig'),
                        file_name='ps1_nam.csv', mime='text/csv', key='ps1_download_year')
+
+with o_sau.expander('Tóm tắt bằng chữ, định nghĩa và giới hạn'):
+    st.caption(f'Đang xem: {labels[code]} · Đơn vị tiền: VND (tỷ = tỷ đồng, triệu = triệu đồng) · Nhãn cột thác: {don_vi}; '
+               'CK = chiết khấu. Đường nhỏ trên thẻ: mức của chỉ số từng năm trong kỳ phân tích.')
+    st.markdown('**Tóm tắt từ số liệu**')
+    st.caption('Câu viết sẵn theo quy tắc từ số liệu, không do AI viết')
+    st.markdown(f'- **Chênh lệch:** G cao hơn R {ty(gap, 2)}; R bằng {pct(row["capture_rate"])} của G.' if has_gap
+                else f'- **Tỷ lệ:** R bằng {pct(row["capture_rate"])} của G.')
+    st.markdown(f'- **Khoản lớn nhất:** {largest["Bước"].lower()} {gon(abs(largest["amount"]))}, '
+                f'bằng {pct(largest["share_of_g"])} của G.')
+    st.markdown('- **Giới hạn:** đây là phân rã theo trạng thái đơn và chiết khấu, '
+                'không phải thất thoát hay dòng tiền theo ngày thanh toán.')
+    st.markdown(
+        '**Cách đọc:** R/G là tỷ lệ doanh thu đơn đã giao trên tiền hàng mọi đơn. '
+        'G−R gồm hủy, trả, chưa giao và chiết khấu; không đồng nhất với thất thoát. '
+        'Bốn khoản trên thác cộng lại đúng bằng G−R (dbt test `assert_rpt_total`); '
+        'số làm tròn có thể lệch ở chữ số cuối.\n\n'
+        'Cột đỏ là phần bị trừ khỏi G. Tỷ lệ hủy càng thấp càng tốt; đây là tỷ trọng **giá trị**, '
+        'khác tỷ lệ số đơn hủy. '
+        'Chiết khấu trên thác chia cho G, còn tỷ lệ chiết khấu chia cho tiền hàng đơn đã giao. '
+        'Tăng trưởng R = R năm nay / R năm trước − 1, dương là tăng; '
+        'tính từ năm có năm trước đủ 12 tháng.'
+    )
+    st.markdown('**Giới hạn:**')
+    st.markdown('\n'.join(f'- {item}' for item in [
+        'R khớp 100% số tiền khách thanh toán (`payment_value`) của đơn đã giao (dbt test `assert_rpt_reconciles`).',
+        'Không trừ thêm tiền hoàn (`refund`) vì đơn returned đã bị loại hẳn khỏi R.',
+        'Chiết khấu (`discount_amount`) tính cho cả dòng hàng (deck slide 3).',
+        *GIOI_HAN_CHUNG,
+    ]))

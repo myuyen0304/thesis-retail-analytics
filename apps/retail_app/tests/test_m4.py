@@ -189,9 +189,8 @@ def test_ps5_bo_cuc_bieu_do_va_bang_chi_tiet(monkeypatch):
     at = _ps5(monkeypatch)
     assert [t.label for t in at.tabs] == ['Tỷ trọng qua năm', 'Khách hàng & tần suất', 'Bảng số liệu']
     assert [e.label for e in at.get('expander')] == [
-        'Định nghĩa & phạm vi dữ liệu', 'Xem số liệu làm căn cứ', 'Xem bảng C/F theo năm',
-        'Xem bảng chi tiết theo nhóm', 'Cách đọc & phương pháp', 'Giới hạn chi tiết',
-        'Nguồn dữ liệu & kết nối']
+        'Xem số liệu làm căn cứ', 'Xem bảng C/F theo năm', 'Xem bảng chi tiết theo nhóm',
+        'Tóm tắt bằng chữ, định nghĩa và giới hạn', 'Nguồn dữ liệu & kết nối']
     assert len(at.get('vega_lite_chart')) == 3
     chart = json.loads(at.get('vega_lite_chart')[0].proto.spec)
     assert chart['layer'][0]['mark']['type'] == 'rule'  # mốc 0
