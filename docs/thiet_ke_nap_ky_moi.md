@@ -50,6 +50,22 @@ Số có dấu † là số khảo sát sơ bộ, chưa có cell/test chứng mi
 
   Khi bảo vệ phải nói rõ: số năm 2023 là tổng hợp, chỉ hiện lúc demo.
 
+- **PM đổi 2026-11-04 (sau mục trên): chọn B′, hai con trỏ; upload trên Cloud vẫn "nếu kịp".** Thay mục 1 và 3 ở trên về cách công bố, tạm dừng DAG và ẩn chat. Các
+  mục khác của B tạm thời vẫn giữ.
+  1. **Tách đường nạp và con trỏ, không tách công thức.** DAG nhập riêng, không đụng lịch 08:00; đọc 14 nguồn chỉ đọc cộng đợt, dựng bản riêng bằng cùng code dbt. Không viết
+     riêng `rpt_*`, vì số năm mới cần lịch sử (so năm trước, N và C đếm phân biệt trên cả kỳ, giai đoạn).
+  2. **Registry có thêm con trỏ dashboard.** Admin công bố đợt chỉ đổi con trỏ này; `active` vẫn là bản số thật. Lịch 08:00 chỉ ghi `active` (`scripts/pipeline/state.py:113`),
+     nên không cần tạm dừng DAG. Demo xong trả con trỏ dashboard về `active`. Lượt tự động không được đổi con trỏ này.
+  3. **Chat luôn đọc `active`, kể cả trên trang dashboard đang đọc bản có đợt.** Hiện chat đi theo bản mà trang đã chọn (`apps/retail_app/dwh/guarded.py:362`,
+     `apps/retail_app/ai_explain/tools.py:123`), nên phải sửa code. Chat ghi rõ đang dùng bản số thật, tới ngày nào.
+  4. **Khi hai con trỏ khác nhau:** khung "AI diễn giải" trên trang PS ẩn; trang Dự báo theo `active`, nên tự đứng yên; Sức khỏe dữ liệu theo bản dashboard đang hiện.
+  5. **Vẫn cần** D2, D3, D5. Mỗi bản có đợt vẫn tốn khoảng 83 bảng†. Code đổi nên phải dựng lại image theo [thiet_ke_duong_tu_dong.md](thiet_ke_duong_tu_dong.md) §8.7.
+  6. **Điều kiện trước khi đưa code lên `app/myuyen`:** build không có đợt cho số y hệt (§5 mục 1) và eval chat live trên bản không có đợt không hồi quy. Bản số thật sau đó dựng
+     bằng code mới, nên chat vẫn có thể bị ảnh hưởng theo đường này. 295 test chat đang trượt từ trước chưa điều tra, nên test tự động chưa đủ làm cổng này†.
+  7. **Quyền:** không cấp quyền volume cho `retail-web-ro`, `retail-ai-ro`, vì guard khóa chat khi tài khoản đọc có quyền thừa.
+  8. **Dữ liệu thật lâu dài (ngoài phạm vi 12/12):** bên gửi phải kèm tổng đối chiếu, ví dụ G/COGS theo tháng, và hệ thống so với tổng đó, vì `sales` của đợt do hệ thống tự tính
+     (§4.3). Lúc đó cũng cần D4, D6 và cách nạp không tốn một bản đầy đủ mỗi lần.
+
 ## 1. Ước lượng và ảnh hưởng lịch
 
 **Lưu ý 2026-11-01:** ước lượng dưới đây tính cả D4, D6 và chỉ chạy local, chưa tính lại theo phạm vi mới.
@@ -71,9 +87,9 @@ bản public ~2 tuần trước bảo vệ. Code đổi `retail_dbt`, `scripts/p
 - **Production không đổi hành vi:** mọi thay đổi dbt/app/CLI bật bằng biến (như `extension_enabled()`); không có đợt thì build ra
   **y hệt** hôm nay.
 - **Nguồn lõi giữ ngưỡng cách ly 0** ([tien_hoa_schema.md](tien_hoa_schema.md) §6): một dòng sai là dừng cả đợt.
-- **Đợt:** mọi ngày giao dịch của đợt phải **sau** ngày lớn nhất của bản gốc; gửi lại đúng đợt đã nạp bị từ chối (idempotent).
+- **Đợt:** mọi ngày giao dịch của đợt phải **sau** ngày lớn nhất của bản gốc **và của các đợt đã nạp** (thêm 2026-11-04: nếu chỉ so với bản gốc, gửi lại đợt với `order_id` mới sẽ cộng trùng); gửi lại đúng đợt đã nạp bị từ chối (idempotent).
 - Không sửa số đã chốt 2013–2022; không dùng số 2023 tổng hợp cho bất kỳ kết luận nào trong báo cáo.
-- **Chat AI và khung "AI diễn giải" ẩn ở bản có đợt cho tới khi lát D6 đạt** (lý do §3, cách mở §4.7).
+- ~~Chat AI và khung "AI diễn giải" ẩn ở bản có đợt cho tới khi lát D6 đạt~~ **Đổi 2026-11-04 (B′, §0):** chat không đọc bản có đợt, luôn đọc `active`; khung "AI diễn giải" ẩn khi con trỏ dashboard khác `active`.
 
 ## 3. Hiện trạng: chỗ nào chặn nạp kỳ mới
 
@@ -192,7 +208,7 @@ Mức bẩn của `tf.json` phải dưới ngưỡng 1% thì đợt mới chạy
   gồm sha256 của từng đợt (như `identity_suffix` của phần mở rộng).
 - **Số dòng lấy từ manifest** (gốc + đợt), bỏ số cứng ở 5 chỗ; không có đợt thì số = số cũ (production không đổi).
 - Kiểm của đợt, ngưỡng 0: khóa không trùng gốc và không trùng trong đợt; khóa ngoại tới master và tới bảng giao dịch (đợt + gốc);
-  ngày giao dịch của đợt > ngày max của gốc (trừ `promotions.start_date`, xem §4.1); phần cột lõi đúng hợp đồng nguồn lõi; `sales` của đợt bằng `Σ quantity × unit_price` theo ngày.
+  ngày giao dịch của đợt > ngày max của gốc và các đợt đã nạp (trừ `promotions.start_date`, xem §4.1); phần cột lõi đúng hợp đồng nguồn lõi; `sales` của đợt bằng `Σ quantity × unit_price` theo ngày.
 - **Thứ tự trong `prepare`:** tách dòng lõi từ file "lõi kèm cột thêm" và nối vào nguồn lõi trước, rồi mới chạy nguồn mở rộng, vì R3
   (`extension_prepare.py:77–79`) đọc parquet lõi đã có đợt.
 - **`sales` 2023 do hệ thống tính từ `order_items` của đợt**, stakeholder không gửi. Cổng đối soát vì thế luôn khớp với đợt này: nó bắt
@@ -311,7 +327,7 @@ trong `retail_lab` nên quota còn lại đọc 2026-11-04 là 254 bảng, đủ
 2. **Có đợt 2023:** mọi số 2013–2022 (bảng `rpt_*`, số deck, G/COGS từng ngày) **không đổi một đồng**; năm 2023 xuất hiện trên
    Tổng quan, PS1–PS5; G/COGS 2023 từng ngày = `sales` của đợt = G/COGS của ngày mẫu tương ứng trong bản gốc (đối chứng độc lập
    qua bảng ánh xạ trong manifest).
-3. Đợt sai (trùng khóa, ngày chồng bản gốc, `sales` lệch, thiếu bảng) bị chặn với thông báo đúng; gửi lại đợt đã nạp bị từ chối.
+3. Đợt sai (trùng khóa, ngày chồng bản gốc hoặc đợt đã nạp, kể cả gửi lại với `order_id` mới; `sales` lệch, thiếu bảng) bị chặn với thông báo đúng; gửi lại đợt đã nạp bị từ chối.
 4. Băng rôn hiện; chat ẩn; trang Dự báo của bản có đợt 2023 hiện vùng 2024-01-01 → 2025-07-01, model học trên số thực tế tới
    2023-12-31; không đợt thì dự báo giống hệt bản gốc; `submission.csv` không đổi.
 5. Demo trên app (PM chạy): Quản lý gửi đợt → DE duyệt, chạy → Admin công bố → Tổng quan và PS có năm 2023.
@@ -326,7 +342,7 @@ trong `retail_lab` nên quota còn lại đọc 2026-11-04 là 254 bảng, đủ
 
 ## 6. Thứ tự làm (mỗi lát một phiếu GPT, Claude rà trước khi sang lát sau)
 
-**Phạm vi 12/12 (PM 2026-11-01, đổi 2026-11-04):** D1, D2, D3, D5 và lên Databricks theo B tạm thời (§0); T2 nếu còn kịp. D4, D6 tạm gác.
+**Phạm vi 12/12 (PM 2026-11-01, đổi 2026-11-04):** D1, D2, D3, D5 và lên Databricks theo B′ (§0), gồm tách con trỏ dashboard và cho chat đọc riêng `active`; T2 nếu còn kịp. D4, D6 tạm gác.
 
 | Lát | Việc | Ra gì |
 |---|---|---|
