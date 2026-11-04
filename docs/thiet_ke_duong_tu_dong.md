@@ -131,6 +131,7 @@ nạp kỳ mới (đợt kỳ mới dùng lại đường tự động).
 **PM 2026-11-02:** chấp nhận có khâu người duyệt, không cần tự động 100%; Claude phác thảo, rà, kiểm thử; GPT viết code. T1 vẫn làm
 local trước. Phiếu T2 chỉ soạn **sau khi T1 merge**, vì T2 dùng lại `contract_registry`, `tu_dong.phan_loai`, `hop_dong_cua_luot`.
 Số có † chưa kiểm trên hệ thống thật; bước S0 (§8.9) kiểm các điểm này.
+**PM 2026-11-04:** làm D1–D5 trước ([thiet_ke_nap_ky_moi.md](thiet_ke_nap_ky_moi.md) §0), T2 sau nếu còn kịp. Bỏ catalog demo; các chỗ dưới đây nhắc catalog demo phải đọc lại khi soạn phiếu T2.
 
 ### 8.1 Luồng
 
@@ -179,7 +180,9 @@ Warehouse tự dừng sau 10 phút rảnh, nên dò 5 phút một lần qua SQL 
 
 - **Trạng thái = phát lại sự kiện**, kiểm chuyển trạng thái bằng `TRANSITIONS` hiện có (`apps/retail_app/ui/nhap_store.py:19–25`).
 - **Chống ghi đè:** ghi sự kiện số kế tiếp bằng Files API `overwrite=false`; hai người bấm cùng lúc thì người sau nhận lỗi và tải lại.
-  Cách này thay cho `revision` + `writer_lock`, vốn không dùng được trên Volume. Hành vi này cần S0 kiểm†.
+  Cách này thay cho `revision` + `writer_lock`, vốn không dùng được trên Volume. S0 xác nhận luôn chỉ một người ghi được (§8.9).
+  **Không dựa vào loại lỗi:** khi ghi đua, người thua thường gặp `TypeError` của SDK thay vì `AlreadyExists`. Mỗi sự kiện mang một mã
+  ngẫu nhiên; ghi lỗi kiểu gì cũng đọc lại file đó, mã khớp là mình đã ghi được, khác là người khác đã ghi.
 - **Giới hạn file:** giữ 200 MB (`nhap_store.py:18`). `orders_enriched.csv` thật là 155 MB; Streamlit Cloud cho RAM 690 MB–2,7 GB
   (tài liệu Streamlit, tháng 2/2024), nên file lớn có thể làm app hết bộ nhớ†.
 - **Tách lưu trữ khỏi import:** view không được import `auto_mapping`/`duckdb`. Trang gọi một lớp lưu trữ (đĩa cho local, Volume cho
@@ -216,9 +219,13 @@ Bẫy của P7 sẽ lặp lại với mỗi nguồn mới nếu lịch chỉ đ�
 
 ### 8.5 Quyền và tài khoản (PM làm)
 
-- **Volume** `retail_lab.nhap_du_lieu.kho`: PM tạo schema và volume bằng tài khoản của PM.
+- **Volume** `retail_lab.nhap_du_lieu.kho`: PM tạo schema và volume bằng tài khoản của PM. **Đã tạo 2026-11-04.**
 - **Service principal mới `retail-nhap-writer`** cho web: chỉ `USE CATALOG`, `USE SCHEMA nhap_du_lieu`, `READ VOLUME`, `WRITE VOLUME`
-  trên đúng volume đó. Khóa để trong Streamlit Secrets.
+  trên đúng volume đó. Khóa để trong Streamlit Secrets. **Đã tạo và cấp quyền 2026-11-04;** khóa hết hạn 2027-05-03, tạm để ngoài repo ở
+  `~/.retail-secrets/nhap_writer.env`, chưa đưa vào Streamlit Secrets.
+- **Giới hạn đã biết:** nhóm `users` có `CAN_USE` trên warehouse, nên tài khoản này có thể gửi SQL và đánh thức warehouse nếu lộ khóa, dù không
+  đọc được bảng nào. **PM chấp nhận 2026-11-04:** `retail-web-ro` không có tên riêng trong danh sách quyền của warehouse, nên thu quyền
+  của nhóm `users` có thể làm hỏng web public.
 - **Không bao giờ cấp cho `account users`:** ngày 2026-10-25, một lệnh như vậy đã khóa mọi câu chat.
 - **Không gộp quyền này vào `retail-web-ro`:** guard kiểm quyền thừa của tài khoản đọc (`apps/retail_app/dwh/guarded.py:345–372`).
 - **`retail-pipeline-writer`** cần đọc và ghi volume này.
@@ -237,6 +244,9 @@ dùng chung quota. Bảng đã xóa còn bị tính thêm một thời gian: l�
 - **Sửa registry bằng cách bỏ mục, không đổi `status`.** `allowed_versions` duyệt mọi mục và ném lỗi nếu có mục không `ready` (`apps/retail_app/dwh/releases.py:116–122, 23`), nên đổi `status` có thể
   khóa chat public. Xóa schema trước, bỏ mục sau; chuyển mục sang khóa `da_xoa`. Hiện `cfe19211`, `b25b3e47`, `ccde5a5e` đã xóa schema nhưng còn `ready` (đọc 2026-11-02). Phiếu: `giao_viec_don_ban_cu.md`.
 - **Chặn trước khi dựng:** `nhap_du_lieu_do` không trigger khi không đủ chỗ cho một bản (còn dưới 100 bảng), và báo lý do trên trang Duyệt.
+  **Đổi sau S0:** đọc quota cần quyền account admin, không cấp cho tài khoản pipeline. Thay bằng đếm bảng qua `tables.list` của `retail_lab` và
+  catalog demo, không cần warehouse. Ngày 2026-11-04 số đếm khớp quota (245 + 1 ở `dbacademy` = 246), nhưng số đếm không thấy bảng đã xóa còn bị
+  tính quota, nên đây chỉ là chặn sớm; lỗi quota lúc dựng vẫn phải báo rõ. Tài khoản pipeline có liệt kê được hay không sẽ kiểm khi làm T2†.
 
 ### 8.7 Đưa code lên
 
@@ -251,8 +261,8 @@ dùng chung quota. Bảng đã xóa còn bị tính thêm một thời gian: l�
 1. T1 qua nghiệm thu local.
 2. ~~P5 chạy lại đạt, rồi P6 công bố trên cloud đạt.~~ **Xong 2026-11-02:** bản `dbb80f56` đang phục vụ, P9 đạt (PM kiểm web và chat). Còn P7.
 3. Script dọn bản cũ (§8.6), cũng là điều kiện mở đóng băng image.
-4. **Dữ liệu synthetic không bao giờ vào `retail_lab`.** PM đổi 2026-11-01: đợt synthetic 2023 được lên Databricks, nhưng chỉ ở catalog demo riêng
-   ([thiet_ke_nap_ky_moi.md](thiet_ke_nap_ky_moi.md) §4.8). Chặn bằng code: yêu cầu có cờ synthetic mà catalog là `retail_lab` thì từ chối.
+4. ~~Dữ liệu synthetic không bao giờ vào `retail_lab`.~~ **PM đổi 2026-11-04:** bản có đợt tổng hợp được dựng trong `retail_lab`, chỉ công bố lúc demo khi Admin xác nhận
+   riêng, sau đó rollback ([thiet_ke_nap_ky_moi.md](thiet_ke_nap_ky_moi.md) §0). Chặn bằng code: lượt tự động không được công bố bản có cờ tổng hợp.
 5. Hai trang Gửi/Duyệt bật cứng mọi nơi và bỏ cờ `RETAIL_APP_NHAP_DU_LIEU` (PM đổi 2026-11-01). Làm ở T1 (phiếu T1 §3.12), vì hiện mở
    trang trên cloud có thể lỗi: view import `nhap_store` → `auto_mapping` → `duckdb`, mà `apps/retail_app/requirements.txt` không có duckdb.
 
@@ -267,6 +277,16 @@ dùng chung quota. Bảng đã xóa còn bị tính thêm một thời gian: l�
 | Đọc được quota bằng tài khoản pipeline | Điều kiện chặn §8.6 |
 
 Một mục không đạt thì sửa thiết kế trước khi soạn phiếu, không để GPT phát hiện giữa chừng.
+
+**Kết quả 2026-11-04** (script tạm của Claude, tài khoản `retail-nhap-writer`, SDK 0.117.0; file thử đã xóa hết, script chưa vào repo):
+
+| Kiểm | Kết quả | Hệ quả |
+|---|---|---|
+| Chống ghi đè | **Đạt.** Ghi trùng tuần tự báo `AlreadyExists`, nội dung giữ nguyên. Ghi đua 35 vòng (30 vòng 2 người, 5 vòng 5 người): vòng nào cũng đúng 1 người thắng, nội dung khớp người thắng | Người thua thường gặp `TypeError: object of type '_io.BytesIO' has no len()`, do SDK lỗi khi phân tích phản hồi của server. Đổi §8.2 |
+| Quyền | **Đạt.** Tài khoản chỉ thấy schema `nhap_du_lieu` và `information_schema`; không có quyền trên schema và bảng bản `active`; bị chặn ở hai volume `pipeline_landing`. `retail-web-ro`, `retail-ai-ro` không có quyền trên volume | Không thử `SELECT`, để tránh đánh thức warehouse. Thêm giới hạn ở §8.5 |
+| Warehouse | **Đạt.** 5 lần liệt kê và ghi file, sau 60 giây vẫn `STOPPED`, 0 câu SQL | Giữ thiết kế Volume |
+| File 155 MB | **Chưa xong.** Từ laptop: tải lên 117 giây, RAM từ 112 lên đỉnh 441 MB (thêm 329 MB), `sha256` khớp | Phải thử trên Streamlit Cloud; số laptop không thay được |
+| Đọc quota | **Không đạt.** Tài khoản này bị từ chối vì không phải account admin; `retail-pipeline-writer` cũng không đọc được (`giao_viec_don_ban_cu.md`) | Đổi §8.6 |
 
 ### 8.10 Tiêu chí nghiệm thu T2
 
