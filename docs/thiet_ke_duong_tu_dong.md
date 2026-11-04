@@ -15,8 +15,8 @@ Số có dấu † là số khảo sát sơ bộ; mọi khẳng định khác d�
   1. **Nguồn hoàn toàn mới:** lần đầu DE duyệt; hợp đồng đó được lưu, các lần gửi sau đi đường tự động.
   2. **Kích hoạt:** ngay khi gửi file; đang có lượt khác chạy thì xếp hàng.
   3. **File có thêm cột mới:** vẫn tự chạy phần đã có trong hợp đồng; cột mới chưa vào kho, sinh đề xuất nâng hợp đồng cho DE;
-     duyệt xong chạy lại để nạp bù. Thiếu cột, đổi tên, đổi kiểu thì luôn dừng chờ DE.
-  4. **Công bố:** validate đạt thì **tự công bố**; nhật ký ghi `he_thong`; Admin rollback được.
+     duyệt xong chạy lại để nạp bù. Thiếu cột bắt buộc, đổi tên cột bắt buộc, đổi kiểu thì luôn dừng chờ DE. Cột thêm qua nâng hợp đồng không bắt buộc, trừ cột đã lên mart (PM chốt 2026-11-02).
+  4. **Công bố:** validate đạt thì **tự công bố** với lượt do hệ thống khởi động; lượt do người bấm chạy lại dừng chờ Admin (Claude sửa 2026-11-02, phiếu T1 §3.6); nhật ký ghi `he_thong`; Admin rollback được.
 
 ## 1. Luồng
 
@@ -38,7 +38,8 @@ Hàm phân loại thuần (không I/O) nhận đề xuất auto mapping + hợp 
 | Auto mapping không chắc nguồn (dưới ngưỡng điểm/khoảng cách, `auto_mapping.py:65–68`) | cần người | không biết file thuộc nguồn nào |
 | Cột khớp hợp đồng (thứ tự có thể khác) | **tự động** | |
 | Có thêm cột mới | **tự động**, cột mới = `bo` | PM chốt 3; cột mới chưa ra ngoài nên an toàn PII |
-| Thiếu cột hoặc đổi tên cột | cần người | thay đổi phá hợp đồng |
+| Thiếu cột hoặc đổi tên cột bắt buộc | cần người | thay đổi phá hợp đồng |
+| Thiếu cột thêm qua nâng hợp đồng (silver, bỏ) | tự động | cột không bắt buộc (PM chốt 2026-11-02); bản dữ liệu mới không có cột đó |
 | Cột có trong hợp đồng mà kiểu dữ liệu không còn ép được (đề xuất báo `khong_ep_duoc` > 0) | cần người | đổi kiểu |
 | Khóa trùng mà khác nội dung (`xung_dot_khoa.id_trung_khac_noi_dung > 0`) | cần người | như `epd.json` |
 | Nguồn chưa có model dbt | cần người (Chờ model dbt) | như hiện nay |
@@ -64,9 +65,12 @@ Sau khi tự duyệt, các cổng chạy như cũ: cách ly vượt 1%, test dbt
 
 - Khi có cột mới: tạo mục "Nâng hợp đồng `<ten>` v(N+1)" trên trang Duyệt, chỉ gồm cột mới (thống kê, nghi PII, mẫu) theo luật mặc
   định hiện có (PII → silver).
-- DE duyệt → kho hợp đồng lên v(N+1) → nút "Chạy lại để nạp bù" chạy lại yêu cầu đã công bố gần nhất của nguồn đó với hợp đồng mới
-  (file gốc vẫn lưu ở `data/ui_nhap/<id>/`).
-- Cột mới cần model dbt mới mới lên mart; chưa có model thì cột chỉ ở silver.
+- DE duyệt → kho hợp đồng lên v(N+1) → **tự tạo yêu cầu mới** để nạp bù, dùng lại file của yêu cầu đã công bố ra đúng bản đang `active` của nguồn đó; đang có lượt chạy hoặc hàng đợi thì từ chối duyệt nâng, chưa ghi v(N+1) (Claude sửa 2026-11-02, phiếu T1 §3.4) (file
+  gốc vẫn lưu ở `data/ui_nhap/<id>/`), đi đường tự động với hợp đồng mới; yêu cầu cũ giữ nguyên. File đó không có đủ cột mới hoặc chưa có
+  yêu cầu đã công bố thì không nạp bù, cột mới có hiệu lực từ lần gửi sau. Sửa 2026-11-02, thay cho "nút chạy lại yêu cầu cũ"; chi tiết ở
+  phiếu T1 §3.4.
+- Cột thêm qua nâng hợp đồng không bắt buộc, trừ cột `mart` vì model dbt đọc cột đó (PM chốt 2026-11-02, phiếu T1 §3.4).
+- Cột mới cần model dbt mới mới lên mart; chưa có model thì cột chỉ ở silver, và chọn `mart` cho cột đó bị từ chối ngay lúc duyệt nâng (Claude sửa 2026-11-02, phiếu T1 §3.4).
 
 ### 3.4 Chuỗi tự động và hàng đợi
 
@@ -105,7 +109,7 @@ Sau khi tự duyệt, các cổng chạy như cũ: cách ly vượt 1%, test dbt
    `dim_sales_employee` 200 dòng, 36.004 đơn có nhân viên†, 0 dòng cách ly; `sales_employee_name` ở mart, `comment` ở silver.
 2. Gửi file thêm một cột `bonus` → vẫn tự công bố, `bonus` không có trong kho; có mục "Nâng hợp đồng v2"; DE duyệt + nạp bù → `bonus`
    có ở silver.
-3. Gửi file thiếu cột / đổi kiểu / `epd.json` / nguồn chưa có hợp đồng → dừng ở Chờ duyệt với lý do đúng.
+3. Gửi file thiếu cột bắt buộc / đổi kiểu / `epd.json` / nguồn chưa có hợp đồng → dừng ở Chờ duyệt với lý do đúng.
 4. Gửi hai file liền nhau → chạy lần lượt, không lượt nào bị từ chối vì bận.
 5. Lượt tự động lỗi ở `validate` → Lỗi khi chạy, không công bố; DE "Duyệt lại" được (N6).
 6. Nhật ký có đủ các bước của `he_thong`; Admin rollback về bản trước được.
@@ -230,8 +234,8 @@ dùng chung quota. Bảng đã xóa còn bị tính thêm một thời gian: l�
 - **Mặc định chỉ in** danh sách và lệnh; thực hiện cần cờ riêng và mã bản gõ đầy đủ. Lệnh xóa do PM chạy.
 - **Không bao giờ xóa:** `active`, đích rollback được chỉ định, bản của lượt đang dở. Kiểm lại ngay trong script lúc chạy.
   Ngày 2026-11-01 Claude đề xuất nhầm `5d32a104` (đích rollback P8), nên quy tắc này phải nằm trong code.
-- **Đánh dấu trong registry.** Hiện `cfe19211`, `b25b3e47`, `ccde5a5e` đã xóa schema nhưng registry vẫn ghi `ready` (đọc 2026-11-02). Script
-  dọn phải sửa trạng thái khi xóa, và sửa luôn ba mục cũ đó.
+- **Sửa registry bằng cách bỏ mục, không đổi `status`.** `allowed_versions` duyệt mọi mục và ném lỗi nếu có mục không `ready` (`apps/retail_app/dwh/releases.py:116–122, 23`), nên đổi `status` có thể
+  khóa chat public. Xóa schema trước, bỏ mục sau; chuyển mục sang khóa `da_xoa`. Hiện `cfe19211`, `b25b3e47`, `ccde5a5e` đã xóa schema nhưng còn `ready` (đọc 2026-11-02). Phiếu: `giao_viec_don_ban_cu.md`.
 - **Chặn trước khi dựng:** `nhap_du_lieu_do` không trigger khi không đủ chỗ cho một bản (còn dưới 100 bảng), và báo lý do trên trang Duyệt.
 
 ### 8.7 Đưa code lên
