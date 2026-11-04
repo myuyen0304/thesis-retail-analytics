@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 import uuid
 
 
@@ -43,7 +44,14 @@ def atomic_json(path, value):
         f.flush()
         os.fsync(f.fileno())
     try:
-        os.replace(f.name, path)
+        for attempt in range(100):
+            try:
+                os.replace(f.name, path)
+                break
+            except PermissionError as error:
+                if os.name != 'nt' or getattr(error, 'winerror', None) not in (5, 32) or attempt == 99:
+                    raise
+                time.sleep(0.1)
     finally:
         if Path(f.name).exists():
             Path(f.name).unlink()
