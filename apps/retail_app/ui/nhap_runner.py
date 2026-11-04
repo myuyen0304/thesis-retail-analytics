@@ -1,7 +1,7 @@
 """Điều phối subprocess local, đọc trạng thái từ đĩa, không phụ thuộc phiên Streamlit."""
 import argparse
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -13,12 +13,27 @@ import time
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT / 'apps/retail_app') not in sys.path:
     sys.path.insert(0, str(ROOT / 'apps/retail_app'))
-from ui.nhap_store import RequestStore, actor, utc
+from ui.nhap_store import RequestStore, RequestBusyError, FileBusyError, actor, utc, retry_lock, read_json
 from scripts.ingest.approval import has_dbt_model
 from scripts.pipeline.state import atomic_json, writer_lock
 
 PIPELINE_ROOT = 'warehouse/pipeline/ui-nhap'
 STAGES = ('prepare', 'forecast', 'build', 'validate')
+
+
+class WorkerStartError(RuntimeError):
+    """Không tạo được worker; đã thử ghi lỗi, không thử mục kế ngay."""
+
+
+class StartWriteError(RuntimeError):
+    """Đã bắt đầu ghi khi khởi động; dừng lượt, không thử lại cả thao tác."""
+
+
+class PublishedStateError(RuntimeError):
+    """CLI đã công bố; lỗi lưu UI không được diễn giải thành công bố thất bại."""
+
+    def __init__(self, error):
+        super().__init__('Dữ liệu đã công bố nhưng chưa ghi được trạng thái yêu cầu. ' + str(error))
 
 
 def lenh(stage, run_id, ten, extension_dir):
@@ -68,7 +83,7 @@ def _active_busy(store):
             active = store.root / 'active.json'
             if not active.exists():
                 return False
-            marker = json.loads(active.read_text(encoding='utf-8'))
+            marker = read_json(active)
             # Worker có tối đa 10 giây chờ dispatch; sau 30 giây không có khóa thì đã treo.
             if time.time() - marker.get('started_at', 0) < 30 and _pid_alive(marker.get('worker_pid')):
                 return True
@@ -88,7 +103,7 @@ def _finish_worker(store, request_id, run_id):
     try:
         if not active.exists():
             return
-        marker = json.loads(active.read_text(encoding='utf-8'))
+        marker = read_json(active)
         if marker.get('id') != request_id or marker.get('run_id') != run_id:
             return
         record = store.read(request_id)
@@ -115,6 +130,9 @@ def _busy_reason_locked(store):
 def busy_reason(store):
     try:
         with dispatch_lock(store):
+            count = len(_queue_files(store))
+            if count:
+                return f'Đang có {count} yêu cầu tự động trong hàng đợi.'
             return _busy_reason_locked(store)
     except ValueError:
         return 'Đang có một phiên xử lý yêu cầu; chờ lượt đó hoàn tất.'
@@ -125,7 +143,7 @@ def context_path(store, run_id):
 
 
 def read_context(store, run_id):
-    return json.loads(context_path(store, run_id).read_text(encoding='utf-8'))
+    return read_json(context_path(store, run_id))
 
 
 def save_context(store, record, context):
@@ -137,14 +155,17 @@ def save_context(store, record, context):
 
 
 @contextmanager
-def dispatch_lock(store):
-    lock = writer_lock(store.root / 'dispatch')
+def dispatch_lock(store, *, wait=False, allow_busy=False):
+    lock = (retry_lock if wait else writer_lock)(store.root / 'dispatch')
     try:
         lock.__enter__()
     except OSError as error:
+        if allow_busy:
+            yield False
+            return
         raise ValueError('Trạng thái đã đổi; phiên khác đang xử lý, vui lòng tải lại.') from error
     try:
-        yield
+        yield True
     finally:
         lock.__exit__(None, None, None)
 
@@ -168,28 +189,53 @@ def worker_slot(store):
         lock.__exit__(None, None, None)
 
 
-def start(store, request_id, revision):
-    username, audit = actor('chay')
-    with dispatch_lock(store):
-        reason = _busy_reason_locked(store)
-        if reason:
-            raise ValueError(reason)
-        with store.locked(request_id, revision) as record:
-            if record['trang_thai'] not in ('da_duyet', 'loi', 'da_cong_bo'):
-                raise ValueError('Trạng thái đã đổi; yêu cầu chưa thể chạy.')
-            if not has_dbt_model(record['ten_mo_rong'], store.base / 'retail_dbt/models'):
-                raise ValueError('Cần DE viết model dbt trước khi chạy.')
-            run_number = record.get('lan_chay', 0) + 1
-            run_id = f'ui-{request_id}-{run_number}'
-            folder = store.folder(request_id) / 'chay'
+def _queue_files(store):
+    return store.queue_files()
+
+
+def queue_position(store, request_id):
+    index = 0
+    for path in _queue_files(store):
+        try:
+            item = read_json(path)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(item, dict) or 'id' not in item:
+            continue
+        index += 1
+        if item['id'] == request_id:
+            return index
+    return None
+
+
+def _start_locked(store, request_id, revision, username, audit=None):
+    """Gọi khi đã giữ dispatch; khởi động nội bộ không cần phiên đăng nhập."""
+
+    with store.locked(request_id, revision) as record:
+        if record['trang_thai'] not in ('da_duyet', 'loi', 'da_cong_bo'):
+            raise ValueError('Trạng thái đã đổi; yêu cầu chưa thể chạy.')
+        if not has_dbt_model(record['ten_mo_rong'], store.base / 'retail_dbt/models'):
+            raise ValueError('Cần DE viết model dbt trước khi chạy.')
+        run_number = record.get('lan_chay', 0) + 1
+        run_id = f'ui-{request_id}-{run_number}'
+        folder = store.folder(request_id) / 'chay'
+        detail = {'id': request_id, 'run_id': run_id}
+        if record.get('hop_dong'):
+            detail.update(ten=record['hop_dong']['ten'], phien_ban=record['hop_dong']['phien_ban'])
+        try:
             folder.mkdir(exist_ok=True)
-            audit.log(username, 'nhap_chay', {'id': request_id, 'run_id': run_id})
+            if audit is None:
+                store.log_event(username, 'nhap_chay', detail)
+            else:
+                audit.log(username, 'nhap_chay', detail)
             before = record['trang_thai']
-            store.change(record, 'dang_chay', username, run_id=run_id, lan_chay=run_number,
-                         truoc_chay=before, bat_dau=utc(), stage='prepare', thong_bao='', nguoi_chay=username)
+            # Marker chưa có PID được đối soát lại; lỗi ghi marker không được làm mất da_duyet.
             active = store.root / 'active.json'
             atomic_json(active, {'id': request_id, 'run_id': run_id, 'started_at': time.time()})
+            store.change(record, 'dang_chay', username, run_id=run_id, lan_chay=run_number,
+                         truoc_chay=before, bat_dau=utc(), stage='prepare', thong_bao='', nguoi_chay=username)
             options = {'creationflags': subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS} if os.name == 'nt' else {'start_new_session': True}
+            process = None
             try:
                 with (folder / f'{run_id}.log').open('ab') as output:
                     process = subprocess.Popen([sys.executable, '-m', 'apps.retail_app.ui.nhap_runner', request_id, run_id],
@@ -200,10 +246,139 @@ def start(store, request_id, revision):
                 atomic_json(active, {'id': request_id, 'run_id': run_id,
                                      'started_at': time.time(), 'worker_pid': process.pid})
             except Exception as error:
-                (store.root / 'active.json').unlink(missing_ok=True)
-                store.change(record, 'loi', username, str(error), thong_bao=str(error))
+                try:
+                    store.change(record, 'loi', username, str(error), thong_bao=str(error))
+                except Exception:
+                    # Giữ marker để lần phục hồi kế đối soát yêu cầu còn dang_chay.
+                    pass
+                else:
+                    try:
+                        active.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                if process is None:
+                    raise WorkerStartError('Không khởi động được worker: ' + str(error)) from error
                 raise
+        except WorkerStartError:
+            raise
+        except Exception as error:
+            raise StartWriteError('Lỗi sau khi bắt đầu ghi khởi động: ' + str(error)) from error
     return record
+
+
+def start(store, request_id, revision):
+    username, audit = actor('chay')
+    with dispatch_lock(store):
+        if cancelled_backfill(store, store.read(request_id)):
+            raise ValueError('Yêu cầu nạp bù đã bị hủy, không chạy')
+        count = len(_queue_files(store))
+        if count:
+            raise ValueError(f'Đang có {count} yêu cầu tự động trong hàng đợi.')
+        reason = _busy_reason_locked(store)
+        if reason:
+            raise ValueError(reason)
+        return _start_locked(store, request_id, revision, username, audit)
+
+
+def cancelled_backfill(store, record):
+    return bool(record.get('nap_bu_tu') and record.get('duong') == 'tu_dong'
+                and record['trang_thai'] == 'da_duyet'
+                and queue_position(store, record['id']) is None)
+
+
+def _remove_queue_item(store, path):
+    """File đang được đọc trên Windows có thể chưa xóa được; dọn ở lượt kế nếu hết hạn."""
+    for attempt in range(100):
+        try:
+            path.unlink(missing_ok=True)
+            return True
+        except OSError as error:
+            sharing = (os.name == 'nt' and isinstance(error, PermissionError)
+                       and getattr(error, 'winerror', None) in (5, 32))
+            if sharing and attempt < 99:
+                time.sleep(0.1)
+                continue
+            store.log_event('he_thong', 'nhap_xep_hang',
+                            {'muc': path.name, 'ly_do': 'Chưa xóa được mục hàng đợi: ' + str(error)})
+            return False
+
+
+def _kick_locked(store):
+    if _busy_reason_locked(store):
+        return None
+    for path in _queue_files(store):
+        deadline = time.monotonic() + 10
+        for attempt in range(100):
+            item = {}
+            try:
+                item = read_json(path)
+                record = store.read(item['id'])
+                record['trang_thai'], record['revision'], record['ten_mo_rong']
+                if record['trang_thai'] != 'da_duyet' or record.get('duong') != 'tu_dong':
+                    raise ValueError('Bỏ mục không còn được duyệt.')
+                started = _start_locked(store, item['id'], record['revision'], 'he_thong')
+            except WorkerStartError as error:
+                _remove_queue_item(store, path)
+                store.log_event('he_thong', 'nhap_xep_hang',
+                                {'id': item['id'], 'muc': path.name,
+                                 'ly_do': 'Bỏ mục do lỗi khởi động worker: ' + str(error)})
+                return None
+            except StartWriteError as error:
+                store.log_event('he_thong', 'nhap_xep_hang',
+                                {'id': item['id'], 'muc': path.name,
+                                 'ly_do': 'Giữ mục, dừng lượt khởi động: ' + str(error)})
+                return None
+            except FileNotFoundError as error:
+                removed = _remove_queue_item(store, path)
+                store.log_event('he_thong', 'nhap_xep_hang',
+                                {'muc': path.name, 'ly_do': 'Bỏ mục không đọc được yêu cầu: ' + str(error)})
+                if not removed:
+                    return None
+                break
+            except (OSError, RequestBusyError) as error:
+                remaining = deadline - time.monotonic()
+                if not isinstance(error, FileBusyError) and attempt < 99 and remaining > 0.1:
+                    time.sleep(0.1)
+                    continue
+                store.log_event('he_thong', 'nhap_xep_hang',
+                                {'muc': path.name, 'ly_do': 'Giữ mục do lỗi tạm thời: ' + str(error)})
+                return None
+            except (ValueError, KeyError, TypeError) as error:
+                removed = _remove_queue_item(store, path)
+                detail = {'muc': path.name, 'ly_do': 'Bỏ mục không đọc được yêu cầu: ' + str(error)}
+                if isinstance(item, dict) and 'id' in item:
+                    detail['id'] = item['id']
+                store.log_event('he_thong', 'nhap_xep_hang', detail)
+                if not removed:
+                    return None
+                break
+            else:
+                _remove_queue_item(store, path)
+                return started
+    return None
+
+
+def recover_queue(store, *, wait=False):
+    with dispatch_lock(store, wait=wait, allow_busy=True) as acquired:
+        if acquired:
+            return _kick_locked(store)
+
+
+def enqueue(store, request_id):
+    with dispatch_lock(store, wait=True, allow_busy=True) as acquired:
+        return _enqueue_locked(store, request_id, kick=acquired)
+
+
+def _enqueue_locked(store, request_id, *, kick=True):
+    # Sau hạn chờ, chỉ ghi nguyên tử mục mới; không lấy/xóa hay khởi động ngoài khóa.
+    record = store.read(request_id)
+    if record['trang_thai'] != 'da_duyet' or record.get('duong') != 'tu_dong':
+        raise ValueError('Chỉ yêu cầu tự động đã duyệt mới được xếp hàng.')
+    store.queue_add(record)
+    store.log_event('he_thong', 'nhap_xep_hang', {'id': request_id,
+        'ten': record['ten_mo_rong'], 'phien_ban': record['hop_dong']['phien_ban']})
+    if kick:
+        return _kick_locked(store)
 
 
 def _stage(store, record, stage, output):
@@ -219,47 +394,116 @@ def _stage(store, record, stage, output):
             stream.seek(max(0, log.stat().st_size - 4000))
             tail = stream.read().decode('utf-8', errors='replace')
         raise RuntimeError(f'Stage {stage} thất bại (mã {result.returncode}). ' + tail)
-    context = read_context(store, record['run_id'])
-    if context['target'] != 'duckdb':
-        raise ValueError('Context không phải DuckDB local.')
-    save_context(store, record, context)
+    try:
+        context = read_context(store, record['run_id'])
+        if context['target'] != 'duckdb':
+            raise ValueError('Context không phải DuckDB local.')
+        save_context(store, record, context)
+    except Exception as error:
+        if stage == 'publish':
+            raise PublishedStateError(error) from error
+        raise
     return context
 
 
 def run_worker(store, request_id, run_id):
-    with worker_slot(store):
+    try:
+        with worker_slot(store):
+            return _run_worker_locked(store, request_id, run_id)
+    finally:
+        # Khóa worker đã nhả; dispatch quyết định có thể khởi động mục kế.
         try:
-            # Chờ thao tác tạo worker ghi xong PID rồi mới lấy revision mới nhất.
-            for attempt in range(100):
-                try:
-                    with writer_lock(store.root / 'dispatch'):
-                        record = store.read(request_id)
-                    break
-                except OSError:
-                    time.sleep(0.1)
-            else:
-                raise RuntimeError('Không lấy được khóa khởi động worker.')
-            if record['trang_thai'] != 'dang_chay' or record['run_id'] != run_id:
-                raise ValueError('Lượt chạy không còn hiệu lực.')
-            username = record['nguoi_chay']
-            log = store.folder(request_id) / 'chay' / f'{run_id}.log'
+            recover_queue(store, wait=True)
+        except (OSError, ValueError):
+            pass
+
+
+def _run_worker_locked(store, request_id, run_id):
+    try:
+        # Chờ thao tác tạo worker ghi xong PID rồi mới lấy revision mới nhất.
+        for attempt in range(100):
             try:
-                with log.open('ab') as output:
-                    for stage in STAGES:
-                        with store.locked(request_id, record['revision']) as record:
-                            record['stage'] = stage
-                            store.save(record)
-                        context = _stage(store, record, stage, output)
-                        if context['stage'] == 'skipped':
-                            if record['truoc_chay'] != 'da_cong_bo':
-                                raise ValueError('Pipeline bỏ qua nhưng yêu cầu chưa có bản công bố để giữ lại.')
-                            return store.transition(request_id, record['revision'], 'da_cong_bo', username,
-                                'Không có gì mới, bỏ qua', thong_bao='Không có gì mới, bỏ qua')
-                return store.transition(request_id, record['revision'], 'da_kiem', username)
+                with writer_lock(store.root / 'dispatch'):
+                    record = store.read(request_id)
+                break
+            except OSError:
+                time.sleep(0.1)
+        else:
+            raise RuntimeError('Không lấy được khóa khởi động worker.')
+        if record['trang_thai'] != 'dang_chay' or record['run_id'] != run_id:
+            raise ValueError('Lượt chạy không còn hiệu lực.')
+        username = record['nguoi_chay']
+        log = store.folder(request_id) / 'chay' / f'{run_id}.log'
+        try:
+            with log.open('ab') as output:
+                for stage in STAGES:
+                    with store.locked(request_id, record['revision']) as record:
+                        record['stage'] = stage
+                        store.save(record)
+                    context = _stage(store, record, stage, output)
+                    if context['stage'] == 'skipped':
+                        if record['truoc_chay'] != 'da_cong_bo':
+                            raise ValueError('Pipeline bỏ qua nhưng yêu cầu chưa có bản công bố để giữ lại.')
+                        return store.transition(request_id, record['revision'], 'da_cong_bo', username,
+                            'Không có gì mới, bỏ qua', thong_bao='Không có gì mới, bỏ qua')
+            checked = store.transition(request_id, record['revision'], 'da_kiem', username)
+            if checked.get('duong') == 'tu_dong' and checked.get('nguoi_chay') == 'he_thong':
+                try:
+                    return _publish_core(store, request_id, checked['revision'], 'he_thong')
+                except PublishedStateError:
+                    raise
+                except Exception as error:
+                    return store.transition(request_id, store.read(request_id)['revision'], 'loi', 'he_thong',
+                                            str(error), thong_bao=str(error))
+            return checked
+        except PublishedStateError:
+            raise
+        except Exception as error:
+            return store.transition(request_id, record['revision'], 'loi', username, str(error), thong_bao=str(error))
+    finally:
+        _finish_worker(store, request_id, run_id)
+
+
+def publish_decision(record, context):
+    """Quyết định trạng thái công bố không phụ thuộc đĩa hay phiên đăng nhập."""
+    if record['trang_thai'] != 'da_kiem':
+        raise ValueError('Trạng thái đã đổi; phải kiểm tra thành công trước công bố.')
+    if context.get('stage') != 'published':
+        raise ValueError('Pipeline chưa xác nhận công bố.')
+    return {'trang_thai': 'da_cong_bo', 'thong_bao': 'Đã cập nhật bản dữ liệu local.'}
+
+
+def _publish_core(store, request_id, revision, username, audit=None):
+    with store.locked(request_id, revision) as record:
+        if record['trang_thai'] != 'da_kiem':
+            raise ValueError('Trạng thái đã đổi; phải kiểm tra thành công trước công bố.')
+        detail = {'id': request_id, 'run_id': record['run_id']}
+        if record.get('hop_dong'):
+            detail.update(ten=record['hop_dong']['ten'], phien_ban=record['hop_dong']['phien_ban'])
+        if audit is None:
+            store.log_event(username, 'nhap_cong_bo', detail)
+        else:
+            audit.log(username, 'nhap_cong_bo', detail)
+        log = store.folder(request_id) / 'chay' / f"{record['run_id']}.log"
+        try:
+            with log.open('ab') as output:
+                context = _stage(store, record, 'publish', output)
+            outcome = publish_decision(record, context)
+            try:
+                return store.change(record, outcome['trang_thai'], username, thong_bao=outcome['thong_bao'])
             except Exception as error:
-                return store.transition(request_id, record['revision'], 'loi', username, str(error), thong_bao=str(error))
-        finally:
-            _finish_worker(store, request_id, run_id)
+                raise PublishedStateError(error) from error
+        except PublishedStateError as error:
+            # Đọc lại bản đã lưu, không dùng record vừa đổi trong bộ nhớ khi ghi thất bại.
+            try:
+                pending = store.read(request_id)
+                pending['thong_bao'] = str(error)
+                store.save(pending)
+            except (OSError, ValueError):
+                pass
+            with log.open('ab') as output:
+                output.write((str(error) + '\n').encode('utf-8'))
+            raise
 
 
 def publish(store, request_id, revision):
@@ -268,22 +512,129 @@ def publish(store, request_id, revision):
         reason = _busy_reason_locked(store)
         if reason:
             raise ValueError(reason)
-        with store.locked(request_id, revision) as record:
-            if record['trang_thai'] != 'da_kiem':
-                raise ValueError('Trạng thái đã đổi; phải kiểm tra thành công trước công bố.')
-            audit.log(username, 'nhap_cong_bo', {'id': request_id, 'run_id': record['run_id']})
-            log = store.folder(request_id) / 'chay' / f"{record['run_id']}.log"
-            with log.open('ab') as output:
-                context = _stage(store, record, 'publish', output)
-            if context['stage'] != 'published':
-                raise ValueError('Pipeline chưa xác nhận công bố.')
-            return store.change(record, 'da_cong_bo', username, thong_bao='Đã cập nhật bản dữ liệu local.')
+        return _publish_core(store, request_id, revision, username, audit)
+
+
+def rollback_command(release_id, run_id):
+    if not re.fullmatch(r'[a-f0-9]{24}', release_id):
+        raise ValueError('Mã bản dữ liệu không hợp lệ.')
+    if PIPELINE_ROOT != 'warehouse/pipeline/ui-nhap':
+        raise ValueError('Root nhập dữ liệu không hợp lệ.')
+    if not re.fullmatch(r'ui-rollback-[a-zA-Z0-9_-]{1,88}', run_id):
+        raise ValueError('Mã lượt rollback không hợp lệ.')
+    return [sys.executable, '-m', 'scripts.pipeline.cli', 'rollback', '--release-id', release_id,
+            '--run-id', run_id, '--target', 'duckdb', '--root', PIPELINE_ROOT]
+
+
+def rollback_details(store):
+    state = store.pipeline_state()
+    requests = store.release_requests()
+    result = []
+    for key, value in state.get('releases', {}).items():
+        if not re.fullmatch(r'[a-f0-9]{24}', key) or value.get('status') != 'ready' or key == state.get('active'):
+            continue
+        found = requests.get(key, {})
+        row = found.get('record', {})
+        published = found.get('published', '')
+        version = row.get('hop_dong', {}).get('phien_ban')
+        display_time = (datetime.fromisoformat(published).astimezone(timezone(timedelta(hours=7))).strftime('%Y-%m-%d %H:%M')
+                        if published else 'Chưa rõ giờ công bố')
+        label = ' · '.join([display_time, row.get('ten_file', 'Không tìm được yêu cầu'),
+                            row.get('id', '—'), f'v{version}' if version else 'Chưa rõ hợp đồng', key[:8]])
+        result.append({'id': key, 'published': published, 'label': label})
+    return sorted(result, key=lambda row: (row['published'], row['id']), reverse=True)
+
+
+def rollback_options(store):
+    return [row['id'] for row in rollback_details(store)]
+
+
+def awaiting_publish(record, busy):
+    return (record['trang_thai'] == 'da_kiem' and record.get('duong') == 'tu_dong'
+            and record.get('nguoi_chay') == 'he_thong' and bool(busy))
+
+
+def page_busy(store):
+    """Chỉ quan sát worker, độc lập với hàng đợi; lỗi đọc tạm coi là còn bận."""
+    active = store.root / 'active.json'
+    try:
+        marker = read_json(active)
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError):
+        return True
+    if marker.get('worker_pid'):
+        return _pid_alive(marker['worker_pid'])
+    return time.time() - marker.get('started_at', 0) < 30
+
+
+def page_snapshot(store, username, role):
+    worker_alive = page_busy(store)
+    busy = worker_alive or bool(store.queue_files())
+    rows = store.visible(username, role)
+    positions = {row['id']: queue_position(store, row['id']) for row in rows}
+    notices = {row['id']: store.column_notice(row, rows) for row in rows}
+    pending = any(row['trang_thai'] in ('da_gui', 'dang_chay') or positions[row['id']]
+                  or (row['trang_thai'] in ('da_duyet', 'cho_duyet') and row.get('duong') == 'tu_dong')
+                  or awaiting_publish(row, busy) for row in rows)
+    waiting_columns = any(store.pending_columns(row) for row in rows)
+    return {'rows': rows, 'positions': positions, 'notices': notices, 'busy': busy,
+            'pending': pending, 'waiting_columns': waiting_columns, 'worker_alive': worker_alive}
+
+
+def monitor_page(store, username, role, snapshot, *, notify=False, draw=None):
+    """Một fragment cho cả trang; đổi dữ liệu thì rerun app trong cùng phiên đăng nhập."""
+    import streamlit as st
+    from ui import roles
+    key = 'nhap_monitor_' + ('gui_' if notify else 'duyet_') + username
+
+    watching = snapshot['pending'] or (notify and snapshot['waiting_columns'])
+
+    @st.fragment(run_every='5s' if watching else None)
+    def poll():
+        user = roles.logged_in_user()
+        if not user or user['username'] != username or roles.current_role() != role:
+            st.rerun(scope='app')
+        current = page_snapshot(store, username, role)
+        states = {row['id']: row['trang_thai'] for row in current['rows']}
+        previous = st.session_state.get(key, states)
+        messages = st.session_state.pop(key + '_messages', [])
+        if notify:
+            for row in current['rows']:
+                state = row['trang_thai']
+                if row['id'] in previous and previous[row['id']] != state and state in ('da_cong_bo', 'loi'):
+                    messages.append(row['ten_file'] + ': ' + ('Đã cập nhật' if state == 'da_cong_bo' else 'Lỗi'))
+        st.session_state[key] = states
+        if current != snapshot:
+            st.session_state[key + '_messages'] = messages
+            st.rerun(scope='app')
+        for message in messages:
+            st.toast(message)
+        if draw is not None:
+            draw(current)
+
+    poll()
+
+
+def rollback(store, release_id):
+    username, audit = actor('cong_bo')
+    with dispatch_lock(store):
+        if _queue_files(store):
+            raise ValueError('Đang có yêu cầu tự động trong hàng đợi.')
+        reason = _busy_reason_locked(store)
+        if reason:
+            raise ValueError(reason)
+        run_id = 'ui-rollback-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+        command = rollback_command(release_id, run_id)
+        audit.log(username, 'nhap_rollback', {'release_id': release_id})
+        return subprocess.run(command, cwd=store.base, capture_output=True, text=True, timeout=3600,
+                              env={**os.environ, 'PYTHONUTF8': '1'})
 
 
 def summary(store, record):
-    context = json.loads((store.folder(record['id']) / 'chay/context.json').read_text(encoding='utf-8'))
+    context = read_json(store.folder(record['id']) / 'chay/context.json')
     if context['stage'] == 'skipped':
-        context = json.loads((store.folder(record['id']) / 'chay/published.context.json').read_text(encoding='utf-8'))
+        context = read_json(store.folder(record['id']) / 'chay/published.context.json')
     result = {k: context.get(k) for k in ('release_id', 'snapshot_id', 'so_dong_cach_ly', 'quality')}
     if record['ten_mo_rong'] == 'orders_enriched' and context['stage'] in ('validated', 'published'):
         import duckdb
