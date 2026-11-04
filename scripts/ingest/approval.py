@@ -3,7 +3,6 @@ from copy import deepcopy
 from pathlib import Path
 import re
 
-from scripts.ingest.adapters import normalize
 from scripts.ingest.source_contract import COLUMNS, KEYS
 
 
@@ -13,6 +12,7 @@ def extension_name(filename):
 
 
 def default_decisions(proposal):
+    from scripts.ingest.adapters import normalize
     source = proposal['nguon']['de_xuat']
     keys = KEYS.get(source) or []
     key = keys[0] if len(keys) == 1 else None
@@ -23,7 +23,7 @@ def default_decisions(proposal):
             'bo' if col['loai'] == 'thua' else 'nap')
         decision = {'ten': name, 'xu_ly': action}
         if action in ('nap', 'khoa_noi'):
-            decision.update(kieu=COLUMNS[source][key][0] if action == 'khoa_noi' else 'string',
+            decision.update(kieu=COLUMNS[source][key][0] if action == 'khoa_noi' else col.get('thong_ke', {}).get('kieu_goi_y', 'string'),
                             duoc_rong=bool(col.get('thong_ke', {}).get('so_rong', 0)))
         if action == 'nap':
             decision['hien_thi'] = 'silver' if col.get('nghi_pii') else 'mart'
@@ -61,6 +61,46 @@ def has_dbt_model(name, models):
         return False
     pattern = re.compile(r"extension_enabled\(\s*['\"]" + re.escape(name) + r"['\"]\s*\)")
     return any(pattern.search(p.read_text(encoding='utf-8')) for p in Path(models).rglob('*.sql'))
+
+
+def has_dbt_column(name, column, models):
+    """Chỉ công nhận đầu ra SELECT ngoài cùng của mart có marker phần mở rộng.
+
+    Không suy diễn dấu * hoặc SQL/Jinja động; trường hợp chưa rõ trả False.
+    """
+    reserved = set(('select from where join on as with distinct all group by order having limit union '
+                    'case when then else end null true false integer bigint smallint int double float '
+                    'decimal numeric string varchar char text date timestamp boolean cast').split())
+    if not re.fullmatch(r'[a-z][a-z0-9_]*', column) or column in reserved:
+        return False
+    marker = re.compile(r"extension_enabled\(\s*['\"]" + re.escape(name) + r"['\"]\s*\)")
+    for path in (Path(models) / 'marts').rglob('*.sql'):
+        text = path.read_text(encoding='utf-8')
+        text = re.sub(r'\{#.*?#\}|/\*.*?\*/|--[^\n]*', ' ', text, flags=re.S)
+        if not marker.search(text):
+            continue
+        # Giữ chỗ biểu thức Jinja để không nhận nhầm tên biến thành cột đầu ra.
+        text = re.sub(r'\{\{.*?\}\}', ' __jinja__ ', text, flags=re.S)
+        text = re.sub(r'\{%.*?%\}', ' ', text, flags=re.S)
+        text = re.sub(r"'(?:''|[^'])*'", ' __literal__ ', text)
+        depth, start = 0, None
+        for token in re.finditer(r'\(|\)|\bselect\b|\bfrom\b|,', text, re.I):
+            word = token.group().lower()
+            if word == '(':
+                depth += 1
+            elif word == ')':
+                depth -= 1
+            elif depth == 0 and word == 'select':
+                start = token.end()
+            elif depth == 0 and start is not None and word in (',', 'from'):
+                expression = text[start:token.start()].strip()
+                alias = re.search(r'\bas\s+([a-z][a-z0-9_]*)\s*$', expression, re.I)
+                plain = re.fullmatch(r'(?:[a-z][a-z0-9_]*\.)?([a-z][a-z0-9_]*)', expression, re.I)
+                output = alias or plain
+                if output and output[1].lower() == column:
+                    return True
+                start = token.end() if word == ',' else None
+    return False
 
 
 SOURCE_LABELS = dict(zip(

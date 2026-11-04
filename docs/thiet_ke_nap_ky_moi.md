@@ -28,7 +28,17 @@ Số có dấu † là số khảo sát sơ bộ, chưa có cell/test chứng mi
   1. **Đợt 2023 tổng hợp được lên Databricks, nhưng chỉ ở catalog demo riêng** (cách A, §4.8), không bao giờ vào `retail_lab`.
      Thay dòng "chỉ local" ở bản trước.
   2. **Giữ dự báo đứng yên cho 12/12:** bản có đợt dùng lại kết quả dự báo của bản gốc, không train lại. Mục 3 và phần model của mục
-     5 ở trên tạm gác, D4 và D6 làm sau 12/12 nếu còn thời gian. **PM cần xác nhận lại với thầy** vì dự báo là lõi GĐ2.
+     5 ở trên tạm gác, D4 và D6 làm sau 12/12 nếu còn thời gian. **PM xác nhận lại 2026-11-02: giữ đứng yên.** Vẫn cần báo thầy vì dự
+     báo là lõi GĐ2; chưa có ghi nhận thầy đã đồng ý.
+
+- **PM chốt 2026-11-02: bộ thử auto mapping là bộ file cùng dạng `student_data` thầy gửi, nhưng dữ liệu năm 2023; sinh bằng cách B; thêm
+  một cột hoàn toàn mới vào `orders_enriched` 2023; file JSON đi tới kho là `tf.json` bản 2023, chỉ ở catalog demo** (§4.1–§4.3, §8 câu
+  1). Bốn chỗ thiết kế cũ không nhận được bộ này, đã đối chiếu code và sửa ở §4.2–§4.3:
+  1. Thiết kế cũ từ chối file có cột thêm, tức từ chối `orders_enriched` và `shipments_realistic`.
+  2. Zip của thầy không có `orders`, `shipments`, `sales`, `sample_submission`. `extension_prepare.py:77–79` đòi `order_id` đã có trong
+     `orders` lõi (R3), nên dòng đơn 2023 phải tách từ chính `orders_enriched` 2023 vào lõi trước.
+  3. Hợp đồng `orders_enriched.yml:3` chỉ khai một đường dẫn file, chưa nhận thêm file theo đợt.
+  4. 14 nguồn giữ ngưỡng 0 ([tien_hoa_schema.md](tien_hoa_schema.md) §6), kể cả `web_traffic`: file lõi có giá trị bẩn sẽ dừng cả đợt.
 
 ## 1. Ước lượng và ảnh hưởng lịch
 
@@ -105,7 +115,7 @@ chấp nhận (vẫn sau bản gốc). **Phải kiểm lại với từng test b
 
 | | A. Dời 2021 + 2 năm | **B. Trộn ngày từ dữ liệu gốc (bootstrap theo ngày) — đề xuất** | C. Mô hình ngẫu nhiên theo cấu trúc EDA |
 |---|---|---|---|
-| Cách làm | chép nguyên năm 2021 | mỗi ngày của 2023 lấy **toàn bộ đơn của một ngày "mẫu"** cùng tháng, cùng ngày-trong-tháng ở một năm 2019–2022 chọn ngẫu nhiên có seed; tháng 8 chỉ lấy năm lẻ (2019, 2021) | sinh số đơn, giỏ hàng, giá từ phân phối ước lượng |
+| Cách làm | chép nguyên năm 2021 | mỗi ngày của 2023 lấy **toàn bộ đơn của một ngày "mẫu"** cùng tháng, cùng ngày-trong-tháng ở một năm 2019–2022 chọn ngẫu nhiên có seed; hai cửa sổ khuyến mãi chỉ có ở năm lẻ (30/01–01/03 và 30/07–02/09) chỉ lấy 2019, 2021 | sinh số đơn, giỏ hàng, giá từ phân phối ước lượng |
 | Trông "mới" | không: biểu đồ 2023 trùng y 2021 | có: mỗi ngày từ một năm khác nhau | có |
 | Bất biến (thanh toán, thứ tự đặt/gửi/giao, `sales = Σ quantity × unit_price`) | tự đúng | **tự đúng**, vì lấy trọn đơn kèm mọi bảng con và dời mọi ngày của đơn cùng một khoảng | phải tự chứng minh từng cái |
 | Giữ cấu trúc EDA | có | có: mùa vụ tháng, ngày-trong-tháng (cùng ngày), Urban Blowout tháng 8 năm lẻ, mức sau đứt gãy 2018 | chỉ những gì được mô hình hóa |
@@ -116,21 +126,50 @@ Chi tiết phương án B (kiểm ở bước đầu D1):
   ngoại tới master tự đúng.
 - Đơn mẫu mang theo `order_items`, `payments`, `shipments`, `returns`, `reviews` của nó; mọi cột ngày cộng cùng một độ lệch
   (ngày 2023 − ngày mẫu). Mỗi ngày 2023 ứng đúng một ngày mẫu khác nhau nên không đơn nào bị chép hai lần.
-- `promotions`: khuyến mãi của năm mẫu dời sang 2023 với `promo_id` mới, dòng hàng trỏ theo ánh xạ cũ → mới.
-- `web_traffic` theo ngày mẫu; `inventory` theo tháng mẫu (grain kiểm lại ở D1).
+- `promotions`: mỗi cặp (`promo_id` gốc, độ lệch ngày) có dòng hàng dùng thành một khuyến mãi mới, ngày dời đúng độ lệch đó, để mọi dòng
+  hàng vẫn nằm trong khoảng ngày của khuyến mãi (bản gốc: 276.316 dòng dùng `promo_id`, 0 dòng ngoài khoảng†). Hệ quả đã biết: 2023 có
+  nhiều khuyến mãi hơn một năm thật; đợt cuối năm mượn từ tháng 1 có `start_date` trong 2022.
+- `web_traffic` theo ngày mẫu; `inventory` theo tháng mẫu, `snapshot_date` về ngày cuối tháng 2023 (`units_sold` vốn không khớp
+  `order_items`: 18/504 sản phẩm tháng 03/2021†, nên không có bất biến để giữ).
 - `sales` 2023 **tính lại** từ `order_items` của đợt (không chép), nên khớp cổng đối soát theo định nghĩa.
 - Giới hạn ghi rõ: Tết âm lịch rơi vào ngày khác nhau mỗi năm, chọn ngày mẫu theo dương lịch nên hiệu ứng Tết 2023 có thể lệch;
   không có xu hướng tăng/giảm mới (sau 2018 chuỗi đi ngang, §5 điểm 2).
 
-Đầu ra: thư mục `data_demo/dot_2023/` (gitignore) gồm một CSV mỗi bảng + `manifest.json` (bảng, số dòng, sha256, khoảng ngày,
-`nguon_sinh`, seed, bảng ánh xạ ngày 2023 → ngày mẫu). Script ở `scripts/demo/` (có test), không chạy trong app.
+**Đầu ra (PM chốt 2026-11-02): bộ cùng dạng `student_data`, không phải một CSV cho mỗi nguồn lõi.** Thư mục `data_demo/dot_2023/`
+(gitignore), script ở `scripts/demo/` (có test), không chạy trong app:
+
+| File 2023 | Sinh thế nào |
+|---|---|
+| `orders_enriched.csv` | Đơn mẫu giữ nguyên các cột nhân viên, cộng **một cột hoàn toàn mới** ngoài hợp đồng (đề xuất `loyalty_tier`) |
+| `shipments_realistic.csv` | Dòng giao hàng của đơn mẫu, dời ngày, giữ thuộc tính shipper |
+| `order_items`, `payments`, `returns`, `reviews`, `inventory`, `web_traffic`, `promotions` | Như chi tiết phương án B ở trên, sạch (ngưỡng 0) |
+| `customers`, `products`, `geography` | Giữ nguyên bản gốc, không đổi byte |
+| `tf.json` | Một bản ghi mỗi ngày 2023, hậu tố `Variant`, cấy giá trị bẩn cùng loại với bản của thầy |
+| `eprom.json` | Khuyến mãi mẫu của năm 2023, không đơn nào tham chiếu, giữ giá trị lạ như bản của thầy |
+| `epd.json` | Giữ nguyên bản của thầy vì không có năm |
+
+Không có `orders`, `shipments`, `sales`, giống zip của thầy. `manifest.json` để riêng (số dòng, sha256, khoảng ngày, `nguon_sinh`, seed,
+ánh xạ ngày 2023 → ngày mẫu, danh sách giá trị đã cấy), không tính là file của stakeholder.
+
+Mức bẩn của `tf.json` phải dưới ngưỡng 1% thì đợt mới chạy tiếp. Bản của thầy: kiểm tạm bằng script† với R1/R5 hiện có có 5/1.000 dòng
+(0,50%) bị cách ly và 3 dòng sai miền lọt qua (`sessions = -100`, `999999999`, `unique_visitors = -50`).
 
 ### 4.2 Loại yêu cầu mới: "đợt giao dịch kỳ mới"
 
 - Trang Gửi có thêm lựa chọn loại yêu cầu. Loại "đợt giao dịch" nhận **nhiều file** (đề xuất: đủ các bảng trong manifest đợt), mỗi
   file áp quy tắc file không tin cậy hiện có (§2 phiếu nhập UI); tổng dung lượng đợt ≤ 200 MB†.
-- `auto_mapping.propose` chạy cho từng file: file phải nhận ra **đúng một nguồn lõi**, schema khớp 100% (không cột thêm/thiếu), nếu
-  không thì cả đợt `loi_de_xuat`. Báo cáo đợt: số dòng từng bảng, khoảng ngày, kiểm trùng khóa với bản gốc.
+- `auto_mapping.propose` chạy cho từng file rồi xếp vào một trong năm nhóm. **Thiếu cột lõi hoặc không nhận ra nguồn của file giao dịch
+  thì cả đợt `loi_de_xuat`.**
+
+| Nhóm | Điều kiện | Xử lý | File trong bộ 2023 |
+|---|---|---|---|
+| Khớp lõi | header = đúng một nguồn lõi | thêm dòng vào nguồn lõi | 7 file giao dịch |
+| Lõi kèm cột thêm | chứa đủ cột của một nguồn lõi, có cột ngoài | **tách đôi:** cột lõi thêm dòng vào nguồn lõi; cột ngoài đi theo hợp đồng mở rộng; cột chưa có hợp đồng = `bo` + đề xuất nâng hợp đồng cho DE, không chặn đợt (thiết kế đường tự động, PM chốt 3) | `orders_enriched`, `shipments_realistic` |
+| Master không đổi | sha256 trùng bản gốc | bỏ qua, ghi vào báo cáo đợt | `customers`, `products`, `geography` |
+| Nguồn mở rộng | có hợp đồng đã duyệt, không có cột lõi nào bị thiếu do nó | nạp theo hợp đồng, ngưỡng 1% | `tf.json` |
+| Chỉ đề xuất | chưa có hợp đồng hoặc bị từ chối | không vào kho, hiện đề xuất và lý do; không chặn đợt | `eprom.json`, `epd.json` |
+
+- Báo cáo đợt: số dòng từng bảng, khoảng ngày, kiểm trùng khóa với bản gốc, cột mới phát hiện, số dòng cách ly theo lý do.
 - Tóm tắt nghiệp vụ cho Quản lý: "Đợt giao dịch 01/2023–12/2023: N đơn, M dòng hàng, doanh thu G ≈ …".
 - Duyệt (DE/Admin) không chỉnh cột: chỉ Duyệt/Từ chối đợt. Chạy, công bố như luồng hiện có (DE chạy, Admin công bố).
 
@@ -140,7 +179,21 @@ Chi tiết phương án B (kiểm ở bước đầu D1):
   gồm sha256 của từng đợt (như `identity_suffix` của phần mở rộng).
 - **Số dòng lấy từ manifest** (gốc + đợt), bỏ số cứng ở 5 chỗ; không có đợt thì số = số cũ (production không đổi).
 - Kiểm của đợt, ngưỡng 0: khóa không trùng gốc và không trùng trong đợt; khóa ngoại tới master và tới bảng giao dịch (đợt + gốc);
-  ngày của đợt > ngày max của gốc; header đúng hợp đồng nguồn lõi; `sales` của đợt bằng `Σ quantity × unit_price` theo ngày.
+  ngày giao dịch của đợt > ngày max của gốc (trừ `promotions.start_date`, xem §4.1); phần cột lõi đúng hợp đồng nguồn lõi; `sales` của đợt bằng `Σ quantity × unit_price` theo ngày.
+- **Thứ tự trong `prepare`:** tách dòng lõi từ file "lõi kèm cột thêm" và nối vào nguồn lõi trước, rồi mới chạy nguồn mở rộng, vì R3
+  (`extension_prepare.py:77–79`) đọc parquet lõi đã có đợt.
+- **`sales` 2023 do hệ thống tính từ `order_items` của đợt**, stakeholder không gửi. Cổng đối soát vì thế luôn khớp với đợt này: nó bắt
+  lỗi nối/mất dòng, nhưng không chứng minh dữ liệu 2023 đúng.
+- **Hợp đồng nhiều file:** `orders_enriched` có file gốc 17 cột và file 2023 18 cột, nên kiểm header (`extension_prepare.py:51`) theo
+  từng file, phần nạp chỉ lấy `loaded_columns`. R2, R6 kiểm trên toàn bộ gốc + đợt: thuộc tính nhân viên đổi trong 2023 sẽ bị R6 cách ly.
+- **Không sửa `scripts/ingest/extensions/orders_enriched.yml` đang chạy production chỉ để nhận đợt:** hash hợp đồng nằm trong
+  `snapshot_id` (`extension_contract.py:87–89`), đổi là lịch 08:00 dựng bản mới. Khai báo file đợt ở manifest đợt, hợp đồng chỉ dùng
+  cho root demo qua bản chép `hop_dong/`.
+- **`tf.json`:** hợp đồng mới tên riêng (`load` không cho trùng tên nguồn lõi, `extension_contract.py:32`),
+  `khoa_noi` theo `date` tới `web_traffic`, `hien_thi: silver`, một model staging + test; không lên mart, không đổi dashboard.
+  Trùng ngày với `web_traffic` thì giữ bản lõi, không ghi đè ([tien_hoa_schema.md](tien_hoa_schema.md) §7). **Phải thêm luật miền** vào
+  hợp đồng mở rộng (min/max, [tien_hoa_schema.md](tien_hoa_schema.md) §4 dòng 7b) vì R5 chỉ kiểm rỗng và ép kiểu
+  (`extension_prepare.py:87–92`), nếu không `-100` và `999999999` lọt vào kho. Hậu tố `Variant` giữ nguyên ở silver, chưa làm luật chuẩn hóa.
 
 ### 4.4 dbt: kỳ dữ liệu theo bản, không viết cứng
 
@@ -218,7 +271,17 @@ Chi tiết phương án B (kiểm ở bước đầu D1):
 - **Dự báo đứng yên:** stage forecast của bản có đợt dùng lại kết quả bản gốc, có kiểm hash và ghi rõ lấy từ bản nào. Stage hiện đòi vùng
   dự báo liền sau ngày thực tế cuối (`scripts/forecast/stage.py`) và `check_forecast` (`scripts/pipeline/cli.py:101`) kiểm kết quả
   cùng lượt, nên phải đổi có kiểm soát. Trang Dự báo ghi nhãn "Dự báo từ bản gốc, chưa học dữ liệu 2023"; không so với số 2023 tổng
-  hợp để kết luận độ chính xác. **Chưa rà hết** chỗ dbt và `validate` đọc vùng dự báo (§4.4, §4.5), phải rà trước khi soạn phiếu.
+  hợp để kết luận độ chính xác. **Đã rà 2026-11-02, việc của D3 (không thuộc D1):**
+  - `fact_daily_sales.sql:14–19` nối 548 dòng `sample_submission`, trùng `date_sk` với số 2023 nên hỏng test `unique` (`_*.yml` của marts):
+    chỉ giữ dòng vùng dự báo sau ngày thực tế cuối.
+  - `dim_date.sql`: `is_forecast_period` viết cứng từ 2023-01-01.
+  - `stage.py:144–146` dừng khi vùng không liền sau ngày thực tế cuối; `check_forecast` (`cli.py:117`) đòi kết quả cùng snapshot: cần đường
+    "dùng lại dự báo của bản gốc" có kiểm hash, ghi rõ bản nguồn.
+  - `assert_rpt_forecast.sql` (`trained_through` = ngày thực tế cuối) và `assert_rpt_forecast_actual.sql` (số thực tế dừng ở `trained_through`)
+    sẽ trượt: đề xuất `rpt_forecast_actual` ở bản có đợt chỉ lấy tới `trained_through`, để trang Dự báo không vẽ số tổng hợp cạnh dự báo. Khi đó
+    phải giới hạn **cả hai vế** của phép so với `stg_sales` về ngày ≤ `trained_through`, vì `stg_sales` của bản có đợt gồm cả 2023.
+  - `assert_rpt_total.sql:65–73` đòi kỳ 2012-2022 phủ tới ngày cuối của toàn lịch sử: giới hạn về kỳ gốc (§4.4).
+  - `cli.py:129–136` chỉ so `is_actual` với `sales`, không phụ thuộc vùng dự báo.
 - **Chat:** ẩn ở app demo theo §4.6; chat bản public không đổi.
 
 ## 5. Tiêu chí nghiệm thu
@@ -236,6 +299,12 @@ Chi tiết phương án B (kiểm ở bước đầu D1):
 5. Demo trên app (PM chạy): Quản lý gửi đợt → DE duyệt, chạy → Admin công bố → Tổng quan và PS có năm 2023.
 6. **D6:** trên bản có đợt, chat trả lời đúng số 2023 và dự báo 2024–2025 theo đáp án đối chứng, có nhãn "số tổng hợp"; bộ eval cũ
    trên bản gốc không hồi quy.
+7. **Bộ cùng dạng `student_data` (PM 2026-11-02):**
+   - gửi cả bộ một lần; mỗi file vào đúng nhóm ở §4.2;
+   - đơn 2023 vào `fact_order`, `dim_sales_employee` vẫn 200 dòng nếu không có nhân viên mới;
+   - cột mới không vào kho, có đề xuất nâng hợp đồng cho DE, các cột khác vẫn chạy;
+   - cột shipper không vào kho; `epd`, `eprom` không vào kho;
+   - nếu nhận `tf.json`: dòng rỗng/sai kiểu/sai miền vào cách ly, số dòng khớp danh sách đã cấy trong manifest; đẩy mức bẩn vượt 1% thì đợt dừng.
 
 ## 6. Thứ tự làm (mỗi lát một phiếu GPT, Claude rà trước khi sang lát sau)
 
@@ -243,8 +312,9 @@ Chi tiết phương án B (kiểm ở bước đầu D1):
 
 | Lát | Việc | Ra gì |
 |---|---|---|
-| D1 | Bộ sinh dữ liệu (§4.1) + kiểm bất biến | `data_demo/dot_2023/` + test |
-| D2 | Snapshot + đợt, số dòng theo manifest, kiểm đợt (§4.3) | `prepare --dot`, test; không đợt = như cũ |
+| D1 | Bộ sinh dữ liệu cùng dạng `student_data` (§4.1) + kiểm bất biến | `data_demo/dot_2023/` + test |
+| D2 | Snapshot + đợt, tách lõi/mở rộng, hợp đồng nhiều file, số dòng theo manifest, kiểm đợt (§4.2–§4.3) | `prepare --dot`, test; không đợt = như cũ |
+| D2b | `tf.json`: hợp đồng + luật miền + model staging (§4.3). **Cắt đầu tiên nếu trễ**, dashboard không phụ thuộc | nghiệm thu §5 mục 7 phần `tf` |
 | D3 | dbt kỳ động, vùng dự báo theo bản, test khóa số giới hạn kỳ gốc (§4.4) | nghiệm thu §5 mục 1–2 bằng CLI |
 | D4 | Dự báo học lại, vùng theo ngày thực tế cuối (§4.5) | lượt CLI đầy đủ có forecast 2024–2025; không đợt = forecast như cũ |
 | D5 | App: kỳ động, băng rôn, ẩn chat; trang Gửi/Duyệt loại "đợt" (§4.2, §4.6) | nghiệm thu §5 mục 3–5 |
@@ -261,7 +331,8 @@ Nhánh mới tách từ `nhap-ui/myuyen` sau khi phiếu nhập UI qua §6.
 ## 8. Câu hỏi PM chốt
 
 1. **Cách sinh 2023:** PM hỏi thêm phương án "synthetic dựa trên dữ liệu gốc" → Claude đề xuất **B. trộn ngày từ dữ liệu gốc** (§4.1).
-   **Chờ PM xác nhận B** (hay A/C).
+   **Chốt 2026-11-02 (PM):** B, đơn mẫu lấy từ `orders_enriched`, bộ thử cùng dạng `student_data`, có một cột hoàn toàn mới (§4.1). File
+   JSON đi tới kho là `tf.json` bản 2023, chỉ ở catalog demo (§4.3, lát D2b).
 2. ~~Bảng trong đợt~~ **Chốt 2026-10-31 (PM):** đủ mọi bảng giao dịch có ngày, để mọi test bất biến đạt và PS có đủ metric.
 3. ~~PS2 giai đoạn~~ **Chốt 2026-10-31 (PM):** năm mới gộp vào giai đoạn cuối hiện có, không đổi luật seed.
 4. ~~**Kỳ phân tích chính:** 2013–2023 hay giữ 2013–2022?~~ **Chốt 2026-10-31 (PM):** kỳ theo dữ liệu (2013–2023 khi có đợt 2023),

@@ -80,9 +80,16 @@ def column_profile(data, col):
     samples = [r[0] for r in data.con.execute(
         f'select {value} as v from {quote(data.table)} where {value} is not null '
         f'group by 1 order by count(*) desc, v limit {SAMPLE_LIMIT}').fetchall()]
-    return {'so_gia_tri': distinct, 'so_rong': empty,
+    integer_count = data.con.execute(
+        f'select count(*) from {quote(data.table)} where {value} is not null '
+        f"and try_cast({value} as integer) is not null and regexp_full_match({value}, '-?(0|[1-9][0-9]*)')"
+    ).fetchone()[0]
+    profile = {'so_gia_tri': distinct, 'so_rong': empty,
             'ty_le_rong': round(empty / data.n_rows, 4) if data.n_rows else 0.0,
             'mau': samples, 'so_giong_dien_thoai': phone, 'so_khac_rong': nonempty}
+    profile['kieu_goi_y'] = ('integer' if nonempty and integer_count == nonempty
+                            and not pii_reasons(col, profile) else 'string')
+    return profile
 
 
 def pii_reasons(col, profile):
@@ -327,6 +334,11 @@ def render_report(body):
     for c in cols:
         if c['loai'] == 'khop':
             lines.append(f"| {_md(c['ten_trong_file'])} | {_md(c['cot_hop_dong'])} | {c['kieu_hop_dong']} | {c['khong_ep_duoc']} |")
+    suggestions = [c for c in cols if c.get('thong_ke', {}).get('kieu_goi_y') == 'integer']
+    if suggestions:
+        lines += ['', '## 7a. Gợi ý kiểu', '']
+        lines += [f"- {_md(c['ten_trong_file'])}: gợi ý kiểu integer vì 100% giá trị khác rỗng là số nguyên."
+                  for c in suggestions]
     conflict = body.get('xung_dot_khoa', {})
     lines += ['', '## 8. Xung đột khóa', '']
     if conflict.get('da_kiem'):

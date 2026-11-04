@@ -2,20 +2,27 @@
 import streamlit as st
 
 from ui import roles, nhap_runner
-from ui.nhap_store import RequestStore, LABELS
+from ui.nhap_store import RequestStore, LABELS, nhap_kha_dung
 from scripts.ingest.approval import tom_tat_nghiep_vu
 
 if not roles.allowed(roles.current_role(), 'gui_du_lieu'):
     st.error('Bạn không có quyền xem trang này.')
     st.stop()
+if not nhap_kha_dung():
+    st.info('Chức năng nhập dữ liệu trên bản web đang được phát triển. Hiện chạy ở bản nội bộ.')
+    st.stop()
 
 st.title('Gửi dữ liệu')
-st.caption('Nhập dữ liệu vào kho local. Mỗi yêu cầu nhận một file CSV hoặc JSON, tối đa 200 MB.')
+st.caption('Mỗi yêu cầu nhận một file CSV hoặc JSON, tối đa 200 MB.')
 user = roles.logged_in_user()
 if not user:
     st.info('Đăng nhập để gửi và theo dõi dữ liệu.')
     st.stop()
 store = RequestStore()
+try:
+    nhap_runner.recover_queue(store, wait=False)
+except (OSError, ValueError):
+    pass
 with st.form('gui_du_lieu', clear_on_submit=True):
     upload = st.file_uploader('File dữ liệu', type=['csv', 'json'], accept_multiple_files=False, max_upload_size=200)
     description = st.text_area('Mô tả dữ liệu', max_chars=2000)
@@ -32,15 +39,6 @@ if submitted:
             st.error(str(error))
 
 
-@st.fragment(run_every='5s')
-def running_request(request_id):
-    nhap_runner.busy_reason(store)
-    row = store.read(request_id)
-    if row['trang_thai'] != 'dang_chay':
-        st.rerun(scope='app')
-    st.info('Đang chạy ' + row.get('stage', 'prepare') + '. Có thể tải lại trang.')
-
-
 def requests():
     role = roles.current_role()
     if not roles.allowed(role, 'gui_du_lieu'):
@@ -48,13 +46,29 @@ def requests():
     current = roles.logged_in_user()
     if not current:
         return
-    rows = store.visible(current['username'], role)
+    snapshot = nhap_runner.page_snapshot(store, current['username'], role)
+    rows = snapshot['rows']
     st.subheader('Yêu cầu đã gửi')
     if not rows:
         st.info('Chưa có yêu cầu.')
     for row in rows:
-        with st.expander(f"{row['ten_file']} · {LABELS[row['trang_thai']]} · {row['id']}"):
+        publishing = nhap_runner.awaiting_publish(row, snapshot['busy'])
+        label = 'Đang xử lý' if publishing or row['trang_thai'] == 'dang_chay' else LABELS[row['trang_thai']]
+        with st.expander(f"{row['ten_file']} · {label} · {row['id']}"):
             st.text(row['mo_ta'])
+            if row['trang_thai'] == 'da_gui' and not row.get('duong'):
+                st.caption('Đang đọc và hiểu file…')
+            else:
+                st.caption('Đường xử lý: ' + ('Tự động' if row.get('duong') == 'tu_dong' else 'Chờ đội dữ liệu'))
+            for reason in row.get('ly_do', []):
+                st.info(reason['nghiep_vu'])
+            for column in row.get('phan_loai', {}).get('cot_tuy_chon_thieu', []):
+                st.info(f'File không có cột `{column}`; bản dữ liệu này sẽ không có cột đó')
+            position = snapshot['positions'][row['id']]
+            if position:
+                st.info(f'Đang xếp hàng (thứ {position})')
+            if snapshot['notices'][row['id']]:
+                st.info(snapshot['notices'][row['id']])
             if row['trang_thai'] == 'loi_de_xuat':
                 st.error(row['lich_su'][-1]['ghi_chu'])
                 if role in ('phan_tich', 'ky_su', 'admin') and row.get('loi_ky_thuat'):
@@ -67,13 +81,20 @@ def requests():
             if row['trang_thai'] == 'tu_choi':
                 st.warning('Lý do từ chối: ' + row['lich_su'][-1]['ghi_chu'])
             elif row['trang_thai'] == 'dang_chay':
-                running_request(row['id'])
+                stage = row.get('stage')
+                if stage in nhap_runner.STAGES:
+                    st.info(f'Đang xử lý (bước {nhap_runner.STAGES.index(stage) + 1}/4)')
+                else:
+                    st.info('Đang xử lý')
+            elif publishing:
+                st.info('Đang xử lý')
             elif row['trang_thai'] == 'cho_model_dbt':
                 st.info('Đã duyệt và lưu file; đội dữ liệu cần bổ sung mô hình trước khi chạy.')
             elif row['trang_thai'] == 'loi':
                 st.warning('Xử lý dữ liệu chưa thành công. Đội dữ liệu đang kiểm tra.')
             elif row['trang_thai'] == 'da_cong_bo':
-                st.success('Đã cập nhật bản dữ liệu local.')
+                st.success('Đã cập nhật dữ liệu')
+    nhap_runner.monitor_page(store, current['username'], role, snapshot, notify=True)
 
 
 requests()

@@ -14,12 +14,13 @@ import time
 from types import SimpleNamespace
 
 import pytest
+import streamlit as st
 from streamlit.testing.v1 import AppTest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from ui import roles, nhap_store as ns, nhap_runner as nr
-from scripts.ingest import auto_mapping, approval
+from scripts.ingest import auto_mapping, approval, extension_contract
 from scripts.pipeline.state import atomic_json, writer_lock
 
 VIEWS = Path(__file__).resolve().parents[1] / 'views'
@@ -33,7 +34,6 @@ def store(tmp_path):
 @pytest.fixture
 def identity(monkeypatch):
     events = []
-    monkeypatch.setenv('RETAIL_APP_NHAP_DU_LIEU', '1')
     monkeypatch.setattr(roles, 'current_role', lambda: 'admin')
     monkeypatch.setattr(roles, 'logged_in_user', lambda: {'username': 'admin1'})
     monkeypatch.setattr(roles, 'store', lambda: SimpleNamespace(log=lambda *args: events.append(args)))
@@ -100,8 +100,8 @@ def test_size_limit(store, monkeypatch):
 
 EXPECTED = {
     'da_gui': {'cho_duyet', 'loi_de_xuat'}, 'cho_duyet': {'da_duyet', 'cho_model_dbt', 'tu_choi'},
-    'da_duyet': {'dang_chay'}, 'dang_chay': {'da_kiem', 'loi', 'da_cong_bo'}, 'loi': {'dang_chay'},
-    'da_kiem': {'da_cong_bo'}, 'da_cong_bo': {'dang_chay'}, 'cho_model_dbt': set(), 'tu_choi': set(), 'loi_de_xuat': set()}
+    'da_duyet': {'dang_chay'}, 'dang_chay': {'da_kiem', 'loi', 'da_cong_bo'}, 'loi': {'dang_chay', 'cho_duyet'},
+    'da_kiem': {'da_cong_bo', 'loi'}, 'da_cong_bo': {'dang_chay'}, 'cho_model_dbt': set(), 'tu_choi': set(), 'loi_de_xuat': set()}
 
 
 @pytest.mark.parametrize('before', EXPECTED)
@@ -138,19 +138,16 @@ def test_atomic_failure_keeps_previous(store, monkeypatch):
     path = store.folder(r['id']) / 'yeu_cau.json'
     before = path.read_bytes()
     monkeypatch.setattr('scripts.pipeline.state.os.replace', lambda *args: (_ for _ in ()).throw(OSError('disk failure')))
-    with pytest.raises(ValueError):
+    with pytest.raises(OSError, match='disk failure'):
         store.transition(r['id'], r['revision'], 'tu_choi', 'de', 'reason')
     assert path.read_bytes() == before
 
 
 def test_visibility_and_roles(store, monkeypatch):
     r = pending(store)
-    for flag in ('0', '', '1'):
-        monkeypatch.setenv('RETAIL_APP_NHAP_DU_LIEU', flag)
-        for role in roles.ROLES:
-            assert roles.allowed(role, 'gui_du_lieu') == ('gui_du_lieu' in roles.PAGES_BY_ROLE[role])
-            assert roles.allowed(role, 'gui_du_lieu') == (flag == '1' and role != 'khach')
-            assert roles.allowed(role, 'duyet_du_lieu') == (flag == '1' and role in ('ky_su', 'admin'))
+    for role in roles.ROLES:
+        assert roles.allowed(role, 'gui_du_lieu') == (role != 'khach')
+        assert roles.allowed(role, 'duyet_du_lieu') == (role in ('ky_su', 'admin'))
     assert not store.visible('outsider', 'quan_ly')
     assert not store.visible('outsider', 'phan_tich')
     assert not store.visible('manager', 'khach')
@@ -407,6 +404,21 @@ def test_review_page_and_reject(store, identity, monkeypatch):
     assert store.read(r['id'])['trang_thai'] == 'tu_choi'
 
 
+def test_editor_type_choices_match_contract(store, identity, monkeypatch):
+    pending(store)
+    monkeypatch.setattr(ns, 'RequestStore', lambda: store)
+    seen = []
+    original = st.column_config.SelectboxColumn
+    def capture(label, **options):
+        if label == 'Kiểu':
+            seen.append(tuple(options['options']))
+        return original(label, **options)
+    monkeypatch.setattr(st.column_config, 'SelectboxColumn', capture)
+    at = AppTest.from_file(str(VIEWS / 'duyet_du_lieu.py')).run()
+    assert not at.exception
+    assert seen and all(options == extension_contract.VALID_TYPES for options in seen)
+
+
 @pytest.mark.parametrize('page', ['gui_du_lieu', 'duyet_du_lieu'])
 def test_page_recovers_dead_worker(store, identity, monkeypatch, page):
     record = launch_fake(store, identity, monkeypatch)
@@ -419,11 +431,12 @@ def test_page_recovers_dead_worker(store, identity, monkeypatch, page):
 
 
 @pytest.mark.parametrize('page', ['gui_du_lieu', 'duyet_du_lieu'])
-def test_pages_feature_off(identity, monkeypatch, page):
+def test_pages_visible_without_flag(store, identity, monkeypatch, page):
     monkeypatch.setenv('RETAIL_APP_NHAP_DU_LIEU', '0')
+    monkeypatch.setattr(ns, 'RequestStore', lambda: store)
     at = AppTest.from_file(str(VIEWS / f'{page}.py')).run()
     assert not at.exception
-    assert at.error and not at.button
+    assert not at.error, [item.value for item in at.error]
 
 
 def test_summary_readonly_and_skip(store):

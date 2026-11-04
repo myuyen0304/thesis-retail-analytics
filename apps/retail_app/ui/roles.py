@@ -57,12 +57,9 @@ _PAGE_CHOICES = {
 
 
 class _RolePages(Mapping):
-    """Ma trận luôn phản ánh cờ hiện tại, kể cả khi phiên Streamlit tải lại."""
+    """Ma trận quyền của các trang."""
     def __getitem__(self, role):
-        pages = _PAGE_CHOICES[role]
-        if os.getenv('RETAIL_APP_NHAP_DU_LIEU') != '1':
-            return tuple(k for k in pages if k not in ('gui_du_lieu', 'duyet_du_lieu'))
-        return pages
+        return _PAGE_CHOICES[role]
 
     def __iter__(self):
         return iter(_PAGE_CHOICES)
