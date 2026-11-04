@@ -132,6 +132,10 @@ nạp kỳ mới (đợt kỳ mới dùng lại đường tự động).
 local trước. Phiếu T2 chỉ soạn **sau khi T1 merge**, vì T2 dùng lại `contract_registry`, `tu_dong.phan_loai`, `hop_dong_cua_luot`.
 Số có † chưa kiểm trên hệ thống thật; bước S0 (§8.9) kiểm các điểm này.
 **PM 2026-11-04:** làm D1–D5 trước ([thiet_ke_nap_ky_moi.md](thiet_ke_nap_ky_moi.md) §0), T2 sau nếu còn kịp. Bỏ catalog demo; các chỗ dưới đây nhắc catalog demo phải đọc lại khi soạn phiếu T2.
+**PM 2026-11-04 (sau đó): chọn B′, hai con trỏ; upload trên Cloud vẫn "nếu kịp".** Khi soạn phiếu T2 phải đọc lại ba điểm:
+1. §8 hiện chỉ thiết kế **một file mở rộng**, chưa có đợt nhiều file. Luồng đợt lên Cloud chưa được thiết kế.
+2. `hieu_luc.json` (§8.4) chỉ ghi nguồn mở rộng, không ghi đợt. Với B′, lịch 08:00 chỉ ghi `active` nên không làm mất đợt trên dashboard lúc demo; nếu đợt trở thành dữ liệu lâu dài thì phải giải lại, không thì lịch dựng bản không có đợt.
+3. Công bố đợt đổi con trỏ dashboard, không đổi `active`; §8.1 và §8.3 đang viết theo một con trỏ.
 
 ### 8.1 Luồng
 
