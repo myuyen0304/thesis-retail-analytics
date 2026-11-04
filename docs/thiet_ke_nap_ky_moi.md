@@ -40,6 +40,16 @@ Số có dấu † là số khảo sát sơ bộ, chưa có cell/test chứng mi
   3. Hợp đồng `orders_enriched.yml:3` chỉ khai một đường dẫn file, chưa nhận thêm file theo đợt.
   4. 14 nguồn giữ ngưỡng 0 ([tien_hoa_schema.md](tien_hoa_schema.md) §6), kể cả `web_traffic`: file lõi có giá trị bẩn sẽ dừng cả đợt.
 
+- **PM đổi 2026-11-04: chọn "B tạm thời", demo trên đúng link public.** Thay cách A ở mục trên và §4.8:
+  1. Bản có đợt 2023 tổng hợp **được dựng trong `retail_lab`**, nhưng chỉ công bố lúc demo, do Admin xác nhận riêng, luôn có băng rôn. Lượt tự động không
+     được công bố bản này. Demo xong Admin rollback về bản số thật, rồi xóa bản có đợt nếu cần chỗ.
+  2. Bỏ catalog `retail_demo` và app demo riêng. Lý do: bản miễn phí Streamlit chỉ cho 1 app từ repo private (`streamlit_cloud_deploy.md`), và PM không muốn thêm app.
+  3. Trong lúc bản có đợt đang công bố: tạm dừng DAG, vì lịch 08:00 không biết về đợt và có thể dựng rồi công bố đè; chat public bị ẩn (D6 vẫn gác).
+  4. Thứ tự: **D1 → D2 → D3 → D5 → lên Databricks → T2 nếu còn kịp.** Chưa có T2 thì DE nạp đợt bằng Airflow; dashboard public vẫn đổi số. D2b cắt đầu tiên nếu trễ.
+  5. PM sẽ báo thầy; chưa có ghi nhận thầy đồng ý việc 2023 tổng hợp hiện trên link public lúc demo và việc dự báo đứng yên.
+
+  Khi bảo vệ phải nói rõ: số năm 2023 là tổng hợp, chỉ hiện lúc demo.
+
 ## 1. Ước lượng và ảnh hưởng lịch
 
 **Lưu ý 2026-11-01:** ước lượng dưới đây tính cả D4, D6 và chỉ chạy local, chưa tính lại theo phạm vi mới.
@@ -55,9 +65,9 @@ bản public ~2 tuần trước bảo vệ. Code đổi `retail_dbt`, `scripts/p
 
 ## 2. Ràng buộc
 
-- **Dữ liệu tổng hợp chỉ ở môi trường demo:** root demo `warehouse/pipeline/ui-nhap` (DuckDB local) và catalog demo trên Databricks
-  (§4.8). Không bao giờ vào `data/` gốc, catalog `retail_lab`, app public hiện tại hay `main` data. Bản nào chứa đợt tổng hợp thì mọi
-  trang hiện băng rôn **"Dữ liệu tổng hợp – chỉ để demo"**.
+- **Dữ liệu tổng hợp (đổi 2026-11-04, §0):** không bao giờ vào `data/` gốc hay git. Có ở root demo `warehouse/pipeline/ui-nhap` và, là bản riêng,
+  trong `retail_lab`. Bản này chỉ công bố khi Admin xác nhận riêng; lượt tự động bị chặn bằng code. Bản nào chứa đợt tổng hợp thì mọi trang hiện băng
+  rôn **"Dữ liệu tổng hợp – chỉ để demo"**.
 - **Production không đổi hành vi:** mọi thay đổi dbt/app/CLI bật bằng biến (như `extension_enabled()`); không có đợt thì build ra
   **y hệt** hôm nay.
 - **Nguồn lõi giữ ngưỡng cách ly 0** ([tien_hoa_schema.md](tien_hoa_schema.md) §6): một dòng sai là dừng cả đợt.
@@ -148,6 +158,9 @@ Chi tiết phương án B (kiểm ở bước đầu D1):
 | `eprom.json` | Khuyến mãi mẫu của năm 2023, không đơn nào tham chiếu, giữ giá trị lạ như bản của thầy |
 | `epd.json` | Giữ nguyên bản của thầy vì không có năm |
 
+**Nguyên mẫu chỉ đọc 2026-11-04†** (một seed thử, số đổi theo seed; phiếu D1 là `giao_viec_sinh_dot_2023.md`): 36.782 đơn, 39.194 dòng hàng; 21 khuyến mãi mới; 0 dòng
+hàng ngoài khoảng ngày khuyến mãi; tháng 8/2023 có ΣCOGS/ΣRevenue 1,373, giữ được Urban Blowout.
+
 Không có `orders`, `shipments`, `sales`, giống zip của thầy. `manifest.json` để riêng (số dòng, sha256, khoảng ngày, `nguon_sinh`, seed,
 ánh xạ ngày 2023 → ngày mẫu, danh sách giá trị đã cấy), không tính là file của stakeholder.
 
@@ -227,6 +240,8 @@ Mức bẩn của `tf.json` phải dưới ngưỡng 1% thì đợt mới chạy
 
 ### 4.6 App ở root demo
 
+**Đọc lại khi soạn D5 (đổi 2026-11-04, §0):** băng rôn và ẩn chat theo cờ tổng hợp phải có ở **app public**, không chỉ root demo.
+
 - PS1–PS5, Tổng quan đọc kỳ từ `rpt_build_info` (đã có `analysis_start_year`/`analysis_end_year`, `ps2_xu_huong.py:31`), không tự
   viết 2013–2022 trong caption/label.
 - Băng rôn "Dữ liệu tổng hợp – chỉ để demo" khi bản có cờ.
@@ -253,6 +268,9 @@ Mức bẩn của `tf.json` phải dưới ngưỡng 1% thì đợt mới chạy
 - **Phạm vi:** chỉ app local, bản demo `ui-nhap`; chat trên Streamlit Cloud và Databricks không đổi hành vi.
 
 ### 4.8 Catalog demo trên Databricks (cách A, PM chốt 2026-11-01; chưa tạo)
+
+**Đã thay bằng B tạm thời ngày 2026-11-04 (§0).** Bỏ các mục tách catalog, app riêng và chặn theo catalog. Phần "Dự báo đứng yên" và quota vẫn áp dụng; dựng
+trong `retail_lab` nên quota còn lại đọc 2026-11-04 là 254 bảng, đủ khoảng 3 bản†.
 
 - **Tách riêng:** catalog riêng, tên đề xuất `retail_demo`, có registry `retail_control` riêng vì registry nằm trong catalog đang cấu
   hình (`scripts/pipeline/state.py:59–60`). Pipeline và app đều đọc catalog từ `RETAIL_DATABRICKS_CATALOG`
@@ -286,7 +304,7 @@ Mức bẩn của `tf.json` phải dưới ngưỡng 1% thì đợt mới chạy
 
 ## 5. Tiêu chí nghiệm thu
 
-**Lưu ý 2026-11-01:** mục 4 (dự báo 2024–2025) và mục 6 (D6) tạm gác theo §0; mục 5 chạy trên catalog demo. Sẽ viết lại khi soạn phiếu.
+**Lưu ý 2026-11-01, đổi 2026-11-04:** mục 4 (dự báo 2024–2025) và mục 6 (D6) tạm gác theo §0; mục 5 chạy trên `retail_lab` và link public theo B tạm thời, gồm công bố rồi rollback. Sẽ viết lại khi soạn phiếu.
 
 1. **Không đợt → giống hệt hôm nay:** build root demo không có đợt cho cùng số mọi `rpt_*` và G/COGS từng ngày như kho của lượt
    `demo-lat4-bat-01` (2026-10-29); toàn bộ test hiện có đạt; production `code_version` đổi nhưng số không đổi.
@@ -308,7 +326,7 @@ Mức bẩn của `tf.json` phải dưới ngưỡng 1% thì đợt mới chạy
 
 ## 6. Thứ tự làm (mỗi lát một phiếu GPT, Claude rà trước khi sang lát sau)
 
-**Phạm vi 12/12 (PM 2026-11-01):** D1, D2, D3, D5 và catalog demo (§4.8). D4, D6 tạm gác.
+**Phạm vi 12/12 (PM 2026-11-01, đổi 2026-11-04):** D1, D2, D3, D5 và lên Databricks theo B tạm thời (§0); T2 nếu còn kịp. D4, D6 tạm gác.
 
 | Lát | Việc | Ra gì |
 |---|---|---|
@@ -323,6 +341,8 @@ Mức bẩn của `tf.json` phải dưới ngưỡng 1% thì đợt mới chạy
 Nhánh mới tách từ `nhap-ui/myuyen` sau khi phiếu nhập UI qua §6.
 
 ## 7. Điều kiện trước khi giao GPT
+
+**Ghi chú 2026-11-04:** điều kiện dưới đây áp cho D2 trở đi. D1 chỉ sinh file, không đụng pipeline hay app, nên không bị chặn.
 
 - PM chạy xong nghiệm thu §6 của phiếu nhập UI, **kèm bước trỏ app vào registry `ui-nhap`** (chế độ versioned) và ảnh trang Sức
   khỏe dữ liệu. Toàn bộ ý "dashboard tự cập nhật" dựa vào bước này; nó chưa được thử.
