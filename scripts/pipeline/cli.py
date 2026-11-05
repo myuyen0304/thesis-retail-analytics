@@ -313,13 +313,13 @@ def _entry(stage, run_id, target, started, result, source=None, error=None):
             'finished_at': _utc(), 'result': result, 'error_type': type(error).__name__ if error is not None else None}
 
 
-def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None):
+def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=()):
     """Chạy một stage và để lại một dòng lịch sử: dat (stage tiến lên), bo_qua (run bỏ qua hoặc stage đã xong từ trước), loi."""
     started = _utc()
     context_path = Path(root).resolve() / 'runs' / str(run_id) / 'context.json'
     before = _read_json(context_path)
     try:
-        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force, extensions=extensions, extension_directory=extension_directory)
+        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force, extensions=extensions, extension_directory=extension_directory, dots=dots)
     except Exception as error:
         record_history(Path(root).resolve(), _entry(stage, run_id, target, started, 'loi', _read_json(context_path) or before,
                                                     error))
@@ -330,7 +330,9 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
     return context
 
 
-def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None):
+def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=()):
+    if dots and (stage != 'prepare' or target == 'databricks' or snapshot_id):
+        raise ValueError('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', run_id):
         raise ValueError('run_id chỉ gồm chữ, số, gạch nối/gạch dưới; tối đa 100 ký tự')
     if extension_directory and not extensions:
@@ -351,6 +353,10 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                         raise ValueError('run_id đã dùng cho tập --extension khác')
                     if context.get('extension_dir') != extension_directory:
                         raise ValueError('run_id đã dùng cho --extension-dir khác')
+                    from scripts.ingest import dot
+                    requested = [b['ma_dot'] for b, _ in dot.classify_all(dots, data)] if dots else []
+                    if [b['ma_dot'] for b in context.get('dot', [])] != requested:
+                        raise ValueError('run_id đã dùng cho danh sách --dot khác')
                     return context
                 if target == 'databricks':
                     cloud = Databricks()
@@ -366,7 +372,10 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                     manifest = snapshot.validate(path, **ext_options)
                 else:
                     try:
-                        path = snapshot.prepare(data, landing, extensions=extensions, **ext_options) if extensions else snapshot.prepare(data, landing)
+                        if dots:
+                            path = snapshot.prepare(data, landing, extensions=extensions, dots=dots, **ext_options)
+                        else:
+                            path = snapshot.prepare(data, landing, extensions=extensions, **ext_options) if extensions else snapshot.prepare(data, landing)
                     except ValueError as error:      # header / số dòng / số field sai: chưa có snapshot, vẫn để lại lý do
                         contract.write_quarantine(quarantine, getattr(error, 'summary', {}),
                                                   getattr(error, 'evidence', None), error=error)
@@ -397,6 +406,9 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                 if extensions:
                     context['extensions'] = sorted(set(extensions))
                     context['so_dong_cach_ly'] = {n: extended[n]['so_dong_cach_ly'] for n in sorted(extended)}
+                if manifest.get('dot'):
+                    context['dot'] = manifest['dot']
+                    context['co_du_lieu_tong_hop'] = manifest['co_du_lieu_tong_hop']
                 atomic_json(context_path, context)
                 return context
             context = json.loads(context_path.read_text(encoding='utf-8'))
@@ -408,6 +420,8 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                 raise ValueError('Code đổi giữa các stage; tạo run_id mới')
             manifest = snapshot.validate(context['snapshot_path'], **({'extension_directory': context['extension_dir']}
                                         if context.get('extension_dir') else {}))
+            if manifest.get('dot'):
+                raise ValueError('snapshot có đợt chưa dùng được ở stage này (D3, D5)')
             if stage == 'forecast':
                 # task riêng forecast_train_score (S2): không cần cloud hay registry; chỉ đọc snapshot, ghi runs/<id>/forecast
                 if context['stage'] in ('forecasted', 'built', 'validated'):
@@ -520,10 +534,13 @@ def main():
     ap.add_argument('--snapshot-id')
     ap.add_argument('--extension', action='append', default=[], metavar='TEN')
     ap.add_argument('--extension-dir')
+    ap.add_argument('--dot', action='append', default=[])
     ap.add_argument('--force', action='store_true')
     ap.add_argument('--release-id')
     ap.add_argument('--limit', type=int, default=20, help='history: số lần chạy gần nhất cần in')
     a = ap.parse_args()
+    if a.dot and (a.stage != 'prepare' or a.target == 'databricks' or a.snapshot_id):
+        ap.error('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
     if a.extension_dir and (not a.extension or a.stage not in ('prepare', 'run')):
         ap.error('--extension-dir chỉ dùng cùng --extension ở prepare hoặc run')
     if a.extension and a.stage not in ('prepare', 'run'):
@@ -565,7 +582,7 @@ def main():
         return
     for stage in STAGES if a.stage == 'run' else (a.stage,):
         result = execute(stage, run_id=a.run_id, target=a.target, root=a.root, data=a.data,
-                         snapshot_id=a.snapshot_id, force=a.force, extensions=a.extension, extension_directory=a.extension_dir)
+                         snapshot_id=a.snapshot_id, force=a.force, extensions=a.extension, extension_directory=a.extension_dir, dots=a.dot)
         print(json.dumps({k: result[k] for k in ('run_id', 'release_id', 'snapshot_id', 'stage')}, ensure_ascii=False))
 
 
