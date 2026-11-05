@@ -11,7 +11,8 @@ select
     {{ date_sk('o.delivery_date') }}                                as delivery_date_sk,
     c.customer_sk,{% if extension_enabled('orders_enriched') %}
     e.sales_employee_sk,{% endif %}
-    j.order_junk_sk,
+    {% if extension_enabled('shipments_realistic') %}s.shipper_sk,
+    {% endif %}j.order_junk_sk,
     n.payment_value,                                    -- = Σ net_amount; khớp payments.payment_value (test)
     o.installments,                                     -- thông tin DUY NHẤT mới từ payments (§5.2)
     o.shipping_fee,
@@ -24,4 +25,6 @@ join {{ ref('dim_order_junk') }} j
   on  j.order_status = o.order_status and j.payment_method = o.payment_method
   and j.device_type = o.device_type   and j.order_source = o.order_source{% if extension_enabled('orders_enriched') %}
 left join {{ ref('stg_orders_enriched') }} oe on oe.order_id = o.order_id
-left join {{ ref('dim_sales_employee') }} e on e.sales_employee_id = oe.sales_employee_id{% endif %}
+left join {{ ref('dim_sales_employee') }} e on e.sales_employee_id = oe.sales_employee_id{% endif %}{% if extension_enabled('shipments_realistic') %}
+left join {{ ref('stg_shipments_realistic') }} sr on sr.order_id = o.order_id
+left join {{ ref('dim_shipper') }} s on s.shipper_id = sr.shipper_id{% endif %}
