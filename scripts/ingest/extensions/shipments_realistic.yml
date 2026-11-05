@@ -1,0 +1,182 @@
+phien_ban: 1
+ten: shipments_realistic
+file: student_data/shipments_realistic.csv
+trang_thai: da_duyet
+duyet_boi: PM (myuyen0304)
+ngay_duyet: '2026-11-05'
+nguong_cach_ly: 0.01
+khoa_noi:
+  cot: order_id
+  nguon: shipments
+  cot_nguon: order_id
+header:
+- shipper_id
+- order_id
+- ship_date
+- delivery_date
+- shipping_fee
+- shipper_company
+- shipper_vehicle
+- shipper_experience_years
+- shipper_rating
+- delivery_success_rate
+- average_delivery_time
+- working_shift
+- join_date
+- shipper_name
+- shipper_phone
+- shipper_gender
+- shipper_age
+- shipper_marital_status
+- shipper_education
+- city
+- region
+- district
+cot:
+- ten: shipper_id
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: mart
+- ten: order_id
+  xu_ly: khoa_noi
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: integer
+- ten: ship_date
+  xu_ly: doi_chieu_loi
+  duoc_rong: false
+  trang_thai: da_duyet
+- ten: delivery_date
+  xu_ly: doi_chieu_loi
+  duoc_rong: false
+  trang_thai: da_duyet
+- ten: shipping_fee
+  xu_ly: doi_chieu_loi
+  duoc_rong: false
+  trang_thai: da_duyet
+- ten: shipper_company
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: mart
+- ten: shipper_vehicle
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: mart
+- ten: shipper_experience_years
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: integer
+  hien_thi: mart
+- ten: shipper_rating
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: double
+  hien_thi: mart
+- ten: delivery_success_rate
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: double
+  hien_thi: mart
+- ten: average_delivery_time
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: integer
+  hien_thi: mart
+- ten: working_shift
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: mart
+- ten: join_date
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: date
+  hien_thi: mart
+- ten: shipper_name
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: mart
+- ten: shipper_phone
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: mart
+- ten: shipper_gender
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: silver
+- ten: shipper_age
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: integer
+  hien_thi: silver
+- ten: shipper_marital_status
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: silver
+- ten: shipper_education
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: silver
+- ten: city
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: mart
+- ten: region
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: mart
+- ten: district
+  xu_ly: nap
+  duoc_rong: false
+  trang_thai: da_duyet
+  kieu: string
+  hien_thi: mart
+thuc_the:
+- ten: shipper
+  khoa: shipper_id
+  thuoc_tinh:
+  - shipper_company
+  - shipper_vehicle
+  - shipper_experience_years
+  - shipper_rating
+  - delivery_success_rate
+  - average_delivery_time
+  - working_shift
+  - join_date
+  - shipper_name
+  - shipper_phone
+  - shipper_gender
+  - shipper_age
+  - shipper_marital_status
+  - shipper_education
+  - city
+  - region
+  - district
+  trang_thai: da_duyet

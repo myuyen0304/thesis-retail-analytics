@@ -1,5 +1,6 @@
 """U9–U15 và I1–I3: bằng chứng đề xuất, CLI và dữ liệu giảng viên."""
 import hashlib
+from copy import deepcopy
 from pathlib import Path
 import sys
 
@@ -12,6 +13,274 @@ from scripts.ingest import auto_mapping as mapping
 from scripts.ingest.adapters import read_file, quote
 from scripts.ingest.source_contract import SOURCES
 from conftest import write_csv
+
+
+def matched_column(name, kind):
+    return {'ten_trong_file': name, 'cot_hop_dong': name, 'loai': 'khop', 'kieu_hop_dong': kind}
+
+
+def test_review_a1_new_id_is_not_conflicting_id(tmp_path):
+    write_csv(tmp_path / 'products.csv', ['product_id', 'product_name'], [['1', 'A']])
+    path = write_csv(tmp_path / 'input.csv', ['product_id', 'product_name'], [['99', 'B']])
+    with read_file(path) as data:
+        result = mapping.key_conflicts(data, 'products', tmp_path)
+    assert result['id_trung_khac_noi_dung'] == 0
+
+
+def test_review_a2_integer_child_with_leading_zero(tmp_path):
+    path, refs, conflict = extension_fixture(tmp_path, 'products')
+    write_csv(path, ['product_id'], [['099']])
+    write_csv(refs / 'inventory.csv', ['product_id'], [['99']])
+    with read_file(path) as data:
+        assert mapping.extension_candidate(data, 'products', conflict, refs) == (None, [])
+
+
+def test_review_a2_child_missing_column(tmp_path):
+    path, refs, conflict = extension_fixture(tmp_path, 'products')
+    write_csv(refs / 'inventory.csv', ['other_id'], [['1']])
+    with read_file(path) as data:
+        assert mapping.extension_candidate(data, 'products', conflict, refs) == (None, ['inventory'])
+
+
+def test_review_a3_empty_reference_domain(tmp_path):
+    write_csv(tmp_path / 'products.csv', ['price'], [[''], [' ']])
+    path = write_csv(tmp_path / 'input.csv', ['price'], [['10']])
+    with read_file(path) as data:
+        assert mapping.unusual_values(data, [matched_column('price', 'double')], 'products', tmp_path) == [
+            {'cot': 'price', 'chua_kiem_mien': True}]
+
+
+def test_review_a4_unicode_suffix(tmp_path):
+    write_csv(tmp_path / 'web_traffic.csv', ['traffic_source'], [['Search']])
+    path = write_csv(tmp_path / 'input.csv', ['traffic_source'], [['Search Bản 1'], ['Search Bản 2']])
+    with read_file(path) as data:
+        assert mapping.suffix_candidates(data, [matched_column('traffic_source', 'string')], 'web_traffic', tmp_path) == [
+            {'cot': 'traffic_source', 'mau': r'\s+Bản\s+[0-9]+$', 'so_dong': 2,
+             'tong_khac_rong': 2, 'khop_sau_khi_bo': 2, 'trang_thai': 'de_xuat', 'da_ap_dung': False}]
+
+
+def test_review_a4_reference_missing_column(tmp_path):
+    write_csv(tmp_path / 'web_traffic.csv', ['other'], [['Search']])
+    path = write_csv(tmp_path / 'input.csv', ['traffic_source'], [['Search Edition 1']])
+    with read_file(path) as data:
+        assert mapping.suffix_candidates(data, [matched_column('traffic_source', 'string')], 'web_traffic', tmp_path) == []
+
+
+@pytest.mark.parametrize('kind,count', [('so_am', 3), ('vuot_nguong', 4)])
+def test_review_a5_summary_counts_domain_evidence(enriched, kind, count):
+    from scripts.ingest import approval
+    path, refs, _, _ = enriched
+    proposal = mapping.propose(path, refs)
+    proposal['gia_tri_la'] = [{'cot': 'price', 'khong_ep_duoc': {'so_dong': 1}, kind: {'so_dong': count}}]
+    expected = 'Có 4 giá trị' if kind == 'so_am' else 'Có 5 giá trị'
+    assert any(line.startswith(expected) for line in approval.tom_tat_nghiep_vu(proposal))
+
+
+def test_a1_mapping_null_duplicate_ambiguous_and_order(tmp_path):
+    refs = tmp_path / 'refs'
+    refs.mkdir()
+    write_csv(refs / 'products.csv', ['product_id', 'product_name', 'price'],
+              [['1', 'A', '10'], ['2', 'B', '20'], ['3', 'C', '30'], ['4', 'C', '30']])
+    path = write_csv(tmp_path / 'input.csv', ['product_id', 'product_name', 'price'],
+                     [['9', 'B', '20'], ['', 'A', '10'], ['9', 'A', '10.0000001'],
+                      ['1', 'A', '10'], ['8', 'C', '30'], ['7', 'X', '40']])
+    with read_file(path) as data:
+        result = mapping.key_conflicts(data, 'products', refs)
+    assert result['id_rong'] == result['id_trung_trong_file'] == 1
+    assert result['khop_dung_1'] == 4 and result['khong_khop'] == 2
+    assert result['danh_lai_khoa'] == 2
+    assert result['anh_xa'] == [{'id_trong_file': '9', 'id_nguon': '1'},
+        {'id_trong_file': None, 'id_nguon': '1'}, {'id_trong_file': '9', 'id_nguon': '2'}]
+    with read_file(refs / 'products.csv') as data:
+        assert mapping.key_conflicts(data, 'products', refs)['anh_xa'] == []
+
+
+CHILDREN = [('promotions', 'order_items', 'promo_id'), ('promotions', 'order_items', 'promo_id_2'),
+            ('products', 'order_items', 'product_id'), ('products', 'inventory', 'product_id'),
+            ('customers', 'orders', 'customer_id')]
+
+
+def extension_fixture(tmp_path, source):
+    refs = tmp_path / 'refs'
+    refs.mkdir()
+    key = {'promotions': 'promo_id', 'products': 'product_id', 'customers': 'customer_id'}[source]
+    path = write_csv(tmp_path / 'input.csv', [key], [['99'], ['99'], ['']])
+    write_csv(refs / 'order_items.csv', ['promo_id', 'promo_id_2', 'product_id'], [['old', '', '1']])
+    write_csv(refs / 'inventory.csv', ['product_id'], [['1']])
+    write_csv(refs / 'orders.csv', ['customer_id'], [['1']])
+    return path, refs, {'da_kiem': True, 'id_trung_nguon': 0, 'danh_lai_khoa': 2}
+
+
+@pytest.mark.parametrize('source', ['promotions', 'products', 'customers'])
+def test_a2_extension_zero_references(tmp_path, source):
+    path, refs, conflict = extension_fixture(tmp_path, source)
+    with read_file(path) as data:
+        result, absent = mapping.extension_candidate(data, source, conflict, refs)
+    assert not absent
+    assert result == {'ten': source + '_ext', 'hien_thi': 'silver', 'id_chung_nguon': 0,
+                      'dong_con_tham_chieu': 0, 'ban_ghi_giong_nguon': 2, 'trang_thai': 'de_xuat'}
+
+
+@pytest.mark.parametrize('source,child,column', CHILDREN)
+@pytest.mark.parametrize('damage', ['referenced', 'missing'])
+def test_a2_every_child_blocks_or_is_missing(tmp_path, source, child, column, damage):
+    path, refs, conflict = extension_fixture(tmp_path, source)
+    if damage == 'missing':
+        (refs / (child + '.csv')).unlink()
+    else:
+        header = ['promo_id', 'promo_id_2', 'product_id'] if child == 'order_items' else [column]
+        write_csv(refs / (child + '.csv'), header, [['99' if c == column else '' for c in header]])
+    with read_file(path) as data:
+        result, absent = mapping.extension_candidate(data, source, conflict, refs)
+    assert result is None
+    assert absent == ([child] if damage == 'missing' else [])
+
+
+@pytest.mark.parametrize('mode', ['overlap', 'unchecked', 'empty', 'other_source'])
+def test_a2_ineligible(tmp_path, mode):
+    path, refs, conflict = extension_fixture(tmp_path, 'products')
+    source = 'products'
+    if mode == 'overlap':
+        conflict['id_trung_nguon'] = 1
+    elif mode == 'unchecked':
+        conflict['da_kiem'] = False
+    elif mode == 'empty':
+        write_csv(path, ['product_id'], [[''], [' ']])
+    else:
+        source = 'web_traffic'
+    with read_file(path) as data:
+        assert mapping.extension_candidate(data, source, conflict, refs) == (None, [])
+
+
+def test_a2_missing_child_propagates_to_proposal(tmp_path):
+    refs = tmp_path / 'refs'
+    refs.mkdir()
+    header = SOURCES['products'][0]
+    row = ['1', 'A', 'C', 'S', 'M', 'red', '10', '5']
+    write_csv(refs / 'products.csv', header, [row])
+    path = write_csv(tmp_path / 'products.csv', header, [['99', *row[1:]]])
+    result = mapping.propose(path, refs)
+    assert result['nguon_mo_rong_de_xuat'] is None
+    assert result['tham_chieu_thieu'] == ['inventory', 'order_items']
+
+
+@pytest.mark.parametrize('kind', ['integer', 'double', 'decimal(14,2)'])
+@pytest.mark.parametrize('reference', ['positive', 'negative', 'absent'])
+def test_a3_domain_bounds_and_samples(tmp_path, kind, reference):
+    refs = tmp_path / 'refs'
+    refs.mkdir()
+    if reference != 'absent':
+        write_csv(refs / 'products.csv', ['price'], [['-2' if reference == 'negative' else '0'], ['10']])
+    path = write_csv(tmp_path / 'input.csv', ['price', 'extra'],
+        [[v, '-999'] for v in ['badB', 'badA', 'badB', '-1', '100', '101', '', 'badC', 'badD', 'badE', 'badF']])
+    columns = [matched_column('price', kind), {'ten_trong_file': 'extra', 'loai': 'thuoc_tinh_le'}]
+    with read_file(path) as data:
+        result, = mapping.unusual_values(data, columns, 'products', refs)
+    assert result['cot'] == 'price'
+    assert result['khong_ep_duoc'] == {'so_dong': 7, 'mau': ['badB', 'badA', 'badC', 'badD', 'badE']}
+    if reference == 'absent':
+        assert result['chua_kiem_mien'] is True
+        assert 'so_am' not in result and 'vuot_nguong' not in result
+    else:
+        assert result['vuot_nguong']['so_dong'] == 1
+        assert result['vuot_nguong']['mau'] == ['101']
+        assert float(result['vuot_nguong']['nguong']) == 100
+        assert ('so_am' in result) == (reference == 'positive')
+        if reference == 'positive':
+            assert result['so_am'] == {'so_dong': 1, 'mau': ['-1']}
+
+
+def test_a3_clean_is_empty_and_date_invalid(tmp_path):
+    path = write_csv(tmp_path / 'web_traffic.csv', ['date', 'sessions'], [['2023-01-01', '10']])
+    columns = [matched_column('date', 'date'), matched_column('sessions', 'integer')]
+    with read_file(path) as data:
+        assert mapping.unusual_values(data, columns, 'web_traffic', tmp_path) == []
+    path = write_csv(tmp_path / 'input.csv', ['date'], [['not-a-date'], ['']])
+    with read_file(path) as data:
+        assert mapping.unusual_values(data, columns[:1], 'web_traffic', tmp_path) == [
+            {'cot': 'date', 'khong_ep_duoc': {'so_dong': 1, 'mau': ['not-a-date']}}]
+
+
+@pytest.mark.parametrize('ratio,matching,expected', [(89, 89, False), (90, 90, True),
+    (100, 98, False), (100, 99, True), (100, 0, False)])
+def test_a4_suffix_thresholds_and_no_mutation(tmp_path, ratio, matching, expected):
+    refs = tmp_path / 'refs'
+    refs.mkdir()
+    write_csv(refs / 'web_traffic.csv', ['traffic_source'], [['Search'], ['Event Edition 2023']])
+    values = ['  Search Edition 1  ' if i < matching else 'Event Edition 2023' for i in range(ratio)]
+    values += ['plain'] * (100 - ratio) + [' ', '']
+    path = write_csv(tmp_path / 'input.csv', ['traffic_source'], [[v] for v in values])
+    before = path.read_bytes()
+    with read_file(path) as data:
+        result = mapping.suffix_candidates(data, [matched_column('traffic_source', 'string')], 'web_traffic', refs)
+        assert data.n_rows == 102
+    assert bool(result) == expected
+    if expected:
+        assert result == [{'cot': 'traffic_source', 'mau': r'\s+Edition\s+[0-9]+$', 'so_dong': ratio,
+            'tong_khac_rong': 100, 'khop_sau_khi_bo': matching, 'trang_thai': 'de_xuat', 'da_ap_dung': False}]
+    assert path.read_bytes() == before
+
+
+def test_a4_no_reference_or_unmatched_column(tmp_path):
+    path = write_csv(tmp_path / 'input.csv', ['traffic_source'], [['Search Edition 1']])
+    with read_file(path) as data:
+        assert mapping.suffix_candidates(data, [matched_column('traffic_source', 'string')], 'web_traffic', tmp_path) == []
+    write_csv(tmp_path / 'web_traffic.csv', ['traffic_source'], [['Search']])
+    col = matched_column('traffic_source', 'string')
+    col['loai'] = 'thuoc_tinh_le'
+    with read_file(path) as data:
+        assert mapping.suffix_candidates(data, [col], 'web_traffic', tmp_path) == []
+
+
+@pytest.mark.parametrize('mode', ['split_words', 'no_letters', 'empty', 'numeric_column'])
+def test_a4_requires_one_word_group_and_string_column(tmp_path, mode):
+    write_csv(tmp_path / 'web_traffic.csv', ['traffic_source'], [['Search']])
+    values = {'split_words': ['Search Edition 1'] * 5 + ['Search Copy 2'] * 5,
+              'no_letters': ['Search 123 4'] * 10, 'empty': ['', ' '],
+              'numeric_column': ['Search Edition 1'] * 10}[mode]
+    path = write_csv(tmp_path / 'input.csv', ['traffic_source'], [[v] for v in values])
+    col = matched_column('traffic_source', 'integer' if mode == 'numeric_column' else 'string')
+    with read_file(path) as data:
+        assert mapping.suffix_candidates(data, [col], 'web_traffic', tmp_path) == []
+
+
+def test_a_new_evidence_defaults_empty(tmp_path):
+    path = write_csv(tmp_path / 'unknown.csv', ['alien'], [['value']])
+    proposal = mapping.propose(path, tmp_path)
+    assert proposal['phien_ban'] == 1
+    assert proposal['gia_tri_la'] == proposal['luat_sua_ung_vien'] == []
+    assert proposal['nguon_mo_rong_de_xuat'] is None
+
+
+def test_a5_old_proposal_decisions_and_safe_reports(enriched):
+    from scripts.ingest import approval, tu_dong
+    path, refs, _, _ = enriched
+    proposal = mapping.propose(path, refs)
+    old = deepcopy(proposal)
+    for key in ('nguon_mo_rong_de_xuat', 'gia_tri_la', 'luat_sua_ung_vien'):
+        old.pop(key)
+    for key in ('id_rong', 'id_trung_trong_file', 'khong_khop', 'anh_xa'):
+        old['xung_dot_khoa'].pop(key, None)
+    assert mapping.render_report(old)
+    poison = '<evil>|\n# injected'
+    proposal['gia_tri_la'] = [{'cot': poison, 'khong_ep_duoc': {'so_dong': 2, 'mau': [poison]}}]
+    proposal['luat_sua_ung_vien'] = [{'cot': poison, 'mau': poison, 'so_dong': 9,
+        'tong_khac_rong': 10, 'khop_sau_khi_bo': 9, 'trang_thai': 'de_xuat', 'da_ap_dung': False}]
+    proposal['nguon_mo_rong_de_xuat'] = {'ten': poison, 'trang_thai': 'de_xuat'}
+    proposal['xung_dot_khoa']['anh_xa'] = [{'id_trong_file': poison, 'id_nguon': str(i)} for i in range(7)]
+    decisions = approval.default_decisions(old)
+    assert approval.default_decisions(proposal) == decisions
+    args = (decisions, 'demo', 'student_data/demo.csv', 'PM', '2026-11-05')
+    assert approval.hop_dong_tu_de_xuat(proposal, *args) == approval.hop_dong_tu_de_xuat(old, *args)
+    assert tu_dong.phan_loai(proposal, [], False) == tu_dong.phan_loai(old, [], False)
+    summary = approval.tom_tat_nghiep_vu(proposal)
+    assert len(summary) == len(approval.tom_tat_nghiep_vu(old)) + 2
+    assert not any(poison in line or '<evil>' in line for line in summary)
+    report = mapping.render_report(proposal)
+    assert '<evil>' not in report and '\n# injected' not in report
+    assert '&lt;evil&gt;&#124; # injected' in report
+    assert '7 dòng ánh xạ' in report
+    assert '| 5 |' not in report and '| 6 |' not in report
 
 
 def by_column(body):
@@ -193,6 +462,55 @@ def test_untrusted_column_names_and_markdown(tmp_path):
 
 
 REAL = ROOT / 'data/student_data'
+
+
+@pytest.mark.parametrize('filename', ['tf.json', 'epd.json', 'eprom.json',
+                                     'orders_enriched.csv', 'shipments_realistic.csv'])
+def test_a6_real_acceptance(filename):
+    from scripts.ingest import approval, extension_contract, tu_dong
+    if not (REAL / filename).is_file() or not all((ROOT / 'data' / (n + '.csv')).is_file() for n in SOURCES):
+        pytest.skip('Thiếu data/student_data hoặc bảng tham chiếu A6')
+    path = REAL / filename
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    p = mapping.propose(path, ROOT / 'data')
+    conflict = p['xung_dot_khoa']
+    unusual = {item['cot']: item for item in p['gia_tri_la']}
+    if filename == 'tf.json':
+        rule, = p['luat_sua_ung_vien']
+        assert rule['cot'] == 'traffic_source'
+        assert (rule['so_dong'], rule['tong_khac_rong'], rule['khop_sau_khi_bo']) == (998, 999, 998)
+        assert rule['da_ap_dung'] is False and rule['trang_thai'] == 'de_xuat'
+        assert unusual['date']['khong_ep_duoc'] == {'so_dong': 2, 'mau': ['2026-99-99', 'not_a_date']}
+        assert unusual['sessions']['khong_ep_duoc'] == {'so_dong': 1, 'mau': ['N/A']}
+        assert unusual['sessions']['so_am']['so_dong'] == 1
+        assert unusual['sessions']['vuot_nguong']['so_dong'] == 1
+        assert unusual['sessions']['vuot_nguong']['mau'] == ['999999999']
+        assert unusual['unique_visitors']['khong_ep_duoc'] == {'so_dong': 1, 'mau': ['unknown']}
+        assert unusual['unique_visitors']['so_am']['so_dong'] == 1
+    elif filename == 'epd.json':
+        assert [conflict[k] for k in ('id_rong', 'id_trung_trong_file', 'khop_dung_1', 'khong_khop', 'id_trung_nguon')] == [2, 1, 995, 5, 998]
+        assert len(conflict['anh_xa']) == 995
+        assert unusual['price']['khong_ep_duoc'] == {'so_dong': 1, 'mau': ['N/A']}
+        assert unusual['price']['so_am']['so_dong'] == unusual['price']['vuot_nguong']['so_dong'] == 1
+    elif filename == 'eprom.json':
+        assert p['nguon']['de_xuat'] == 'promotions'
+        assert p['nguon_mo_rong_de_xuat'] == {'ten': 'promotions_ext', 'hien_thi': 'silver',
+            'id_chung_nguon': 0, 'dong_con_tham_chieu': 0, 'ban_ghi_giong_nguon': 217, 'trang_thai': 'de_xuat'}
+        assert unusual['discount_value']['khong_ep_duoc'] == {'so_dong': 2, 'mau': ['30%%', 'twenty percent']}
+        assert unusual['discount_value']['so_am']['so_dong'] == 1
+    else:
+        assert conflict['anh_xa'] == []
+    if filename != 'eprom.json':
+        assert p['nguon_mo_rong_de_xuat'] is None
+    candidates = [('orders_enriched', 1, extension_contract.load('orders_enriched'), [])] if filename == 'orders_enriched.csv' else []
+    route = tu_dong.phan_loai(p, candidates, filename == 'orders_enriched.csv')
+    assert route['ket_qua'] == ('tu_dong' if filename == 'orders_enriched.csv' else 'can_nguoi')
+    if filename == 'shipments_realistic.csv':
+        assert 'chua_co_hop_dong' in [r['ma'] for r in route['ly_do']]
+    summary = '\n'.join(approval.tom_tat_nghiep_vu(p))
+    assert not any(value in summary for item in unusual.values() for key in ('khong_ep_duoc', 'so_am', 'vuot_nguong')
+                   for value in item.get(key, {}).get('mau', []))
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
 
 
 @pytest.fixture(scope='module')

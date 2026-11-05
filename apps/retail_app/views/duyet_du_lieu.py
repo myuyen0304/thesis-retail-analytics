@@ -17,7 +17,7 @@ import yaml
 from scripts.ingest import extension_contract
 st.title('Duyệt dữ liệu')
 st.caption('Chỉ chạy DuckDB local. Công bố tại đây cập nhật kho nhập dữ liệu; kho báo cáo của app giữ cấu hình hiện tại.')
-st.info('Hiện chỉ orders_enriched có model dbt. Phần mở rộng khác dừng ở “Chờ model dbt” sau khi duyệt.')
+st.info('Đã có model dbt cho orders_enriched và shipments_realistic. Phần mở rộng khác cần DE bổ sung model trước khi chạy.')
 store = RequestStore()
 try:
     nhap_runner.recover_queue(store, wait=False)

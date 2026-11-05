@@ -41,6 +41,7 @@ sources:
         external_location: "read_parquet('{{ var(\"snapshot_path\", \"\") }}/{name}.parquet')"
     tables:
       - name: orders_enriched
+      - name: shipments_realistic
 
   # Kết quả stage dự báo của pipeline (scripts/forecast/stage.py). Chỉ dùng khi pipeline truyền var forecast_path
   # (models reporting/rpt_forecast_* tắt khi không có var này, nên build cũ không đổi).
