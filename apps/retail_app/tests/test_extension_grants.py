@@ -8,7 +8,9 @@ from tests.test_ai_databricks import _g, _t, CAT, SP
 from tests.test_databricks import assert_ingest_sources
 
 
-@pytest.mark.parametrize('extra', [[], ['orders_enriched']], ids=['H1-core', 'H2-extension'])
+@pytest.mark.parametrize('extra', [[], ['orders_enriched'], ['shipments_realistic'],
+                                 ['orders_enriched', 'shipments_realistic']],
+                         ids=['H1-core', 'H2-extension', 'B3-shipments', 'B3-both'])
 def test_h1_h2_valid_sources(extra):
     names = list(SOURCES) + extra
     assert_ingest_sources(names, len(names))
