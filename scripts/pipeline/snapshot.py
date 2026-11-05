@@ -20,10 +20,19 @@ def validate(path, contract=None, extension_directory=None):
     contract = SOURCES if contract is None else contract
     path = Path(path)
     manifest = json.loads((path / 'manifest.json').read_text(encoding='utf-8'))
+    batches = manifest.get('dot', [])
+    if batches:
+        from scripts.ingest import dot
+        if (manifest.get('co_du_lieu_tong_hop') is not True or manifest.get('dot_sha256') != dot.seal(batches)
+                or any(b['ma_dot'] != dot.identity(b['files']) for b in batches)):
+            raise ValueError('Manifest đợt không khớp hash/định danh')
     extended = {n: e for n, e in manifest['sources'].items() if e.get('mo_rong')}
     if set(manifest['sources']) - set(extended) != set(contract):
         raise ValueError('Snapshot thiếu/thừa nguồn')
     for name, (header, count) in contract.items():
+        if batches:
+            count += sum(b['sales_rows'] if name == 'sales' else sum(f['so_dong'] for f in b['files']
+                         if f['nguon'] == name and f['nhom'] in ('khop_loi', 'loi_kem_cot_them')) for b in batches)
         entry = manifest['sources'][name]
         table = pq.read_table(path / f'{name}.parquet')
         if (entry['header'] != header or entry['rows'] != count
@@ -32,19 +41,26 @@ def validate(path, contract=None, extension_directory=None):
                 or digest(path / f'{name}.parquet') != entry['parquet_sha256']):
             raise ValueError(f'{name}: snapshot không khớp hợp đồng/hash/định danh dòng')
     for name, entry in extended.items():
-        extension_prepare.validate(path, name, entry, extension_directory)
+        if batches:
+            extension_prepare.validate(path, name, entry, extension_directory, batch=True)
+        else:
+            extension_prepare.validate(path, name, entry, extension_directory)
     identity = hashlib.sha256((''.join(f"{n}:{manifest['sources'][n]['csv_sha256']};"
                                     for n in sorted(contract))
-                               + extension_contract.identity_suffix(extended)).encode()).hexdigest()[:12]
+                               + extension_contract.identity_suffix(extended)
+                               + (dot.suffix(batches) if batches else '')).encode()).hexdigest()[:12]
     if manifest['snapshot_id'] != identity or path.name != identity:
         raise ValueError('snapshot_id không khớp nguồn')
     return manifest
 
 
-def prepare(data='data', landing='warehouse/landing', contract=None, extensions=(), extension_directory=None):
+def prepare(data='data', landing='warehouse/landing', contract=None, extensions=(), extension_directory=None, dots=()):
     import pyarrow as pa
     import pyarrow.parquet as pq
     contract = SOURCES if contract is None else contract
+    if dots:
+        from scripts.ingest import dot
+        return dot.prepare(data, landing, contract, extensions, extension_directory, dots)
     data, landing = Path(data), Path(landing)
     entries = {}
     # Kiểm toàn bộ trước; hash lại sau khi đọc để phát hiện nguồn bị thay giữa chừng.
