@@ -40,6 +40,17 @@ def test_external_dir_prepare_context_validate(external, monkeypatch):
         c.execute('external', ['ui_custom'], extension_directory=c.folder / 'different')
 
 
+def test_contract_directory_does_not_change_snapshot_id(external, tmp_path):
+    c = external
+    first = c.execute('first', ['ui_custom'], extension_directory=c.folder)
+    directory = tmp_path / 'chay/ui-new-2/hop_dong'
+    directory.mkdir(parents=True)
+    (directory / 'ui_custom.yml').write_bytes((c.folder / 'ui_custom.yml').read_bytes())
+    second = c.execute('second', ['ui_custom'], extension_directory=directory)
+    assert first['snapshot_id'] == second['snapshot_id']
+    assert second['extension_dir'] == str(directory.resolve())
+
+
 @pytest.mark.parametrize('stage', ['forecast', 'build', 'validate', 'publish'])
 def test_each_stage_validates_external_contract(external, monkeypatch, stage):
     c = external
