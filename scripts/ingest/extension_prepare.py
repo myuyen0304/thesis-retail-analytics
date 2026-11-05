@@ -1,6 +1,9 @@
 """Kiểm nguồn mở rộng bằng SQL, giữ bằng chứng và đánh lại số dòng phần nhận."""
 import hashlib
+import csv
+from contextlib import contextmanager
 from pathlib import Path
+import tempfile
 
 import duckdb
 
@@ -41,12 +44,35 @@ def _typed(col, kind, alias=None):
     return expr if kind == 'string' else f'try_cast({expr} as {kind})'
 
 
-def prepare(doc, data, ready):
+@contextmanager
+def batch_input(source, doc, additions, ready):
+    """Gộp đúng header duyệt, giữ thứ tự gốc rồi đợt; chỉ dùng trên đường có đợt."""
+    with tempfile.TemporaryDirectory(prefix='extension-', dir=Path(ready).parent) as folder:
+        merged = Path(folder) / 'merged.csv'
+        original_hash = digest(source)
+        with merged.open('w', encoding='utf-8', newline='') as target:
+            writer = csv.writer(target)
+            writer.writerow(doc['header'])
+            for index, path in enumerate([source, *additions]):
+                with Path(path).open(encoding='utf-8-sig', newline='') as stream:
+                    reader = csv.DictReader(stream)
+                    if (index == 0 and reader.fieldnames != doc['header']) or not set(doc['header']) <= set(reader.fieldnames or []):
+                        from scripts.ingest.dot import fail
+                        fail('D2-extension', Path(path).name, 'header')
+                    for row in reader:
+                        writer.writerow([row[c] for c in doc['header']])
+        with duckdb.connect(config={'threads': 2, 'memory_limit': '2GB'}) as con:
+            with read_file(merged, con) as table:
+                table.sha256 = original_hash
+                yield table
+
+
+def prepare(doc, data, ready, additions=None):
     """Chỉ ghi parquet sau khi kiểm header, các lý do R1–R6 và ngưỡng."""
     name = doc['ten']
     source = Path(data) / doc['file']
     ready = Path(ready)
-    with read_file(source) as table:
+    with (read_file(source) if additions is None else batch_input(source, doc, additions, ready)) as table:
         con = table.con
         if table.columns != doc['header']:
             added = sorted(set(table.columns) - set(doc['header']))
@@ -133,7 +159,7 @@ def prepare(doc, data, ready):
                 'cach_ly_sha256': digest(quarantine)}
 
 
-def validate(path, name, entry, directory=None):
+def validate(path, name, entry, directory=None, batch=False):
     """Kiểm lại hợp đồng, hash và thứ tự dòng bằng DuckDB, không tải toàn bảng vào Python."""
     doc = load(name, directory)
     selected = loaded_columns(doc)
@@ -148,7 +174,7 @@ def validate(path, name, entry, directory=None):
     if (any(type(n) is not int for n in (total, rejected, rows)) or total <= 0 or rejected < 0
             or rows + rejected != total or rejected / total > doc['nguong_cach_ly']):
         raise ValueError(f'{name}: số dòng/ngưỡng không khớp')
-    with duckdb.connect(config={'threads': 4}) as con:
+    with duckdb.connect(config={'threads': 2, 'memory_limit': '2GB'} if batch else {'threads': 4}) as con:
         con.execute('create temp table accepted as select * from read_parquet(?)', [str(parquet)])
         header = [r[0] for r in con.execute('describe accepted').fetchall()]
         stats = con.execute('select count(*), count(distinct _src_row), min(_src_row), max(_src_row) '
