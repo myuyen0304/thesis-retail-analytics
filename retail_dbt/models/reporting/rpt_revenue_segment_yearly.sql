@@ -35,7 +35,7 @@ select
     dimension_name,
     dimension_value,
     year,
-    year between 2013 and 2022                                         as is_analysis_period,
+    year between 2013 and {{ ky_cuoi() }}                                         as is_analysis_period,
     r,
     r_total,
     share,                                                             -- tỷ trọng trong R cùng năm
