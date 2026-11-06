@@ -52,7 +52,7 @@ def prepare(c, run='batch', **kwargs):
     return cli.execute('prepare', run_id=run, root=c.landing.parent / 'pipeline', data=c.data, **kwargs)
 
 
-@pytest.mark.parametrize('stage', ['forecast', 'build', 'validate', 'publish'])
+@pytest.mark.parametrize('stage', ['publish'])   # D3 mở forecast, build, validate local; publish chờ D5
 @pytest.mark.parametrize('entry', ['direct', 'snapshot_id', 'prepared', 'forecasted', 'built', 'validated'])
 def test_stages_blocked_from_manifest(cli_case, stage, entry):
     c = cli_case
