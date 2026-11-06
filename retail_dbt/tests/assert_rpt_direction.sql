@@ -55,14 +55,14 @@ from (
            sum(case when (window_months, change_month_date, direction_after, extreme_month_date, held_to_end_of_data) in (
                     (3, cast('2016-11-01' as date), 'xuong', cast('2016-08-01' as date), false),
                     (6, cast('2017-02-01' as date), 'xuong', cast('2016-08-01' as date), false),
-                    (9, cast('2017-05-01' as date), 'xuong', cast('2016-08-01' as date), false),
+                    (9, cast('2017-05-01' as date), 'xuong', cast('2016-08-01' as date), false){% if not co_dot() %},
                     (3, cast('2021-12-01' as date), 'len',   cast('2021-10-01' as date), true),
                     (6, cast('2022-02-01' as date), 'len',   cast('2021-10-01' as date), true),
-                    (9, cast('2022-05-01' as date), 'len',   cast('2021-10-01' as date), true))
+                    (9, cast('2022-05-01' as date), 'len',   cast('2021-10-01' as date), true){% endif %})
                     then 1 else 0 end) as hit
     from {{ ref('rpt_revenue_direction_change') }}
 ) t
-where k <> 6 or hit <> 6
+where {% if co_dot() %}hit <> 3{% else %}k <> 6 or hit <> 6{% endif %}
 union all
 -- 5. Đối chiếu với mốc BA (cột data_* của rpt_revenue_turning_point): cuối 2016 (tăng → giảm) dữ liệu tự tìm thấy,
 --    đỉnh 08/2016, phát hiện 02/2017; cuối 2018, cuối 2019 là đổi tốc độ cùng hướng xuống nên không thấy
