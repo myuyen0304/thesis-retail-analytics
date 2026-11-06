@@ -48,6 +48,7 @@ def requests():
         return
     snapshot = nhap_runner.page_snapshot(store, current['username'], role)
     rows = snapshot['rows']
+    dang_dung = nhap_runner.nguon_dang_dung(store) if any(r['trang_thai'] == 'da_cong_bo' for r in rows) else None
     st.subheader('Yêu cầu đã gửi')
     if not rows:
         st.info('Chưa có yêu cầu.')
@@ -93,7 +94,12 @@ def requests():
             elif row['trang_thai'] == 'loi':
                 st.warning('Xử lý dữ liệu chưa thành công. Đội dữ liệu đang kiểm tra.')
             elif row['trang_thai'] == 'da_cong_bo':
-                st.success('Đã cập nhật dữ liệu')
+                if dang_dung is None:
+                    st.info('Đã xử lý xong; đội dữ liệu đang kiểm tra trạng thái hiện tại.')
+                elif dang_dung[0] is None or row.get('ten_mo_rong') in dang_dung[1]:   # chưa có bản nào để so: giữ câu cũ
+                    st.success('Đã cập nhật dữ liệu')
+                else:
+                    st.info('Dữ liệu này đã từng được cập nhật nhưng hiện không nằm trong bản đang dùng.')
     nhap_runner.monitor_page(store, current['username'], role, snapshot, notify=True)
 
 

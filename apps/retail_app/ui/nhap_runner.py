@@ -218,25 +218,79 @@ def queue_position(store, request_id):
     return None
 
 
+def _active_context(store):
+    """(mã bản đang xem, context của bản đó); chưa có bản đang xem thì (None, None). Chỉ đọc."""
+    state = store.pipeline_state()
+    active = state.get('active')
+    if not active:
+        return None, None
+    release = state['releases'][active]
+    context = read_context(store, release['run_id'])
+    if context['release_id'] != active or context['target'] != 'duckdb':
+        raise ValueError('Context active không khớp bản đang phục vụ.')
+    if not isinstance(context.get('extensions', []), list):
+        raise ValueError('Danh sách phần mở rộng của active không hợp lệ.')
+    return active, context
+
+
+def active_extensions(store):
+    """(mã bản đang xem, tập nguồn mở rộng của bản đó). Chỉ đọc; dữ liệu hỏng thì để lỗi."""
+    active, context = _active_context(store)
+    return active, set(context.get('extensions', [])) if active else set()
+
+
+def published_release(store, record):
+    """Bản mà số trong tóm tắt của yêu cầu thuộc về; chưa công bố lần nào thì None. Chỉ đọc."""
+    path = store.folder(record['id']) / 'chay/published.context.json'
+    if not path.exists():
+        return None
+    release = read_json(path)['release_id']
+    if not isinstance(release, str):
+        raise ValueError('release_id không hợp lệ.')
+    return release
+
+
+READ_ERRORS = (OSError, ValueError, KeyError, TypeError, AttributeError)
+
+
+def doi_chieu_ban(store, record):
+    """Câu báo cho trang Duyệt khi số của yêu cầu không phải bản đang xem: (kiểu st, câu) hoặc None. Chỉ đọc."""
+    try:
+        published = published_release(store, record)
+        if published is None:
+            return None
+        active, names = active_extensions(store)
+    except READ_ERRORS:
+        return 'warning', 'Chưa đối chiếu được với bản đang xem.'
+    if active is None:
+        return 'warning', 'Kho chưa có bản đang xem.'
+    if published == active:
+        return None
+    x, y = published[:8], active[:8]
+    if record.get('ten_mo_rong') in names:
+        return 'info', f'Số dưới đây là của bản {x}. Bản đang xem là {y}, vẫn có nguồn này.'
+    return 'warning', f'Số dưới đây là của bản {x}, không phải bản đang xem ({y}). Nguồn này hiện không có trong bản đang xem.'
+
+
+def nguon_dang_dung(store):
+    """(mã bản đang xem, tập nguồn) cho trang Gửi; đọc lỗi thì None. Chỉ đọc."""
+    try:
+        return active_extensions(store)
+    except READ_ERRORS:
+        return None
+
+
 def _extensions_for_run(store, record):
     """Đọc bộ active cho lượt mới; chưa ghi gì vào hợp đồng của yêu cầu hay lượt cũ."""
     from scripts.ingest import extension_contract
     own = _extension_names([record['ten_mo_rong']])[0]
     request_directory = store.folder(record['id']) / 'hop_dong'
     try:
-        state = store.pipeline_state()
-        active = state.get('active')
+        active, context = _active_context(store)
         names = [own]
         directory = None
         if active:
-            release = state['releases'][active]
-            context = read_context(store, release['run_id'])
-            if context['release_id'] != active or context['target'] != 'duckdb':
-                raise ValueError('Context active không khớp bản đang phục vụ.')
-            extensions = context.get('extensions', [])
-            if not isinstance(extensions, list):
-                raise ValueError('Danh sách phần mở rộng của active không hợp lệ.')
-            names = _extension_names([own, *extensions])
+            names = _extension_names([own, *context.get('extensions', [])])
             if set(names) != {own}:
                 if not context.get('extension_dir'):
                     raise ValueError('Context active thiếu extension_dir.')

@@ -706,3 +706,158 @@ def test_dispatch_competition_message(store, identity, action):
         with pytest.raises(ValueError, match='Trạng thái đã đổi'):
             getattr(nr, action)(store, r['id'], r['revision'])
     assert store.read(r['id']) == r
+
+
+# Phiếu hiển thị sau rollback: đối chiếu chỉ đọc, không đổi trạng thái yêu cầu
+A, B, C = 'a' * 24, 'b' * 24, 'c' * 24
+GIU = 'Đã cập nhật dữ liệu'
+KHONG_CON = 'Dữ liệu này đã từng được cập nhật nhưng hiện không nằm trong bản đang dùng.'
+
+
+def kho(store, active, releases):
+    """releases: {mã bản: danh sách nguồn mở rộng}."""
+    root = store.base / nr.PIPELINE_ROOT
+    for rid, names in releases.items():
+        atomic_json(root / 'runs' / rid / 'context.json', {'release_id': rid, 'target': 'duckdb', 'extensions': names})
+    atomic_json(root / 'state.json', {'version': 'test', 'payload': {
+        'active': active, 'releases': {rid: {'run_id': rid, 'status': 'ready'} for rid in releases}}})
+
+
+def da_cong_bo(store, name, rid):
+    record = pending(store)
+    record.update(trang_thai='da_cong_bo', ten_mo_rong=name)
+    if rid:
+        atomic_json(store.folder(record['id']) / 'chay/published.context.json', {'stage': 'published', 'release_id': rid})
+    return store.save(record)
+
+
+def trang_duyet(store, monkeypatch):
+    monkeypatch.setattr(ns, 'RequestStore', lambda: store)
+    at = AppTest.from_file(str(VIEWS / 'duyet_du_lieu.py')).run()
+    assert not at.exception
+    return [x.value for x in at.warning], [x.value for x in at.info]
+
+
+def trang_gui(store, monkeypatch):
+    monkeypatch.setattr(roles, 'current_role', lambda: 'quan_ly')
+    monkeypatch.setattr(roles, 'logged_in_user', lambda: {'username': 'manager'})
+    monkeypatch.setattr(ns, 'RequestStore', lambda: store)
+    at = AppTest.from_file(str(VIEWS / 'gui_du_lieu.py')).run()
+    assert not at.exception
+    return [x.value for x in at.success], [x.value for x in at.info]
+
+
+def test_notice_none_when_published_is_active(store, identity, monkeypatch):
+    kho(store, A, {A: ['orders_enriched']})
+    record = da_cong_bo(store, 'orders_enriched', A)
+    assert nr.doi_chieu_ban(store, record) is None
+    warnings, infos = trang_duyet(store, monkeypatch)
+    assert not [w for w in warnings if 'bản đang xem' in w] and not [i for i in infos if 'bản đang xem' in i.lower()]
+    assert GIU in trang_gui(store, monkeypatch)[0]
+
+
+def test_notice_after_rollback_without_source(store, identity, monkeypatch):
+    kho(store, A, {A: ['orders_enriched'], B: ['orders_enriched', 'shipments_realistic']})
+    da_cong_bo(store, 'shipments_realistic', B)
+    warnings, _ = trang_duyet(store, monkeypatch)
+    assert f'Số dưới đây là của bản {B[:8]}, không phải bản đang xem ({A[:8]}). Nguồn này hiện không có trong bản đang xem.' in warnings
+    success, infos = trang_gui(store, monkeypatch)
+    assert GIU not in success and KHONG_CON in infos
+
+
+def test_notice_when_newer_release_keeps_source(store, identity, monkeypatch):
+    kho(store, B, {A: ['orders_enriched'], B: ['orders_enriched', 'shipments_realistic']})
+    da_cong_bo(store, 'orders_enriched', A)
+    assert f'Số dưới đây là của bản {A[:8]}. Bản đang xem là {B[:8]}, vẫn có nguồn này.' in trang_duyet(store, monkeypatch)[1]
+    assert GIU in trang_gui(store, monkeypatch)[0]
+
+
+def test_rollback_flips_two_requests(store, identity):
+    kho(store, A, {A: ['orders_enriched'], B: ['orders_enriched', 'shipments_realistic']})
+    first = da_cong_bo(store, 'orders_enriched', A)
+    second = da_cong_bo(store, 'shipments_realistic', B)
+    assert nr.doi_chieu_ban(store, first) is None
+    assert nr.doi_chieu_ban(store, second)[0] == 'warning'
+    kho(store, B, {A: ['orders_enriched'], B: ['orders_enriched', 'shipments_realistic']})
+    assert nr.doi_chieu_ban(store, first)[0] == 'info'
+    assert nr.doi_chieu_ban(store, second) is None
+
+
+def test_rollback_to_own_older_release(store, identity):
+    kho(store, A, {A: ['orders_enriched'], C: ['orders_enriched']})
+    record = da_cong_bo(store, 'orders_enriched', C)
+    kind, text = nr.doi_chieu_ban(store, record)
+    assert kind == 'info' and C[:8] in text and A[:8] in text
+
+
+def test_notice_without_active_or_published(store, identity):
+    record = da_cong_bo(store, 'orders_enriched', A)
+    assert nr.doi_chieu_ban(store, record) == ('warning', 'Kho chưa có bản đang xem.')
+    assert nr.active_extensions(store) == (None, set())
+    assert nr.nguon_dang_dung(store) == (None, set())
+    bare = da_cong_bo(store, 'orders_enriched', None)
+    kho(store, A, {A: ['orders_enriched']})
+    assert nr.published_release(store, bare) is None
+    assert nr.doi_chieu_ban(store, bare) is None
+
+
+@pytest.mark.parametrize('damage', ['state', 'context', 'mismatch', 'target', 'published', 'no_release', 'release_kind', 'extensions'])
+def test_notice_survives_damage(store, identity, monkeypatch, damage):
+    kho(store, A, {A: ['orders_enriched']})
+    record = da_cong_bo(store, 'orders_enriched', B)
+    root = store.base / nr.PIPELINE_ROOT
+    context = root / 'runs' / A / 'context.json'
+    if damage == 'state':
+        (root / 'state.json').write_text('{hong', encoding='utf-8')
+    elif damage == 'context':
+        context.write_text('{hong', encoding='utf-8')
+    elif damage == 'mismatch':
+        atomic_json(context, {'release_id': C, 'target': 'duckdb', 'extensions': []})
+    elif damage == 'target':
+        atomic_json(context, {'release_id': A, 'target': 'databricks', 'extensions': []})
+    elif damage == 'extensions':
+        atomic_json(context, {'release_id': A, 'target': 'duckdb', 'extensions': 'orders_enriched'})
+    elif damage == 'published':
+        (store.folder(record['id']) / 'chay/published.context.json').write_text('{hong', encoding='utf-8')
+    elif damage == 'release_kind':
+        atomic_json(store.folder(record['id']) / 'chay/published.context.json', {'stage': 'published', 'release_id': 123})
+    else:
+        atomic_json(store.folder(record['id']) / 'chay/published.context.json', {'stage': 'published'})
+    assert nr.doi_chieu_ban(store, record) == ('warning', 'Chưa đối chiếu được với bản đang xem.')
+    assert 'Chưa đối chiếu được với bản đang xem.' in trang_duyet(store, monkeypatch)[0]
+    if damage not in ('published', 'no_release', 'release_kind'):
+        assert 'Đã xử lý xong; đội dữ liệu đang kiểm tra trạng thái hiện tại.' in trang_gui(store, monkeypatch)[1]
+
+
+@pytest.mark.parametrize('state', ['da_kiem', 'dang_chay', 'loi'])
+def test_notice_only_for_published_state(store, identity, monkeypatch, state):
+    kho(store, A, {A: []})
+    record = da_cong_bo(store, 'orders_enriched', B)
+    record.update(trang_thai=state, bat_dau='2026-11-05T00:00:00+00:00', run_id='ui-thu', stage='prepare')
+    store.save(record)
+    monkeypatch.setattr(nr, 'doi_chieu_ban', lambda *a: pytest.fail('Không đối chiếu ở trạng thái này'))
+    monkeypatch.setattr(nr, 'nguon_dang_dung', lambda *a: pytest.fail('Không đọc khi chưa công bố'))
+    trang_duyet(store, monkeypatch)
+    trang_gui(store, monkeypatch)
+
+
+def test_sender_reads_active_once_per_draw(store, identity, monkeypatch):
+    kho(store, A, {A: ['orders_enriched']})
+    da_cong_bo(store, 'orders_enriched', A)
+    da_cong_bo(store, 'shipments_realistic', A)
+    calls = []
+    original = nr.nguon_dang_dung
+    monkeypatch.setattr(nr, 'nguon_dang_dung', lambda s: calls.append(1) or original(s))
+    trang_gui(store, monkeypatch)
+    assert len(calls) == 1
+
+
+def test_comparison_writes_nothing(store, identity):
+    kho(store, A, {A: ['orders_enriched'], B: ['shipments_realistic']})
+    record = da_cong_bo(store, 'shipments_realistic', B)
+    def fingerprint():
+        return {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in store.base.rglob('*') if p.is_file()}
+    before = fingerprint()
+    nr.active_extensions(store), nr.published_release(store, record), nr.doi_chieu_ban(store, record), nr.nguon_dang_dung(store)
+    assert fingerprint() == before
+    assert store.read(record['id'])['trang_thai'] == 'da_cong_bo' and store.read(record['id'])['revision'] == record['revision']
