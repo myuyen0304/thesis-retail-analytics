@@ -168,6 +168,10 @@ def review():
             running_status(latest)
 
     nhap_runner.monitor_page(store, user['username'], roles.current_role(), snapshot, draw=draw_running)
+    if state == 'da_cong_bo':       # đứng trên thong_bao: dòng đó có thể còn của lượt trước
+        notice = nhap_runner.doi_chieu_ban(store, record)
+        if notice:
+            getattr(st, notice[0])(notice[1])
     if record.get('thong_bao'):
         st.text(record['thong_bao'])
     if state in ('da_kiem', 'da_cong_bo'):
@@ -247,23 +251,35 @@ def review():
 
     if roles.current_role() == 'admin':
         st.subheader('Rollback kho nhập dữ liệu')
-        versions = nhap_runner.rollback_options(store)
-        labels = {row['id']: row['label'] for row in nhap_runner.rollback_details(store)}
+        try:
+            versions = nhap_runner.rollback_options(store)
+            labels = {row['id']: row['label'] for row in nhap_runner.rollback_details(store)}
+        except nhap_runner.READ_ERRORS:
+            versions = []
+            st.warning('Chưa đọc được danh sách bản để khôi phục.')
+        if (done := st.session_state.pop('rollback_xong', None)):
+            st.success(f'Đã khôi phục bản dữ liệu local ({done[:8]}).')
         if versions:
-            with st.form('rollback_ui_nhap'):
+            # Mỗi lần rollback xong form mang khóa mới, nên ô xác nhận về trạng thái chưa tick:
+            # bấm thêm một lần không đổi bản tiếp
+            with st.form(f"rollback_ui_nhap_{st.session_state.get('rollback_lan', 0)}"):
                 release_id = st.selectbox('Bản cần khôi phục', versions, format_func=lambda key: labels.get(key, key))
                 confirmed = st.checkbox('Tôi xác nhận khôi phục bản dữ liệu này')
                 run_rollback = st.form_submit_button('Rollback')
             if run_rollback and not confirmed:
                 st.warning('Cần xác nhận trước khi khôi phục bản dữ liệu.')
             if run_rollback and confirmed:
+                result = None
                 try:
                     result = nhap_runner.rollback(store, release_id)
                     if result.returncode:
                         st.error(result.stderr or result.stdout)
-                    else:
-                        st.success('Đã khôi phục bản dữ liệu local.')
                 except Exception as error:
                     st.error(str(error))
+                if result is not None and not result.returncode:
+                    # Chạy lại trang: trạng thái yêu cầu, cảnh báo và danh sách bản ở trên đều được đọc trước khi rollback
+                    st.session_state['rollback_xong'] = release_id
+                    st.session_state['rollback_lan'] = st.session_state.get('rollback_lan', 0) + 1
+                    st.rerun()
 
 review()
