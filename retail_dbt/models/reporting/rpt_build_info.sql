@@ -9,6 +9,6 @@ select
     min(order_date)   as data_start_date,       -- đơn đầu tiên
     max(order_date)   as data_end_date,         -- đơn cuối cùng = lúc trích dữ liệu (trạng thái đơn chốt ở đây)
     2013              as analysis_start_year,   -- slide 3: phân tích 10 năm đủ 2013–2022
-    2022              as analysis_end_year,
+    {{ ky_cuoi() }}              as analysis_end_year,
     2014              as growth_start_year      -- tăng trưởng năm tính từ 2014
 from {{ ref('int_reporting_order_items') }}
