@@ -15,7 +15,7 @@ where period_code = '2013-2022' and abs(g - 15688978837.51) > 0.01
 union all
 select 'du 2 ky gop', count(*)
 from (select count(*) k from {{ ref('rpt_revenue_total') }}) t
-where k <> 2
+where k <> {{ 3 if co_dot() else 2 }}
 union all
 -- 2. Toàn kỳ = cộng các năm cho measure cộng được (G, R, 4 phần, Q, N: mỗi đơn chỉ thuộc 1 năm)
 select 'toan ky = tong cac nam (G, R, 4 phan chenh, Q, N)', count(*)
@@ -68,7 +68,7 @@ from {{ ref('rpt_revenue_total') }} t
 cross join (
     select min(d.full_date) d0, max(d.full_date) d1
     from {{ ref('fact_daily_sales') }} s join {{ ref('dim_date') }} d on d.date_sk = s.date_sk
-    where s.is_actual
+    where s.is_actual{% if co_dot() %} and d.year <= 2022{% endif %}
 ) h
 where t.period_code = '2012-2022' and (t.first_order_date <> h.d0 or t.last_order_date <> h.d1)
 
@@ -129,7 +129,7 @@ cross join (
 ) y
 cross join {{ ref('rpt_revenue_total') }} t
 where t.period_code = '2012-2022'
-  and (c.k <> 1 or i.data_start_date <> t.first_order_date or i.data_end_date <> t.last_order_date
+  and (c.k <> 1 or i.data_start_date <> t.first_order_date or i.data_end_date <> {% if co_dot() %}cast('{{ var('last_actual_date') }}' as date){% else %}t.last_order_date{% endif %}
        or i.analysis_start_year <> y.a0 or i.analysis_end_year <> y.a1 or i.growth_start_year <> y.g0)
 ) checks
 where n > 0
