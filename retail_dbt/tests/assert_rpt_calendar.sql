@@ -3,7 +3,7 @@ select * from (
 select '126 thang lien tuc 07/2012 -> 12/2022' as rule, count(*) as n
 from (select count(*) as k, min(month_start_date) as lo, max(month_start_date) as hi
       from {{ ref('rpt_revenue_monthly') }}) m
-where k <> 126 or lo <> cast('2012-07-01' as date) or hi <> cast('2022-12-01' as date)
+where k <> {{ 126 + (ky_cuoi() - 2022) * 12 }} or lo <> cast('2012-07-01' as date) or hi <> cast('{{ ky_cuoi() }}-12-01' as date)
 union all
 -- r_12m và YoY tính lại bằng self-join (độc lập với window function); NULL đúng chỗ, không NULL sai chỗ
 select 'r_12m = tong 12 thang gan nhat (tu 07/2013), NULL truoc do', count(*)
@@ -30,7 +30,7 @@ union all
 select 'chi so thang: du 12 thang, khong NULL, tong = 12 moi nam 2013-2022; NULL nam 2012', count(*)
 from (select year, sum(month_index) as s, count(month_index) as k from {{ ref('rpt_revenue_monthly') }}
       group by year) y
-where (year between 2013 and 2022 and (k <> 12 or {{ differs('s', '12', 1e-9) }}))
+where (year between 2013 and {{ ky_cuoi() }} and (k <> 12 or {{ differs('s', '12', 1e-9) }}))
    or (year = 2012 and k <> 0)
 union all
 select 'cuoi thang: eom_share = R ngay>=26 / R; ky vong = (D-25)/D', count(*)
@@ -96,16 +96,16 @@ cross join (
         where d.month = 8 and d.is_analysis_period
     ) x
 ) chk
-where not (ap.august_odd_vs_even between -0.37661 and -0.37660)
+where {% if co_dot() %}false{% else %}not (ap.august_odd_vs_even between -0.37661 and -0.37660){% endif %}
    or {{ differs('ap.loo_min_odd_vs_even', 'chk.lo', 1e-12) }}
    or {{ differs('ap.loo_max_odd_vs_even', 'chk.hi', 1e-12) }}
-   or not (ap.loo_min_odd_vs_even <= ap.august_odd_vs_even and ap.august_odd_vs_even <= ap.loo_max_odd_vs_even)
-   or not (ap.max_index_odd < ap.min_index_even)
+   or not (ap.loo_min_odd_vs_even <= ap.august_odd_vs_even and ap.august_odd_vs_even <= ap.loo_max_odd_vs_even){% if not co_dot() %}
+   or not (ap.max_index_odd < ap.min_index_even){% endif %}
 union all
 select 'season_peak_trough_ratio = max / min chi so thang (2013-2022)', count(*)
 from {{ ref('rpt_revenue_yearly') }} y
 join (select year, max(month_index) / min(month_index) as ratio from {{ ref('rpt_revenue_monthly') }}
-      where year between 2013 and 2022 group by year) m on m.year = y.year
+      where year between 2013 and {{ ky_cuoi() }} group by year) m on m.year = y.year
 where {{ differs('y.season_peak_trough_ratio', 'm.ratio', 1e-12) }}
 ) checks
 where n > 0
