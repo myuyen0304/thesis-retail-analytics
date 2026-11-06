@@ -48,6 +48,8 @@ def dbt_build(context, target, cloud=None):
         vars_['forecast_path'] = context['forecast_path']
     if 'extensions' in context:
         vars_['extensions'] = context['extensions']
+    if context.get('bien_dot'):       # chỉ bản có đợt; không đợt thì --vars y như cũ (D3)
+        vars_.update(context['bien_dot'])
     dbt = os.getenv('RETAIL_DBT_EXECUTABLE') or str(Path(sys.executable).with_name('dbt.exe' if os.name == 'nt' else 'dbt'))
     env = {**os.environ, 'PYTHONUTF8': '1', 'RETAIL_DUCKDB_BUILD_PATH': context['duckdb_path']}
     if cloud:
@@ -313,13 +315,13 @@ def _entry(stage, run_id, target, started, result, source=None, error=None):
             'finished_at': _utc(), 'result': result, 'error_type': type(error).__name__ if error is not None else None}
 
 
-def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=()):
+def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=(), du_bao_tu=None):
     """Chạy một stage và để lại một dòng lịch sử: dat (stage tiến lên), bo_qua (run bỏ qua hoặc stage đã xong từ trước), loi."""
     started = _utc()
     context_path = Path(root).resolve() / 'runs' / str(run_id) / 'context.json'
     before = _read_json(context_path)
     try:
-        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force, extensions=extensions, extension_directory=extension_directory, dots=dots)
+        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force, extensions=extensions, extension_directory=extension_directory, dots=dots, du_bao_tu=du_bao_tu)
     except Exception as error:
         record_history(Path(root).resolve(), _entry(stage, run_id, target, started, 'loi', _read_json(context_path) or before,
                                                     error))
@@ -330,9 +332,11 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
     return context
 
 
-def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=()):
+def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=(), du_bao_tu=None):
     if dots and (stage != 'prepare' or target == 'databricks' or snapshot_id):
         raise ValueError('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
+    if du_bao_tu and stage != 'forecast':
+        raise ValueError('--du-bao-tu chỉ dùng với stage forecast')
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', run_id):
         raise ValueError('run_id chỉ gồm chữ, số, gạch nối/gạch dưới; tối đa 100 ký tự')
     if extension_directory and not extensions:
@@ -353,10 +357,15 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                         raise ValueError('run_id đã dùng cho tập --extension khác')
                     if context.get('extension_dir') != extension_directory:
                         raise ValueError('run_id đã dùng cho --extension-dir khác')
-                    from scripts.ingest import dot
-                    requested = [b['ma_dot'] for b, _ in dot.classify_all(dots, data)] if dots else []
-                    if [b['ma_dot'] for b in context.get('dot', [])] != requested:
-                        raise ValueError('run_id đã dùng cho danh sách --dot khác')
+                    if snapshot_id and context.get('dot'):
+                        # dot_sha256 trong manifest đã niêm phong danh sách đợt của snapshot này
+                        if context['snapshot_id'] != snapshot_id:
+                            raise ValueError('run_id đã dùng cho snapshot khác')
+                    else:
+                        from scripts.ingest import dot
+                        requested = [b['ma_dot'] for b, _ in dot.classify_all(dots, data)] if dots else []
+                        if [b['ma_dot'] for b in context.get('dot', [])] != requested:
+                            raise ValueError('run_id đã dùng cho danh sách --dot khác')
                     return context
                 if target == 'databricks':
                     cloud = Databricks()
@@ -420,15 +429,23 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                 raise ValueError('Code đổi giữa các stage; tạo run_id mới')
             manifest = snapshot.validate(context['snapshot_path'], **({'extension_directory': context['extension_dir']}
                                         if context.get('extension_dir') else {}))
-            if manifest.get('dot'):
-                raise ValueError('snapshot có đợt chưa dùng được ở stage này (D3, D5)')
+            if manifest.get('dot') and (stage == 'publish' or target == 'databricks'):
+                raise ValueError('snapshot có đợt chưa dùng được ở stage này (D5)')
             if stage == 'forecast':
                 # task riêng forecast_train_score (S2): không cần cloud hay registry; chỉ đọc snapshot, ghi runs/<id>/forecast
                 if context['stage'] in ('forecasted', 'built', 'validated'):
                     return context
                 if context['stage'] != 'prepared':
                     raise ValueError(f"Stage forecast cần run ở trạng thái prepared, đang là {context['stage']}")
-                context['forecast_path'], context['forecast'] = forecast_stage(context)
+                if manifest.get('dot'):
+                    if not du_bao_tu:
+                        raise ValueError('Snapshot có đợt: dự báo đứng yên, cần --du-bao-tu <release_id> của bản gốc')
+                    from scripts.pipeline import du_bao_dot
+                    context['forecast_path'], context['forecast'] = du_bao_dot.dung_lai(context, root, du_bao_tu)
+                elif du_bao_tu:
+                    raise ValueError('--du-bao-tu chỉ dùng cho snapshot có đợt')
+                else:
+                    context['forecast_path'], context['forecast'] = forecast_stage(context)
                 context['stage'] = 'forecasted'
                 atomic_json(context_path, context)
                 return context
@@ -444,6 +461,9 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                     raise ValueError('Chưa chạy stage forecast cho run này: chạy forecast trước build '
                                      '(DAG có task forecast_train_score giữa prepare_snapshot và ingest_and_dbt_build)')
                 check_forecast(context)
+                if manifest.get('dot'):
+                    from scripts.pipeline import du_bao_dot
+                    context['bien_dot'] = du_bao_dot.bien_dbt(context, manifest)
                 if cloud:
                     cloud.ingest(context, manifest)
                     cloud.ingest_forecast(context)
@@ -524,6 +544,12 @@ def print_history(root, target='duckdb', limit=20):
             print(f"{row['run_id']}: cách ly " + json.dumps(context['so_dong_cach_ly'], ensure_ascii=False))
 
 
+def _snapshot_co_dot(root, snapshot_id):
+    """Bản có đợt chỉ tồn tại local nên manifest có sẵn; không có file thì coi như không đợt (đường Databricks)."""
+    path = Path(root) / 'snapshots' / str(snapshot_id) / 'manifest.json'
+    return bool(snapshot_id) and path.exists() and bool(json.loads(path.read_text(encoding='utf-8')).get('dot'))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('stage', choices=(*STAGES, 'run', 'rollback', 'history'))
@@ -535,12 +561,15 @@ def main():
     ap.add_argument('--extension', action='append', default=[], metavar='TEN')
     ap.add_argument('--extension-dir')
     ap.add_argument('--dot', action='append', default=[])
+    ap.add_argument('--du-bao-tu', metavar='RELEASE_ID', help='forecast của snapshot có đợt: bản gốc để dùng lại dự báo')
     ap.add_argument('--force', action='store_true')
     ap.add_argument('--release-id')
     ap.add_argument('--limit', type=int, default=20, help='history: số lần chạy gần nhất cần in')
     a = ap.parse_args()
     if a.dot and (a.stage != 'prepare' or a.target == 'databricks' or a.snapshot_id):
         ap.error('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
+    if a.du_bao_tu and a.stage != 'forecast':
+        ap.error('--du-bao-tu chỉ dùng với stage forecast')
     if a.extension_dir and (not a.extension or a.stage not in ('prepare', 'run')):
         ap.error('--extension-dir chỉ dùng cùng --extension ở prepare hoặc run')
     if a.extension and a.stage not in ('prepare', 'run'):
@@ -565,6 +594,8 @@ def main():
                         ap.error(f'không có phiên bản {a.release_id} trong registry; các bản rollback được: '
                                  + (', '.join(ready) or 'chưa có'))
                     rollback_record = checked(state['releases'][a.release_id])
+                    if _snapshot_co_dot(a.root, rollback_record.get('snapshot_id')):
+                        raise ValueError('Bản có đợt chưa được đưa thành bản đang xem (D5)')
                     verify_consumers(rollback_record, registry, cloud)
                     registry.publish(a.release_id, state['active'])
                     atomic_json(Path(a.root) / 'rollbacks' / f'{uuid.uuid4().hex}.json',
@@ -582,7 +613,7 @@ def main():
         return
     for stage in STAGES if a.stage == 'run' else (a.stage,):
         result = execute(stage, run_id=a.run_id, target=a.target, root=a.root, data=a.data,
-                         snapshot_id=a.snapshot_id, force=a.force, extensions=a.extension, extension_directory=a.extension_dir, dots=a.dot)
+                         snapshot_id=a.snapshot_id, force=a.force, extensions=a.extension, extension_directory=a.extension_dir, dots=a.dot, du_bao_tu=a.du_bao_tu)
         print(json.dumps({k: result[k] for k in ('run_id', 'release_id', 'snapshot_id', 'stage')}, ensure_ascii=False))
 
 
