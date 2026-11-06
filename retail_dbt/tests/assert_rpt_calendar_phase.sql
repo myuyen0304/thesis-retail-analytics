@@ -54,7 +54,7 @@ cross join {{ ref('rpt_august_parity') }} ap
 where (s.rhythm_code = 'cuoi_thang' and {{ differs('s.metric_value', 't.eom_excess', 1e-12) }})
    or (s.rhythm_code = 'thang_8' and {{ differs('s.metric_value', 'ap.august_odd_vs_even', 1e-12) }})
    or not (s.loo_min <= s.metric_value and s.metric_value <= s.loo_max)
-   or s.n_years_with_pattern > s.n_years or s.n_years <> 10
+   or s.n_years_with_pattern > s.n_years or s.n_years <> {{ ky_cuoi() - 2012 }}{# D3: số năm theo kỳ 2013–ky_cuoi; không đợt vẫn là 10 #}
 union all
 -- chênh mùa gộp bỏ năm y tính lại bằng cách trừ: (R tháng m cả kỳ − R tháng m năm y), không qua join năm <> y
 select 'on dinh mua vu: bo tung nam tinh lai bang phep tru', count(*)
@@ -76,8 +76,8 @@ from {{ ref('rpt_calendar_phase') }}
 where not ((phase_code = 'A' and first_year = 2013 and last_year = 2016 and season_peak_trough_ratio between 2.9065 and 2.9067)
         or (phase_code = 'B' and first_year = 2017 and last_year = 2018 and season_peak_trough_ratio between 4.5193 and 4.5194)
         or (phase_code = 'C' and first_year = 2019 and last_year = 2019 and season_peak_trough_ratio between 3.7098 and 3.7099)
-        or (phase_code = 'D' and first_year = 2020 and last_year = 2022 and season_peak_trough_ratio between 3.5375 and 3.5376))
-   or peak_month <> 5 or trough_month <> 12
+        or (phase_code = 'D' and first_year = 2020 and last_year = {{ ky_cuoi() }}{% if not co_dot() %} and season_peak_trough_ratio between 3.5375 and 3.5376{% endif %}))
+   or {% if co_dot() %}(phase_code <> 'D' and (peak_month <> 5 or trough_month <> 12)){% else %}peak_month <> 5 or trough_month <> 12{% endif %}{% if not co_dot() %}
 union all
 select 'so khoa on dinh: mua vu 3,39 (3,22-3,49), cuoi thang +7,18 (7,08-7,35), thang 8 -37,7 (-39,1 den -36,2); 10/10 nam', count(*)
 from {{ ref('rpt_calendar_stability') }}
@@ -85,6 +85,6 @@ where n_years_with_pattern <> 10
    or (rhythm_code = 'mua_vu' and not (metric_value between 3.3942 and 3.3943 and loo_min between 3.2213 and 3.2214
                                        and loo_max between 3.4895 and 3.4896))
    or (rhythm_code = 'cuoi_thang' and not (metric_value between 0.07183 and 0.07184 and loo_min between 0.07082 and 0.07083
-                                           and loo_max between 0.07345 and 0.07346))
+                                           and loo_max between 0.07345 and 0.07346)){% endif %}
 ) checks
 where n > 0
