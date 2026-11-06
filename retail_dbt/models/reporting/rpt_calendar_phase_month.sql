@@ -7,13 +7,13 @@
 -- Chỉ số tháng của giai đoạn tính lại từ tử và mẫu (docs/dwh_huong_dan_pm_ba.md §5 quy tắc 1), không lấy TB chỉ số các năm:
 --   month_index = Σ R tháng m các năm trong giai đoạn ÷ (Σ R cả giai đoạn ÷ 12).
 with first_phase as (
-    select min(start_year) as y from {{ ref('ps2_phases') }}
+    select min(start_year) as y from {{ ps2_phases_ky() }}
 ),
 yp as (
     select y.year, p.phase_code, p.phase_name, p.start_year
     from (select distinct year from {{ ref('rpt_revenue_monthly') }} where is_analysis_period) y
     cross join first_phase f
-    join {{ ref('ps2_phases') }} p
+    join {{ ps2_phases_ky('p') }}
       on (y.year > p.start_year and y.year <= p.end_year)
       or (y.year = p.start_year and p.start_year = f.y)
 ),
