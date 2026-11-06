@@ -26,7 +26,7 @@ eom as (      -- PS3 KPI "mức dồn về cuối tháng" của cả năm. Mức
 ph as (       -- PS2/PS3: nhãn giai đoạn của năm (seed ps2_phases). Năm ranh giới thuộc cả hai giai đoạn (quy tắc 2) → 'A/B'
     select y.year, {{ listagg_ordered('p.phase_code', "'/'", 'p.start_year') }} as ps2_phase_codes
     from (select distinct year from {{ ref('int_reporting_order_items') }}) y
-    join {{ ref('ps2_phases') }} p on y.year between p.start_year and p.end_year
+    join {{ ps2_phases_ky('p') }} on y.year between p.start_year and p.end_year
     group by y.year
 ),
 l as (
@@ -40,7 +40,7 @@ l as (
 )
 select
     year,
-    year between 2013 and 2022                                    as is_analysis_period,
+    year between 2013 and {{ ky_cuoi() }}                                    as is_analysis_period,
     g, r, cancelled_gross, returned_gross, undelivered_gross, delivered_discount,
     g - r                                                         as gap_g_minus_r,   -- thẻ "Chênh lệch G − R" của PS1
     n, q, c, u, p, f, aov, capture_rate, cancelled_rate, discount_rate,
