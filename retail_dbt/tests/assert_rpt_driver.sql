@@ -5,7 +5,7 @@ select 'nam: khop rpt_revenue_yearly, du 2014-2022, giai doan dung quy tac' as r
 from {{ ref('rpt_revenue_yearly') }} y
 full outer join (select * from {{ ref('rpt_driver_period') }} where period_type = 'year') d
   on cast(d.period_code as integer) = y.year
-left join {{ ref('ps2_phases') }} ph on ph.phase_code = d.phase_code
+left join {{ ps2_phases_ky('ph') }} on ph.phase_code = d.phase_code
 where (y.year >= 2014 and d.period_code is null) or (y.year < 2014 and d.period_code is not null)
    or (d.period_code is not null and (
         y.year is null or d.start_year <> y.year - 1 or d.end_year <> y.year
@@ -142,7 +142,9 @@ from (
     join {{ ref('rpt_revenue_yearly') }} y1 on y1.year = d.end_year
     where d.period_type = 'phase'
 ) t
-where abs(contrib_n - dn) >= 5e6 or abs(contrib_u - du) >= 5e6 or abs(contrib_p - dq) >= 5e6
+{#- D3: có đợt thì giai đoạn D kéo tới năm mới (2019–2023, 4 bước), tách thẳng lệch tới 12,8 triệu (lượt d3-dot 2026-11-06):
+    ngưỡng 5 triệu đo trên D 2019–2022 không còn áp; D vẫn phải cùng kết luận kéo lên / kéo xuống (hai điều kiện dưới). #}
+where {% if co_dot() %}(period_code <> 'D' and (abs(contrib_n - dn) >= 5e6 or abs(contrib_u - du) >= 5e6 or abs(contrib_p - dq) >= 5e6)){% else %}abs(contrib_n - dn) >= 5e6 or abs(contrib_u - du) >= 5e6 or abs(contrib_p - dq) >= 5e6{% endif %}
    or coalesce(top_up_driver, '-') <> coalesce(case when greatest(dn, du, dq) > 0 then
           case greatest(dn, du, dq) when dn then 'n' when du then 'u' else 'p' end end, '-')
    or coalesce(top_down_driver, '-') <> coalesce(case when least(dn, du, dq) < 0 then
@@ -158,10 +160,10 @@ where (period_code = '2019' and not (round(contrib_n / 1e4) = -57242 and round(c
                                   and top_up_driver = 'p' and top_down_driver = 'u'))
    or (period_code = 'B' and not (round(delta_r / 1e4) = -20023 and round(contrib_n / 1e4) = -24989
                                   and top_up_driver = 'p' and top_down_driver = 'n'))
-   or (period_code = 'C' and not (round(delta_r / 1e4) = -55495 and top_up_driver = 'p' and top_down_driver = 'n'))
+   or (period_code = 'C' and not (round(delta_r / 1e4) = -55495 and top_up_driver = 'p' and top_down_driver = 'n')){% if not co_dot() %}
    or (period_code = 'D' and not (round(delta_r / 1e4) = -374 and round(contrib_n / 1e4) = -14576
-                                  and round(contrib_p / 1e4) = 16034 and top_up_driver = 'p' and top_down_driver = 'n'))
-   or (delta_r_is_small <> (period_code in ('2015', 'D')))
+                                  and round(contrib_p / 1e4) = 16034 and top_up_driver = 'p' and top_down_driver = 'n')){% endif %}
+   or {% if co_dot() %}(period_code not in ('D', '{{ ky_cuoi() }}') and delta_r_is_small <> (period_code = '2015')){% else %}(delta_r_is_small <> (period_code in ('2015', 'D'))){% endif %}
 union all
 -- 9. % đổi của R / N / U / P và giá trị đầu/cuối của U, P (dòng phụ dưới thẻ PS4, sửa sau góp ý PM 2026-09-29).
 -- Dòng năm: khớp yoy_* của rpt_revenue_yearly (tính bằng lag, độc lập với model). Mọi kỳ: = giá trị năm cuối / năm đầu − 1.
