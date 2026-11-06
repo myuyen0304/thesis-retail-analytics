@@ -38,5 +38,5 @@ select
     -- Quy tắc LỊCH (không tra dim_promotion) để phủ được cả 2023 trong vùng dự báo.
     mod(y, 2) = 1 and ((m = 7 and d >= 30) or m = 8 or (m = 9 and d <= 2))
                                                         as is_urban_blowout,
-    full_date >= cast('2023-01-01' as date)             as is_forecast_period
+    {% if co_dot() %}full_date > cast('{{ var('last_actual_date') }}' as date){% else %}full_date >= cast('2023-01-01' as date){% endif %}             as is_forecast_period
 from p
