@@ -64,7 +64,7 @@ def test_stages_blocked_from_manifest(cli_case, stage, entry):
         ctx.pop('co_du_lieu_tong_hop')
         ctx['stage'] = entry
         Path(ctx['directory'], 'context.json').write_text(json.dumps(ctx), encoding='utf-8')
-    with pytest.raises(ValueError, match='snapshot có đợt chưa dùng được ở stage này'):
+    with pytest.raises(ValueError, match='--xac-nhan-tong-hop'):
         cli.execute(stage, run_id=ctx['run_id'], root=c.landing.parent / 'pipeline')
 
 
