@@ -132,7 +132,7 @@ def _turn(t: service.TurnResult) -> None:
 
 
 p = provider.from_config()
-if (why := ai_unavailable(b, p)) is not None:       # cùng điều kiện với khung AI trên trang PS (ui/ai_panel.py)
+if (why := ai_unavailable(b, p, chat=True)) is not None:       # cùng điều kiện với khung AI trên trang PS (ui/ai_panel.py)
     st.info(why)
 else:
     turns = st.session_state.ai_turns
