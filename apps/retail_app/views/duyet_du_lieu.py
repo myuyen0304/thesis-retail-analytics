@@ -283,3 +283,37 @@ def review():
                     st.rerun()
 
 review()
+
+
+# Đợt do DAG dựng không cần có yêu cầu nhập UI; khối này không nằm trong review().
+if roles.current_role() == 'admin':
+    from ui.common import backend
+    try:
+        dashboard_root, dashboard_registry = nhap_runner.dashboard_state(store.base, backend())
+    except (OSError, ValueError, KeyError) as error:
+        st.info(str(error) if isinstance(error, ValueError) else 'Chưa đọc được registry của dashboard.')
+    else:
+        st.subheader('Bản dữ liệu trên dashboard')
+        if st.session_state.pop('dashboard_done', False):
+            st.success('Đã cập nhật bản dashboard.')
+        candidates = [key for key, value in dashboard_registry.get('releases', {}).items()
+                      if value.get('status') == 'ready' and value.get('co_du_lieu_tong_hop') is True]
+        action, chosen, confirmed = False, None, False
+        if candidates:
+            with st.form(f"dashboard_publish_{st.session_state.get('dashboard_count', 0)}"):
+                chosen = st.selectbox('Bản có đợt', sorted(candidates))
+                confirmed = st.checkbox('Đây là dữ liệu tổng hợp, chỉ để demo')
+                action = st.form_submit_button('Đưa bản có đợt lên dashboard (demo)')
+        if dashboard_registry.get('dashboard') and st.button('Trả dashboard về bản số thật'):
+            action, chosen = True, None
+        if action:
+            try:
+                outcome = nhap_runner.dashboard_action(store, backend(), chosen, confirmed=confirmed)
+                if outcome.returncode:
+                    st.error(outcome.stderr or outcome.stdout)
+                else:
+                    st.session_state['dashboard_done'] = True
+                    st.session_state['dashboard_count'] = st.session_state.get('dashboard_count', 0) + 1
+                    st.rerun()
+            except (ValueError, PermissionError) as error:
+                st.error(str(error))
