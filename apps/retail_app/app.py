@@ -15,10 +15,11 @@ st.set_page_config(page_title='Doanh thu bán lẻ', layout='wide')
 
 # Chỉ trang role được xem mới có trong navigation: mở thẳng URL trang khác cũng không vào được.
 role = roles.current_role()
-pages = [st.Page(path, title=title, default=key == roles.DEFAULT_PAGE[role])
-         for key, (path, title) in roles.PAGES.items() if roles.allowed(role, key)]
-nav = st.navigation(pages)
-sidebar(role)
+pages = {key: st.Page(path, title=title, default=key == roles.DEFAULT_PAGE[role])
+         for key, (path, title) in roles.PAGES.items() if roles.allowed(role, key)}
+nav = st.navigation(list(pages.values()))
+page_key = next(key for key, page in pages.items() if page is nav)
+sidebar(role, page=page_key)
 top = st.container()      # chỗ trống ở đầu trang cho thông báo "Đọc lại thành công"
 nav.run()
 report_reads(top)         # trang lỗi thì đã st.stop() trước khi tới đây
