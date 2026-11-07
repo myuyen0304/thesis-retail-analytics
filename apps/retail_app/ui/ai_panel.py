@@ -11,6 +11,7 @@ import pandas as pd
 import streamlit as st
 
 from ai_explain import links, page_explain, provider, service, tools
+from dwh import releases
 from dwh.connection import release_for_read
 from dwh.guarded import ai_databricks_principal
 from ui import roles
@@ -22,8 +23,10 @@ _STYLE = ('{k} {{background: rgba(124, 58, 237, 0.06); border-color: rgba(124, 5
           '{k} [data-testid="stCaptionContainer"] {{color: inherit; opacity: 0.75;}}')
 
 
-def ai_unavailable(b: str, p) -> str | None:
+def ai_unavailable(b: str, p, *, chat=False) -> str | None:
     """Vì sao AI (chat hoặc khung trang) chưa dùng được với backend b và provider p; None nếu dùng được."""
+    if not chat and releases.pointers_differ():
+        return 'AI diễn giải tạm ẩn: dashboard đang dùng bản tổng hợp, chat đọc bản số thật.'
     if b not in service.CHAT_BACKENDS:
         return f'AI chưa hỗ trợ **{BACKEND_LABEL[b]}**. Chọn backend khác ở thanh bên.'
     if b == 'postgres' and not os.environ.get('PG_AI_USER'):
@@ -116,6 +119,9 @@ def _body(req: page_explain.PageRequest) -> None:
 
 def ai_panel(req: page_explain.PageRequest) -> None:
     """Khung AI của một trang. Gọi trong cột bên phải, sau phần tóm tắt theo quy tắc."""
+    if releases.pointers_differ():
+        st.caption('AI diễn giải tạm ẩn: dashboard đang dùng bản tổng hợp, chat đọc bản số thật.')
+        return
     key = f'ai_panel_{req.page}'
     st.html(f'<style>{_STYLE.format(k=f".st-key-{key}")}</style>')
     with st.container(border=True, key=key):
