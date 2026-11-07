@@ -315,24 +315,28 @@ def _entry(stage, run_id, target, started, result, source=None, error=None):
             'finished_at': _utc(), 'result': result, 'error_type': type(error).__name__ if error is not None else None}
 
 
-def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=(), du_bao_tu=None):
+def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=(), du_bao_tu=None, confirm_synthetic=False):
     """Chạy một stage và để lại một dòng lịch sử: dat (stage tiến lên), bo_qua (run bỏ qua hoặc stage đã xong từ trước), loi."""
     started = _utc()
     context_path = Path(root).resolve() / 'runs' / str(run_id) / 'context.json'
     before = _read_json(context_path)
     try:
-        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force, extensions=extensions, extension_directory=extension_directory, dots=dots, du_bao_tu=du_bao_tu)
+        context = _execute(stage, run_id=run_id, target=target, root=root, data=data, snapshot_id=snapshot_id, force=force, extensions=extensions, extension_directory=extension_directory, dots=dots, du_bao_tu=du_bao_tu, confirm_synthetic=confirm_synthetic)
     except Exception as error:
         record_history(Path(root).resolve(), _entry(stage, run_id, target, started, 'loi', _read_json(context_path) or before,
                                                     error))
         raise
+    if stage == 'publish' and context.get('stage') == 'published_dashboard':
+        stage = 'publish_dashboard'
     done_before = before is not None and before.get('stage') == context.get('stage')
     result = 'bo_qua' if context.get('stage') == 'skipped' or done_before else 'dat'
     record_history(Path(root).resolve(), _entry(stage, run_id, target, started, result, context))
     return context
 
 
-def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=(), du_bao_tu=None):
+def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=(), du_bao_tu=None, confirm_synthetic=False):
+    if confirm_synthetic and stage != 'publish':
+        raise ValueError('--xac-nhan-tong-hop chỉ dùng với publish')
     if dots and (stage != 'prepare' or target == 'databricks' or snapshot_id):
         raise ValueError('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
     if du_bao_tu and stage != 'forecast':
@@ -423,13 +427,17 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
             context = json.loads(context_path.read_text(encoding='utf-8'))
             if context['target'] != target:
                 raise ValueError('Target không khớp lần prepare')
+            if confirm_synthetic and not context.get('dot'):
+                raise ValueError('Cờ chỉ dùng cho bản có đợt')
+            if stage == 'publish' and context.get('dot') and not confirm_synthetic:
+                raise ValueError('Bản có đợt cần --xac-nhan-tong-hop; chỉ Admin công bố lên dashboard')
             if context['stage'] in ('published', 'skipped'):
                 return context
             if context['code_version'] != code_version():
                 raise ValueError('Code đổi giữa các stage; tạo run_id mới')
             manifest = snapshot.validate(context['snapshot_path'], **({'extension_directory': context['extension_dir']}
                                         if context.get('extension_dir') else {}))
-            if manifest.get('dot') and (stage == 'publish' or target == 'databricks'):
+            if manifest.get('dot') and target == 'databricks':
                 raise ValueError('snapshot có đợt chưa dùng được ở stage này (D5)')
             if stage == 'forecast':
                 # task riêng forecast_train_score (S2): không cần cloud hay registry; chỉ đọc snapshot, ghi runs/<id>/forecast
@@ -480,15 +488,25 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                 record = {k: context[k] for k in ('release_id', 'snapshot_id', 'code_version', 'run_id', 'schema', 'duckdb_path')}
                 record['artifact_path'] = f"runs/{run_id}/dbt.duckdb"
                 record['status'] = 'ready'
+                if context.get('dot'):
+                    record['co_du_lieu_tong_hop'] = True
                 registry.register(checked(record))
                 verify_consumers(context, registry, cloud)
                 context['stage'] = 'validated'
             elif stage == 'publish':
-                if context['stage'] != 'validated':
+                if manifest.get('dot') and not confirm_synthetic:
+                    raise ValueError('Bản có đợt cần --xac-nhan-tong-hop; chỉ Admin công bố lên dashboard')
+                if confirm_synthetic and not manifest.get('dot'):
+                    raise ValueError('Cờ chỉ dùng cho bản có đợt')
+                if context['stage'] not in ('validated', 'published_dashboard'):
                     raise ValueError('Phải validate trước publish')
                 verify_consumers(context, registry, cloud)
-                registry.publish(context['release_id'], context['expected_active'])
-                context['stage'] = 'published'
+                if manifest.get('dot'):
+                    registry.publish_dashboard(context['release_id'], registry.read()['payload'].get('dashboard'))
+                    context['stage'] = 'published_dashboard'
+                else:
+                    registry.publish(context['release_id'], context['expected_active'])
+                    context['stage'] = 'published'
             else:
                 raise ValueError('Stage không hỗ trợ')
             atomic_json(context_path, context)
@@ -552,7 +570,7 @@ def _snapshot_co_dot(root, snapshot_id):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('stage', choices=(*STAGES, 'run', 'rollback', 'history'))
+    ap.add_argument('stage', choices=(*STAGES, 'run', 'rollback', 'history', 'tra-dashboard', 'dat-dashboard'))
     ap.add_argument('--run-id', help='bắt buộc, trừ lệnh history')
     ap.add_argument('--target', choices=('duckdb', 'databricks'), default='duckdb')
     ap.add_argument('--root', default='warehouse/pipeline')
@@ -562,14 +580,19 @@ def main():
     ap.add_argument('--extension-dir')
     ap.add_argument('--dot', action='append', default=[])
     ap.add_argument('--du-bao-tu', metavar='RELEASE_ID', help='forecast của snapshot có đợt: bản gốc để dùng lại dự báo')
+    ap.add_argument('--xac-nhan-tong-hop', action='store_true')
     ap.add_argument('--force', action='store_true')
     ap.add_argument('--release-id')
     ap.add_argument('--limit', type=int, default=20, help='history: số lần chạy gần nhất cần in')
     a = ap.parse_args()
-    if a.dot and (a.stage != 'prepare' or a.target == 'databricks' or a.snapshot_id):
+    if a.dot and (a.stage not in ('prepare', 'run') or a.target == 'databricks' or a.snapshot_id):
         ap.error('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
-    if a.du_bao_tu and a.stage != 'forecast':
+    if a.du_bao_tu and a.stage not in ('forecast', 'run'):
         ap.error('--du-bao-tu chỉ dùng với stage forecast')
+    if a.xac_nhan_tong_hop and a.stage not in ('publish', 'dat-dashboard'):
+        ap.error('--xac-nhan-tong-hop chỉ dùng với publish hoặc dat-dashboard')
+    if a.stage == 'run' and a.dot and not a.du_bao_tu:
+        ap.error('run --dot cần --du-bao-tu trước prepare')
     if a.extension_dir and (not a.extension or a.stage not in ('prepare', 'run')):
         ap.error('--extension-dir chỉ dùng cùng --extension ở prepare hoặc run')
     if a.extension and a.stage not in ('prepare', 'run'):
@@ -579,6 +602,44 @@ def main():
         return
     if not a.run_id:
         ap.error('cần --run-id')
+    if a.stage == 'dat-dashboard':
+        started = _utc()
+        with writer_lock(a.root):
+            if not a.xac_nhan_tong_hop:
+                ap.error('Admin cần --xac-nhan-tong-hop để đặt dashboard.')
+            if a.target != 'duckdb':
+                ap.error('dat-dashboard chỉ hỗ trợ target duckdb.')
+            if not a.release_id or not re.fullmatch('[a-f0-9]{24}', a.release_id):
+                ap.error('dat-dashboard cần --release-id gồm 24 ký tự hex.')
+            registry = Registry(a.root)
+            state = registry.read()['payload']
+            record = state['releases'].get(a.release_id, {})
+            if record.get('status') != 'ready' or record.get('co_du_lieu_tong_hop') is not True:
+                ap.error('Bản tổng hợp phải tồn tại và đạt quality gate.')
+            try:
+                verify_consumers(record, registry, None)
+            except Exception as error:
+                ap.error(f'Không đọc được kho của bản đã chọn: {error}')
+            expected = state.get('dashboard')
+            registry.publish_dashboard(a.release_id, expected)
+        record_history(Path(a.root).resolve(), _entry('publish_dashboard', a.run_id, a.target, started,
+                                                      'bo_qua' if expected == a.release_id else 'dat', record))
+        print('Đã đặt bản tổng hợp lên dashboard.' if expected != a.release_id else 'bo_qua: dashboard đang dùng bản này.')
+        return
+    if a.stage == 'tra-dashboard':
+        started = _utc()
+        with writer_lock(a.root):
+            cloud = Databricks() if a.target == 'databricks' else None
+            try:
+                registry = Registry(a.root, cloud.query if cloud else None)
+                changed = registry.clear_dashboard(registry.read()['payload'].get('dashboard'))
+            finally:
+                if cloud:
+                    cloud.close()
+        record_history(Path(a.root).resolve(), _entry('clear_dashboard', a.run_id, a.target, started,
+                                                      'dat' if changed else 'bo_qua'))
+        print('Đã trả dashboard về bản số thật.' if changed else 'bo_qua: dashboard đang theo active.')
+        return
     if a.stage == 'rollback':
         started, rollback_record, result = _utc(), {'release_id': a.release_id}, 'loi'
         try:
@@ -612,9 +673,15 @@ def main():
         print('Đã khôi phục phiên bản ' + a.release_id)
         return
     for stage in STAGES if a.stage == 'run' else (a.stage,):
+        options = {'confirm_synthetic': True} if a.xac_nhan_tong_hop else {}
         result = execute(stage, run_id=a.run_id, target=a.target, root=a.root, data=a.data,
-                         snapshot_id=a.snapshot_id, force=a.force, extensions=a.extension, extension_directory=a.extension_dir, dots=a.dot, du_bao_tu=a.du_bao_tu)
+                         snapshot_id=a.snapshot_id, force=a.force, extensions=a.extension, extension_directory=a.extension_dir,
+                         dots=a.dot if stage == 'prepare' else [],
+                         du_bao_tu=a.du_bao_tu if stage == 'forecast' else None, **options)
         print(json.dumps({k: result[k] for k in ('run_id', 'release_id', 'snapshot_id', 'stage')}, ensure_ascii=False))
+        if a.stage == 'run' and stage == 'validate' and result.get('dot'):
+            print('Bản đã qua kiểm; Admin công bố bằng publish --xac-nhan-tong-hop.')
+            break
 
 
 if __name__ == '__main__':
