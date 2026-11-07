@@ -66,14 +66,17 @@ class _DuckDBSession:
     def __init__(self, timeout_s: float, max_rows: int):
         import duckdb
         self._duckdb = duckdb
-        self.con = duckdb.connect(str(duckdb_path()), read_only=True)
+        with releases.active_scope():
+            path = duckdb_path()
+            self.record = releases.current()
+        self.con = duckdb.connect(str(path), read_only=True)
         self.timeout_s, self.max_rows = timeout_s, max_rows
 
     def fetch(self, st: Statement) -> Fetched:
         timer = threading.Timer(self.timeout_s, self.con.interrupt)   # DuckDB không có statement_timeout
         timer.start()
         try:
-            cur = self.con.execute(releases.sql_for(st.render('duckdb'), releases.resolve('duckdb')), list(st.params))
+            cur = self.con.execute(releases.sql_for(st.render('duckdb'), self.record), list(st.params))
             rows = cur.fetchmany(self.max_rows + 1)
         except self._duckdb.InterruptException as e:
             raise QueryTimeout(f'quá {self.timeout_s} giây') from e
@@ -300,6 +303,7 @@ class _DatabricksSession:
         try:
             self.cur = self.conn.cursor()
             allowed, required = _release_scope(self.cur, allowed_relations, catalog, optional_relations)
+            self.record = releases.current() if releases.enabled('databricks') else None
             _check_dbx_identity(self.cur, client_id, allowed, catalog, required)
         except Exception:
             self.close()
@@ -307,8 +311,7 @@ class _DatabricksSession:
 
     def fetch(self, st: Statement) -> Fetched:
         try:
-            self.cur.execute(releases.sql_for(st.render('databricks'), releases.current()
-                                             if releases.enabled('databricks') else None), list(st.params))
+            self.cur.execute(releases.sql_for(st.render('databricks'), getattr(self, 'record', None)), list(st.params))
             rows = self.cur.fetchmany(self.max_rows + 1)
         except Exception as e:
             if 'TIMEOUT' in str(e).upper() or 'TIMED OUT' in str(e).upper():
@@ -359,7 +362,7 @@ def _release_scope(cur, allowed_relations: frozenset[str], catalog: str, optiona
         if releases.enabled('databricks'):
             state = _read_registry(cur)
             # Pin từ UI hoặc phiên tool đầu tiên; các tool còn lại giữ cùng bản trong lượt chat.
-            record = releases.current() or releases.choose(state)
+            record = releases.active_current() or releases.choose(state, pointer='active')
             if record != releases.choose(state, record['release_id']):
                 raise GuardError('Registry đã đổi nội dung phiên bản bất biến')
             releases.pin(record)
@@ -392,7 +395,10 @@ def open_session(backend: str, allowed_relations: frozenset[str], timeout_s: flo
     timeout_s=None: mặc định theo backend (Databricks lâu hơn vì warehouse có thể đang khởi động).
     optional_relations: được phép đọc nhưng không bắt buộc có quyền / có bảng (xem _release_scope)."""
     if backend == 'duckdb':
-        return _DuckDBSession(timeout_s or DEFAULT_TIMEOUT_S, max_rows)
+        session = _DuckDBSession(timeout_s or DEFAULT_TIMEOUT_S, max_rows)
+        if session.record is not None:
+            releases.pin(session.record)
+        return session
     if backend == 'postgres':
         return _PostgresSession(timeout_s or DEFAULT_TIMEOUT_S, max_rows,
                                 frozenset(allowed_relations) | frozenset(optional_relations))
