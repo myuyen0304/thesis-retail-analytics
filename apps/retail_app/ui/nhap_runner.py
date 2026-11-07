@@ -652,7 +652,7 @@ def rollback_details(store):
     requests = store.release_requests()
     result = []
     for key, value in state.get('releases', {}).items():
-        if not re.fullmatch(r'[a-f0-9]{24}', key) or value.get('status') != 'ready' or key == state.get('active'):
+        if not re.fullmatch(r'[a-f0-9]{24}', key) or value.get('status') != 'ready' or key == state.get('active') or value.get('co_du_lieu_tong_hop'):
             continue
         found = requests.get(key, {})
         row = found.get('record', {})
@@ -780,6 +780,42 @@ def summary(store, record):
 
 def elapsed(record):
     return max(0, int((datetime.now(timezone.utc) - datetime.fromisoformat(record['bat_dau'])).total_seconds()))
+
+
+def dashboard_state(base, backend):
+    """Hai nút demo dùng đúng registry của dashboard, không dùng root nhập dữ liệu."""
+    from dwh import releases
+    if not releases.enabled(backend):
+        raise ValueError('Công bố dashboard cần chế độ versioned.')
+    if backend != 'duckdb':
+        raise ValueError('Công bố dashboard hiện chỉ hỗ trợ DuckDB local.')
+    path = (Path(base) / os.getenv('RETAIL_RELEASE_STATE', 'warehouse/pipeline/state.json')).resolve()
+    if not path.is_file():
+        raise ValueError('Chưa có file registry của dashboard.')
+    return path.parent, read_json(path)['payload']
+
+
+def dashboard_action(store, backend, release_id=None, *, confirmed=False):
+    from ui import roles
+    if roles.current_role() != 'admin':
+        raise PermissionError('Chỉ Admin được đổi bản dashboard.')
+    username, audit = actor('cong_bo')
+    root, state = dashboard_state(store.base, backend)
+    command = [sys.executable, '-m', 'scripts.pipeline.cli']
+    run_id = 'ui-dashboard-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+    if release_id is not None:
+        if not confirmed:
+            raise ValueError('Cần xác nhận dữ liệu tổng hợp, chỉ để demo.')
+        record = state['releases'].get(release_id, {})
+        if record.get('status') != 'ready' or record.get('co_du_lieu_tong_hop') is not True:
+            raise ValueError('Bản tổng hợp chưa đạt quality gate.')
+        command += ['dat-dashboard', '--run-id', run_id, '--release-id', release_id, '--xac-nhan-tong-hop']
+    else:
+        command += ['tra-dashboard', '--run-id', run_id]
+    command += ['--target', 'duckdb', '--root', str(root)]
+    audit.log(username, 'dashboard_publish' if release_id else 'dashboard_clear', {'release_id': release_id})
+    return subprocess.run(command, cwd=store.base, capture_output=True, text=True, timeout=3600,
+                          env={**os.environ, 'PYTHONUTF8': '1'})
 
 
 if __name__ == '__main__':
