@@ -286,7 +286,7 @@ def test_execute_rejects_flag_for_other_stage(tmp_path, stage):
 
 def test_publish_still_blocked(cli_case):
     ctx = cli_case.prepare(dots=[cli_case.batch])
-    with pytest.raises(ValueError, match='chưa dùng được ở stage này'):
+    with pytest.raises(ValueError, match='--xac-nhan-tong-hop'):
         cli.execute('publish', run_id=ctx['run_id'], root=cli_case.root)
 
 
