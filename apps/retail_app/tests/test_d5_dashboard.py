@@ -133,6 +133,9 @@ def test_t6_each_page_selects_correct_schema(warehouse, monkeypatch, page):
 
 def test_t6_panel_hidden_only_when_pointers_differ(warehouse):
     releases.resolve('duckdb', pointer='dashboard')
+    from ai_explain.page_explain import request_ps1
+    assert ai_panel.ai_unavailable('duckdb', object(), req=request_ps1('2019', 'year')) is None
+    assert 'dữ liệu demo' in ai_panel.ai_unavailable('duckdb', object(), req=request_ps1('2023', 'year'))
     assert 'tạm ẩn' in ai_panel.ai_unavailable('duckdb', object())
     assert ai_panel.ai_unavailable('duckdb', object(), chat=True) is None
     warehouse.clear_dashboard(B)
