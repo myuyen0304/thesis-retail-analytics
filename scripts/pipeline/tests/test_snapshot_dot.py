@@ -113,7 +113,7 @@ def test_code_version_checked_before_snapshot(cli_case, monkeypatch):
 
 @pytest.mark.parametrize('stage', ['forecast', 'build', 'validate', 'publish', 'run'])
 def test_execute_direct_rejects_dots_for_other_stages(tmp_path, stage):
-    with pytest.raises(ValueError, match='--dot chỉ dùng với prepare local'):
+    with pytest.raises(ValueError, match='--dot chỉ dùng với prepare, không cùng --snapshot-id'):
         cli._execute(stage, run_id='invalid', root=tmp_path / 'pipeline', dots=[tmp_path / 'batch'])
     assert not (tmp_path / 'pipeline').exists()
 
