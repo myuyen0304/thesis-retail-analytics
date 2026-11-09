@@ -1,6 +1,6 @@
 # Thiết kế: đợt dữ liệu 2023 rồi 2024 trên web public
 
-Soạn ngày 2026-11-07, Claude. Trạng thái: **PM đã chốt mọi quyết định ngày 2026-11-07** (§0). Chưa soạn phiếu GPT, chưa code.
+Soạn ngày 2026-11-07, Claude. Trạng thái: **PM đã chốt mọi quyết định ngày 2026-11-07** (§0). L1 đã commit; phiếu L2, L3 soạn ngày 2026-11-09.
 Nền: [thiet_ke_nap_ky_moi.md](thiet_ke_nap_ky_moi.md) (B′, D1–D5) và `thiet_ke_duong_tu_dong.md` §8 (T2, nhánh `docs/thiet-ke-b-tam-thoi`).
 Các vị trí `file:dòng` đã đọc trong worktree `D:\retail-analytics-nap` (HEAD `610123b` cộng phần D5a/D5a-1 chưa commit). Số gắn † là số chưa kiểm.
 
@@ -83,7 +83,8 @@ Volume `retail_lab.nhap_du_lieu.kho`, PM tạo ngày 2026-11-04. Cách chống g
 | `dang_chay` | `da_kiem` (kèm `release_id`), `loi` | Airflow |
 | `loi` | `cho_chay` (DE bấm chạy lại), `huy` | web (DE) |
 | `da_kiem` | `tren_dashboard` | Airflow, sau khi lệnh `dat` đạt |
-| `tren_dashboard` | `da_tra` | Airflow, khi có lệnh trả |
+| `tren_dashboard` | `da_tra` | Airflow, khi có lệnh trả hoặc khi bản khác thay chỗ |
+| `da_tra` | `tren_dashboard` | Airflow, khi Admin bật lại cùng bản (§7.5). Thêm ngày 2026-11-09, khi soạn phiếu L2 |
 
 `sai_hop_dong`, `loi_file`, `huy` là trạng thái cuối. Muốn sửa thì gửi yêu cầu mới.
 
@@ -110,7 +111,7 @@ Lịch 5 phút, `max_active_runs=1`, tạm dừng khi tạo. Chỉ dùng Files A
 1. **Đợt mới** (`da_gui`):
    - tải file về `warehouse/pipeline/docker/nhap/<id>/` và so sha256 với `yeu_cau.json`. Thư mục này nằm trong mount đã ghi được `./warehouse/pipeline` (`docker-compose.airflow.yml:22`), nên **không cần đổi compose**;
    - chạy `dot.classify_all(chuỗi)` (`dot.py:122`), với chuỗi = các đợt đang có trong sổ, theo thứ tự, cộng đợt mới. Ghi `cho_chay` hoặc `sai_hop_dong` kèm mã lỗi;
-   - các mã đáng chú ý: D2-1 (trùng khóa với gốc hoặc đợt trước, `dot.py:157–158`), D2-2 (ngày không nằm sau mốc cắt, `:161`), D2-3 (thiếu đơn ở một ngày nào đó, `:163–165`), D2-7 (đợt trùng, `:126–127`).
+   - bước này chỉ bắt được các mã của `dot.classify` (D2-missing, D2-master, D2-format…) và D2-7 (đợt trùng, gồm cả đợt đang chờ công bố). D2-1 (trùng khóa, `dot.py:157–158`), D2-2 (ngày không nằm sau mốc cắt, `:161`), D2-3 (thiếu đơn ở một ngày nào đó, `:163–165`) nằm trong `check_batch` của `prepare`, nên ra `loi` kèm mã, chưa tạo schema `r_`. Chỉnh ngày 2026-11-09, khi soạn phiếu L2.
 2. **Kiểm chỗ:** đếm bảng của `retail_lab` qua `tables.list` (§8.6 T2). Còn dưới 100 + 83 chỗ thì ghi `het_cho`, không trigger. Ngày 2026-11-07, số đếm bằng đúng quota (246).
 3. **Trigger** `retail_dot_pipeline` với conf `{request_id, dots: [đường dẫn theo thứ tự], du_bao_tu: <active>}`.
    - Phần mở rộng của đợt lấy **đúng bộ của bản `active`**, đọc từ manifest của bản đó. Không ghi cứng `orders_enriched` + `shipments_realistic` như DAG local (`deploy/airflow/dags/retail_dot_pipeline.py:1`). Lý do: `du_bao_dot._kiem_khop` đòi sales của phần gốc bằng sales bản nguồn (`scripts/pipeline/du_bao_dot.py:120`)†.
@@ -119,9 +120,9 @@ Lịch 5 phút, `max_active_runs=1`, tạm dừng khi tạo. Chỉ dùng Files A
    - `dat`: chạy `cli dat-dashboard --target databricks --release-id <rid> --xac-nhan-tong-hop`, rồi ghi `vao_so` vào sổ đợt (chỉ khi lệnh đạt), rồi ghi kết quả.
    - `tra`: chạy `cli tra-dashboard --target databricks`; sổ đợt giữ nguyên (Q6).
    - Khóa `writer.lock` đang bận thì để lần dò sau.
-6. **Chống chạy chồng:** mọi task gọi CLI của `retail_batch_pipeline`, `retail_dot_pipeline` và lệnh dashboard dùng chung một Airflow pool `retail_writer` một chỗ. `writer.lock` chỉ giữ từng stage (`giao_viec_don_ban_cu.md` G4), nên nếu không có pool, lượt 08:00 và lượt đợt có thể đan xen trên laptop.
+6. **Chống chạy chồng:** mọi task gọi CLI của `retail_batch_pipeline` và `retail_dot_pipeline` dùng chung một Airflow pool `retail_writer` một chỗ. Lệnh dashboard không dùng pool mà dựa vào `writer.lock` (CLI thoát mã 75 khi bận), vì nếu chờ pool thì DAG dò đứng theo suốt lúc dựng đợt (chỉnh ngày 2026-11-09). `writer.lock` chỉ giữ từng stage (`giao_viec_don_ban_cu.md` G4), nên nếu không có pool, lượt 08:00 và lượt đợt có thể đan xen trên laptop.
 
-Đối soát: sổ đợt ghi sau `dat-dashboard`, hai bước không nguyên tử. Mỗi lần dò so con trỏ `dashboard` của registry với mục cuối của sổ. Con trỏ chỉ vào một bản có đợt mà sổ thiếu thì ghi bù `vao_so`.
+Đối soát: sổ đợt ghi sau `dat-dashboard`, hai bước không nguyên tử. Kết quả lệnh ghi **sau cùng**, nên máy tắt giữa chừng thì lệnh vẫn chờ và lần dò sau chạy lại; mỗi bước tự kiểm trước khi ghi. Không so với registry mỗi lần dò như bản đầu, vì làm vậy phải gửi SQL và đánh thức warehouse (chỉnh ngày 2026-11-09).
 
 ## 6. Chạy đợt trên Databricks (pipeline)
 
@@ -201,7 +202,7 @@ File `scripts/demo/sinh_dot_2023.py` nằm ngoài phần băm, nên sửa sau kh
 
 | Chỗ | Hiện tại | Khi `co_dot` |
 |---|---|---|
-| `retail_dbt/models/marts/dim_date.sql:1,5` | `integers(4566)`, 2012-01-01 → 2024-07-01 | Dừng ở `greatest(2024-07-01, last_actual_date)`: 4.749 dòng nếu tới 2024-12-31 |
+| `retail_dbt/models/marts/dim_date.sql:1,5` | `integers(4566)`, 2012-01-01 → 2024-07-01 | Dừng ở `greatest(2024-07-01, cuối tháng của ngày lớn nhất trong mọi cột ngày)`. Không dừng ở `last_actual_date` như bản đầu: ngày trả hàng, đánh giá của đợt vượt sang đầu năm sau (bộ 2023 tới 2024-02-06), và khóa ngoại tới `dim_date` sẽ trượt (chỉnh ngày 2026-11-09, phiếu L3 §3.4) |
 | `retail_dbt/models/marts/_marts.yml:9` | Mô tả dải cố định | Ghi theo điều kiện |
 | `retail_dbt/tests/assert_row_counts.sql:3` | `dim_date` = 4566 | Theo dải ở trên |
 | `retail_dbt/tests/assert_row_counts.sql:6` | `fact_daily_sales` = 4381 | Số ngày thực tế + số ngày dự báo. 2023: 4.198 + 183 = 4.381; 2024: 4.564 + 0 |
@@ -265,7 +266,7 @@ Script cần SQL warehouse để đọc registry, quét view (G6) và ghi CAS. N
 Lý do phải làm có kiểm soát: DAG production **tự publish** (`deploy/airflow/dags/retail_batch_pipeline.py:71`, `prepare >> … >> publish`). Image mới đổi `code_version`, nên lượt kế tiếp sẽ dựng và publish ngay mà không ai xem.
 
 **Điều kiện vào cửa sổ:**
-- L1–L4 (§14) đã merge;
+- L1–L3 (§14) đã merge, và bộ sinh L4 đã chạy được: `retail_dbt` đóng băng sau cửa sổ, nên L3 phải đạt `dbt build` thật với dữ liệu 2024 trước đó (chỉnh ngày 2026-11-09). L4 còn có thể sửa sau cửa sổ, vì `scripts/demo` ngoài phần băm. L5 làm sau cửa sổ cũng được;
 - D5a đã commit;
 - `nap-ky/myuyen` đã merge vào `main`. Hiện nhánh chứa đủ `origin/main` và đi trước 74 commit;
 - quota còn ít nhất 183 chỗ (100 + 83).
@@ -322,12 +323,12 @@ Claude sẽ viết lệnh đầy đủ thành một script cho PM chạy ngoài 
 | L0 | Dọn `03ad08c0` (PM); commit D5a; merge `nap-ky` vào `main` | không | §10 |
 | L1 | Lớp lưu Volume, loại yêu cầu "đợt" ở trang Gửi, trạng thái ở trang Duyệt, nút dashboard ghi lệnh (§3, §4, §7.3, §7.4) | có | test với Volume giả; S0 đã chứng minh `overwrite=false` |
 | L2 | DAG `nhap_du_lieu_do`, `--dot` trên databricks, DAG `retail_dot_pipeline` theo conf, pool, quyền chỉ cho web (§5, §6, §7.1, §7.2) | có | cloud giả, cộng một lượt thật sau cửa sổ |
-| L3 | Đợt 2024: dbt §9.2, chế độ không dự báo §9.3 | có | local đầy đủ: không có đợt, có 2023, có 2023 + 2024 |
-| L4 | Bộ sinh dữ liệu 2024 (§9.1) | không | local |
-| L5 | G8 cho `don_ban_cu.py` (§10) | không | cloud giả |
+| L3 | Đợt 2024: dbt §9.2, chế độ không dự báo §9.3. **Cùng phiếu với L4** | có | local đầy đủ: không có đợt, có 2023, có 2023 + 2024 |
+| L4 | Bộ sinh dữ liệu 2024 (§9.1). Phải chạy được trước cửa sổ để kiểm L3 | không | local |
+| L5 | G8 cho `don_ban_cu.py` (§10). Hạn trước lần xóa `5d32a104` khoảng 11-22 | không | cloud giả |
 | — | Cửa sổ bảo trì (§11), sau L1–L3 | | PM chạy |
 
-L3 và L4 kiểm được hoàn toàn ở local, nên làm song song với L1–L2. L4 và L5 làm sau cửa sổ cũng được. Thời gian mỗi lát chưa ước†. Nếu L1–L3 chưa xong trước khoảng 11-21 thì Mốc 1 trễ theo.
+L2 làm trước, rồi L3 + L4, không làm song song vì cùng sửa `cli.py` và `du_bao_dot.py` (chỉnh ngày 2026-11-09). L5 làm sau cửa sổ cũng được. Thời gian mỗi lát chưa ước†. Nếu L1–L3 chưa xong trước khoảng 11-21 thì Mốc 1 trễ theo.
 
 ## 15. Câu còn mở
 
@@ -336,4 +337,4 @@ Không còn câu nào. PM chốt ngày 2026-11-07 theo đề xuất của Claude
 Việc kế:
 1. PM dọn `03ad08c0` khi warehouse chạy lại (§10).
 2. Claude soạn phiếu GPT cho L1, L2, L3, mỗi lát một phiếu.
-3. GPT làm L1–L3 song song; L4, L5 làm sau cũng được.
+3. GPT làm L2, rồi L3 + L4; L5 làm sau cũng được.
