@@ -713,3 +713,70 @@ def test_corrupt_metadata_isolated_per_request(store, monkeypatch, damage):
     at = cloud_page(store, monkeypatch)
     assert not at.exception and not at.error
     assert any('Dữ liệu trạng thái hỏng' in e.label for e in at.expander)
+
+
+def test_l2_replay_reactivate_and_bad_field_types(store):
+    events = [(1, {'toi': 'da_gui'}), (2, {'toi': 'dang_kiem'}),
+              (3, {'toi': 'cho_chay'}), (4, {'toi': 'dang_chay'}),
+              (5, {'toi': 'da_kiem', 'release_id': RID}),
+              (6, {'toi': 'tren_dashboard'}), (7, {'toi': 'da_tra'}),
+              (8, {'toi': 'tren_dashboard'})]
+    assert nd.phat_lai(events)['trang_thai'] == 'tren_dashboard'
+    for key in ('release_id', 'ma_loi', 'thong_bao'):
+        malformed = [(1, {'toi': 'da_gui', key: 123})]
+        assert nd.phat_lai(malformed)['trang_thai'] == 'hong'
+
+
+def test_l2_pure_modules_import_without_streamlit():
+    code = ("import sys; sys.path.insert(0, 'apps/retail_app'); "
+            "sys.modules['streamlit']=None; "
+            "import ui.trang_thai_dot, ui.kho_dot")
+    result = subprocess.run([sys.executable, '-B', '-X', 'utf8', '-c', code],
+                            cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize('damage', ['command_json', 'command_type', 'command_missing_kind', 'result_json'])
+def test_l2_bad_command_does_not_lock_buttons(store, damage):
+    row = store.gui_dot([Upload()], 'batch', '')
+    advance(store, row, ['dang_kiem', 'cho_chay', 'dang_chay', 'da_kiem'])
+    command = b'{broken' if damage == 'command_json' else (
+        b'[]' if damage == 'command_type' else
+        b'{}' if damage == 'command_missing_kind' else
+        b'{"loai":"dat"}')
+    store.kho.ghi_moi('lenh/000001.json', command)
+    if damage == 'result_json':
+        store.kho.ghi_moi('lenh/000001.ket_qua.json', b'{broken')
+    latest = store.latest_command()
+    assert latest['ket_qua'] == {'ket_qua': 'loi',
+        'thong_bao': 'Dữ liệu lệnh hỏng; báo kỹ sư dữ liệu.'}
+    assert store.label(store.read(row['id']), latest) == 'Đã kiểm tra'
+
+
+def test_l2_bad_ledger_has_fixed_message(store):
+    store.kho.ghi_moi('so_dot/000001.json', b'{broken')
+    with pytest.raises(ValueError) as error:
+        store.ledger()
+    assert str(error.value) == 'Sổ đợt hỏng; báo kỹ sư dữ liệu.'
+
+
+def test_l2_unreadable_command_and_ledger_are_sanitized(store, monkeypatch):
+    row = store.gui_dot([Upload()], 'batch', '')
+    advance(store, row, ['dang_kiem', 'cho_chay', 'dang_chay', 'da_kiem'])
+    store.kho.ghi_moi('lenh/000001.json', b'{"loai":"dat","so":999}')
+    assert store.latest_command()['so'] == 1
+    original = store.kho.doc
+
+    def unreadable(path):
+        if path == 'lenh/000001.json' or path == 'so_dot/000001.json':
+            raise OSError('secret-file-path')
+        return original(path)
+
+    store.kho.ghi_moi('so_dot/000001.json', b'{}')
+    monkeypatch.setattr(store.kho, 'doc', unreadable)
+    latest = store.latest_command()
+    assert latest['so'] == 1
+    assert latest['ket_qua']['thong_bao'] == 'Dữ liệu lệnh hỏng; báo kỹ sư dữ liệu.'
+    assert store.label(store.read(row['id']), latest) == 'Đã kiểm tra'
+    with pytest.raises(ValueError, match=r'^Sổ đợt hỏng; báo kỹ sư dữ liệu\.$'):
+        store.ledger()
