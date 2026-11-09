@@ -1,0 +1,81 @@
+# Bộ Airflow thử cho tổng duyệt đợt 2023 (thiết kế §11). Chỉ dùng qua scripts/ops/tong_duyet.ps1.
+# Metadata riêng, cổng riêng, không tự lên lại. Dùng chung warehouse/pipeline với Airflow đang chạy
+# để cùng writer.lock, registry và snapshot. Image không có DAG retail_batch_pipeline (tự publish).
+name: retail-thu
+
+x-airflow: &airflow
+  image: retail-airflow:thu-l2
+  pull_policy: never
+  env_file:
+    - path: D:/retail-analytics/.env.airflow.local
+      required: true
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: retail-thu-chi-dung-cho-tong-duyet
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/logs/passwords.json
+    RETAIL_AIRFLOW_ADMIN_PASSWORD: admin
+    PYTHONUTF8: '1'
+    RETAIL_PIPELINE_SCHEDULE_ENABLED: 'false'
+    RETAIL_PIPELINE_DEFAULT_TARGET: duckdb
+    RETAIL_PIPELINE_DEFAULT_EXTENSIONS: ''
+    RETAIL_NHAP_VOLUME: /Volumes/retail_lab/nhap_du_lieu/kho/tong_duyet
+  volumes:
+    - D:/retail-analytics/data:/opt/retail/data:ro
+    - D:/retail-analytics-nap/data_demo:/opt/retail/data_demo:ro
+    - D:/retail-analytics/warehouse/pipeline:/opt/retail/warehouse/pipeline
+    - airflow-logs:/opt/airflow/logs
+  depends_on:
+    airflow-db:
+      condition: service_healthy
+
+services:
+  airflow-db:
+    image: postgres:17
+    pull_policy: never
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-metadata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U airflow -d airflow']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  airflow-init:
+    <<: *airflow
+    command:
+      - bash
+      - -c
+      - |
+        airflow db migrate &&
+        airflow pools set retail_writer 1 'CLI ghi cua pipeline' &&
+        python -c "import json, os, pathlib; pathlib.Path('/opt/airflow/logs/passwords.json').write_text(json.dumps({'admin': os.environ['RETAIL_AIRFLOW_ADMIN_PASSWORD']}))"
+  airflow-api:
+    <<: *airflow
+    command: api-server
+    ports: ['127.0.0.1:8081:8080']
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+  airflow-scheduler:
+    <<: *airflow
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+  airflow-dag-processor:
+    <<: *airflow
+    command: dag-processor
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  airflow-metadata:
+  airflow-logs:
