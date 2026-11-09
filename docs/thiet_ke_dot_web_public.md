@@ -269,11 +269,24 @@ Lý do phải làm có kiểm soát: DAG production **tự publish** (`deploy/ai
 - L1–L3 (§14) đã merge, và bộ sinh L4 đã chạy được: `retail_dbt` đóng băng sau cửa sổ, nên L3 phải đạt `dbt build` thật với dữ liệu 2024 trước đó (chỉnh ngày 2026-11-09). L4 còn có thể sửa sau cửa sổ, vì `scripts/demo` ngoài phần băm. L5 làm sau cửa sổ cũng được;
 - D5a đã commit;
 - `nap-ky/myuyen` đã merge vào `main`. Hiện nhánh chứa đủ `origin/main` và đi trước 74 commit;
-- quota còn ít nhất 183 chỗ (100 + 83).
+- quota còn ít nhất 183 chỗ (100 + 83);
+- app thử dưới đây đã đạt.
+
+**App thử trước cửa sổ (PM chốt 2026-11-09).** Code mới chưa từng chạy trên Streamlit Cloud, nên phải thử mà không đụng web đang chạy. PM làm sau khi L1–L3 đã merge, đủ thời gian sửa trước cửa sổ:
+1. Tạo app Streamlit Cloud thứ hai, chạy từ `main` tại đúng commit sẽ đưa lên `app/myuyen`. App đang chạy trên `app/myuyen` giữ nguyên.
+2. Chép secrets từ app đang chạy, **không thêm khóa `RETAIL_NHAP_*`**. `RETAIL_NHAP_DOT` mặc định là `tat`, nên app thử không ghi vào Volume.
+3. Kiểm:
+   - app mở được, không lỗi thiếu thư viện hay thiếu biến môi trường;
+   - vẫn hiện bản `dbb80f56`, không có băng rôn;
+   - số PS1 khớp web đang chạy;
+   - một câu chat đúng.
+4. Xóa app thử sau khi kiểm xong, và không chia sẻ link trong lúc thử vì app đọc dữ liệu thật.
+
+Trượt thì sửa rồi thử lại, chưa vào cửa sổ. Cách này chỉ kiểm code mới với bản đang chạy; phần đọc và ghi Volume thật vẫn kiểm ở lượt thật sau cửa sổ (§14, L2).
 
 Sau cửa sổ, **đóng băng** `retail_dbt/*`, `scripts/{pipeline,ingest,parity,forecast}` và `apps/retail_app` tới 12/12. `scripts/demo` và `scripts/ops` vẫn sửa được.
 
-1. Đưa code app lên `app/myuyen`, Reboot. Kiểm web vẫn hiện bản `dbb80f56`, số PS1 khớp `assert_rpt_total.sql`, một câu chat đúng.
+1. Gắn tag commit hiện tại của `app/myuyen` để có đường quay lại. Đưa code app lên `app/myuyen`, Reboot. Kiểm web vẫn hiện bản `dbb80f56`, số PS1 khớp `assert_rpt_total.sql`, một câu chat đúng.
 2. Gắn tag image cũ: `docker tag retail-airflow:local retail-airflow:truoc-r2`.
 3. Tạm dừng `retail_batch_pipeline` trên giao diện Airflow.
 4. Dựng image từ `git archive` của đúng commit đã merge (không dựng từ worktree đang có file của agent khác).
@@ -283,7 +296,7 @@ Sau cửa sổ, **đóng băng** `retail_dbt/*`, `scripts/{pipeline,ingest,parit
    - vài số dự báo trong chat, vì dự báo được học lại†.
 7. `publish`, rồi bật lại DAG. Lượt 08:00 kế tiếp phải ra `bo_qua`.
 
-**Rollback:** chỉ trả con trỏ về `dbb80f56` thì lượt 08:00 sẽ dựng lại bản mới, vì `code_version` lệch. Phải trả cả image (`retail-airflow:truoc-r2`) hoặc tạm dừng DAG cho tới khi sửa xong.
+**Rollback:** chỉ trả con trỏ về `dbb80f56` thì lượt 08:00 sẽ dựng lại bản mới, vì `code_version` lệch. Phải trả cả image (`retail-airflow:truoc-r2`) hoặc tạm dừng DAG cho tới khi sửa xong. Web lỗi ở bước 1 thì đưa `app/myuyen` về commit đã gắn tag rồi Reboot.
 
 Claude sẽ viết lệnh đầy đủ thành một script cho PM chạy ngoài Claude Code.
 
@@ -326,7 +339,8 @@ Claude sẽ viết lệnh đầy đủ thành một script cho PM chạy ngoài 
 | L3 | Đợt 2024: dbt §9.2, chế độ không dự báo §9.3. **Cùng phiếu với L4** | có | local đầy đủ: không có đợt, có 2023, có 2023 + 2024 |
 | L4 | Bộ sinh dữ liệu 2024 (§9.1). Phải chạy được trước cửa sổ để kiểm L3 | không | local |
 | L5 | G8 cho `don_ban_cu.py` (§10). Hạn trước lần xóa `5d32a104` khoảng 11-22 | không | cloud giả |
-| — | Cửa sổ bảo trì (§11), sau L1–L3 | | PM chạy |
+| — | App thử trên Streamlit Cloud (§11), sau khi L1–L3 đã merge | không | PM chạy |
+| — | Cửa sổ bảo trì (§11), sau L1–L3 và app thử | | PM chạy |
 
 L2 làm trước, rồi L3 + L4, không làm song song vì cùng sửa `cli.py` và `du_bao_dot.py` (chỉnh ngày 2026-11-09). L5 làm sau cửa sổ cũng được. Thời gian mỗi lát chưa ước†. Nếu L1–L3 chưa xong trước khoảng 11-21 thì Mốc 1 trễ theo.
 
