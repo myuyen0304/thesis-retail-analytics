@@ -329,3 +329,36 @@ Claude sẽ thử đột biến khi rà, ít nhất gồm:
 - Chỗ làm khác phiếu và lý do. Chỗ nào phiếu chưa rõ thì ghi câu hỏi, không tự đoán.
 
 ## 8. Rà của Claude (Claude ghi, GPT đọc để sửa)
+
+### Lượt 1 — §3.1 (2026-11-09): chưa đạt, sửa rồi báo lại, **vẫn dừng trước §3.2**
+
+Claude tự chạy `test_thu_kho_volume.py`: 37 đạt. Chữ ký 5 hàm Files API dùng trong script khớp SDK 0.117.0. Thử 27 mutation trên bản sao: 20 bị test bắt, 7 sống sót.
+
+**R1 (phải sửa) — có thể không dọn được thư mục con.** `allowed()` loại mọi đường dẫn có phần rỗng, nên `.../v1/` bị từ chối. Client giả luôn trả thư mục không có `/` cuối. API thật chưa rõ: tài liệu không nói về đường dẫn trong phản hồi, nhưng ví dụ đường dẫn thư mục ở request có `/` cuối, và `KhoVolume.liet_ke` đã `rstrip('/')`. Claude cho client giả trả `/` cuối thì V1–V6 vẫn đạt, mã thoát 0, nhưng còn 9 file và 10 thư mục của lượt thử trên Volume.
+- Sửa: với mục `is_directory`, bỏ **đúng một** `/` cuối trước khi kiểm `allowed()` và trước khi gọi API. `//` hay `/../` vẫn phải bị từ chối. Không nới cho mục là file.
+- Test: chạy các ca dọn ở §3.1 với cả hai dạng thư mục (có và không có `/` cuối); dạng nào cũng không còn gì của lượt.
+
+**R2 (phải sửa, Claude bổ sung vào §3.1) — trượt mà không biết vì sao.** Script nuốt exception rồi chỉ in `V1: TRƯỢT`. Mục đích của script là biết sớm quyền Volume có đúng không, nên PM cần phân biệt được thiếu quyền với lỗi khác.
+- Sửa: khi mã trượt do exception, in `V1: TRƯỢT (<tên loại lỗi>)`, ví dụ `PermissionDenied`. Chỉ in tên loại, không in nội dung lỗi. Trượt do so sánh sai thì giữ `V1: TRƯỢT`.
+- Test: fake ném `PermissionDenied(SECRET)` thì có tên loại, không có secret, mã thoát 1, vẫn dọn hết.
+
+**R3 — Claude rút lại (2026-11-09), không làm.** Claude từng đề nghị thêm test cho 5 kiểm phụ. Đây là script thử dùng vài lần, chính lượt chạy thật mới là phép kiểm V1–V6, nên không đáng thêm một vòng sửa. Chỉ sửa R1, R2 và test của hai mục đó; Claude rà nhanh rồi PM chạy thật.
+
+**Không phải sửa, chỉ ghi nhận:** thử SDK thật với khóa giả và host `.invalid`, script im lặng hơn 110 giây (Claude dừng ở đó, chưa thấy mã thoát). Chỉ xảy ra khi host sai; đừng thêm tham số vào `WorkspaceClient`.
+
+Báo cáo lại: kết quả test, và xác nhận chỉ sửa 2 file §3.1.
+
+### Lượt 2 — §3.1 (2026-11-09): đạt, GPT làm tiếp từ §3.2
+
+GPT sửa R1, R2 và làm cả R3 vì đọc phiếu trước khi Claude rút mục này. Claude giữ phần test thêm. Claude chạy lại 65 test đạt và đọc phần sửa R1, R2; không chạy lại mutation.
+
+PM chạy thật trên `/Volumes/retail_lab/nhap_du_lieu/kho`:
+
+| Danh tính | Kết quả | Ghi chú |
+|---|---|---|
+| `pipeline` | V1–V6 đạt, thoát 0, không cảnh báo dọn | Lần đầu thiếu quyền; PM cấp `USE SCHEMA` trên schema, `READ VOLUME`, `WRITE VOLUME` trên `kho` cho `retail-pipeline-writer` |
+| `writer` | V1–V6 đạt, thoát 0, không cảnh báo dọn | Chạy bằng bản env tạm đã đổi tên khóa, xóa ngay sau khi chạy |
+
+Sau lượt trượt đầu của `pipeline`, `thu_ket_noi` trống (PM kiểm bằng `databricks fs ls`, trước lần chạy `writer` cuối cùng). Lượt đó có `V6: TimeoutError`; sau khi cấp quyền không còn, nguyên nhân chưa kiểm riêng.
+
+**Lưu ý cho PM:** `~/.retail-secrets/nhap_writer.env` dùng tên `DATABRICKS_CLIENT_ID/SECRET`. Khi đặt Streamlit Secrets phải dùng tên `RETAIL_NHAP_DBX_CLIENT_ID/SECRET`. Với `.env.airflow.local`, tên `RETAIL_PIPELINE_CLIENT_ID/SECRET` đã đúng.
