@@ -411,6 +411,20 @@ for name in ('duckdb', 'scripts.ingest.auto_mapping', 'scripts.ingest.dot'):
     assert result.returncode == 0, result.stderr[-6000:]
 
 
+def test_cloud_import_only_app_on_sys_path(tmp_path):
+    source = ("import sys\n"
+              "sys.path.insert(0, sys.argv[1])\n"
+              "import ui.nhap_store\n"
+              "import ui.nhap_runner\n"
+              "import ui.nhap_dot\n"
+              "import scripts.ingest.approval\n")
+    env = os.environ.copy()
+    env.pop('PYTHONPATH', None)
+    result = subprocess.run([sys.executable, '-P', '-B', '-X', 'utf8', '-c', source, str(APP)],
+                            cwd=tmp_path, env=env, capture_output=True, text=True, encoding='utf-8')
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.parametrize('different', [False, True])
 def test_forecast_note_only_when_different(monkeypatch, different):
     monkeypatch.setattr(common, 'info_strip', lambda: None)
