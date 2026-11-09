@@ -54,7 +54,7 @@ if dot_mode != 'tat':
                     if row['trang_thai'] in ('dang_chay', 'da_kiem') and row.get('release_id'):
                         st.caption('Bản dữ liệu: ' + row['release_id'][:8])
         except Exception as error:
-            st.error('Chưa đọc được yêu cầu đợt: ' + str(error))
+            st.error('Chưa đọc được yêu cầu đợt; báo kỹ sư dữ liệu.')
 if not local_available:
     st.stop()
 st.caption('Mỗi yêu cầu nhận một file CSV hoặc JSON, tối đa 200 MB.')
