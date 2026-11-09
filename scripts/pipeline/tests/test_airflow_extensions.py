@@ -13,7 +13,8 @@ STAGES = ('prepare', 'forecast', 'build', 'validate', 'publish')
 
 class FakeDAG:
     def __init__(self, **kwargs):
-        self.params = kwargs['params']
+        self.params = kwargs.get('params', {})
+        self.kwargs = kwargs
 
     def __enter__(self):
         return self
@@ -23,11 +24,17 @@ class FakeDAG:
 
 
 class FakeParam:
-    def __init__(self, default, **schema):
+    def __init__(self, default=None, **schema):
         self.default, self.schema = default, schema
 
 
 class FakeTask:
+    def __getitem__(self, key):
+        return self
+
+    def expand_kwargs(self, value):
+        return self
+
     def override(self, **kwargs):
         return self
 
@@ -53,8 +60,8 @@ def load_dag(monkeypatch):
                          'airflow.exceptions': exceptions, 'pendulum': pendulum}.items():
         monkeypatch.setitem(sys.modules, name, module)
 
-    def load():
-        spec = importlib.util.spec_from_file_location('retail_dag_under_test', DAG_PATH)
+    def load(path=DAG_PATH):
+        spec = importlib.util.spec_from_file_location('retail_dag_under_test', path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
@@ -113,3 +120,55 @@ def test_a5_invalid_default(load_dag, monkeypatch, raw):
     monkeypatch.setenv('RETAIL_PIPELINE_DEFAULT_EXTENSIONS', raw)
     with pytest.raises(ValueError, match='RETAIL_PIPELINE_DEFAULT_EXTENSIONS'):
         load_dag()
+
+
+def test_l2_dot_dag_commands_and_pool(load_dag):
+    dag = load_dag(DAG_PATH.with_name('retail_dot_pipeline.py'))
+    assert dag.dag.kwargs['schedule'] is None
+    assert dag.dag.kwargs['is_paused_upon_creation'] is True
+    assert dag.dag.kwargs['default_args']['pool'] == 'retail_writer'
+    folder = '/opt/retail/warehouse/pipeline/docker/nhap/20261109T010000Z_abcdef_dot/file'
+    params = {'target': 'databricks', 'dots': ['/opt/retail/data_demo/demo', folder],
+              'du_bao_tu': 'a' * 24, 'extensions': ['another_ext'],
+              'pipeline_run_id': 'dot_one_1', 'request_id': '20261109T010000Z_abcdef_dot'}
+    context = {'run_id': 'abc', 'params': params}
+    expected = ['/opt/pipeline/bin/python', '-m', 'scripts.pipeline.cli', 'prepare',
+                '--run-id', 'dot_one_1', '--target', 'databricks', '--root', 'warehouse/pipeline/docker',
+                '--dot', '/opt/retail/data_demo/demo', '--dot', folder, '--extension', 'another_ext']
+    assert dag.command('prepare', context) == expected
+    assert '--dot' not in dag.command('forecast', context)
+    with pytest.raises(ValueError):
+        dag.command('publish', context)
+    for bad in ('../data', '/tmp/file', '', folder + '/../file'):
+        params['dots'] = [bad]
+        with pytest.raises(ValueError):
+            dag.command('prepare', context)
+
+
+def test_l2_poller_dag_schedule_and_trigger(load_dag, monkeypatch):
+    class Trigger(FakeTask):
+        options = None
+        @classmethod
+        def partial(cls, **kwargs):
+            cls.options = kwargs
+            return cls()
+    trigger_mod = ModuleType('airflow.providers.standard.operators.trigger_dagrun')
+    trigger_mod.TriggerDagRunOperator = Trigger
+    for name in ('airflow.providers', 'airflow.providers.standard', 'airflow.providers.standard.operators'):
+        monkeypatch.setitem(sys.modules, name, ModuleType(name))
+    monkeypatch.setitem(sys.modules, trigger_mod.__name__, trigger_mod)
+    exceptions = sys.modules['airflow.exceptions']
+    exceptions.AirflowException = RuntimeError
+    module = load_dag(DAG_PATH.with_name('nhap_du_lieu_do.py'))
+    dag = module.dag.kwargs
+    assert dag['schedule'] == '*/5 * * * *' and dag['catchup'] is False
+    assert dag['max_active_runs'] == 1 and dag['is_paused_upon_creation'] is True
+    assert dag['default_args']['retries'] == 0 and 'pool' not in dag['default_args']
+    assert Trigger.options == {'task_id': 'trigger', 'trigger_dag_id': 'retail_dot_pipeline',
+                               'skip_when_already_exists': True, 'wait_for_completion': False}
+
+
+def test_l2_batch_pool_and_compose_order(load_dag):
+    assert load_dag().dag.kwargs['default_args']['pool'] == 'retail_writer'
+    compose = (DAG_PATH.parents[3] / 'docker-compose.airflow.yml').read_text(encoding='utf-8')
+    assert "airflow db migrate &&\n        airflow pools set retail_writer 1 'CLI ghi cua pipeline' &&" in compose
