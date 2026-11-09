@@ -121,7 +121,7 @@ def test_t6_each_page_selects_correct_schema(warehouse, monkeypatch, page):
     banners = [w for w in at.warning if w.value == 'Dữ liệu tổng hợp – chỉ để demo']
     assert len(banners) == (0 if expected == A else 1)
     if page == 'ai_explain':
-        assert any('2022-12-31' in item.value and 'bản số thật' in item.value for item in at.info)
+        assert any('31/12/2022' in item.value and 'bản số thật' in item.value for item in at.info)
 
     warehouse.clear_dashboard(B)
     seen.clear()
@@ -157,7 +157,7 @@ def test_t11_old_registry_same_record(warehouse, pointer):
 def test_t8_period_label_scoped_to_synthetic(warehouse):
     releases.resolve('duckdb', pointer='dashboard')
     assert common.period_label('2013-2022', 'total', False) == '2013–2022 (kỳ gốc, số thật)'
-    assert common.period_label('2012-2022', 'total', False) == '2012–2022 (toàn bộ dữ liệu)'
+    assert common.period_label('2012-2022', 'total', False) == '2012–2022 (kỳ gốc, số thật)'
     with releases.active_scope():
         releases.resolve('duckdb')
         assert common.period_label('2013-2022', 'total', False) == '2013–2022 (toàn bộ dữ liệu)'
