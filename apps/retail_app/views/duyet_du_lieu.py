@@ -63,7 +63,7 @@ if dot_mode != 'tat':
         else:
             st.info('Cần đăng nhập để duyệt dữ liệu.')
     except Exception as error:
-        st.error(str(error))
+        st.error(str(error) if str(error) in ('Sổ đợt hỏng; báo kỹ sư dữ liệu.', 'Chưa cấu hình kho đợt') else 'Dữ liệu đợt hỏng; báo kỹ sư dữ liệu.')
 
 if backend() == 'databricks' and roles.current_role() == 'admin':
     if dot_mode != 'volume':
@@ -95,8 +95,8 @@ if backend() == 'databricks' and roles.current_role() == 'admin':
             if state.get('dashboard') and st.button('Trả dashboard về bản số thật', disabled=pending):
                 dots.dashboard_command()
                 st.rerun()
-        except Exception as error:
-            st.error(str(error))
+        except Exception:
+            st.error('Chưa đọc được dashboard; báo kỹ sư dữ liệu.')
 if not local_available:
     st.stop()
 import yaml
