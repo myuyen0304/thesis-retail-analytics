@@ -23,10 +23,29 @@ _STYLE = ('{k} {{background: rgba(124, 58, 237, 0.06); border-color: rgba(124, 5
           '{k} [data-testid="stCaptionContainer"] {{color: inherit; opacity: 0.75;}}')
 
 
-def ai_unavailable(b: str, p, *, chat=False) -> str | None:
+def _demo_reason(req):
+    """Chỉ năm thật được đối chiếu giữa hai bản; giai đoạn và cả chuỗi vẫn ẩn."""
+    if not releases.pointers_differ():
+        return None
+    calls = getattr(req, 'calls', ())
+    yearly = bool(calls) and all('year' in args and args.get('period_type') != 'phase'
+                                 and 'view' not in args for _, args in calls)
+    if not yearly:
+        return ('Trang này gộp cả dữ liệu demo nên AI tạm ẩn. Hỏi AI ở trang Hỏi dữ liệu (AI), '
+                'nơi AI đọc bản số thật.')
+    with releases.active_scope():
+        end = load_or_stop('build_info').iloc[0]['data_end_date']
+    year = pd.Timestamp(end).year
+    if all(args['year'] <= year for _, args in calls):
+        return None
+    return (f'AI chỉ giải thích dữ liệu thật tới năm {year}; lựa chọn này có dữ liệu demo. '
+            f'Chọn một năm từ {year} trở về trước để AI giải thích.')
+
+
+def ai_unavailable(b: str, p, *, chat=False, req=None) -> str | None:
     """Vì sao AI (chat hoặc khung trang) chưa dùng được với backend b và provider p; None nếu dùng được."""
-    if not chat and releases.pointers_differ():
-        return 'AI diễn giải tạm ẩn: dashboard đang dùng bản tổng hợp, chat đọc bản số thật.'
+    if not chat and (why := _demo_reason(req)):
+        return why
     if b not in service.CHAT_BACKENDS:
         return f'AI chưa hỗ trợ **{BACKEND_LABEL[b]}**. Chọn backend khác ở thanh bên.'
     if b == 'postgres' and not os.environ.get('PG_AI_USER'):
@@ -41,6 +60,7 @@ def ai_unavailable(b: str, p, *, chat=False) -> str | None:
     return None
 
 
+@releases.active_read
 def _data_key(b: str) -> str:
     """Bản dữ liệu đang đọc: release_id ở chế độ versioned, mốc dựng kho ở chế độ cũ."""
     record = release_for_read(b)
@@ -94,7 +114,7 @@ def _render(t: service.TurnResult, req: page_explain.PageRequest, cache: dict, c
 
 def _body(req: page_explain.PageRequest) -> None:
     b, p = backend(), provider.from_config()
-    if (why := ai_unavailable(b, p)) is not None:
+    if (why := ai_unavailable(b, p, req=req)) is not None:
         st.caption('AI chưa dùng được ở đây. ' + why)
         return
     if not req.calls:
@@ -119,8 +139,8 @@ def _body(req: page_explain.PageRequest) -> None:
 
 def ai_panel(req: page_explain.PageRequest) -> None:
     """Khung AI của một trang. Gọi trong cột bên phải, sau phần tóm tắt theo quy tắc."""
-    if releases.pointers_differ():
-        st.caption('AI diễn giải tạm ẩn: dashboard đang dùng bản tổng hợp, chat đọc bản số thật.')
+    if why := _demo_reason(req):
+        st.caption(why)
         return
     key = f'ai_panel_{req.page}'
     st.html(f'<style>{_STYLE.format(k=f".st-key-{key}")}</style>')
