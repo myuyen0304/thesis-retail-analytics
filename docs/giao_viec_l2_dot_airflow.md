@@ -67,8 +67,17 @@ python -B -X utf8 scripts/ops/thu_kho_volume.py --env-file <đường dẫn> --d
 | V5 | 2 luồng đua, 5 vòng | Mỗi vòng đúng 1 thắng; bên kia `TrangThaiDaDoi` |
 | V6 | Đọc file kích thước 1 MB | sha256 khớp |
 
-- In mỗi mã một dòng `ĐẠT`/`TRƯỢT`; hết thì xóa thư mục thử bằng `client.files.delete`, xóa lỗi chỉ cảnh báo. Thoát mã 0 nếu đạt hết, 1 nếu không, 3 nếu không đăng nhập được.
-- Test bằng client giả: mọi nhánh trên, không in secret (đưa secret mẫu vào file env, chặn `capsys`), không ghi ra ngoài `thu_ket_noi/`.
+- In mỗi mã một dòng `ĐẠT`/`TRƯỢT`. Thoát mã 0 nếu đạt hết, 1 nếu không, 3 nếu không đăng nhập được.
+- **Dọn thư mục thử**, chạy trong `finally` nên cả khi một mã trượt giữa chừng. SDK 0.117.0 tách hai API: `client.files.delete(file_path)` xóa file, `client.files.delete_directory(directory_path)` chỉ xóa thư mục rỗng.
+  1. Duyệt đệ quy thư mục của lượt hiện tại bằng `client.files.list_directory_contents`, gồm cả file các mã đã ghi trước khi trượt.
+  2. Xóa từng file bằng `delete`, rồi xóa thư mục con từ dưới lên bằng `delete_directory`, cuối cùng xóa thư mục lượt.
+  3. Trước mỗi lần xóa, kiểm đường dẫn nằm trong `<goc>/thu_ket_noi/<giờ UTC>_<6 hex>/` của lượt hiện tại; không nằm trong thì bỏ qua và cảnh báo. Không chạm các lượt khác.
+  4. Lỗi dọn chỉ in cảnh báo, gồm đường dẫn và tên loại lỗi. Mã thoát vẫn theo V1–V6.
+- Test bằng client giả: mọi nhánh trên, không in secret (đưa secret mẫu vào file env, chặn `capsys`), không ghi ra ngoài `thu_ket_noi/`. Client giả phải theo đúng SDK: `delete` lên thư mục thì lỗi, `delete_directory` lên thư mục còn nội dung thì lỗi. Thêm các ca về dọn:
+  - đạt hết thì không còn gì của lượt;
+  - một mã trượt giữa chừng vẫn dọn hết;
+  - thư mục của lượt khác còn nguyên;
+  - lỗi dọn không đổi mã thoát.
 
 Xong mục này thì báo PM rồi **dừng**.
 
