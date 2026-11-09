@@ -66,7 +66,228 @@ def pending(store):
 
 def ready(store):
     r = pending(store)
-    return store.transition(r['id'], r['revision'], 'da_duyet', 'de', ten_mo_rong='orders_enriched')
+    r = store.transition(r['id'], r['revision'], 'da_duyet', 'de', ten_mo_rong='orders_enriched')
+    request_contract(store, r)
+    return r
+
+
+def request_contract(store, record):
+    doc = extension_contract.load(record['ten_mo_rong'])
+    doc['file'] = f"ui_nhap/{record['id']}/{record['ten_file']}"
+    folder = store.folder(record['id']) / 'hop_dong'
+    folder.mkdir(exist_ok=True)
+    (folder / (doc['ten'] + '.yml')).write_text(yaml.safe_dump(doc), encoding='utf-8')
+
+
+def active_extensions(store, names, rid='a' * 24):
+    """Bản active giả có context và hợp đồng thật, không chạm registry của repo."""
+    run_id = 'ui-active-' + rid[:1]
+    directory = store.base / 'contracts' / rid
+    directory.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        doc = extension_contract.load(name)
+        doc['file'] = f'fixture/{rid}/{name}.csv'
+        data = store.base / 'data' / doc['file']
+        data.parent.mkdir(parents=True, exist_ok=True)
+        data.write_text('order_id\n1\n', encoding='utf-8')
+        (directory / (name + '.yml')).write_text(yaml.safe_dump(doc), encoding='utf-8')
+    atomic_json(nr.context_path(store, run_id), {'run_id': run_id, 'release_id': rid,
+        'target': 'duckdb', 'stage': 'published', 'extensions': names, 'extension_dir': str(directory)})
+    state = store.pipeline_state()
+    state.setdefault('releases', {})[rid] = {'run_id': run_id, 'status': 'ready'}
+    state['active'] = rid
+    atomic_json(store.base / nr.PIPELINE_ROOT / 'state.json', {'version': 'test', 'payload': state})
+    return directory
+
+
+def shipment_request(store):
+    r = ready(store)
+    r['ten_mo_rong'] = 'shipments_realistic'
+    request_contract(store, r)
+    return store.save(r)
+
+
+@pytest.mark.parametrize('route', ['tay', 'tu_dong', 'nap_bu'])
+def test_b4_start_unions_active_and_refreshes_for_retry(store, monkeypatch, route):
+    r = shipment_request(store)
+    r['duong'] = 'tu_dong' if route != 'tay' else 'tay'
+    if route == 'nap_bu':
+        r['nap_bu_tu'] = 'source-request'
+    store.save(r)
+    request_dir = store.folder(r['id']) / 'hop_dong'
+    request_bytes = {p.name: p.read_bytes() for p in request_dir.iterdir()}
+    active_extensions(store, [], 'b' * 24)
+    # Active xuất hiện sau lúc duyệt: phải lấy lúc bắt đầu.
+    directory = active_extensions(store, ['orders_enriched'])
+    monkeypatch.setattr(nr, 'has_dbt_model', lambda *a: True)
+    monkeypatch.setattr(nr.subprocess, 'Popen', lambda *a, **kw: SimpleNamespace(pid=123))
+    started = nr._start_locked(store, r['id'], r['revision'], 'he_thong')
+    assert started['mo_rong_chay'] == ['orders_enriched', 'shipments_realistic']
+    dest = store.folder(r['id']) / 'chay' / started['run_id'] / 'hop_dong/orders_enriched.yml'
+    assert dest.read_bytes() == (directory / 'orders_enriched.yml').read_bytes()
+    before = dest.read_bytes()
+    old_bytes = {p.name: p.read_bytes() for p in dest.parent.iterdir()}
+    state = store.pipeline_state()
+    state['active'] = 'b' * 24
+    atomic_json(store.base / nr.PIPELINE_ROOT / 'state.json', {'payload': state})
+    failed = store.transition(r['id'], started['revision'], 'loi', 'he_thong')
+    retried = nr._start_locked(store, r['id'], failed['revision'], 'de')
+    assert retried['mo_rong_chay'] == ['shipments_realistic']
+    assert dest.read_bytes() == before
+    assert {p.name: p.read_bytes() for p in dest.parent.iterdir()} == old_bytes
+    commands = []
+    def stage(cmd, **kw):
+        commands.append(cmd)
+        atomic_json(nr.context_path(store, retried['run_id']), {'target': 'duckdb', 'stage': 'prepared'})
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(nr.subprocess, 'run', stage)
+    nr._stage(store, retried, 'prepare', io.BytesIO())
+    cmd, = commands
+    assert [cmd[i + 1] for i, arg in enumerate(cmd) if arg == '--extension'] == retried['mo_rong_chay']
+    assert Path(cmd[cmd.index('--extension-dir') + 1]) == store.folder(r['id']) / 'chay' / retried['run_id'] / 'hop_dong'
+    assert {p.name: p.read_bytes() for p in request_dir.iterdir()} == request_bytes
+
+
+def test_b4_no_active_and_same_name_request_wins(store):
+    r = shipment_request(store)
+    assert nr._extensions_for_run(store, r)[0] == ['shipments_realistic']
+    active_extensions(store, ['orders_enriched', 'shipments_realistic'])
+    own = store.folder(r['id']) / 'hop_dong/shipments_realistic.yml'
+    before = own.read_bytes()
+    names, copies = nr._extensions_for_run(store, r)
+    assert names == ['orders_enriched', 'shipments_realistic']
+    assert copies['shipments_realistic'] == before
+    assert own.read_bytes() == before
+
+
+@pytest.mark.parametrize('initial', ['loi', 'da_cong_bo'])
+def test_b6_new_run_adds_new_active_extension_and_preserves_old_bytes(store, monkeypatch, initial):
+    r = ready(store)
+    request_dir = store.folder(r['id']) / 'hop_dong'
+    original = {p.name: p.read_bytes() for p in request_dir.iterdir()}
+    monkeypatch.setattr(nr, 'has_dbt_model', lambda *a: True)
+    monkeypatch.setattr(nr.subprocess, 'Popen', lambda *a, **kw: SimpleNamespace(pid=123))
+    first = nr._start_locked(store, r['id'], r['revision'], 'de')
+    old_dir = store.folder(r['id']) / 'chay' / first['run_id'] / 'hop_dong'
+    old_bytes = {p.name: p.read_bytes() for p in old_dir.iterdir()}
+    # Active có chính yêu cầu này và một phần mới; hợp đồng own của active khác byte.
+    active_dir = active_extensions(store, ['orders_enriched', 'shipments_realistic'])
+    active_bytes = {p.name: p.read_bytes() for p in active_dir.iterdir()}
+    first['trang_thai'] = initial
+    store.save(first)
+    second = nr._start_locked(store, r['id'], first['revision'], 'de')
+    assert second['lan_chay'] == first['lan_chay'] + 1
+    assert second['mo_rong_chay'] == ['orders_enriched', 'shipments_realistic']
+    new_dir = store.folder(r['id']) / 'chay' / second['run_id'] / 'hop_dong'
+    assert {p.name: p.read_bytes() for p in new_dir.iterdir()} == {
+        'orders_enriched.yml': original['orders_enriched.yml'],
+        'shipments_realistic.yml': active_bytes['shipments_realistic.yml']}
+    assert {p.name: p.read_bytes() for p in old_dir.iterdir()} == old_bytes
+    assert {p.name: p.read_bytes() for p in request_dir.iterdir()} == original
+    assert {p.name: p.read_bytes() for p in active_dir.iterdir()} == active_bytes
+    # Active đổi giữa các stage không đổi bộ đã chốt của lượt đang chạy.
+    active_extensions(store, [], 'b' * 24)
+    commands = []
+    def run(cmd, **kwargs):
+        commands.append(cmd)
+        atomic_json(nr.context_path(store, second['run_id']), {'target': 'duckdb', 'stage': 'prepared'})
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(nr.subprocess, 'run', run)
+    nr._stage(store, second, 'prepare', io.BytesIO())
+    cmd = commands[0]
+    assert [cmd[i + 1] for i, arg in enumerate(cmd) if arg == '--extension'] == second['mo_rong_chay']
+    assert Path(cmd[cmd.index('--extension-dir') + 1]) == new_dir
+
+
+def test_b6_core_active_without_extension_directory_starts(store, monkeypatch):
+    r = shipment_request(store)
+    active_extensions(store, [])
+    path = nr.context_path(store, 'ui-active-a')
+    context = json.loads(path.read_text(encoding='utf-8'))
+    context.pop('extension_dir')
+    atomic_json(path, context)
+    monkeypatch.setattr(nr, 'has_dbt_model', lambda *a: True)
+    monkeypatch.setattr(nr.subprocess, 'Popen', lambda *a, **kw: SimpleNamespace(pid=123))
+    started = nr._start_locked(store, r['id'], r['revision'], 'de')
+    assert started['mo_rong_chay'] == ['shipments_realistic']
+    directory = store.folder(r['id']) / 'chay' / started['run_id'] / 'hop_dong'
+    assert [p.name for p in directory.iterdir()] == ['shipments_realistic.yml']
+
+
+def test_b4_rollback_uses_rolled_back_release_not_latest_contract(store):
+    r = shipment_request(store)
+    old = active_extensions(store, ['orders_enriched'])
+    active_extensions(store, ['orders_enriched', 'shipments_realistic'], 'b' * 24)
+    state = store.pipeline_state()
+    state['active'] = 'a' * 24
+    atomic_json(store.base / nr.PIPELINE_ROOT / 'state.json', {'payload': state})
+    # Registry hiện hành khác bản active, không được đọc vào lượt chạy.
+    registry = store.base / 'scripts/ingest/extensions'
+    registry.mkdir(parents=True)
+    (registry / 'orders_enriched.yml').write_text('broken', encoding='utf-8')
+    _, copies = nr._extensions_for_run(store, r)
+    assert copies['orders_enriched'] == (old / 'orders_enriched.yml').read_bytes()
+
+
+@pytest.mark.parametrize('damage', ['context', 'contract', 'file', 'extension_dir', 'release_id', 'target', 'extensions'])
+def test_b4_missing_active_inputs_stops_before_worker(store, monkeypatch, damage):
+    r = shipment_request(store)
+    directory = active_extensions(store, ['orders_enriched'])
+    if damage == 'contract':
+        (directory / 'orders_enriched.yml').unlink()
+    elif damage == 'file':
+        doc = extension_contract.load('orders_enriched', directory)
+        (store.base / 'data' / doc['file']).unlink()
+    else:
+        path = nr.context_path(store, 'ui-active-a')
+        if damage == 'context':
+            path.write_text('{broken', encoding='utf-8')
+        else:
+            body = json.loads(path.read_text(encoding='utf-8'))
+            if damage == 'extension_dir':
+                body.pop('extension_dir')
+            else:
+                body[damage] = {'release_id': 'wrong', 'target': 'postgres', 'extensions': 'orders_enriched'}[damage]
+            atomic_json(path, body)
+    state = store.base / nr.PIPELINE_ROOT / 'state.json'
+    before = state.read_bytes()
+    monkeypatch.setattr(nr, 'has_dbt_model', lambda *a: True)
+    monkeypatch.setattr(nr.subprocess, 'Popen', lambda *a, **kw: pytest.fail('Không được khởi động worker'))
+    with pytest.raises(nr.WorkerStartError, match='Không giữ được'):
+        nr._start_locked(store, r['id'], r['revision'], 'he_thong')
+    assert state.read_bytes() == before
+    failed = store.read(r['id'])
+    assert failed['trang_thai'] == 'loi' and 'Không giữ được' in failed['thong_bao']
+    failed['thong_bao'] = 'old error'
+    store.save(failed)
+    with pytest.raises(nr.WorkerStartError, match='Không giữ được'):
+        nr._start_locked(store, r['id'], failed['revision'], 'he_thong')
+    assert store.read(r['id'])['thong_bao'] != 'old error'
+
+
+@pytest.mark.parametrize('names', [[], ['../orders'], ['orders_enriched', 'BAD'], [None]])
+def test_b4_commands_validate_each_name(tmp_path, names):
+    with pytest.raises(ValueError, match='Tên phần mở rộng'):
+        nr.lenh('prepare', 'ui-demo-1', names, tmp_path)
+
+
+def test_b4_summary_two_extensions(store):
+    import duckdb
+    r = shipment_request(store)
+    rid = 'a' * 24
+    path = store.base / nr.PIPELINE_ROOT / 'runs/ui-summary/dbt.duckdb'
+    path.parent.mkdir(parents=True)
+    with duckdb.connect(str(path)) as con:
+        con.execute(f'create schema r_{rid}_marts')
+        con.execute(f'create table r_{rid}_marts.dim_sales_employee as select 1')
+        con.execute(f'create table r_{rid}_marts.dim_shipper as select 1 union all select 2')
+        con.execute(f'create table r_{rid}_marts.fact_order as select 1 as sales_employee_sk, 1 as shipper_sk '
+                    'union all select 1, null')
+    context = {'stage': 'published', 'run_id': 'ui-summary', 'release_id': rid, 'duckdb_path': str(path),
+               'extensions': ['orders_enriched', 'shipments_realistic']}
+    atomic_json(store.folder(r['id']) / 'chay/context.json', context)
+    result = nr.summary(store, r)
+    assert [result[k] for k in ('dim_sales_employee', 'dim_shipper', 'orders_with_employee', 'orders_with_shipper')] == [1, 2, 2, 1]
 
 
 @pytest.mark.parametrize('name,expected', [('../x.csv', 'x.csv'), ('a\\b.json', 'b.json'), ('A B.CSV', 'a_b.csv')])
@@ -100,8 +321,8 @@ def test_size_limit(store, monkeypatch):
 
 EXPECTED = {
     'da_gui': {'cho_duyet', 'loi_de_xuat'}, 'cho_duyet': {'da_duyet', 'cho_model_dbt', 'tu_choi'},
-    'da_duyet': {'dang_chay'}, 'dang_chay': {'da_kiem', 'loi', 'da_cong_bo'}, 'loi': {'dang_chay', 'cho_duyet'},
-    'da_kiem': {'da_cong_bo', 'loi'}, 'da_cong_bo': {'dang_chay'}, 'cho_model_dbt': set(), 'tu_choi': set(), 'loi_de_xuat': set()}
+    'da_duyet': {'dang_chay', 'loi'}, 'dang_chay': {'da_kiem', 'loi', 'da_cong_bo'}, 'loi': {'dang_chay', 'cho_duyet'},
+    'da_kiem': {'da_cong_bo', 'loi'}, 'da_cong_bo': {'dang_chay', 'loi'}, 'cho_model_dbt': set(), 'tu_choi': set(), 'loi_de_xuat': set()}
 
 
 @pytest.mark.parametrize('before', EXPECTED)
@@ -485,3 +706,158 @@ def test_dispatch_competition_message(store, identity, action):
         with pytest.raises(ValueError, match='Trạng thái đã đổi'):
             getattr(nr, action)(store, r['id'], r['revision'])
     assert store.read(r['id']) == r
+
+
+# Phiếu hiển thị sau rollback: đối chiếu chỉ đọc, không đổi trạng thái yêu cầu
+A, B, C = 'a' * 24, 'b' * 24, 'c' * 24
+GIU = 'Đã cập nhật dữ liệu'
+KHONG_CON = 'Dữ liệu này đã từng được cập nhật nhưng hiện không nằm trong bản đang dùng.'
+
+
+def kho(store, active, releases):
+    """releases: {mã bản: danh sách nguồn mở rộng}."""
+    root = store.base / nr.PIPELINE_ROOT
+    for rid, names in releases.items():
+        atomic_json(root / 'runs' / rid / 'context.json', {'release_id': rid, 'target': 'duckdb', 'extensions': names})
+    atomic_json(root / 'state.json', {'version': 'test', 'payload': {
+        'active': active, 'releases': {rid: {'run_id': rid, 'status': 'ready'} for rid in releases}}})
+
+
+def da_cong_bo(store, name, rid):
+    record = pending(store)
+    record.update(trang_thai='da_cong_bo', ten_mo_rong=name)
+    if rid:
+        atomic_json(store.folder(record['id']) / 'chay/published.context.json', {'stage': 'published', 'release_id': rid})
+    return store.save(record)
+
+
+def trang_duyet(store, monkeypatch):
+    monkeypatch.setattr(ns, 'RequestStore', lambda: store)
+    at = AppTest.from_file(str(VIEWS / 'duyet_du_lieu.py')).run()
+    assert not at.exception
+    return [x.value for x in at.warning], [x.value for x in at.info]
+
+
+def trang_gui(store, monkeypatch):
+    monkeypatch.setattr(roles, 'current_role', lambda: 'quan_ly')
+    monkeypatch.setattr(roles, 'logged_in_user', lambda: {'username': 'manager'})
+    monkeypatch.setattr(ns, 'RequestStore', lambda: store)
+    at = AppTest.from_file(str(VIEWS / 'gui_du_lieu.py')).run()
+    assert not at.exception
+    return [x.value for x in at.success], [x.value for x in at.info]
+
+
+def test_notice_none_when_published_is_active(store, identity, monkeypatch):
+    kho(store, A, {A: ['orders_enriched']})
+    record = da_cong_bo(store, 'orders_enriched', A)
+    assert nr.doi_chieu_ban(store, record) is None
+    warnings, infos = trang_duyet(store, monkeypatch)
+    assert not [w for w in warnings if 'bản đang xem' in w] and not [i for i in infos if 'bản đang xem' in i.lower()]
+    assert GIU in trang_gui(store, monkeypatch)[0]
+
+
+def test_notice_after_rollback_without_source(store, identity, monkeypatch):
+    kho(store, A, {A: ['orders_enriched'], B: ['orders_enriched', 'shipments_realistic']})
+    da_cong_bo(store, 'shipments_realistic', B)
+    warnings, _ = trang_duyet(store, monkeypatch)
+    assert f'Số dưới đây là của bản {B[:8]}, không phải bản đang xem ({A[:8]}). Nguồn này hiện không có trong bản đang xem.' in warnings
+    success, infos = trang_gui(store, monkeypatch)
+    assert GIU not in success and KHONG_CON in infos
+
+
+def test_notice_when_newer_release_keeps_source(store, identity, monkeypatch):
+    kho(store, B, {A: ['orders_enriched'], B: ['orders_enriched', 'shipments_realistic']})
+    da_cong_bo(store, 'orders_enriched', A)
+    assert f'Số dưới đây là của bản {A[:8]}. Bản đang xem là {B[:8]}, vẫn có nguồn này.' in trang_duyet(store, monkeypatch)[1]
+    assert GIU in trang_gui(store, monkeypatch)[0]
+
+
+def test_rollback_flips_two_requests(store, identity):
+    kho(store, A, {A: ['orders_enriched'], B: ['orders_enriched', 'shipments_realistic']})
+    first = da_cong_bo(store, 'orders_enriched', A)
+    second = da_cong_bo(store, 'shipments_realistic', B)
+    assert nr.doi_chieu_ban(store, first) is None
+    assert nr.doi_chieu_ban(store, second)[0] == 'warning'
+    kho(store, B, {A: ['orders_enriched'], B: ['orders_enriched', 'shipments_realistic']})
+    assert nr.doi_chieu_ban(store, first)[0] == 'info'
+    assert nr.doi_chieu_ban(store, second) is None
+
+
+def test_rollback_to_own_older_release(store, identity):
+    kho(store, A, {A: ['orders_enriched'], C: ['orders_enriched']})
+    record = da_cong_bo(store, 'orders_enriched', C)
+    kind, text = nr.doi_chieu_ban(store, record)
+    assert kind == 'info' and C[:8] in text and A[:8] in text
+
+
+def test_notice_without_active_or_published(store, identity):
+    record = da_cong_bo(store, 'orders_enriched', A)
+    assert nr.doi_chieu_ban(store, record) == ('warning', 'Kho chưa có bản đang xem.')
+    assert nr.active_extensions(store) == (None, set())
+    assert nr.nguon_dang_dung(store) == (None, set())
+    bare = da_cong_bo(store, 'orders_enriched', None)
+    kho(store, A, {A: ['orders_enriched']})
+    assert nr.published_release(store, bare) is None
+    assert nr.doi_chieu_ban(store, bare) is None
+
+
+@pytest.mark.parametrize('damage', ['state', 'context', 'mismatch', 'target', 'published', 'no_release', 'release_kind', 'extensions'])
+def test_notice_survives_damage(store, identity, monkeypatch, damage):
+    kho(store, A, {A: ['orders_enriched']})
+    record = da_cong_bo(store, 'orders_enriched', B)
+    root = store.base / nr.PIPELINE_ROOT
+    context = root / 'runs' / A / 'context.json'
+    if damage == 'state':
+        (root / 'state.json').write_text('{hong', encoding='utf-8')
+    elif damage == 'context':
+        context.write_text('{hong', encoding='utf-8')
+    elif damage == 'mismatch':
+        atomic_json(context, {'release_id': C, 'target': 'duckdb', 'extensions': []})
+    elif damage == 'target':
+        atomic_json(context, {'release_id': A, 'target': 'databricks', 'extensions': []})
+    elif damage == 'extensions':
+        atomic_json(context, {'release_id': A, 'target': 'duckdb', 'extensions': 'orders_enriched'})
+    elif damage == 'published':
+        (store.folder(record['id']) / 'chay/published.context.json').write_text('{hong', encoding='utf-8')
+    elif damage == 'release_kind':
+        atomic_json(store.folder(record['id']) / 'chay/published.context.json', {'stage': 'published', 'release_id': 123})
+    else:
+        atomic_json(store.folder(record['id']) / 'chay/published.context.json', {'stage': 'published'})
+    assert nr.doi_chieu_ban(store, record) == ('warning', 'Chưa đối chiếu được với bản đang xem.')
+    assert 'Chưa đối chiếu được với bản đang xem.' in trang_duyet(store, monkeypatch)[0]
+    if damage not in ('published', 'no_release', 'release_kind'):
+        assert 'Đã xử lý xong; đội dữ liệu đang kiểm tra trạng thái hiện tại.' in trang_gui(store, monkeypatch)[1]
+
+
+@pytest.mark.parametrize('state', ['da_kiem', 'dang_chay', 'loi'])
+def test_notice_only_for_published_state(store, identity, monkeypatch, state):
+    kho(store, A, {A: []})
+    record = da_cong_bo(store, 'orders_enriched', B)
+    record.update(trang_thai=state, bat_dau='2026-11-05T00:00:00+00:00', run_id='ui-thu', stage='prepare')
+    store.save(record)
+    monkeypatch.setattr(nr, 'doi_chieu_ban', lambda *a: pytest.fail('Không đối chiếu ở trạng thái này'))
+    monkeypatch.setattr(nr, 'nguon_dang_dung', lambda *a: pytest.fail('Không đọc khi chưa công bố'))
+    trang_duyet(store, monkeypatch)
+    trang_gui(store, monkeypatch)
+
+
+def test_sender_reads_active_once_per_draw(store, identity, monkeypatch):
+    kho(store, A, {A: ['orders_enriched']})
+    da_cong_bo(store, 'orders_enriched', A)
+    da_cong_bo(store, 'shipments_realistic', A)
+    calls = []
+    original = nr.nguon_dang_dung
+    monkeypatch.setattr(nr, 'nguon_dang_dung', lambda s: calls.append(1) or original(s))
+    trang_gui(store, monkeypatch)
+    assert len(calls) == 1
+
+
+def test_comparison_writes_nothing(store, identity):
+    kho(store, A, {A: ['orders_enriched'], B: ['shipments_realistic']})
+    record = da_cong_bo(store, 'shipments_realistic', B)
+    def fingerprint():
+        return {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in store.base.rglob('*') if p.is_file()}
+    before = fingerprint()
+    nr.active_extensions(store), nr.published_release(store, record), nr.doi_chieu_ban(store, record), nr.nguon_dang_dung(store)
+    assert fingerprint() == before
+    assert store.read(record['id'])['trang_thai'] == 'da_cong_bo' and store.read(record['id'])['revision'] == record['revision']

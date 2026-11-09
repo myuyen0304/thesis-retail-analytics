@@ -10,7 +10,7 @@ with p as (
         lead(phase_code) over (order by start_year) as next_phase_code,
         lead(phase_name) over (order by start_year) as next_phase_name,
         lead(trend)      over (order by start_year) as next_trend
-    from {{ ref('ps2_phases') }}
+    from {{ ps2_phases_ky() }}
 )
 select
     p.end_year                                   as turning_year,

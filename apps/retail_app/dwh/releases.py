@@ -10,6 +10,9 @@ CONTROL_RELATION = 'retail_control.state'
 _pin = ContextVar('retail_release', default=None)
 _depth = ContextVar('retail_release_depth', default=0)
 _since = ContextVar('retail_release_since', default=None)    # payload['active_since'] của lần đọc registry đã pin bản
+_active_depth = ContextVar('retail_active_depth', default=0)
+_pointer = ContextVar('retail_release_pointer', default='active')
+_state = ContextVar('retail_release_state', default=None)
 _HEX = re.compile(r'[a-f0-9]{24}')
 
 
@@ -30,8 +33,8 @@ def local_state():
     return json.loads(Path(path).read_text(encoding='utf-8'))['payload']
 
 
-def choose(state, requested=None):
-    rid = requested or state.get('active')
+def choose(state, requested=None, pointer='active'):
+    rid = requested or (state.get('dashboard') if pointer == 'dashboard' else None) or state.get('active')
     if not rid or rid not in state['releases']:
         raise ValueError('Chưa có phiên bản dữ liệu được công bố')
     record = checked(state['releases'][rid])
@@ -40,7 +43,9 @@ def choose(state, requested=None):
     return record
 
 
-def reset():
+def reset(pointer='active'):
+    _pointer.set(pointer)
+    _state.set(None)
     _pin.set(None)
     _since.set(None)
 
@@ -62,7 +67,7 @@ def pinned_read(fn):
     from functools import wraps
     @wraps(fn)
     def wrapped(*args, **kwargs):
-        with scope():
+        with active_scope():
             return fn(*args, **kwargs)
     return wrapped
 
@@ -76,7 +81,7 @@ def pin(record):
     return record
 
 
-def resolve(backend, fetch=None):
+def resolve(backend, fetch=None, pointer=None):
     if not enabled(backend):
         return None
     if current() is not None:
@@ -90,8 +95,10 @@ def resolve(backend, fetch=None):
         if len(rows) != 1:
             raise ValueError('Registry phải có đúng một dòng main')
         state = json.loads(rows[0][0])
-    record = pin(choose(state))
-    _since.set(state.get('active_since'))
+    selected = pointer or _pointer.get()
+    record = pin(choose(state, pointer=selected))
+    _state.set(state)
+    _since.set(state.get('dashboard_since' if selected == 'dashboard' and state.get('dashboard') else 'active_since'))
     return record
 
 
@@ -120,3 +127,36 @@ def allowed_versions(state, logical):
         record = choose(state, rid)
         out.update(record['schema'] + '.' + r.split('.')[1] for r in logical)
     return frozenset(out)
+
+
+@contextmanager
+def active_scope():
+    """Một lượt chat giữ cùng active qua nhiều tool và trả nguyên pin về trang gọi."""
+    nested = _active_depth.get() > 0
+    depth = _active_depth.set(_active_depth.get() + 1)
+    tokens = [] if nested else [(var, var.set(value)) for var, value in
+                               ((_pin, None), (_since, None), (_state, None), (_pointer, 'active'))]
+    try:
+        yield
+    finally:
+        for var, token in reversed(tokens):
+            var.reset(token)
+        _active_depth.reset(depth)
+
+
+def active_current():
+    return current() if _active_depth.get() else None
+
+
+def active_read(fn):
+    from functools import wraps
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        with active_scope():
+            return fn(*args, **kwargs)
+    return wrapped
+
+
+def pointers_differ():
+    state = _state.get() or {}
+    return bool(state.get('dashboard') and state['dashboard'] != state.get('active'))

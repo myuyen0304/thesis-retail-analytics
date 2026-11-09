@@ -24,8 +24,8 @@ def backend() -> str:
     return st.session_state.backend
 
 
-def sidebar(role: str) -> None:
-    releases.reset()
+def sidebar(role: str, page: str = '') -> None:
+    releases.reset('active' if page in ('du_bao', 'ai_explain') else 'dashboard')
     backend()
     st.session_state._reads = {}          # bảng đã đọc trong lượt chạy này (report_reads liệt kê lại)
     st.session_state._collapse_source = False
@@ -39,6 +39,13 @@ def sidebar(role: str) -> None:
         st.cache_data.clear()
         st.session_state.reloaded = True   # report_reads sẽ báo thành công sau khi trang đọc xong
     roles.account_box(role)
+    if releases.enabled(backend()):
+        try:
+            record = release_for_read(backend())
+        except Exception:
+            record = None  # Phần đọc dữ liệu của trang sẽ báo lỗi theo cơ chế hiện có.
+        if record and record.get('co_du_lieu_tong_hop'):
+            st.warning('Dữ liệu tổng hợp – chỉ để demo')
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -181,6 +188,12 @@ def page_header(title: str, question: str) -> None:
     st.title(title)
     st.markdown(f'**Câu hỏi:** {question}')
     info_strip()
+    if title == 'Hỏi dữ liệu (AI)' and releases.pointers_differ():
+        end = load_or_stop('build_info').iloc[0]['data_end_date']
+        st.info(f'Chat đang dùng bản số thật, số tới {end}; không dùng số tổng hợp trên dashboard.')
+    if title == 'Dự báo G và COGS' and releases.pointers_differ():
+        end = load_or_stop('build_info').iloc[0]['data_end_date']
+        st.info(f'Dashboard đang hiện dữ liệu tổng hợp có đợt; trang này dùng số thật, số tới {end}.')
 
 
 def kpi(col, label: str, value: str, help: str | None = None,
@@ -255,6 +268,8 @@ def period_label(code: str, period_type: str, is_analysis: bool) -> str:
     """Nhãn kỳ cho người xem. Chỉ ghép chữ từ các cột của rpt_revenue_bridge."""
     text = code.replace('-', '–')
     if period_type == 'total':
+        if code == '2013-2022' and not is_analysis and (releases.current() or {}).get('co_du_lieu_tong_hop'):
+            return f'{text} (kỳ gốc, số thật)'
         return f'{text} (kỳ phân tích)' if is_analysis else f'{text} (toàn bộ dữ liệu)'
     return text if is_analysis else f'{text} (chưa đủ năm, tham khảo)'
 

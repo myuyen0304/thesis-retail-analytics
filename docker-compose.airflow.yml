@@ -19,6 +19,7 @@ x-airflow: &airflow
     PYTHONUTF8: '1'
   volumes:
     - ./data:/opt/retail/data:ro
+    - ./data_demo:/opt/retail/data_demo:ro
     - ./warehouse/pipeline:/opt/retail/warehouse/pipeline
     - airflow-logs:/opt/airflow/logs
   depends_on:

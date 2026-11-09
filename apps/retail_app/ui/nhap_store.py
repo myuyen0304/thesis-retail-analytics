@@ -17,8 +17,8 @@ MAX_BYTES = 200 * 1024 * 1024
 TRANSITIONS = {
     'da_gui': {'cho_duyet', 'loi_de_xuat'},
     'cho_duyet': {'da_duyet', 'cho_model_dbt', 'tu_choi'},
-    'da_duyet': {'dang_chay'}, 'dang_chay': {'da_kiem', 'loi', 'da_cong_bo'},
-    'loi': {'dang_chay', 'cho_duyet'}, 'da_kiem': {'da_cong_bo', 'loi'}, 'da_cong_bo': {'dang_chay'},
+    'da_duyet': {'dang_chay', 'loi'}, 'dang_chay': {'da_kiem', 'loi', 'da_cong_bo'},
+    'loi': {'dang_chay', 'cho_duyet'}, 'da_kiem': {'da_cong_bo', 'loi'}, 'da_cong_bo': {'dang_chay', 'loi'},
     'cho_model_dbt': set(), 'tu_choi': set(), 'loi_de_xuat': set(),
 }
 LABELS = {'da_gui': 'Đã gửi', 'cho_duyet': 'Chờ duyệt', 'loi_de_xuat': 'Không đọc được file',

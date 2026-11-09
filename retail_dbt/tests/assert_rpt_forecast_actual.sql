@@ -12,7 +12,7 @@ moc as (
 select * from (
 select 'rpt_forecast_actual khop sales.csv tung ngay (G, COGS, du ngay, khong thua)' as rule, count(*) as n
 from a
-full outer join {{ ref('stg_sales') }} s on s.sales_date = a.sale_date
+full outer join {% if co_dot() %}(select * from {{ ref('stg_sales') }} where sales_date <= cast('{{ var('forecast_trained_through') }}' as date)){% else %}{{ ref('stg_sales') }}{% endif %} s on s.sales_date = a.sale_date
 where a.sale_date is null or s.sales_date is null or a.g <> s.revenue or a.cogs <> s.cogs
 union all
 select 'rpt_forecast_actual: moi ngay mot dong, khong null', count(*)

@@ -16,4 +16,5 @@ select
     revenue,
     cogs,
     false
-from {{ ref('stg_sample_submission') }}
+from {{ ref('stg_sample_submission') }}{% if co_dot() %}
+where sales_date > cast('{{ var('last_actual_date') }}' as date){% endif %}

@@ -9,4 +9,5 @@ select
     f.cogs           as cogs
 from {{ ref('fact_daily_sales') }} f
 join {{ ref('dim_date') }} d on d.date_sk = f.date_sk
-where f.is_actual
+where f.is_actual{% if co_dot() %}
+  and d.full_date <= cast('{{ var('forecast_trained_through') }}' as date){% endif %}

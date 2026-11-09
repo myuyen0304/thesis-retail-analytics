@@ -143,4 +143,12 @@ def tom_tat_nghiep_vu(de_xuat):
         out.append('Thông tin trùng đã có, đề xuất bỏ: ' + ', '.join(redundant))
     if any(c.get('nghi_pii') for c in de_xuat['cot']):
         out.append('Có thông tin cá nhân: sẽ không hiển thị trên báo cáo khi chưa được duyệt.')
+    unusual = sum(item.get(key, {}).get('so_dong', 0) for item in de_xuat.get('gia_tri_la', [])
+                  for key in ('khong_ep_duoc', 'so_am', 'vuot_nguong'))
+    if unusual:
+        out.append(f'Có {number(unusual)} giá trị không đọc được hoặc bất thường; đội dữ liệu sẽ kiểm tra.')
+    if de_xuat.get('nguon_mo_rong_de_xuat'):
+        out.append(f'Dữ liệu này có mã riêng, nên đề xuất lưu tách, không trộn với {label.lower()} đang có.')
+    elif de_xuat.get('luat_sua_ung_vien'):
+        out.append('Có gợi ý sửa giá trị cần đội dữ liệu xem xét; dữ liệu vẫn giữ nguyên.')
     return out

@@ -1206,7 +1206,7 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')
 
 
-@releases.pinned_read
+@releases.active_read
 def run(call: ToolCall | dict, backend: str, *, timeout_s: float | None = None,
         max_rows: int = DEFAULT_MAX_ROWS) -> ToolResult:
     if isinstance(call, dict):
@@ -1250,6 +1250,7 @@ def run(call: ToolCall | dict, backend: str, *, timeout_s: float | None = None,
 _KNOWN_GROUPS: dict[str, frozenset] = {}
 
 
+@releases.active_read
 def known_groups(backend: str) -> frozenset:
     """Tên mọi nhóm của 3 chiều PS5 (Streetwear, East, organic_search...), để bộ điều phối biết câu hỏi có lọc nhóm hay
     không. Đọc qua phiên chỉ-đọc như mọi tool. Chỉ nhớ kết quả ĐỌC ĐƯỢC; lỗi (kể cả tập rỗng) thì raise, không trả tập

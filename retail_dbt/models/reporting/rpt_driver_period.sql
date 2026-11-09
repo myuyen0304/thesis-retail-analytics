@@ -13,7 +13,7 @@ with y as (
     from {{ ref('rpt_revenue_yearly') }}
 ),
 ph as (
-    select phase_code, phase_name, start_year, end_year from {{ ref('ps2_phases') }}
+    select phase_code, phase_name, start_year, end_year from {{ ps2_phases_ky() }}
 ),
 yr as (
     select 'year' as period_type, cast(y.year as varchar(4)) as period_code, ph.phase_code, ph.phase_name,

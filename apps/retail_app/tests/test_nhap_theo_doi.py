@@ -220,6 +220,11 @@ def test_rollback_widget_sends_full_id(tmp_path, monkeypatch):
     app.checkbox[0].check()
     next(item for item in app.button if item.label == 'Rollback').click().run()
     assert not app.exception and sent == [release]
+    # Trang chạy lại sau rollback: báo đúng bản, ô xác nhận bỏ tick, bấm thêm lần nữa không đổi bản
+    assert any(release[:8] in row.value for row in app.success)
+    assert not app.checkbox[0].value
+    next(item for item in app.button if item.label == 'Rollback').click().run()
+    assert sent == [release] and any('Cần xác nhận' in row.value for row in app.warning)
 
 
 @pytest.mark.parametrize('decision', ['approve', 'reject'])

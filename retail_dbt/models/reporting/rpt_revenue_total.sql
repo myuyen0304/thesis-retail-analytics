@@ -4,7 +4,9 @@
 with periods as (
     select '2012-2022' as period_code, 2012 as start_year, 2022 as end_year, false as is_analysis_period
     union all
-    select '2013-2022', 2013, 2022, true
+    select '2013-2022', 2013, 2022, {% if co_dot() %}false
+    union all
+    select '2013-{{ ky_cuoi() }}', 2013, {{ ky_cuoi() }}, true{% else %}true{% endif %}
 ),
 t as (
     select

@@ -10,14 +10,99 @@ from scripts.ingest.source_contract import SOURCES
 if not roles.allowed(roles.current_role(), 'duyet_du_lieu'):
     st.error('Bạn không có quyền xem trang này.')
     st.stop()
-if not nhap_kha_dung():
-    st.info('Chức năng nhập dữ liệu trên bản web đang được phát triển. Hiện chạy ở bản nội bộ.')
+from ui.common import backend
+from ui.kho_dot import configured_store, mode
+from ui.nhap_dot import DotStore
+
+local_available = nhap_kha_dung()
+dot_mode = mode()
+if not local_available and dot_mode == 'tat':
+    if backend() == 'databricks' and roles.current_role() == 'admin':
+        st.info('Công bố dashboard trên bản này cần kho đợt (Volume)')
+    else:
+        st.info('Chức năng nhập dữ liệu trên bản web đang được phát triển. Hiện chạy ở bản nội bộ.')
+    st.stop()
+st.title('Duyệt dữ liệu')
+dots = None
+if dot_mode != 'tat':
+    st.subheader('Đợt dữ liệu')
+    try:
+        dots = DotStore(configured_store())
+        current_user = roles.logged_in_user()
+        if current_user:
+            command = dots.latest_command()
+            for row in dots.visible(current_user['username'], roles.current_role()):
+                with st.expander(f"{row['nhan']} · {dots.label(row, command)} · {row['id']}"):
+                    st.caption(f"{len(row['files'])} file · {sum(f['so_byte'] for f in row['files']) / 1024**2:.2f} MB · {row['ngay_gui']}")
+                    if row.get('release_id'):
+                        st.caption('Bản dữ liệu: ' + row['release_id'][:8])
+                    if row.get('ma_loi'):
+                        st.warning(f"{row['ma_loi']}: {row.get('thong_bao', '')}")
+                    elif row.get('thong_bao'):
+                        st.info(row['thong_bao'])
+                    if row['trang_thai'] == 'loi':
+                        if st.button('Chạy lại', key='dot_retry_' + row['id']):
+                            dots.change(row['id'], 'cho_chay')
+                            st.rerun()
+                        if st.button('Hủy', key='dot_cancel_' + row['id']):
+                            dots.change(row['id'], 'huy')
+                            st.rerun()
+            ledger = dots.ledger()
+            st.subheader('Sổ đợt')
+            st.caption('Chỉ ảnh hưởng lần dựng đợt sau, không đổi dashboard đang hiện.')
+            st.dataframe(pd.DataFrame([{'Thứ tự': r['so'], 'Mã đợt': r['ma_dot'][:8],
+                'Yêu cầu': r.get('request_id', ''), 'Bản': r.get('release_id', '')[:8]} for r in ledger]), hide_index=True)
+            if ledger:
+                with st.form('dot_remove'):
+                    removed = st.selectbox('Đợt cần bỏ', [r['ma_dot'] for r in ledger], format_func=lambda code: code[:8])
+                    reason = st.text_area('Lý do bỏ khỏi sổ (bắt buộc)')
+                    remove = st.form_submit_button('Bỏ khỏi sổ')
+                if remove:
+                    dots.remove_from_ledger(removed, reason)
+                    st.rerun()
+        else:
+            st.info('Cần đăng nhập để duyệt dữ liệu.')
+    except Exception as error:
+        st.error(str(error))
+
+if backend() == 'databricks' and roles.current_role() == 'admin':
+    if dot_mode != 'volume':
+        st.info('Công bố dashboard trên bản này cần kho đợt (Volume)')
+    elif dots is not None:
+        st.subheader('Bản dữ liệu trên dashboard')
+        try:
+            state = nhap_runner.dashboard_state_cloud()
+            command = dots.latest_command()
+            pending = command is not None and command['ket_qua'] is None
+            if pending:
+                st.info('Đang chờ Airflow xử lý lệnh (thường dưới 5 phút)')
+            elif command and command['ket_qua'].get('ket_qua') == 'loi':
+                st.error(command['ket_qua'].get('thong_bao', 'Lệnh dashboard bị lỗi.'))
+            st.caption('Bản dashboard: ' + str(state.get('dashboard') or 'Theo bản số thật'))
+            since = state.get('dashboard_since')
+            if isinstance(since, dict) and since.get('release_id') == state.get('dashboard') and since.get('at'):
+                st.caption('Giờ công bố: ' + str(since['at']))
+            candidates = sorted(key for key, value in state.get('releases', {}).items()
+                                if value.get('status') == 'ready' and value.get('co_du_lieu_tong_hop') is True)
+            if candidates:
+                with st.form('cloud_dashboard_publish'):
+                    chosen = st.selectbox('Bản có đợt', candidates, disabled=pending)
+                    confirmed = st.checkbox('Đây là dữ liệu tổng hợp, chỉ để demo', disabled=pending)
+                    publish = st.form_submit_button('Đưa bản có đợt lên dashboard (demo)', disabled=pending)
+                if publish:
+                    dots.dashboard_command(chosen, confirmed=confirmed)
+                    st.rerun()
+            if state.get('dashboard') and st.button('Trả dashboard về bản số thật', disabled=pending):
+                dots.dashboard_command()
+                st.rerun()
+        except Exception as error:
+            st.error(str(error))
+if not local_available:
     st.stop()
 import yaml
 from scripts.ingest import extension_contract
-st.title('Duyệt dữ liệu')
 st.caption('Chỉ chạy DuckDB local. Công bố tại đây cập nhật kho nhập dữ liệu; kho báo cáo của app giữ cấu hình hiện tại.')
-st.info('Hiện chỉ orders_enriched có model dbt. Phần mở rộng khác dừng ở “Chờ model dbt” sau khi duyệt.')
+st.info('Đã có model dbt cho orders_enriched và shipments_realistic. Phần mở rộng khác cần DE bổ sung model trước khi chạy.')
 store = RequestStore()
 try:
     nhap_runner.recover_queue(store, wait=False)
@@ -168,6 +253,10 @@ def review():
             running_status(latest)
 
     nhap_runner.monitor_page(store, user['username'], roles.current_role(), snapshot, draw=draw_running)
+    if state == 'da_cong_bo':       # đứng trên thong_bao: dòng đó có thể còn của lượt trước
+        notice = nhap_runner.doi_chieu_ban(store, record)
+        if notice:
+            getattr(st, notice[0])(notice[1])
     if record.get('thong_bao'):
         st.text(record['thong_bao'])
     if state in ('da_kiem', 'da_cong_bo'):
@@ -247,23 +336,69 @@ def review():
 
     if roles.current_role() == 'admin':
         st.subheader('Rollback kho nhập dữ liệu')
-        versions = nhap_runner.rollback_options(store)
-        labels = {row['id']: row['label'] for row in nhap_runner.rollback_details(store)}
+        try:
+            versions = nhap_runner.rollback_options(store)
+            labels = {row['id']: row['label'] for row in nhap_runner.rollback_details(store)}
+        except nhap_runner.READ_ERRORS:
+            versions = []
+            st.warning('Chưa đọc được danh sách bản để khôi phục.')
+        if (done := st.session_state.pop('rollback_xong', None)):
+            st.success(f'Đã khôi phục bản dữ liệu local ({done[:8]}).')
         if versions:
-            with st.form('rollback_ui_nhap'):
+            # Mỗi lần rollback xong form mang khóa mới, nên ô xác nhận về trạng thái chưa tick:
+            # bấm thêm một lần không đổi bản tiếp
+            with st.form(f"rollback_ui_nhap_{st.session_state.get('rollback_lan', 0)}"):
                 release_id = st.selectbox('Bản cần khôi phục', versions, format_func=lambda key: labels.get(key, key))
                 confirmed = st.checkbox('Tôi xác nhận khôi phục bản dữ liệu này')
                 run_rollback = st.form_submit_button('Rollback')
             if run_rollback and not confirmed:
                 st.warning('Cần xác nhận trước khi khôi phục bản dữ liệu.')
             if run_rollback and confirmed:
+                result = None
                 try:
                     result = nhap_runner.rollback(store, release_id)
                     if result.returncode:
                         st.error(result.stderr or result.stdout)
-                    else:
-                        st.success('Đã khôi phục bản dữ liệu local.')
                 except Exception as error:
                     st.error(str(error))
+                if result is not None and not result.returncode:
+                    # Chạy lại trang: trạng thái yêu cầu, cảnh báo và danh sách bản ở trên đều được đọc trước khi rollback
+                    st.session_state['rollback_xong'] = release_id
+                    st.session_state['rollback_lan'] = st.session_state.get('rollback_lan', 0) + 1
+                    st.rerun()
 
 review()
+
+
+# Đợt do DAG dựng không cần có yêu cầu nhập UI; khối này không nằm trong review().
+if roles.current_role() == 'admin':
+    from ui.common import backend
+    try:
+        dashboard_root, dashboard_registry = nhap_runner.dashboard_state(store.base, backend())
+    except (OSError, ValueError, KeyError) as error:
+        st.info(str(error) if isinstance(error, ValueError) else 'Chưa đọc được registry của dashboard.')
+    else:
+        st.subheader('Bản dữ liệu trên dashboard')
+        if st.session_state.pop('dashboard_done', False):
+            st.success('Đã cập nhật bản dashboard.')
+        candidates = [key for key, value in dashboard_registry.get('releases', {}).items()
+                      if value.get('status') == 'ready' and value.get('co_du_lieu_tong_hop') is True]
+        action, chosen, confirmed = False, None, False
+        if candidates:
+            with st.form(f"dashboard_publish_{st.session_state.get('dashboard_count', 0)}"):
+                chosen = st.selectbox('Bản có đợt', sorted(candidates))
+                confirmed = st.checkbox('Đây là dữ liệu tổng hợp, chỉ để demo')
+                action = st.form_submit_button('Đưa bản có đợt lên dashboard (demo)')
+        if dashboard_registry.get('dashboard') and st.button('Trả dashboard về bản số thật'):
+            action, chosen = True, None
+        if action:
+            try:
+                outcome = nhap_runner.dashboard_action(store, backend(), chosen, confirmed=confirmed)
+                if outcome.returncode:
+                    st.error(outcome.stderr or outcome.stdout)
+                else:
+                    st.session_state['dashboard_done'] = True
+                    st.session_state['dashboard_count'] = st.session_state.get('dashboard_count', 0) + 1
+                    st.rerun()
+            except (ValueError, PermissionError) as error:
+                st.error(str(error))

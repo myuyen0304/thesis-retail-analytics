@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
+import re
 import sys
 
 import duckdb
@@ -20,6 +21,12 @@ SOURCE_MIN_MARGIN = 0.08     # Điểm gần nhau thì đưa BA quyết, không 
 REDUNDANT_MIN_RATIO = 0.999  # Chấp nhận tối đa 0,1% lệch, vẫn ghi tử số/mẫu số cho BA.
 PHONE_MIN_RATIO = 0.5       # Phải quá nửa số giá trị không rỗng giống điện thoại.
 SAMPLE_LIMIT = 5
+GIA_TRI_LA_HE_SO = 10
+LUAT_SUA_TY_LE = 0.9
+LUAT_SUA_KHOP = 0.99
+THAM_CHIEU_CON = {'promotions': [('order_items', 'promo_id'), ('order_items', 'promo_id_2')],
+                 'products': [('order_items', 'product_id'), ('inventory', 'product_id')],
+                 'customers': [('orders', 'customer_id')]}
 PII_ID_WORDS = frozenset({'name', 'phone', 'email', 'address', 'birth', 'age', 'gender', 'ten', 'sdt'})
 PII_SENSITIVE_WORDS = frozenset({'marital', 'education'})
 PHONE_PATTERN = r'[+0-9 ()-]+'
@@ -213,20 +220,158 @@ def key_conflicts(data, source, data_dir):
         same = ' and '.join(comparisons)
         fk, rk = key_value('f'), key_value('r')
         # LATERAL giữ đúng một dòng cho mỗi bản ghi gửi lên.
-        rows = data.con.execute(f"""
-            select count(*) filter(where a.n = 1),
-                   count(*) filter(where a.n = 1 and {value(key, 'f')} = a.pid),
-                   count(*) filter(where b.n > 0),
-                   count(*) filter(where b.n > 0 and b.identical = 0),
-                   count(*) filter(where a.n = 1 and {value(key, 'f')} <> a.pid)
+        matched = quote(data.table + '_matches')
+        data.con.execute(f"""create temp table {matched} as
+            select {value(key, 'f')} file_id, a.pid source_id, a.n matches,
+                   b.n overlap_count, b.identical identical
             from {quote(data.table)} f,
             lateral (select count(*) n, min({value(key, 'r')}) pid from {quote(ref.table)} r where {same}) a,
             lateral (select count(*) n, count(*) filter(where {same}) identical
                      from {quote(ref.table)} r where {fk} = {rk}) b
-        """).fetchone()
-        return dict(zip(('khop_dung_1', 'khop_va_cung_id', 'id_trung_nguon',
-                         'id_trung_khac_noi_dung', 'danh_lai_khoa'), rows),
-                    da_kiem=True, khoa=key, thuoc_tinh=attrs)
+        """)
+        try:
+            rows = data.con.execute(f"""select
+                count(*) filter(where matches = 1),
+                count(*) filter(where matches = 1 and file_id = source_id),
+                count(*) filter(where overlap_count > 0),
+                count(*) filter(where overlap_count > 0 and identical = 0),
+                count(*) filter(where matches = 1 and file_id <> source_id),
+                count(*) filter(where file_id is null),
+                count(file_id) - count(distinct file_id),
+                count(*) filter(where matches <> 1) from {matched}""").fetchone()
+            mappings = data.con.execute(f'''select file_id, source_id from {matched}
+                where matches = 1 and file_id is distinct from source_id
+                order by source_id, file_id''').fetchall()
+            return dict(zip(('khop_dung_1', 'khop_va_cung_id', 'id_trung_nguon',
+                             'id_trung_khac_noi_dung', 'danh_lai_khoa', 'id_rong',
+                             'id_trung_trong_file', 'khong_khop'), rows),
+                        da_kiem=True, khoa=key, thuoc_tinh=attrs,
+                        anh_xa=[{'id_trong_file': f, 'id_nguon': r} for f, r in mappings])
+        finally:
+            data.con.execute(f'drop table {matched}')
+
+
+def extension_candidate(data, source, conflict, data_dir):
+    """Chỉ đề xuất master tách riêng khi đã kiểm đủ bảng con và không có tham chiếu."""
+    if (source not in THAM_CHIEU_CON or conflict.get('da_kiem') is not True
+            or conflict.get('id_trung_nguon') != 0):
+        return None, []
+    key = KEYS[source][0]
+    names = {normalize(c): c for c in data.columns}
+    raw = _value(names[normalize(key)], 'f')
+    if not data.con.execute(f'select count({raw}) from {quote(data.table)} f').fetchone()[0]:
+        return None, []
+    missing = sorted({name for name, _ in THAM_CHIEU_CON[source]
+                      if not (Path(data_dir) / f'{name}.csv').is_file()})
+    if missing:
+        return None, missing
+    kind = COLUMNS[source][key][0]
+    # Gộp các khóa cùng bảng để một dòng con chỉ đếm một lần.
+    children = {}
+    for name, column in THAM_CHIEU_CON[source]:
+        children.setdefault(name, []).append(column)
+    count = 0
+    for name, columns in children.items():
+        with read_file(Path(data_dir) / f'{name}.csv', con=data.con) as child:
+            child_names = {normalize(c): c for c in child.columns}
+            if any(normalize(col) not in child_names for col in columns):
+                return None, [name]
+            matches = ' or '.join(f'try_cast({_value(child_names[normalize(col)], "c")} as {kind}) '
+                                 f'= try_cast({raw} as {kind})' for col in columns)
+            count += data.con.execute(f'''select count(*) from {quote(child.table)} c where exists
+                (select 1 from {quote(data.table)} f where {matches})''').fetchone()[0]
+    if count:
+        return None, []
+    return {'ten': source + '_ext', 'hien_thi': 'silver', 'id_chung_nguon': 0,
+            'dong_con_tham_chieu': count, 'ban_ghi_giong_nguon': conflict['danh_lai_khoa'],
+            'trang_thai': 'de_xuat'}, []
+
+
+def unusual_values(data, columns, source, data_dir):
+    """Chỉ ghi bằng chứng trên cột khớp, không sửa hoặc loại dòng."""
+    path = Path(data_dir) / f'{source}.csv'
+    reference = read_file(path, con=data.con) if path.is_file() else None
+    result = []
+    try:
+        names = {normalize(c): c for c in reference.columns} if reference else {}
+        for col in columns:
+            if col['loai'] != 'khop':
+                continue
+            name, kind = col['ten_trong_file'], col['kieu_hop_dong']
+            raw = _value(name)
+            typed = f'try_cast({raw} as {kind})'
+            item = {'cot': name}
+
+            def evidence(condition):
+                count = data.con.execute(f'select count(*) from {quote(data.table)} where {condition}').fetchone()[0]
+                samples = data.con.execute(f'select {raw} v from {quote(data.table)} where {condition} '
+                    f'group by 1 order by count(*) desc, v limit {SAMPLE_LIMIT}').fetchall() if count else []
+                return {'so_dong': count, 'mau': [r[0] for r in samples]}
+
+            invalid = evidence(f'{raw} is not null and {typed} is null')
+            if invalid['so_dong']:
+                item['khong_ep_duoc'] = invalid
+            if kind in ('integer', 'double') or kind.startswith('decimal('):
+                ref_col = names.get(normalize(col['cot_hop_dong']))
+                if ref_col is None:
+                    item['chua_kiem_mien'] = True
+                else:
+                    expr = f'try_cast({_value(ref_col)} as {kind})'
+                    low, high = data.con.execute(f'select min({expr}), max({expr}) from {quote(reference.table)}').fetchone()
+                    if low is None or high is None:
+                        item['chua_kiem_mien'] = True
+                    else:
+                        negative = evidence(f'{typed} < 0') if low >= 0 else None
+                        if negative and negative['so_dong']:
+                            item['so_am'] = negative
+                        threshold = high * GIA_TRI_LA_HE_SO
+                        # Tham số SQL tránh chuyển DECIMAL sang float khi so ngưỡng.
+                        count = data.con.execute(f'select count(*) from {quote(data.table)} where {typed} > ?', [threshold]).fetchone()[0]
+                        if count:
+                            samples = data.con.execute(f'select {raw} v from {quote(data.table)} where {typed} > ? '
+                                f'group by 1 order by count(*) desc, v limit {SAMPLE_LIMIT}', [threshold]).fetchall()
+                            item['vuot_nguong'] = {'so_dong': count, 'mau': [r[0] for r in samples],
+                                                  'nguong': str(threshold)}
+            if len(item) > 1:
+                result.append(item)
+    finally:
+        if reference:
+            reference.close()
+    return result
+
+
+def suffix_candidates(data, columns, source, data_dir):
+    """Luật ứng viên có đối chứng; không áp dụng vào bảng đầu vào."""
+    path = Path(data_dir) / f'{source}.csv'
+    if not path.is_file():
+        return []
+    candidates = []
+    pattern = r'\s+(\p{L}+)\s+[0-9]+$'
+    with read_file(path, con=data.con) as ref:
+        names = {normalize(c): c for c in ref.columns}
+        for col in columns:
+            if col['loai'] != 'khop' or col['kieu_hop_dong'] != 'string':
+                continue
+            ref_col = names.get(normalize(col['cot_hop_dong']))
+            if ref_col is None:
+                continue
+            raw = _value(col['ten_trong_file'], 'f')
+            total = data.con.execute(f'select count({raw}) from {quote(data.table)} f').fetchone()[0]
+            groups = data.con.execute(f'''select regexp_extract({raw}, ?, 1) word, count(*) n
+                from {quote(data.table)} f where regexp_matches({raw}, ?) group by 1 order by 1''',
+                [pattern, pattern]).fetchall()
+            for word, count in groups:
+                if count < LUAT_SUA_TY_LE * total:
+                    continue
+                specific = r'\s+' + re.escape(word) + r'\s+[0-9]+$'
+                matches = data.con.execute(f'''select count(*) from {quote(data.table)} f
+                    where regexp_matches({raw}, ?) and exists (select 1 from {quote(ref.table)} r
+                    where regexp_replace({raw}, ?, '') = {_value(ref_col, 'r')})''', [specific, specific]).fetchone()[0]
+                if matches >= LUAT_SUA_KHOP * count:
+                    candidates.append({'cot': col['ten_trong_file'], 'mau': specific, 'so_dong': count,
+                        'tong_khac_rong': total, 'khop_sau_khi_bo': matches,
+                        'trang_thai': 'de_xuat', 'da_ap_dung': False})
+    return candidates
 
 
 def propose(path, data_dir='data'):
@@ -269,6 +414,9 @@ def propose(path, data_dir='data'):
                 else:
                     record['loai'] = 'thuoc_tinh_le'
             columns.append(record)
+        conflict = key_conflicts(data, name, data_dir)
+        extension, missing_children = extension_candidate(data, name, conflict, data_dir)
+        absent = sorted(set(absent) | set(missing_children))
         return {'phien_ban': 1, 'sinh_luc_utc': datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z'),
                 'file': {'ten': data.name, 'sha256': data.sha256, 'dinh_dang': data.format, 'encoding': data.encoding,
                          'co_bom': data.has_bom, 'so_dong': data.n_rows, 'so_cot': len(data.columns)},
@@ -276,7 +424,10 @@ def propose(path, data_dir='data'):
                 'schema_diff': {'loai': diff['kind'], 'doi_thu_tu': diff['order_changed'], 'cot_khop': diff['matched'],
                                 'cot_them': diff['added'], 'cot_thieu': diff['missing'], 'ung_vien_doi_ten': diff['rename_candidates']},
                 'cot': columns, 'thuc_the_moi': entities, 'tham_chieu_thieu': absent,
-                'xung_dot_khoa': key_conflicts(data, name, data_dir)}
+                'xung_dot_khoa': conflict,
+                'nguon_mo_rong_de_xuat': extension,
+                'gia_tri_la': unusual_values(data, columns, name, data_dir),
+                'luat_sua_ung_vien': suffix_candidates(data, columns, name, data_dir)}
 
 
 def _md(value):
@@ -303,7 +454,7 @@ def render_report(body):
         for c in diff['ung_vien_doi_ten']:
             lines.append(f"- Ứng viên {_md(c['ung_vien'])} → {_md(c['cot_thieu'])}: {c['diem']:.4f}; kiểu {c['kieu_suy_duoc']}. Chưa áp dụng.")
         if body['tham_chieu_thieu']:
-            lines.append('- Thiếu file tham chiếu, chưa kiểm được các đường tương ứng: ' + ', '.join(body['tham_chieu_thieu']) + '.')
+            lines.append('- Thiếu file tham chiếu, chưa kiểm được các đường tương ứng: ' + ', '.join(map(_md, body['tham_chieu_thieu'])) + '.')
     lines += ['', '## 3. Nghi PII', '']
     pii = [c for c in cols if c.get('nghi_pii')]
     lines += [f"- {_md(c['ten_trong_file'])}: {_md(c['ly_do_pii'])}." for c in pii] or ['Không phát hiện theo các luật hiện có.']
@@ -346,6 +497,40 @@ def render_report(body):
                   ('khop_dung_1', 'khop_va_cung_id', 'id_trung_nguon', 'id_trung_khac_noi_dung', 'danh_lai_khoa')]
     else:
         lines.append(_md(conflict.get('ly_do', 'Chưa kiểm.')))
+    lines += ['', '## 9. Ánh xạ khóa đề xuất', '']
+    mappings = conflict.get('anh_xa', [])
+    for key in ('id_rong', 'id_trung_trong_file', 'khong_khop'):
+        if key in conflict:
+            lines.append(f'- {key}: {_md(conflict[key])}.')
+    lines.append(f'- {len(mappings)} dòng ánh xạ đề xuất; tối đa 5 dòng đầu bên dưới, bản đầy đủ trong YAML.')
+    if mappings:
+        lines += ['', '| Mã trong file | Mã nguồn |', '|---|---|']
+        lines += [f"| {_md(r['id_trong_file'])} | {_md(r['id_nguon'])} |" for r in mappings[:5]]
+    lines += ['', '## 10. Nguồn mở rộng đề xuất', '']
+    extension = body.get('nguon_mo_rong_de_xuat')
+    if extension:
+        lines += [f'- {_md(key)}: {_md(value)}.' for key, value in extension.items()]
+    else:
+        lines.append('Không có đề xuất nguồn mở rộng.')
+    lines += ['', '## 11. Giá trị lạ', '']
+    for item in body.get('gia_tri_la', []):
+        lines.append(f"- Cột {_md(item['cot'])}:")
+        if item.get('chua_kiem_mien'):
+            lines.append('  - Chưa kiểm miền: không có giá trị tham chiếu dùng được.')
+        for key in ('khong_ep_duoc', 'so_am', 'vuot_nguong'):
+            if key in item:
+                evidence = item[key]
+                threshold = f"; ngưỡng {_md(evidence['nguong'])}" if 'nguong' in evidence else ''
+                lines.append(f"  - {key}: {_md(evidence['so_dong'])} dòng{threshold}; mẫu: "
+                             + '; '.join(map(_md, evidence.get('mau', []))) + '.')
+    if not body.get('gia_tri_la'):
+        lines.append('Không có giá trị lạ theo các phép kiểm đã chạy.')
+    lines += ['', '## 12. Luật sửa ứng viên, chưa áp dụng', '']
+    for rule in body.get('luat_sua_ung_vien', []):
+        lines.append(f"- Cột {_md(rule['cot'])}; mẫu {_md(rule['mau'])}: {_md(rule['so_dong'])}/"
+                     f"{_md(rule['tong_khac_rong'])} dòng khác rỗng; {_md(rule['khop_sau_khi_bo'])} dòng khớp sau khi bỏ đuôi. Chỉ đề xuất.")
+    if not body.get('luat_sua_ung_vien'):
+        lines.append('Không có luật sửa ứng viên đủ bằng chứng.')
     lines += ['', 'Máy chỉ đề xuất; chưa có gì được nạp. Sửa `trang_thai` trong `mapping_de_xuat.yml`.', '']
     return '\n'.join(lines)
 

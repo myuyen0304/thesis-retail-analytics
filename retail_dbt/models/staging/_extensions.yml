@@ -4,3 +4,7 @@ models:
     description: 'Một dòng mỗi đơn được nhận từ phần mở rộng; chứa thuộc tính silver và dấu vết dòng nguồn.'
   - name: dim_sales_employee
     description: 'SCD Type 1, một dòng mỗi nhân viên; chỉ hiện mã, tên và số năm kinh nghiệm đã duyệt.'
+  - name: stg_shipments_realistic
+    description: 'Một dòng mỗi đơn được nhận; giữ đủ 17 thuộc tính shipper và dấu vết nguồn ở staging.'
+  - name: dim_shipper
+    description: 'Type 1, một dòng mỗi shipper_id. Thuộc tính là ảnh chụp hiện tại: join_date sau ship_date ở 91,73% dòng file đầy đủ và 53,18% dòng file nhỏ (số tiền kiểm kỹ thuật của phiếu); không phân tích kinh nghiệm shipper lúc giao. city, region, district thuộc shipper, không phải của đơn.'

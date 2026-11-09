@@ -49,6 +49,10 @@ data_tests:
     description: "PS4/PS5: phần góp theo năm và giai đoạn khớp, cộng về mức đổi R; kéo lên/xuống; hạng nhóm."
   - name: assert_rpt_health
     description: "Sức khỏe dữ liệu: số đếm test, trạng thái chung và log nạp nguồn khớp nhật ký và bảng raw."
+  - name: assert_ky_dot
+    config:
+      enabled: "{{ var('co_dot', false) }}"
+    description: "Bản có đợt: số năm mới khớp sales từng ngày; vùng dự báo chỉ gồm ngày sau số thực tế; kỳ gộp mới bằng cộng các năm; số kỳ gốc giữ nguyên."
   - name: assert_rpt_forecast
     config:
       enabled: "{{ var('forecast_path', '') != '' }}"

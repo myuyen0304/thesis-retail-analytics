@@ -19,7 +19,7 @@ select
           {{ ratio(1, 'p.end_year - p.start_year') }}) - 1         as cagr,
     ms.month_start_date                                            as band_start_date,
     me.month_start_date                                            as band_end_date
-from {{ ref('ps2_phases') }} p
+from {{ ps2_phases_ky('p') }}
 join {{ ref('rpt_revenue_yearly') }} s on s.year = p.start_year
 join {{ ref('rpt_revenue_yearly') }} e on e.year = p.end_year
 join {{ ref('rpt_revenue_monthly') }} ms on ms.year = p.start_year and ms.month = 12

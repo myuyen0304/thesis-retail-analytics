@@ -20,13 +20,131 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'apps/retail_app'))
 from ui import nhap_store as ns, nhap_runner as nr, roles
-from scripts.ingest import auto_mapping, approval
+from scripts.ingest import auto_mapping, approval, extension_contract
 from scripts.ingest.adapters import read_file
 from scripts.ingest.contract_registry import ContractRegistry
 from scripts.pipeline.state import Registry, atomic_json, writer_lock
 from streamlit.testing.v1 import AppTest
 
 REAL_KICK = nr._kick_locked
+
+
+def request_contract(store, record):
+    doc = extension_contract.load(record['ten_mo_rong'])
+    doc['file'] = f"ui_nhap/{record['id']}/{record['ten_file']}"
+    folder = store.folder(record['id']) / 'hop_dong'
+    folder.mkdir(exist_ok=True)
+    (folder / (doc['ten'] + '.yml')).write_text(yaml.safe_dump(doc), encoding='utf-8')
+
+
+def test_b5_real_workers_keep_employee_and_shipper(tmp_path):
+    """Worker/khóa/registry thật; CLI fixture không forecast, chỉ dựng SQL model nhỏ."""
+    import shutil
+    import textwrap
+    base = tmp_path / 'worker-b5'
+    for relative in ('apps/retail_app/ui', 'scripts/ingest', 'scripts/pipeline', 'retail_dbt'):
+        shutil.copytree(ROOT / relative, base / relative,
+                        ignore=shutil.ignore_patterns('__pycache__', 'tests', 'target', 'logs'))
+    helper = base / 'scripts/pipeline/tests/test_shipments_dbt.py'
+    helper.parent.mkdir()
+    helper.write_bytes((ROOT / 'scripts/pipeline/tests/test_shipments_dbt.py').read_bytes())
+    tests = base / 'retail_dbt/tests'
+    tests.mkdir()
+    for name in ('shipments_realistic', 'shipper', 'order_shipper'):
+        (tests / f'assert_{name}.sql').write_bytes((ROOT / f'retail_dbt/tests/assert_{name}.sql').read_bytes())
+    (base / 'apps/retail_app/ui/roles.py').write_text('def store():\n    return None\n', encoding='utf-8')
+    (base / 'scripts/pipeline/cli.py').write_text(textwrap.dedent('''\
+        import argparse, json, hashlib
+        from pathlib import Path
+        import duckdb
+        from scripts.pipeline.state import Registry, atomic_json, writer_lock
+        from scripts.ingest.extension_contract import load
+        from scripts.pipeline.tests.test_shipments_dbt import build_fixture, sql
+        parser = argparse.ArgumentParser()
+        parser.add_argument('stage')
+        for name in ('run-id', 'target', 'root', 'extension-dir'):
+            parser.add_argument('--' + name)
+        parser.add_argument('--extension', action='append', default=[])
+        a = parser.parse_args()
+        assert a.target == 'duckdb'
+        root = Path(a.root)
+        path = root / 'runs' / a.run_id / 'context.json'
+        with writer_lock(root):
+            registry = Registry(root)
+            registry.initialize()
+            if a.stage == 'prepare':
+                for name in a.extension:
+                    doc = load(name, a.extension_dir)
+                    assert (Path('data') / doc['file']).is_file()
+                context = dict(run_id=a.run_id, target='duckdb', extensions=a.extension,
+                    extension_dir=a.extension_dir, release_id=hashlib.sha256(a.run_id.encode()).hexdigest()[:24],
+                    expected_active=registry.read()['payload']['active'], duckdb_path=str(path.parent / 'dbt.duckdb'))
+            else:
+                context = json.loads(path.read_text(encoding='utf-8'))
+            if a.stage == 'build':
+                with duckdb.connect(context['duckdb_path']) as con:
+                    if 'shipments_realistic' in context['extensions']:
+                        assert 'orders_enriched' in context['extensions']
+                        build_fixture(con)
+                    else:
+                        con.execute("create table stg_orders_enriched as select 'E' as sales_employee_id, 'fixture' as sales_employee_name, 2 as years_experience")
+                        con.execute('create table dim_sales_employee as ' + sql('models/marts/dim_sales_employee.sql'))
+            if a.stage == 'validate' and 'shipments_realistic' in context['extensions']:
+                with duckdb.connect(context['duckdb_path']) as con:
+                    for name in ('shipments_realistic', 'shipper', 'order_shipper'):
+                        assert con.execute(sql('tests/assert_' + name + '.sql')).fetchall() == []
+            if a.stage == 'publish':
+                registry.register(dict(release_id=context['release_id'], status='ready', run_id=a.run_id))
+                registry.publish(context['release_id'], context['expected_active'])
+            context['stage'] = {'prepare':'prepared', 'forecast':'forecasted', 'build':'built',
+                                'validate':'validated', 'publish':'published'}[a.stage]
+            atomic_json(path, context)
+        '''), encoding='utf-8')
+    driver = base / 'exercise.py'
+    driver.write_text(textwrap.dedent('''\
+        import io, json, time
+        from pathlib import Path
+        import duckdb, yaml
+        from ui import nhap_store as ns, nhap_runner as nr
+        from scripts.ingest.extension_contract import load
+        store = ns.RequestStore(Path.cwd())
+        records = []
+        for name in ('orders_enriched', 'shipments_realistic'):
+            file = io.BytesIO(b'order_id\\n1\\n')
+            file.name = name + '.csv'
+            r = store.create(file, '', 'manager')
+            doc = load(name)
+            doc['file'] = 'ui_nhap/' + r['id'] + '/' + r['ten_file']
+            folder = store.folder(r['id']) / 'hop_dong'
+            folder.mkdir()
+            (folder / (name + '.yml')).write_text(yaml.safe_dump(doc), encoding='utf-8')
+            r = store.transition(r['id'], r['revision'], 'cho_duyet', 'manager')
+            r = store.transition(r['id'], r['revision'], 'da_duyet', 'he_thong', duong='tu_dong',
+                ten_mo_rong=name, hop_dong={'ten':name, 'phien_ban':1})
+            nr.enqueue(store, r['id'])
+            deadline = time.monotonic() + 60
+            while time.monotonic() < deadline:
+                r = store.read(r['id'])
+                if r['trang_thai'] in ('loi', 'da_cong_bo') and not (store.root / 'active.json').exists():
+                    break
+                time.sleep(0.05)
+            assert r['trang_thai'] == 'da_cong_bo', r.get('thong_bao')
+            records.append(r)
+        state = store.pipeline_state()
+        context = nr.read_context(store, state['releases'][state['active']]['run_id'])
+        with duckdb.connect(context['duckdb_path'], read_only=True) as con:
+            counts = [con.execute('select count(*) from ' + n).fetchone()[0]
+                      for n in ('dim_sales_employee', 'dim_shipper', 'fact_order')]
+        print(json.dumps({'counts': counts, 'extensions': context['extensions'],
+                          'states': [r['trang_thai'] for r in records]}))
+        '''), encoding='utf-8')
+    result = subprocess.run([sys.executable, '-B', str(driver)], cwd=base, capture_output=True,
+        text=True, encoding='utf-8', timeout=150,
+        env={**os.environ, 'PYTHONUTF8': '1', 'PYTHONDONTWRITEBYTECODE': '1',
+             'PYTHONPATH': os.pathsep.join([str(base), str(base / 'apps/retail_app')])})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout) == {'counts': [1, 2, 4],
+        'extensions': ['orders_enriched', 'shipments_realistic'], 'states': ['da_cong_bo', 'da_cong_bo']}
 
 
 def upload(header, bonus='1'):
@@ -178,6 +296,7 @@ def test_queue_runs_second_after_first_finishes(tmp_path, monkeypatch):
         record = store.transition(record['id'], record['revision'], 'da_duyet', 'he_thong',
                                   duong='tu_dong', ten_mo_rong='orders_enriched',
                                   hop_dong={'ten': 'orders_enriched', 'phien_ban': 1, 'sha256': 'a' * 64})
+        request_contract(store, record)
         records.append(record)
         nr.enqueue(store, record['id'])
     assert store.read(records[0]['id'])['trang_thai'] == 'dang_chay'
@@ -205,6 +324,7 @@ def test_dead_worker_recovery_starts_next_queued(tmp_path, monkeypatch):
         record = store.transition(record['id'], record['revision'], 'da_duyet', 'he_thong',
                                   duong='tu_dong', ten_mo_rong='orders_enriched',
                                   hop_dong={'ten': 'orders_enriched', 'phien_ban': 1, 'sha256': 'a' * 64})
+        request_contract(store, record)
         items.append(record)
         nr.enqueue(store, record['id'])
     monkeypatch.setattr(nr, '_pid_alive', lambda pid: False)
@@ -568,6 +688,7 @@ def test_manual_rerun_of_auto_request_waits_for_admin(tmp_path, monkeypatch, ini
     events = runner_setup(store, monkeypatch)
     record = store.create(upload(['order_id']), '', 'manager')
     record.update(trang_thai=initial, duong='tu_dong', ten_mo_rong='orders_enriched')
+    request_contract(store, record)
     store.save(record)
     running = nr.start(store, record['id'], record['revision'])
     result = nr.run_worker(store, record['id'], running['run_id'])
@@ -579,6 +700,7 @@ def queued_record(store, state='da_duyet', route='tu_dong'):
     record = store.create(upload(['order_id']), '', 'manager')
     record.update(trang_thai=state, duong=route, ten_mo_rong='orders_enriched',
                   hop_dong={'ten': 'orders_enriched', 'phien_ban': 1})
+    request_contract(store, record)
     return store.save(record)
 
 
@@ -1333,7 +1455,9 @@ def test_failed_backfill_reviewed_manually_can_start(context, monkeypatch):
     failed = nr.run_worker(store, record['id'], record['run_id'])
     assert failed['trang_thai'] == 'loi' and not store.queue_files()
     reviewed = store.retry_review(record['id'], failed['revision'], 'Kiểm lại file')
-    monkeypatch.setattr(approval, 'hop_dong_tu_de_xuat', lambda *a, **kw: doc)
+    approved_doc = deepcopy(doc)
+    approved_doc['file'] = f"ui_nhap/{record['id']}/{record['ten_file']}"
+    monkeypatch.setattr(approval, 'hop_dong_tu_de_xuat', lambda *a, **kw: approved_doc)
     approved = store.approve(record['id'], reviewed['revision'], {}, 'orders_enriched')
     assert approved['trang_thai'] == 'da_duyet' and approved['duong'] == 'tay'
     assert approved['nap_bu_tu'] == record['nap_bu_tu']
@@ -1733,7 +1857,8 @@ def test_real_workers_finish_three_requests_fifo_with_fake_cli(tmp_path, repeat)
         '''), encoding='utf-8')
     driver = base / 'exercise.py'
     driver.write_text(textwrap.dedent('''\
-        import io, json, time
+        import io, json, time, yaml
+        from scripts.ingest import extension_contract
         from pathlib import Path
         from ui import nhap_store as ns, nhap_runner as nr
         store = ns.RequestStore(Path.cwd())
@@ -1746,6 +1871,11 @@ def test_real_workers_finish_three_requests_fifo_with_fake_cli(tmp_path, repeat)
             record = store.transition(record['id'], record['revision'], 'da_duyet', 'he_thong',
                 duong='tu_dong', ten_mo_rong='orders_enriched',
                 hop_dong={'ten': 'orders_enriched', 'phien_ban': 1})
+            doc = extension_contract.load('orders_enriched')
+            doc['file'] = f"ui_nhap/{record['id']}/{record['ten_file']}"
+            folder = store.folder(record['id']) / 'hop_dong'
+            folder.mkdir()
+            (folder / 'orders_enriched.yml').write_text(yaml.safe_dump(doc), encoding='utf-8')
             ids.append(record['id'])
             nr.enqueue(store, record['id'])
         deadline = time.monotonic() + 60

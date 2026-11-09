@@ -8,7 +8,7 @@ actual as (
            max(cast(cogs as {{ type_double() }}) / cast(revenue as {{ type_double() }})) as ratio_hi,
            sum(case when date_sk between 20220801 and 20220831 then cast(revenue as {{ type_double() }}) end) as g_aug_2022
     from {{ ref('fact_daily_sales') }}
-    where is_actual
+    where is_actual{% if co_dot() %} and date_sk <= {{ var('forecast_trained_through') | replace('-', '') }}{% endif %}
 ),
 -- Luật chọn (hợp đồng §5) tính lại từ mae_g, mae_cogs; ngưỡng hòa 1% khớp TIE trong scripts/forecast/core.py
 s as (

@@ -36,18 +36,28 @@ class PublishedStateError(RuntimeError):
         super().__init__('Dữ liệu đã công bố nhưng chưa ghi được trạng thái yêu cầu. ' + str(error))
 
 
-def lenh(stage, run_id, ten, extension_dir):
+def _extension_names(names):
+    if isinstance(names, str):
+        names = [names]
+    if (not isinstance(names, (list, tuple)) or not names
+            or any(not isinstance(n, str) or not re.fullmatch(r'[a-z][a-z0-9_]*', n) for n in names)):
+        raise ValueError('Tên phần mở rộng không hợp lệ.')
+    return sorted(set(names))
+
+
+def lenh(stage, run_id, names, extension_dir):
     if stage not in (*STAGES, 'publish') or not re.fullmatch(r'ui-[A-Za-z0-9_-]+', run_id):
         raise ValueError('Stage hoặc run_id không hợp lệ.')
-    if not re.fullmatch(r'[a-z][a-z0-9_]*', ten):
-        raise ValueError('Tên phần mở rộng không hợp lệ.')
+    names = _extension_names(names)
     # Giới hạn này phải còn đúng ngay cả khi hằng số bị thay đổi nhầm.
     if PIPELINE_ROOT != 'warehouse/pipeline/ui-nhap':
         raise ValueError('Root nhập dữ liệu không hợp lệ.')
     cmd = [sys.executable, '-m', 'scripts.pipeline.cli', stage, '--run-id', run_id,
            '--target', 'duckdb', '--root', PIPELINE_ROOT]
     if stage == 'prepare':
-        cmd += ['--extension', ten, '--extension-dir', str(Path(extension_dir).resolve())]
+        for name in names:
+            cmd += ['--extension', name]
+        cmd += ['--extension-dir', str(Path(extension_dir).resolve())]
     return cmd
 
 
@@ -208,6 +218,97 @@ def queue_position(store, request_id):
     return None
 
 
+def _active_context(store):
+    """(mã bản đang xem, context của bản đó); chưa có bản đang xem thì (None, None). Chỉ đọc."""
+    state = store.pipeline_state()
+    active = state.get('active')
+    if not active:
+        return None, None
+    release = state['releases'][active]
+    context = read_context(store, release['run_id'])
+    if context['release_id'] != active or context['target'] != 'duckdb':
+        raise ValueError('Context active không khớp bản đang phục vụ.')
+    if not isinstance(context.get('extensions', []), list):
+        raise ValueError('Danh sách phần mở rộng của active không hợp lệ.')
+    return active, context
+
+
+def active_extensions(store):
+    """(mã bản đang xem, tập nguồn mở rộng của bản đó). Chỉ đọc; dữ liệu hỏng thì để lỗi."""
+    active, context = _active_context(store)
+    return active, set(context.get('extensions', [])) if active else set()
+
+
+def published_release(store, record):
+    """Bản mà số trong tóm tắt của yêu cầu thuộc về; chưa công bố lần nào thì None. Chỉ đọc."""
+    path = store.folder(record['id']) / 'chay/published.context.json'
+    if not path.exists():
+        return None
+    release = read_json(path)['release_id']
+    if not isinstance(release, str):
+        raise ValueError('release_id không hợp lệ.')
+    return release
+
+
+READ_ERRORS = (OSError, ValueError, KeyError, TypeError, AttributeError)
+
+
+def doi_chieu_ban(store, record):
+    """Câu báo cho trang Duyệt khi số của yêu cầu không phải bản đang xem: (kiểu st, câu) hoặc None. Chỉ đọc."""
+    try:
+        published = published_release(store, record)
+        if published is None:
+            return None
+        active, names = active_extensions(store)
+    except READ_ERRORS:
+        return 'warning', 'Chưa đối chiếu được với bản đang xem.'
+    if active is None:
+        return 'warning', 'Kho chưa có bản đang xem.'
+    if published == active:
+        return None
+    x, y = published[:8], active[:8]
+    if record.get('ten_mo_rong') in names:
+        return 'info', f'Số dưới đây là của bản {x}. Bản đang xem là {y}, vẫn có nguồn này.'
+    return 'warning', f'Số dưới đây là của bản {x}, không phải bản đang xem ({y}). Nguồn này hiện không có trong bản đang xem.'
+
+
+def nguon_dang_dung(store):
+    """(mã bản đang xem, tập nguồn) cho trang Gửi; đọc lỗi thì None. Chỉ đọc."""
+    try:
+        return active_extensions(store)
+    except READ_ERRORS:
+        return None
+
+
+def _extensions_for_run(store, record):
+    """Đọc bộ active cho lượt mới; chưa ghi gì vào hợp đồng của yêu cầu hay lượt cũ."""
+    from scripts.ingest import extension_contract
+    own = _extension_names([record['ten_mo_rong']])[0]
+    request_directory = store.folder(record['id']) / 'hop_dong'
+    try:
+        active, context = _active_context(store)
+        names = [own]
+        directory = None
+        if active:
+            names = _extension_names([own, *context.get('extensions', [])])
+            if set(names) != {own}:
+                if not context.get('extension_dir'):
+                    raise ValueError('Context active thiếu extension_dir.')
+                directory = Path(context['extension_dir'])
+                if not directory.is_absolute():
+                    directory = store.base / directory
+        copies = {}
+        for name in names:
+            source = request_directory if name == own else directory
+            doc = extension_contract.load(name, source)
+            if not (store.base / 'data' / doc['file']).is_file():
+                raise ValueError(f'{name}: thiếu file dữ liệu của phần mở rộng.')
+            copies[name] = (source / (name + '.yml')).read_bytes()
+        return names, copies
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ValueError('Không giữ được bộ phần mở rộng đang phục vụ: ' + str(error)) from error
+
+
 def _start_locked(store, request_id, revision, username, audit=None):
     """Gọi khi đã giữ dispatch; khởi động nội bộ không cần phiên đăng nhập."""
 
@@ -216,6 +317,18 @@ def _start_locked(store, request_id, revision, username, audit=None):
             raise ValueError('Trạng thái đã đổi; yêu cầu chưa thể chạy.')
         if not has_dbt_model(record['ten_mo_rong'], store.base / 'retail_dbt/models'):
             raise ValueError('Cần DE viết model dbt trước khi chạy.')
+        try:
+            names, contracts = _extensions_for_run(store, record)
+        except ValueError as error:
+            try:
+                if record['trang_thai'] == 'loi':
+                    record['thong_bao'] = str(error)
+                    store.save(record)
+                else:
+                    store.change(record, 'loi', username, str(error), thong_bao=str(error))
+            except Exception as write_error:
+                raise StartWriteError('Không ghi được lỗi chuẩn bị bộ phần mở rộng: ' + str(write_error)) from write_error
+            raise WorkerStartError(str(error)) from error
         run_number = record.get('lan_chay', 0) + 1
         run_id = f'ui-{request_id}-{run_number}'
         folder = store.folder(request_id) / 'chay'
@@ -233,10 +346,17 @@ def _start_locked(store, request_id, revision, username, audit=None):
             active = store.root / 'active.json'
             atomic_json(active, {'id': request_id, 'run_id': run_id, 'started_at': time.time()})
             store.change(record, 'dang_chay', username, run_id=run_id, lan_chay=run_number,
-                         truoc_chay=before, bat_dau=utc(), stage='prepare', thong_bao='', nguoi_chay=username)
+                         truoc_chay=before, bat_dau=utc(), stage='prepare', thong_bao='', nguoi_chay=username,
+                         mo_rong_chay=names)
             options = {'creationflags': subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS} if os.name == 'nt' else {'start_new_session': True}
             process = None
             try:
+                # lan_chay đã ghi: nếu chép lỗi, lần thử sau có run_id mới; không ghi đè lượt cũ.
+                contract_directory = folder / run_id / 'hop_dong'
+                contract_directory.mkdir(parents=True, exist_ok=False)
+                for name, content in contracts.items():
+                    with (contract_directory / (name + '.yml')).open('xb') as contract_file:
+                        contract_file.write(content)
                 with (folder / f'{run_id}.log').open('ab') as output:
                     process = subprocess.Popen([sys.executable, '-m', 'apps.retail_app.ui.nhap_runner', request_id, run_id],
                         cwd=store.base, env={**os.environ, 'PYTHONUTF8': '1'}, stdin=subprocess.DEVNULL,
@@ -382,7 +502,8 @@ def _enqueue_locked(store, request_id, *, kick=True):
 
 
 def _stage(store, record, stage, output):
-    cmd = lenh(stage, record['run_id'], record['ten_mo_rong'], store.folder(record['id']) / 'hop_dong')
+    cmd = lenh(stage, record['run_id'], record.get('mo_rong_chay', [record['ten_mo_rong']]),
+               store.folder(record['id']) / 'chay' / record['run_id'] / 'hop_dong')
     options = {'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}
     result = subprocess.run(cmd, cwd=store.base, env={**os.environ, 'PYTHONUTF8': '1'},
                             stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT, timeout=3600, **options)
@@ -531,7 +652,7 @@ def rollback_details(store):
     requests = store.release_requests()
     result = []
     for key, value in state.get('releases', {}).items():
-        if not re.fullmatch(r'[a-f0-9]{24}', key) or value.get('status') != 'ready' or key == state.get('active'):
+        if not re.fullmatch(r'[a-f0-9]{24}', key) or value.get('status') != 'ready' or key == state.get('active') or value.get('co_du_lieu_tong_hop'):
             continue
         found = requests.get(key, {})
         row = found.get('record', {})
@@ -636,7 +757,8 @@ def summary(store, record):
     if context['stage'] == 'skipped':
         context = read_json(store.folder(record['id']) / 'chay/published.context.json')
     result = {k: context.get(k) for k in ('release_id', 'snapshot_id', 'so_dong_cach_ly', 'quality')}
-    if record['ten_mo_rong'] == 'orders_enriched' and context['stage'] in ('validated', 'published'):
+    extensions = context.get('extensions', record.get('mo_rong_chay', [record['ten_mo_rong']]))
+    if context['stage'] in ('validated', 'published') and extensions:
         import duckdb
         rid = context['release_id']
         if not re.fullmatch(r'[a-f0-9]{24}', rid):
@@ -645,14 +767,65 @@ def summary(store, record):
         if Path(context['duckdb_path']).resolve() != expected.resolve():
             raise ValueError('Đường dẫn kho không thuộc lượt nhập này.')
         with duckdb.connect(str(expected), read_only=True) as con:
-            result['dim_sales_employee'] = con.execute(f'select count(*) from r_{rid}_marts.dim_sales_employee').fetchone()[0]
-            result['orders_with_employee'] = con.execute(
-                f'select count(*) from r_{rid}_marts.fact_order where sales_employee_sk is not null').fetchone()[0]
+            for name, dimension, key, count_key in (
+                ('orders_enriched', 'dim_sales_employee', 'sales_employee_sk', 'orders_with_employee'),
+                ('shipments_realistic', 'dim_shipper', 'shipper_sk', 'orders_with_shipper'),
+            ):
+                if name in extensions:
+                    result[dimension] = con.execute(f'select count(*) from r_{rid}_marts.{dimension}').fetchone()[0]
+                    result[count_key] = con.execute(
+                        f'select count(*) from r_{rid}_marts.fact_order where {key} is not null').fetchone()[0]
     return result
 
 
 def elapsed(record):
     return max(0, int((datetime.now(timezone.utc) - datetime.fromisoformat(record['bat_dau'])).total_seconds()))
+
+
+def dashboard_state(base, backend):
+    """Hai nút demo dùng đúng registry của dashboard, không dùng root nhập dữ liệu."""
+    from dwh import releases
+    if not releases.enabled(backend):
+        raise ValueError('Công bố dashboard cần chế độ versioned.')
+    if backend != 'duckdb':
+        raise ValueError('Công bố dashboard hiện chỉ hỗ trợ DuckDB local.')
+    path = (Path(base) / os.getenv('RETAIL_RELEASE_STATE', 'warehouse/pipeline/state.json')).resolve()
+    if not path.is_file():
+        raise ValueError('Chưa có file registry của dashboard.')
+    return path.parent, read_json(path)['payload']
+
+
+def dashboard_action(store, backend, release_id=None, *, confirmed=False):
+    from ui import roles
+    if roles.current_role() != 'admin':
+        raise PermissionError('Chỉ Admin được đổi bản dashboard.')
+    username, audit = actor('cong_bo')
+    root, state = dashboard_state(store.base, backend)
+    command = [sys.executable, '-m', 'scripts.pipeline.cli']
+    run_id = 'ui-dashboard-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+    if release_id is not None:
+        if not confirmed:
+            raise ValueError('Cần xác nhận dữ liệu tổng hợp, chỉ để demo.')
+        record = state['releases'].get(release_id, {})
+        if record.get('status') != 'ready' or record.get('co_du_lieu_tong_hop') is not True:
+            raise ValueError('Bản tổng hợp chưa đạt quality gate.')
+        command += ['dat-dashboard', '--run-id', run_id, '--release-id', release_id, '--xac-nhan-tong-hop']
+    else:
+        command += ['tra-dashboard', '--run-id', run_id]
+    command += ['--target', 'duckdb', '--root', str(root)]
+    audit.log(username, 'dashboard_publish' if release_id else 'dashboard_clear', {'release_id': release_id})
+    return subprocess.run(command, cwd=store.base, capture_output=True, text=True, timeout=3600,
+                          env={**os.environ, 'PYTHONUTF8': '1'})
+
+
+def dashboard_state_cloud():
+    """Đọc registry bằng kết nối chỉ đọc của app; không dùng khóa ghi Volume."""
+    from dwh.connection import _fetch_databricks
+    from dwh.releases import CONTROL_RELATION
+    _, rows = _fetch_databricks(f"select payload from {CONTROL_RELATION} where name = 'main'", resolve_release=False)
+    if len(rows) != 1:
+        raise ValueError('Registry phải có đúng một dòng main')
+    return json.loads(rows[0][0])
 
 
 if __name__ == '__main__':

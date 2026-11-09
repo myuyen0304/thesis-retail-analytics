@@ -24,7 +24,7 @@ select
     year,
     month,
     days_in_month,
-    year between 2013 and 2022                                  as is_analysis_period,   -- 2012 chỉ có nửa năm
+    year between 2013 and {{ ky_cuoi() }}                                  as is_analysis_period,   -- 2012 chỉ có nửa năm
     mod(year, 2) = 1                                            as is_odd_year,
     g, r, cancelled_gross, returned_gross, undelivered_gross, delivered_discount,
     n, q, c,

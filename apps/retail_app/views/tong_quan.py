@@ -1,7 +1,7 @@
 import altair as alt
 import streamlit as st
 
-from ui.common import GIOI_HAN_CHUNG, kpi_revenue, load_or_stop, need, notes, page_header
+from ui.common import GIOI_HAN_CHUNG, kpi_revenue, load_or_stop, need, notes, page_header, period_label
 from ui.fmt import AXIS_TY, num, pct, ty
 
 page_header('Tổng quan doanh thu', 'Công ty bán được bao nhiêu, và thực nhận bao nhiêu?')
@@ -9,12 +9,11 @@ page_header('Tổng quan doanh thu', 'Công ty bán được bao nhiêu, và th�
 total = load_or_stop('revenue_total').set_index('period_code')
 yearly = load_or_stop('revenue_yearly')
 # kỳ toàn bộ dữ liệu (số của deck slide 4), dùng ở phần Cách đọc
-deck = need(total[~total['is_analysis_period']], 'revenue_total', 'của kỳ toàn bộ dữ liệu').iloc[0]
+deck = need(total[total.index == '2012-2022'], 'revenue_total', 'của kỳ toàn bộ dữ liệu').iloc[0]
 
 # --- Thẻ KPI: toàn bộ dữ liệu (số của deck slide 4) và kỳ phân tích ---
 for code, row in total.iterrows():
-    kind = 'kỳ phân tích' if row['is_analysis_period'] else 'toàn bộ dữ liệu'
-    st.markdown(f'**{row["start_year"]}–{row["end_year"]} ({kind})**')
+    st.markdown('**' + period_label(code, 'total', row['is_analysis_period']) + '**')
     kpi_revenue(row)
 
 # --- R và G theo năm ---

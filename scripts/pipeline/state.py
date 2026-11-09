@@ -106,6 +106,8 @@ class Registry:
         state = before['payload']
         if rid not in state['releases'] or state['releases'][rid]['status'] != 'ready':
             raise ValueError('Bản chưa đạt quality gate')
+        if state['releases'][rid].get('co_du_lieu_tong_hop'):
+            raise ValueError('Bản tổng hợp chỉ được công bố lên dashboard')
         if state['active'] == rid:
             return  # Retry sau khi commit thành công nhưng mất ACK.
         if state['active'] != expected:
@@ -116,3 +118,32 @@ class Registry:
         state['active_since'] = {'release_id': rid,
                                  'at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
         self.save(before, state)
+
+
+    def publish_dashboard(self, rid, expected):
+        """Chỉ Admin qua app hoặc người vận hành CLI xác nhận mới gọi đường này."""
+        before = self.read()
+        state = before['payload']
+        record = state['releases'].get(rid, {})
+        if record.get('status') != 'ready' or record.get('co_du_lieu_tong_hop') is not True:
+            raise ValueError('Dashboard chỉ nhận bản tổng hợp đã đạt quality gate')
+        if state.get('dashboard') != expected:
+            raise RuntimeError('Con trỏ dashboard đã đổi; không ghi đè')
+        if state.get('dashboard') == rid:
+            return
+        state['dashboard'] = rid
+        state['dashboard_since'] = {'release_id': rid,
+                                   'at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
+        self.save(before, state)
+
+    def clear_dashboard(self, expected):
+        before = self.read()
+        state = before['payload']
+        if state.get('dashboard') != expected:
+            raise RuntimeError('Con trỏ dashboard đã đổi; không ghi đè')
+        if 'dashboard' not in state and 'dashboard_since' not in state:
+            return False
+        state.pop('dashboard', None)
+        state.pop('dashboard_since', None)
+        self.save(before, state)
+        return True
