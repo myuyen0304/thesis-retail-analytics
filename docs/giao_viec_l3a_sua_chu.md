@@ -41,3 +41,14 @@ Báo: danh sách file, `git status --short`, `git diff --stat`, số test trư�
 Claude sẽ thử đột biến: áp nhãn mới cho bản không cờ; áp cho mã khác hai mã trên; bỏ `_d` ở từng nhánh.
 
 ## 5. Rà của Claude (Claude ghi, GPT đọc để sửa)
+
+**Lượt 1, 2026-11-09: đạt, không cần sửa.** Claude tự chạy lại: `test_d5_dashboard` 35, `test_l1_dot_web` 139, `test_snapshot_dot` 37, `test_l2_dot_cloud` 11, đều đạt.
+
+Làm khác phiếu, PM đã duyệt: sửa thêm kỳ vọng T6 ở `test_d5_dashboard.py:124`. Phiếu §3 bỏ sót dòng này.
+
+Đột biến: bắt 6/9. Ba ca sống, chấp nhận theo nguyên tắc chỉ chặn lỗi ảnh hưởng thật:
+- áp nhãn mới cho mọi mã kỳ loại `total`: chưa có ca kiểm mã khác hai mã trên;
+- bỏ `not is_analysis`: điều kiện có từ trước L3a, chưa có ca kiểm bản cờ tổng hợp với kỳ phân tích;
+- câu lỗi ở `cli.py:599`: test chỉ kiểm mã thoát, không kiểm chữ.
+
+`test_m1.py` trượt 10/17 ở worktree này, và cũng trượt 10/17 trên bản `HEAD` chưa có L3a, nên không do L3a. Claude chưa tra nguyên nhân. Nhãn của bản không cờ đã có `test_d5_dashboard.py:154` kiểm.
