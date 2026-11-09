@@ -8,55 +8,17 @@ from uuid import uuid4
 from ui import roles
 from ui.nhap_store import actor, safe_filename
 from ui.kho_dot import KhongCo, TrangThaiDaDoi, sequence_names, relative_path
+from ui.trang_thai_dot import TRANSITIONS_DOT, ID_PATTERN, request_path, phat_lai
 
-TRANSITIONS_DOT = {
-    'da_gui': {'dang_kiem', 'loi_file'},
-    'dang_kiem': {'cho_chay', 'sai_hop_dong', 'het_cho'},
-    'het_cho': {'cho_chay'}, 'cho_chay': {'dang_chay'},
-    'dang_chay': {'da_kiem', 'loi'}, 'loi': {'cho_chay', 'huy'},
-    'da_kiem': {'tren_dashboard'}, 'tren_dashboard': {'da_tra'},
-    'da_tra': set(), 'sai_hop_dong': set(), 'loi_file': set(), 'huy': set(),
-}
 LABELS_DOT = dict(zip(
     ('da_gui', 'dang_kiem', 'cho_chay', 'dang_chay', 'da_kiem', 'cho_dashboard', 'tren_dashboard',
      'da_tra', 'sai_hop_dong', 'loi_file', 'het_cho', 'loi', 'huy', 'hong'),
     ('Đã gửi', 'Đang kiểm tra file', 'Chờ chạy', 'Đang chạy', 'Đã kiểm tra', 'Chờ đưa lên dashboard',
      'Đang trên dashboard', 'Đã trả dashboard', 'Sai hợp đồng dữ liệu', 'Không đọc được file',
      'Hết chỗ lưu trữ', 'Lỗi khi chạy', 'Đã hủy', 'Dữ liệu trạng thái hỏng')))
-ID_PATTERN = re.compile(r'[0-9]{8}T[0-9]{6}Z_[a-f0-9]{6}_dot')
 MAX_FILE_BYTES = 200 * 1024 * 1024
 MAX_TOTAL_BYTES = 100 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
-
-
-def request_path(request_id):
-    if not isinstance(request_id, str) or not ID_PATTERN.fullmatch(request_id):
-        raise ValueError('Mã yêu cầu đợt không hợp lệ.')
-    return 'yeu_cau/' + request_id
-
-
-def phat_lai(su_kien):
-    """Nhận các cặp (số thứ tự, sự kiện); hỏng một bước thì không cho thao tác."""
-    result = {'trang_thai': 'hong', 'lich_su': []}
-    state = None
-    try:
-        for expected, (number, event) in enumerate(su_kien, 1):
-            if number != expected:
-                raise ValueError('Số thứ tự sự kiện không liền nhau từ 1.')
-            target = event['toi']
-            if (state is None and target != 'da_gui') or (state is not None and target not in TRANSITIONS_DOT[state]):
-                raise ValueError('Bước chuyển trạng thái không hợp lệ.')
-            state = target
-            result['lich_su'].append(event)
-            for key in ('release_id', 'ma_loi', 'thong_bao'):
-                if key in event:
-                    result[key] = event[key]
-        if state is None:
-            raise ValueError('Chưa có sự kiện đầu tiên.')
-        result['trang_thai'] = state
-    except (KeyError, TypeError, ValueError) as error:
-        result.update(trang_thai='hong', thong_bao='Dữ liệu trạng thái hỏng: ' + str(error))
-    return result
 
 
 class DotStore:
@@ -166,16 +128,28 @@ class DotStore:
         if not names:
             return None
         name = names[-1]
-        command = dict(self._json('lenh/' + name), so=int(name[:-5]))
+        command = {'so': int(name[:-5])}
+        broken = {'ket_qua': 'loi', 'thong_bao': 'Dữ liệu lệnh hỏng; báo kỹ sư dữ liệu.'}
         try:
-            command['ket_qua'] = self._json('lenh/' + name[:-5] + '.ket_qua.json')
-        except KhongCo:
-            command['ket_qua'] = None
+            body = self._json('lenh/' + name)
+            if not isinstance(body, dict) or body.get('loai') not in ('dat', 'tra'):
+                raise ValueError('Lệnh không hợp lệ.')
+            command.update(body)
+            command['so'] = int(name[:-5])
+            try:
+                result = self._json('lenh/' + name[:-5] + '.ket_qua.json')
+                if not isinstance(result, dict) or result.get('ket_qua') not in ('dat', 'loi'):
+                    raise ValueError('Kết quả lệnh không hợp lệ.')
+                command['ket_qua'] = result
+            except KhongCo:
+                command['ket_qua'] = None
+        except (ValueError, TypeError, KeyError, KhongCo, OSError):
+            command['ket_qua'] = broken
         return command
 
     def label(self, row, command):
         pending = (row['trang_thai'] == 'da_kiem' and command and command['ket_qua'] is None
-                   and command['loai'] == 'dat' and command.get('request_id') == row['id'])
+                   and command.get('loai') == 'dat' and command.get('request_id') == row['id'])
         return LABELS_DOT['cho_dashboard' if pending else row['trang_thai']]
 
     def dashboard_command(self, release_id=None, *, confirmed=False):
@@ -203,15 +177,18 @@ class DotStore:
 
     def ledger(self):
         rows = {}
-        for name in sequence_names(self.kho.liet_ke('so_dot')):
-            event = self._json('so_dot/' + name)
-            if event['loai'] == 'vao_so':
-                rows[event['ma_dot']] = dict(event, so=int(name[:-5]))
-            elif event['loai'] == 'bo':
-                rows.pop(event['ma_dot'], None)
-            else:
-                raise ValueError('Sổ đợt có sự kiện không hợp lệ.')
-        return sorted(rows.values(), key=lambda row: row['so'])
+        try:
+            for name in sequence_names(self.kho.liet_ke('so_dot')):
+                event = self._json('so_dot/' + name)
+                if event['loai'] == 'vao_so':
+                    rows[event['ma_dot']] = dict(event, so=int(name[:-5]))
+                elif event['loai'] == 'bo':
+                    rows.pop(event['ma_dot'], None)
+                else:
+                    raise ValueError('Sự kiện không hợp lệ.')
+            return sorted(rows.values(), key=lambda row: row['so'])
+        except (ValueError, KeyError, TypeError, KhongCo, OSError) as error:
+            raise ValueError('Sổ đợt hỏng; báo kỹ sư dữ liệu.') from error
 
     def remove_from_ledger(self, ma_dot, reason):
         username, audit = actor('duyet')
