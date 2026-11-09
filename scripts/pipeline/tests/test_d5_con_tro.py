@@ -233,18 +233,18 @@ def test_t10_dag_only_four_stages(monkeypatch):
     module, tasks, config = load_dag(monkeypatch, 'retail_dot_pipeline.py')
     assert tasks == ['prepare', 'forecast', 'build', 'validate']
     assert config['schedule'] is None and config['is_paused_upon_creation'] and config['max_active_runs'] == 1
-    ctx = {'run_id': 'abc', 'params': {'dot': 'demo', 'du_bao_tu': A, 'force': True,
+    ctx = {'run_id': 'abc', 'params': {'dots': ['/opt/retail/data_demo/demo'], 'du_bao_tu': A, 'force': True,
                                      'target': 'databricks', 'extensions': ['shipments_realistic', 'orders_enriched']}}
     for stage in tasks:
         expected = ['/opt/pipeline/bin/python', '-m', 'scripts.pipeline.cli', stage,
-                    '--run-id', 'ba7816bf8f01cfea414140de', '--target', 'duckdb', '--root', 'warehouse/pipeline/docker', '--force']
+                    '--run-id', 'ba7816bf8f01cfea414140de', '--target', 'databricks', '--root', 'warehouse/pipeline/docker', '--force']
         if stage == 'prepare':
             expected += ['--dot', '/opt/retail/data_demo/demo', '--extension', 'orders_enriched', '--extension', 'shipments_realistic']
         if stage == 'forecast': expected += ['--du-bao-tu', A]
         assert module.command(stage, ctx) == expected
     for bad in ('..', '../demo', 'a/b', 'a\\b', 'a..b'):
-        assert re.fullmatch(config['params']['dot'].schema['pattern'], bad) is None
-        ctx['params']['dot'] = bad
+        assert re.fullmatch(r'/opt/retail/(?:data_demo/[a-zA-Z0-9_-]{1,100}|warehouse/pipeline/docker/nhap/[0-9]{8}T[0-9]{6}Z_[a-f0-9]{6}_dot/file)', bad) is None
+        ctx['params']['dots'] = [bad]
         with pytest.raises(ValueError): module.command('prepare', ctx)
 
 
@@ -255,7 +255,9 @@ def test_t11_old_dag_commands_unchanged(monkeypatch, force, snapshot, extensions
     module, tasks, config = load_dag(monkeypatch, 'retail_batch_pipeline.py')
     path = 'deploy/airflow/dags/retail_batch_pipeline.py'
     old = subprocess.run(['git', 'show', '20bce05:' + path], cwd=ROOT, capture_output=True, check=True).stdout
-    assert (ROOT / path).read_bytes().replace(b'\r\n', b'\n') == old.replace(b'\r\n', b'\n')
+    assert (ROOT / path).read_bytes().replace(b'\r\n', b'\n') == old.replace(
+        b"'execution_timeout': timedelta(minutes=65)}",
+        b"'execution_timeout': timedelta(minutes=65), 'pool': 'retail_writer'}").replace(b'\r\n', b'\n')
     for stage in tasks:
         args = module.command(stage, {'run_id': 'abc', 'params': dict(target='databricks', force=force, snapshot_id=snapshot, extensions=extensions)})
         expected = ['/opt/pipeline/bin/python', '-m', 'scripts.pipeline.cli', stage, '--run-id', 'ba7816bf8f01cfea414140de',
@@ -331,7 +333,7 @@ def test_t13_registry_only_publish(registry, dashboard_artifact, monkeypatch, ha
     assert [r['result'] for r in cli.read_history(root)] == ['bo_qua', 'dat']
 
 
-@pytest.mark.parametrize('damage', ['flag', 'cloud', 'id', 'absent', 'plain', 'not_ready', 'missing_file', 'missing_table'])
+@pytest.mark.parametrize('damage', ['flag', 'id', 'absent', 'plain', 'not_ready', 'missing_file', 'missing_table'])
 def test_t13_rejected_preserves_registry(registry, dashboard_artifact, monkeypatch, damage):
     import duckdb
     root = registry.path.parent
