@@ -20,6 +20,7 @@ Các vị trí `file:dòng` đã đọc trong worktree `D:\retail-analytics-nap`
 | Q10 | Bộ phần mở rộng của đợt lấy đúng theo bản `active` (§5 bước 3) | PM 2026-11-07 |
 | Q11 | Mốc 1 không gồm luồng một file mở rộng trên web (§1) | PM 2026-11-07 |
 | Q12 | **Demo 12/12 chỉ gồm đợt 2023.** Bỏ Mốc 2. Đợt 2024 (Q5, §8 phần chuỗi, §9, phiếu L3 + L4) hoãn tới sau 12/12. Hai lỗi chữ tách sang phiếu L3a | PM 2026-11-09 |
+| Q13 | Tổng duyệt chạy trọn luồng từ giao diện (§11). Một đợt gồm nhiều bảng, **mỗi bảng đúng một file**; không làm phần ghép một bảng từ nhiều file | PM 2026-11-09 |
 
 ## 1. Kịch bản và phạm vi
 
@@ -285,15 +286,19 @@ Lý do phải làm có kiểm soát: DAG production **tự publish** (`deploy/ai
    - một câu chat đúng.
 4. Xóa app thử sau khi kiểm xong, và không chia sẻ link trong lúc thử vì app đọc dữ liệu thật.
 
-Trượt thì sửa rồi thử lại, chưa vào cửa sổ. Cách này chỉ kiểm code mới với bản đang chạy; phần đọc và ghi Volume thật vẫn kiểm ở lượt thật sau cửa sổ (§14, L2).
+Trượt thì sửa rồi thử lại, chưa vào cửa sổ. Cách này chỉ kiểm code mới với bản đang chạy, không kiểm phần đọc và ghi Volume; phần đó thuộc tổng duyệt dưới đây.
 
-**Tổng duyệt đợt 2023 trên cloud trước cửa sổ (PM chốt 2026-11-09).** Đường `--dot` target `databricks` mới kiểm bằng cloud giả, mà lỗi lộ ra sau cửa sổ thì phần băm đã đóng băng. PM chạy một lượt thật theo script Claude viết:
-1. Dùng image thử `retail-airflow:thu-l2` dựng từ `git archive` của commit có L1, L2, L3a. `retail_batch_pipeline` vẫn chạy image cũ, không tạm dừng; `writer.lock` chung tránh ghi chồng từng stage.
-2. Chạy tay `prepare`, `forecast`, `build`, `validate` với `--target databricks --dot /opt/retail/data_demo/dot_2023 --du-bao-tu <active> --extension orders_enriched`, root `warehouse/pipeline/docker`. **Không chạy `publish`, không `dat-dashboard`.** `active` và `dashboard` không đổi.
-3. Claude kiểm số dòng, G/COGS so với đối chứng của bộ sinh, quyền `retail-web-ro` có và `retail-ai-ro` không có trên bản này.
-4. Dọn bằng `don --xoa <bản tổng duyệt> --thuc-hien` trước cửa sổ, để trang Duyệt không hiện bản này trong danh sách chọn. Bản này không phải `active`, đích rollback hay `dashboard`, nên luật G1–G3 và G8 không chặn.
+**Tổng duyệt đợt 2023 trên cloud trước cửa sổ (PM chốt 2026-11-09, Q13).** Upload thật trên Streamlit Cloud chưa từng chạy, và đường `--dot` target `databricks` mới kiểm bằng cloud giả. Lỗi lộ ra sau cửa sổ thì phần băm đã đóng băng. PM chạy một lượt thật từ giao diện theo script Claude viết:
+1. Dựng image thử `retail-airflow:thu-l2` từ `git archive` của commit có L1, L2, L3a. Chạy một bộ Airflow thử riêng: compose project khác, metadata riêng, cổng khác, `RETAIL_PIPELINE_SCHEDULE_ENABLED=false`, và mount cùng `warehouse/pipeline` với Airflow đang chạy để dùng chung `writer.lock`, `state.json`, `snapshots`. `retail_batch_pipeline` trên Airflow đang chạy giữ nguyên. Trên bộ thử chỉ bật `nhap_du_lieu_do` và `retail_dot_pipeline`, **không bật `retail_batch_pipeline`** vì DAG đó tự publish. Không chạy qua mốc 08:00.
+2. Tạo một app Streamlit Cloud tạm từ commit đó, thêm `RETAIL_NHAP_DOT=volume`, khóa `RETAIL_NHAP_DBX_*` của `retail-nhap-writer`, và `RETAIL_NHAP_VOLUME` trỏ vào thư mục riêng `/Volumes/retail_lab/nhap_du_lieu/kho/tong_duyet`. Airflow thử dùng đúng thư mục này. **Không dùng thư mục gốc của `kho`:** cùng bộ file có cùng mã đợt, đợt ở `da_kiem` không hủy được, nên lượt thật sẽ bị D2-7.
+3. PM đăng nhập bằng tài khoản `quan_ly`, không dùng Admin, upload 15 file của `data_demo/dot_2023`. Luồng phải tự đi: `da_gui` → `dang_kiem` → `cho_chay` → `dang_chay` → `da_kiem`.
+4. Tới `da_kiem` thì tắt `nhap_du_lieu_do` ngay. **Không bấm đưa lên dashboard, không chạy `publish`, không `dat-dashboard`:** lệnh `dat` trong thư mục thử vẫn đổi con trỏ `dashboard` thật. `active` và `dashboard` không đổi. Nhật ký audit trên Neon sẽ có thêm dòng của lượt thử.
+5. Claude kiểm số dòng, G/COGS so với đối chứng của bộ sinh, quyền `retail-web-ro` có và `retail-ai-ro` không có trên bản này.
+6. Dọn bằng `don --xoa <bản tổng duyệt> --thuc-hien` trước cửa sổ, để trang Duyệt không hiện bản này trong danh sách chọn. Bản này không phải `active`, đích rollback hay `dashboard`, nên luật G1–G3 và G8 không chặn. Xóa thêm app tạm, thư mục `tong_duyet`, và bộ Airflow thử (cả volume metadata của nó).
 
-Lượt này tốn khoảng 83 chỗ quota, vẫn bị tính khoảng 7 ngày sau khi xóa†. Đỉnh ước tính ở Mốc 1 khoảng 415† nếu tổng duyệt sát cửa sổ, chưa kiểm lại. Trượt thì sửa rồi dựng lại image thử, chưa vào cửa sổ.
+Lượt này không kiểm được bước `dat-dashboard` và image chính thức; hai phần đó vẫn kiểm ở lượt thật sau cửa sổ (§14, L2).
+
+Lượt này tốn khoảng 83 chỗ quota, vẫn bị tính khoảng 7 ngày sau khi xóa†. **Xóa bản tổng duyệt trước khoảng 11-16** để hết bị tính trước 11-24: đỉnh ở Mốc 1 khoảng 332† (N 83, `dbb80f56` 83, `5d32a104` còn tính 80, D23 83, khác 3). Trễ hơn thì đỉnh khoảng 415†, và một lần chạy lại D23 có thể lên gần 500†. Số chưa kiểm lại. Trượt thì sửa rồi dựng lại image thử, chưa vào cửa sổ.
 
 Sau cửa sổ, **đóng băng** `retail_dbt/*`, `scripts/{pipeline,ingest,parity,forecast}` và `apps/retail_app` tới 12/12. `scripts/demo` và `scripts/ops` vẫn sửa được.
 
