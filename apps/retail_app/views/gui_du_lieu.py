@@ -8,16 +8,56 @@ from scripts.ingest.approval import tom_tat_nghiep_vu
 if not roles.allowed(roles.current_role(), 'gui_du_lieu'):
     st.error('Bạn không có quyền xem trang này.')
     st.stop()
-if not nhap_kha_dung():
+from ui.common import backend
+from ui.kho_dot import configured_store, mode
+from ui.nhap_dot import DotStore
+
+local_available = nhap_kha_dung()
+dot_mode = mode()
+if not local_available and dot_mode == 'tat':
     st.info('Chức năng nhập dữ liệu trên bản web đang được phát triển. Hiện chạy ở bản nội bộ.')
     st.stop()
-
 st.title('Gửi dữ liệu')
-st.caption('Mỗi yêu cầu nhận một file CSV hoặc JSON, tối đa 200 MB.')
 user = roles.logged_in_user()
 if not user:
     st.info('Đăng nhập để gửi và theo dõi dữ liệu.')
     st.stop()
+if dot_mode != 'tat':
+    st.subheader('Gửi đợt dữ liệu')
+    try:
+        dots = DotStore(configured_store())
+    except (ValueError, OSError) as error:
+        st.info(str(error))
+    else:
+        with st.form('gui_dot', clear_on_submit=True):
+            uploads = st.file_uploader('Các file của đợt', type=['csv', 'json'],
+                                      accept_multiple_files=True, max_upload_size=200)
+            batch_label = st.text_input('Nhãn đợt', max_chars=40)
+            batch_description = st.text_area('Mô tả đợt', max_chars=2000)
+            send_batch = st.form_submit_button('Gửi đợt dữ liệu')
+        if send_batch:
+            try:
+                row = dots.gui_dot(uploads, batch_label, batch_description)
+                st.success(f"Đã gửi đợt {row['nhan']}.")
+            except Exception as error:
+                st.error(str(error))
+        try:
+            command = dots.latest_command()
+            for row in dots.visible(user['username'], roles.current_role()):
+                with st.expander(f"{row['nhan']} · {dots.label(row, command)} · {row['id']}"):
+                    st.caption(f"{len(row['files'])} file · {sum(f['so_byte'] for f in row['files']) / 1024**2:.2f} MB · {row['ngay_gui']}")
+                    st.text(row.get('mo_ta', ''))
+                    if row.get('ma_loi'):
+                        st.warning(f"{row['ma_loi']}: {row.get('thong_bao', '')}")
+                    elif row.get('thong_bao'):
+                        st.info(row['thong_bao'])
+                    if row['trang_thai'] in ('dang_chay', 'da_kiem') and row.get('release_id'):
+                        st.caption('Bản dữ liệu: ' + row['release_id'][:8])
+        except Exception as error:
+            st.error('Chưa đọc được yêu cầu đợt: ' + str(error))
+if not local_available:
+    st.stop()
+st.caption('Mỗi yêu cầu nhận một file CSV hoặc JSON, tối đa 200 MB.')
 store = RequestStore()
 try:
     nhap_runner.recover_queue(store, wait=False)
