@@ -561,6 +561,35 @@ Lượt rà ở trên chạy đột biến cùng lúc với lúc GPT đang sửa
 
 **Kết luận: D5a-1 đạt ở mức code và test**, khớp với báo cáo GPT. Ba ghi nhận (e), (f), (g) ở trên vẫn để ngỏ, không chặn. Còn chờ §10 bước 1–4 do PM chạy.
 
+### Nghiệm thu §10 bước 1–4 — 2026-11-09
+
+PM chạy app trên máy, registry `warehouse/pipeline/d3-thu/state.json`, ảnh ở `C:\Users\Win\d5a_anh` (ngoài repo). Claude đọc 10 ảnh rồi đối chiếu với hai kho `runs/d3-goc/dbt.duckdb` và `runs/d5a-dot1/dbt.duckdb`.
+
+**Lưu ý về tiêu chí:** §10 bước 3 ghi "khung AI ẩn". L1 §3.9 đã đổi quy tắc: năm thuộc bản `active` thì khung AI vẫn hiện, năm 2023 thì ẩn. Lượt này kiểm theo L1 §3.9.
+
+| Bước | Tiêu chí | Kết quả | Bằng chứng |
+|---|---|---|---|
+| 1 | `run --dot` dừng ở `validate` | Đạt | `history.jsonl` của run `d5a-dot1` có `build` rồi `validate`, không có stage `publish` |
+| 2 | Bấm nút công bố: `dashboard` đổi, `active` giữ nguyên | Đạt | Dòng `publish_dashboard` lúc `2026-11-09T02:56:40Z`, bản `99c445c14a404373a51ca582`; `active` vẫn là `f6f64a3c8909485baf3d67ef` |
+| 2 | Không có cờ thì bị chặn | Đạt ở mức test | T13 khóa ca này; lượt này không thử lại trên registry thật |
+| 3 | Tổng quan có 2023 và băng rôn | Đạt, xem ghi nhận (h) | Kỳ 2013–2023 G 16,80 tỷ, khớp `16797821253,39` trong kho |
+| 3 | PS có 2023 và băng rôn | Đạt | PS1 năm 2023: G 1,11 tỷ, R 0,83 tỷ, 74,5%, khớp `1108842415,88` và `826039488,68`. PS3 có 2023 trên bản đồ nhiệt |
+| 3 | Dự báo theo bản số thật | Đạt, xem ghi nhận (i) | Không băng rôn, đọc `d3-goc`, có dòng chú thích |
+| 3 | Chat theo bản số thật | Đạt, xem ghi nhận (i) | Năm 2022: G `1.169.748.832`, R `860.587.336`, khớp `1169748831,69` và `860587336,35` trong `f6f64a3c…` |
+| 3 | Khung AI theo L1 §3.9 | Đạt | PS1 năm 2022 hiện khung AI; PS1 năm 2023 ẩn khung và có câu báo về năm |
+| 3 | Sức khỏe dữ liệu | **Chưa xem trên màn hình** | Không có ảnh. Dữ liệu trong kho bản có đợt: `status_code = tot`, 170/170 test đạt. L3 §5 mục 6 kiểm trang này bằng `AppTest` |
+| 4 | Trả về bản số thật | Đạt | Dòng `clear_dashboard` lúc `2026-11-09T03:04:41Z`; con trỏ `dashboard` rỗng; không còn băng rôn; kho `f6f64a3c…` không có dòng năm 2023 |
+
+Môi trường sau khi chạy: junction `data` đã gỡ, `D:\retail-analytics-am\data` còn 21 mục, cổng 8502 đã đóng.
+
+**Ghi nhận mới, chưa sửa, đưa vào L3 §3.5:**
+- **(h) Nhãn sai trên Tổng quan.** Với bản có đợt, thẻ `2012–2022` vẫn ghi "(toàn bộ dữ liệu)" trong khi dữ liệu đã tới 2023. Số đúng, nhãn sai. T8 (`test_d5_dashboard.py:160`) đang khóa nhãn này.
+- **(i) Ngày có cả giờ.** Chú thích ở Dự báo và chat hiện "số tới 2022-12-31 00:00:00", do `common.py:192` và `:195` in thẳng giá trị.
+
+**Ghi nhận nhỏ, không sửa:** nút bật và nút trả cùng báo "Đã cập nhật bản dashboard."
+
+**Kết luận: D5a đạt nghiệm thu trên máy, trừ một trang chưa xem là Sức khỏe dữ liệu.** §10 bước 5 đã bỏ theo §13.5. Hai ghi nhận (h), (i) chỉ ảnh hưởng chữ hiển thị, không ảnh hưởng số.
+
 ## 12. PM cần chốt trước khi giao
 
 **PM chốt 2026-11-06: theo đề xuất ở cả 6 mục.** Cụ thể:
