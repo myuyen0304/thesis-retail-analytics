@@ -124,6 +124,11 @@ Không thêm logic mới nếu không cần. Trang phải đúng với bản 201
 - trang Dự báo vẫn đọc `active`, không đổi;
 - khung AI: năm 2023, 2024 ẩn; năm ≤ năm cuối của `active` vẫn hiện (L1 §3.9).
 
+Hai lỗi chữ hiển thị PM thấy khi nghiệm thu D5a (`docs/giao_viec_d5_cong_bo_dot.md` §11, ghi nhận (h), (i)). Sửa ở phiếu này vì `apps/retail_app` đóng băng sau cửa sổ bảo trì:
+
+1. **Nhãn kỳ** (`period_label`, `common.py`): với bản có cờ tổng hợp, cả `2012-2022` và `2013-2022` khi không phải kỳ phân tích đều ghi `(kỳ gốc, số thật)`. Chỉ áp cho đúng hai mã này. Bản không cờ giữ nguyên như cũ, `2012–2022` vẫn là `(toàn bộ dữ liệu)`.
+2. **Ngày trong chú thích** (`page_header`, `common.py`, hai nhánh Hỏi dữ liệu và Dự báo): dùng `_d(end)`, ra dạng `31/12/2022`, không còn `00:00:00`.
+
 ## 4. File được sửa
 
 | File | Phần băm | Việc |
@@ -138,6 +143,9 @@ Không thêm logic mới nếu không cần. Trang phải đúng với bản 201
 | `scripts/pipeline/tests/test_d3_ky_dot.py`, `test_d3_du_bao.py` | có | thêm ca; chỉ sửa ca đang khóa `raise` ở `:44–45`, ghi rõ trong báo cáo |
 | `scripts/pipeline/tests/test_l3_khong_du_bao.py` (mới) | có | §5 |
 | `apps/retail_app/tests/test_l3_trang_2024.py` (mới) | có | §5 mục 6 |
+| `apps/retail_app/ui/common.py` | có | §3.5, hai lỗi chữ |
+| `apps/retail_app/tests/test_d5_dashboard.py` | có | chỉ sửa ca T8 ở `:160` theo nhãn mới; ca bản không cờ ở `:154` và `:163` giữ nguyên |
+| `apps/retail_app/tests/test_l1_dot_web.py` | có | chỉ sửa `:418` và `:423`: dữ liệu giả dùng `pd.Timestamp('2022-12-31')`, kiểm `số tới 31/12/2022` và không có `00:00:00` |
 
 Chỗ khác cần sửa theo §3.3 mục "kiểm thêm" thì **ghi vào báo cáo trước khi sửa**, nêu dòng và lý do.
 
@@ -167,6 +175,7 @@ Chỗ khác cần sửa theo §3.3 mục "kiểm thêm" thì **ghi vào báo cá
    - Tổng quan, PS1–PS5, Sức khỏe dữ liệu không exception, không lỗi;
    - không có lựa chọn năm 2025 trong bộ lọc;
    - nhãn kỳ là `2013-2024`;
+   - thẻ `2012–2022` và `2013–2022` ghi `(kỳ gốc, số thật)`, không còn `(toàn bộ dữ liệu)`;
    - khung AI đúng L1 §3.9 với năm 2024.
 7. **Không hồi quy**, từng lệnh một, ghi số trước và sau khi sửa:
    - `scripts/demo/tests/test_sinh_dot_2023.py`;
