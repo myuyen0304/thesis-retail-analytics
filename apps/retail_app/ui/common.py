@@ -191,6 +191,9 @@ def page_header(title: str, question: str) -> None:
     if title == 'Hỏi dữ liệu (AI)' and releases.pointers_differ():
         end = load_or_stop('build_info').iloc[0]['data_end_date']
         st.info(f'Chat đang dùng bản số thật, số tới {end}; không dùng số tổng hợp trên dashboard.')
+    if title == 'Dự báo G và COGS' and releases.pointers_differ():
+        end = load_or_stop('build_info').iloc[0]['data_end_date']
+        st.info(f'Dashboard đang hiện dữ liệu tổng hợp có đợt; trang này dùng số thật, số tới {end}.')
 
 
 def kpi(col, label: str, value: str, help: str | None = None,
