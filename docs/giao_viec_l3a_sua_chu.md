@@ -51,4 +51,4 @@ Làm khác phiếu, PM đã duyệt: sửa thêm kỳ vọng T6 ở `test_d5_das
 - bỏ `not is_analysis`: điều kiện có từ trước L3a, chưa có ca kiểm bản cờ tổng hợp với kỳ phân tích;
 - câu lỗi ở `cli.py:599`: test chỉ kiểm mã thoát, không kiểm chữ.
 
-`test_m1.py` trượt 10/17 ở worktree này, và cũng trượt 10/17 trên bản `HEAD` chưa có L3a, nên không do L3a. Claude chưa tra nguyên nhân. Nhãn của bản không cờ đã có `test_d5_dashboard.py:154` kiểm.
+`test_m1.py` trượt 10/17 ở worktree này, và cũng trượt 10/17 trên bản `HEAD` chưa có L3a. Nguyên nhân: worktree không có `warehouse/dbt.duckdb` (file do build sinh ra, không nằm trong git). Trên bản sao có file đó, chép từ worktree chính (build ngày 2026-10-18): `test_m1` 17/17, `test_smoke` 26/26, `test_ban_phuc_vu` 4 đạt, 3 bỏ qua. `test_m5` đạt 25/27; hai ca `test_kho_dat_sau_build` trượt ở phép so `:74` (kho ghi 23 test nghiệp vụ, repo cần 24). Kho local dựng trước các test nghiệp vụ thêm ngày 11-05 và 11-06 nên nhiều khả năng do kho cũ; chưa dựng lại kho để xác nhận.
