@@ -339,7 +339,7 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
     if confirm_synthetic and stage != 'publish':
         raise ValueError('--xac-nhan-tong-hop chỉ dùng với publish')
     if dots and (stage != 'prepare' or snapshot_id):
-        raise ValueError('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
+        raise ValueError('--dot chỉ dùng với prepare, không cùng --snapshot-id')
     if du_bao_tu and stage != 'forecast':
         raise ValueError('--du-bao-tu chỉ dùng với stage forecast')
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', run_id):
@@ -596,7 +596,7 @@ def main():
     ap.add_argument('--limit', type=int, default=20, help='history: số lần chạy gần nhất cần in')
     a = ap.parse_args()
     if a.dot and (a.stage not in ('prepare', 'run') or a.snapshot_id):
-        ap.error('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
+        ap.error('--dot chỉ dùng với prepare, không cùng --snapshot-id')
     if a.du_bao_tu and a.stage not in ('forecast', 'run'):
         ap.error('--du-bao-tu chỉ dùng với stage forecast')
     if a.xac_nhan_tong_hop and a.stage not in ('publish', 'dat-dashboard'):
