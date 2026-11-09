@@ -818,6 +818,16 @@ def dashboard_action(store, backend, release_id=None, *, confirmed=False):
                           env={**os.environ, 'PYTHONUTF8': '1'})
 
 
+def dashboard_state_cloud():
+    """Đọc registry bằng kết nối chỉ đọc của app; không dùng khóa ghi Volume."""
+    from dwh.connection import _fetch_databricks
+    from dwh.releases import CONTROL_RELATION
+    _, rows = _fetch_databricks(f"select payload from {CONTROL_RELATION} where name = 'main'", resolve_release=False)
+    if len(rows) != 1:
+        raise ValueError('Registry phải có đúng một dòng main')
+    return json.loads(rows[0][0])
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('request_id')
