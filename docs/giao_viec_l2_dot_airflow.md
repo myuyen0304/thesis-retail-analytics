@@ -362,3 +362,52 @@ PM chạy thật trên `/Volumes/retail_lab/nhap_du_lieu/kho`:
 Sau lượt trượt đầu của `pipeline`, `thu_ket_noi` trống (PM kiểm bằng `databricks fs ls`, trước lần chạy `writer` cuối cùng). Lượt đó có `V6: TimeoutError`; sau khi cấp quyền không còn, nguyên nhân chưa kiểm riêng.
 
 **Lưu ý cho PM:** `~/.retail-secrets/nhap_writer.env` dùng tên `DATABRICKS_CLIENT_ID/SECRET`. Khi đặt Streamlit Secrets phải dùng tên `RETAIL_NHAP_DBX_CLIENT_ID/SECRET`. Với `.env.airflow.local`, tên `RETAIL_PIPELINE_CLIENT_ID/SECRET` đã đúng.
+
+### Lượt 3 — §3.2 đến §3.7 (2026-11-09): chưa đạt, sửa đúng các mục dưới rồi báo lại
+
+Claude tự chạy: `test_nhap_do.py` 36, `test_l2_dot_cloud.py` 10, `test_airflow_extensions.py` 12, `test_snapshot_dot.py` 37, `test_d5_con_tro.py` 39, `test_d3_du_bao.py` 41, `test_l1_dot_web.py` 137, đều đạt và khớp báo cáo. Hai DAG mới nạp được bằng Python của Airflow 3.3.2 trong container đang chạy (truyền qua stdin, không dựng image); chữ ký `get_dr_count`, `get_dagrun_state`, `TriggerDagRunOperator` khớp. Thử 49 mutation trên bản sao: 41 bị test bắt, 8 sống sót. Phần trong băm (`cli.py`, `du_bao_dot.py`) đúng phiếu, không có lỗi hành vi.
+
+**R4 (phải sửa) — hai yêu cầu cùng đợt trong một lần dò đều lọt D2-7.** `quet` đọc `rows` một lần trước vòng lặp, nên yêu cầu đầu vừa ghi `cho_chay` vẫn chưa thấy khi xét yêu cầu thứ hai. Claude thử hai yêu cầu `da_gui` cùng `ma_dot`: cả hai ra `cho_chay`. Khi yêu cầu đầu đang `da_kiem`, yêu cầu thứ hai được trigger một lượt dựng đầy đủ (hơn một tiếng và 83 chỗ quota). Người dùng bấm gửi hai lần trong 5 phút là gặp.
+- Sửa: trong cùng lần dò, nhớ các `ma_dot` vừa ghi `cho_chay` hoặc `het_cho` và tính chúng vào vế trùng.
+- Test: hai yêu cầu `da_gui` cùng `ma_dot`, một lần `quet`: `id` nhỏ ra `cho_chay`, `id` lớn ra `sai_hop_dong` với `D2-7`.
+
+**R5 (phải sửa) — file tạm nằm trong thư mục đợt.** `_download` tạo `.tai_*` ngay trong `file/`, khác phiếu ("thư mục tạm cạnh đích"). Máy tắt đúng lúc ghi thì file còn lại, và `dot.classify` duyệt mọi file nên đợt đúng ra `sai_hop_dong` `D2-file`, là trạng thái cuối. Claude đã thử với `classify` thật.
+- Sửa: tạo file tạm ở thư mục cạnh `file/`, ví dụ `nhap/<id>/.tam/`, cùng ổ đĩa để `os.replace` vẫn nguyên tử.
+- Test: giả lập lỗi ở `os.replace`: `file/` không có file lạ, lần dò sau phân loại đạt.
+
+**R6 (phải sửa) — quota tính cả `information_schema`.** `_quota` duyệt mọi schema `schemas.list` trả về. Đây là view hệ thống, không phải đối tượng của dự án, nên số dùng bị thừa và đợt có thể ra `het_cho` sớm. Claude thử: 287 + 31 view hệ thống đã ra `het_cho`.
+- Sửa: bỏ qua schema `information_schema`.
+- Test: có schema đó thì kết quả không đổi so với khi không có.
+
+**R7 (phải thêm test, không đổi code) — 6 nhóm mutation sống sót mà code hiện đang đúng:**
+
+| Mutation | Test cần thêm |
+|---|---|
+| Thêm vào danh sách trigger trước khi ghi `dang_chay` (§5) | `_event` ném `TrangThaiDaDoi`: `trigger` rỗng |
+| `_log` in nội dung lỗi | Lỗi chứa chuỗi mẫu: stderr có tên loại, không có chuỗi mẫu |
+| Bỏ `if ledger is None: continue` | Sổ hỏng với yêu cầu `da_gui` và `het_cho`: trạng thái không đổi |
+| Bỏ `if ledger is None: return` ở `dat` | Sổ hỏng với lệnh `dat`: không gọi CLI, không có kết quả |
+| Bỏ từng vế `stage == 'validated'`, `co_du_lieu_tong_hop is True` | Tham số hóa: context thiếu đúng một vế thì ra `loi` |
+| Stage forecast mở cloud với lượt không đợt (§3.3) | Lượt không đợt target databricks: `Databricks` không được gọi ở forecast |
+
+**Chấp nhận, không sửa:**
+- `test_snapshot_dot.py` ngoài §4: PM đã duyệt riêng. Diff đúng hai thay đổi (bỏ một tham số, thêm một ca xác nhận CLI nhận đường cloud).
+- `retail_batch_pipeline.py` là một dòng sửa, không phải "một dòng thêm" như §5 mục 15: đúng một khóa `pool` như §3.6, câu ở §5 là do Claude viết chưa chính xác.
+- Mutation bỏ `SAFE_NAME` sống sót vì `KhoVolume.relative_path` vẫn chặn `../`: đây là lớp phòng thủ thứ hai, không cần thêm test.
+- Câu `--dot chỉ dùng với prepare local` đã cũ nhưng chỉ kỹ sư thấy; L3 cũng sửa `cli.py`, sẽ gộp vào đó. **Lượt này không sửa.**
+- Yêu cầu A đang `loi`, gửi lại B cùng đợt, rồi DE chạy lại A: cả hai cùng chạy. Phiếu chỉ chặn bốn trạng thái, tình huống hiếm và do DE chủ động.
+- `dang_kiem` kẹt nếu file trên Volume bị xóa tay: không có đường chuyển trạng thái hợp lệ, chỉ để lại log.
+
+Sửa xong báo: kết quả 3 file test bị đổi, xác nhận chỉ sửa `scripts/ops/nhap_do.py`, `scripts/ops/tests/test_nhap_do.py`, `scripts/pipeline/tests/test_l2_dot_cloud.py`. Claude chỉ rà lại các mục trên và chạy lại đúng các mutation liên quan.
+
+**Thêm cho PM, trước cửa sổ, ngoài §6 (Claude viết lệnh khi tới bước đó):**
+1. Với image `retail-airflow:thu-l2`, chạy `/opt/pipeline/bin/python -m scripts.ops.nhap_do --help`. Claude chỉ kiểm được cách import này trên Python của máy, chưa kiểm trong môi trường `/opt/pipeline`.
+2. Đếm quota thật một lần bằng `retail-pipeline-writer`, chỉ đọc, rồi so với báo cáo `don`. Lý do: hai API này chỉ trả đối tượng danh tính đó có quyền, nên số có thể thấp hơn, hoặc `tables.list` có thể lỗi quyền trên một schema. Nếu lỗi quyền, mọi yêu cầu sẽ kẹt ở `dang_kiem` mà trang không báo gì. Cloud giả không kiểm được điều này.
+
+### Lượt 4 — R4 đến R7 (2026-11-09): đạt phần cloud giả
+
+Claude tự chạy `test_nhap_do.py` 46, `test_l2_dot_cloud.py` 11, `test_d3_ky_dot.py` 11, `test_extensions_cli.py` 7, `test_don_ban_cu.py` 41, đều đạt. Đọc phần sửa R4, R5, R6: đúng phiếu, chỉ đổi đúng 3 file. Chạy lại 7 mutation R7 và thêm 4 mutation cho phần sửa, cộng 1 ca hồi quy D2-7: 11/12 bị bắt.
+
+**Sống sót, chấp nhận:** yêu cầu đầu vừa ra `het_cho` (không phải `cho_chay`) thì yêu cầu trùng cùng lần dò chưa có test riêng. Code đã xử lý đúng; tình huống hiếm và nằm ngoài phần băm nên không mở thêm vòng sửa.
+
+**Chưa kiểm:** cloud thật, image thử và lượt chạy thật, thuộc §6 và hai mục PM ở lượt 3.
