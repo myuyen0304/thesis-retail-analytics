@@ -10,12 +10,97 @@ from scripts.ingest.source_contract import SOURCES
 if not roles.allowed(roles.current_role(), 'duyet_du_lieu'):
     st.error('Bạn không có quyền xem trang này.')
     st.stop()
-if not nhap_kha_dung():
-    st.info('Chức năng nhập dữ liệu trên bản web đang được phát triển. Hiện chạy ở bản nội bộ.')
+from ui.common import backend
+from ui.kho_dot import configured_store, mode
+from ui.nhap_dot import DotStore
+
+local_available = nhap_kha_dung()
+dot_mode = mode()
+if not local_available and dot_mode == 'tat':
+    if backend() == 'databricks' and roles.current_role() == 'admin':
+        st.info('Công bố dashboard trên bản này cần kho đợt (Volume)')
+    else:
+        st.info('Chức năng nhập dữ liệu trên bản web đang được phát triển. Hiện chạy ở bản nội bộ.')
+    st.stop()
+st.title('Duyệt dữ liệu')
+dots = None
+if dot_mode != 'tat':
+    st.subheader('Đợt dữ liệu')
+    try:
+        dots = DotStore(configured_store())
+        current_user = roles.logged_in_user()
+        if current_user:
+            command = dots.latest_command()
+            for row in dots.visible(current_user['username'], roles.current_role()):
+                with st.expander(f"{row['nhan']} · {dots.label(row, command)} · {row['id']}"):
+                    st.caption(f"{len(row['files'])} file · {sum(f['so_byte'] for f in row['files']) / 1024**2:.2f} MB · {row['ngay_gui']}")
+                    if row.get('release_id'):
+                        st.caption('Bản dữ liệu: ' + row['release_id'][:8])
+                    if row.get('ma_loi'):
+                        st.warning(f"{row['ma_loi']}: {row.get('thong_bao', '')}")
+                    elif row.get('thong_bao'):
+                        st.info(row['thong_bao'])
+                    if row['trang_thai'] == 'loi':
+                        if st.button('Chạy lại', key='dot_retry_' + row['id']):
+                            dots.change(row['id'], 'cho_chay')
+                            st.rerun()
+                        if st.button('Hủy', key='dot_cancel_' + row['id']):
+                            dots.change(row['id'], 'huy')
+                            st.rerun()
+            ledger = dots.ledger()
+            st.subheader('Sổ đợt')
+            st.caption('Chỉ ảnh hưởng lần dựng đợt sau, không đổi dashboard đang hiện.')
+            st.dataframe(pd.DataFrame([{'Thứ tự': r['so'], 'Mã đợt': r['ma_dot'][:8],
+                'Yêu cầu': r.get('request_id', ''), 'Bản': r.get('release_id', '')[:8]} for r in ledger]), hide_index=True)
+            if ledger:
+                with st.form('dot_remove'):
+                    removed = st.selectbox('Đợt cần bỏ', [r['ma_dot'] for r in ledger], format_func=lambda code: code[:8])
+                    reason = st.text_area('Lý do bỏ khỏi sổ (bắt buộc)')
+                    remove = st.form_submit_button('Bỏ khỏi sổ')
+                if remove:
+                    dots.remove_from_ledger(removed, reason)
+                    st.rerun()
+        else:
+            st.info('Cần đăng nhập để duyệt dữ liệu.')
+    except Exception as error:
+        st.error(str(error))
+
+if backend() == 'databricks' and roles.current_role() == 'admin':
+    if dot_mode != 'volume':
+        st.info('Công bố dashboard trên bản này cần kho đợt (Volume)')
+    elif dots is not None:
+        st.subheader('Bản dữ liệu trên dashboard')
+        try:
+            state = nhap_runner.dashboard_state_cloud()
+            command = dots.latest_command()
+            pending = command is not None and command['ket_qua'] is None
+            if pending:
+                st.info('Đang chờ Airflow xử lý lệnh (thường dưới 5 phút)')
+            elif command and command['ket_qua'].get('ket_qua') == 'loi':
+                st.error(command['ket_qua'].get('thong_bao', 'Lệnh dashboard bị lỗi.'))
+            st.caption('Bản dashboard: ' + str(state.get('dashboard') or 'Theo bản số thật'))
+            since = state.get('dashboard_since')
+            if isinstance(since, dict) and since.get('release_id') == state.get('dashboard') and since.get('at'):
+                st.caption('Giờ công bố: ' + str(since['at']))
+            candidates = sorted(key for key, value in state.get('releases', {}).items()
+                                if value.get('status') == 'ready' and value.get('co_du_lieu_tong_hop') is True)
+            if candidates:
+                with st.form('cloud_dashboard_publish'):
+                    chosen = st.selectbox('Bản có đợt', candidates, disabled=pending)
+                    confirmed = st.checkbox('Đây là dữ liệu tổng hợp, chỉ để demo', disabled=pending)
+                    publish = st.form_submit_button('Đưa bản có đợt lên dashboard (demo)', disabled=pending)
+                if publish:
+                    dots.dashboard_command(chosen, confirmed=confirmed)
+                    st.rerun()
+            if state.get('dashboard') and st.button('Trả dashboard về bản số thật', disabled=pending):
+                dots.dashboard_command()
+                st.rerun()
+        except Exception as error:
+            st.error(str(error))
+if not local_available:
     st.stop()
 import yaml
 from scripts.ingest import extension_contract
-st.title('Duyệt dữ liệu')
 st.caption('Chỉ chạy DuckDB local. Công bố tại đây cập nhật kho nhập dữ liệu; kho báo cáo của app giữ cấu hình hiện tại.')
 st.info('Đã có model dbt cho orders_enriched và shipments_realistic. Phần mở rộng khác cần DE bổ sung model trước khi chạy.')
 store = RequestStore()
