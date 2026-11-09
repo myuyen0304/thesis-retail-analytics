@@ -415,12 +415,26 @@ for name in ('duckdb', 'scripts.ingest.auto_mapping', 'scripts.ingest.dot'):
 def test_forecast_note_only_when_different(monkeypatch, different):
     monkeypatch.setattr(common, 'info_strip', lambda: None)
     monkeypatch.setattr(releases, 'pointers_differ', lambda: different)
-    monkeypatch.setattr(common, 'load_or_stop', lambda *a: pd.DataFrame({'data_end_date': ['2022-12-31']}))
+    monkeypatch.setattr(common, 'load_or_stop', lambda *a: pd.DataFrame({'data_end_date': [pd.Timestamp('2022-12-31')]}))
     at = AppTest.from_string("from ui.common import page_header; page_header('Dự báo G và COGS', 'Dự báo?')").run()
     assert not at.exception
     assert bool(at.info) is different
     if different:
-        assert 'số tới 2022-12-31' in at.info[0].value
+        assert 'số tới 31/12/2022' in at.info[0].value
+        assert '00:00:00' not in at.info[0].value
+
+
+@pytest.mark.parametrize('different', [False, True])
+def test_chat_note_only_when_different(monkeypatch, different):
+    monkeypatch.setattr(common, 'info_strip', lambda: None)
+    monkeypatch.setattr(releases, 'pointers_differ', lambda: different)
+    monkeypatch.setattr(common, 'load_or_stop', lambda *a: pd.DataFrame({'data_end_date': [pd.Timestamp('2022-12-31')]}))
+    at = AppTest.from_string("from ui.common import page_header; page_header('Hỏi dữ liệu (AI)', 'Hỏi?')").run()
+    assert not at.exception
+    assert bool(at.info) is different
+    if different:
+        assert 'số tới 31/12/2022' in at.info[0].value
+        assert '00:00:00' not in at.info[0].value
 
 
 REQUESTS = [pe.request_ps1('2019', 'year'), pe.request_ps4('2019', 'year', 2018, 2019, '2019'),
