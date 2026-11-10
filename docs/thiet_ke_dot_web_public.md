@@ -270,13 +270,13 @@ Script cần SQL warehouse để đọc registry, quét view (G6) và ghi CAS. N
 Lý do phải làm có kiểm soát: DAG production **tự publish** (`deploy/airflow/dags/retail_batch_pipeline.py:71`, `prepare >> … >> publish`). Image mới đổi `code_version`, nên lượt kế tiếp sẽ dựng và publish ngay mà không ai xem.
 
 **Điều kiện vào cửa sổ:**
-- L1, L2, L3a (§14) đã merge (chỉnh ngày 2026-11-09 theo Q12). L5 làm sau cửa sổ cũng được;
+- L1, L2, L3a và phần B1 của L5 (§14) đã merge (chỉnh ngày 2026-11-09 theo Q12; thêm B1 ngày 2026-11-10). Phần G8 của L5 làm sau cửa sổ cũng được;
 - D5a đã commit;
 - `nap-ky/myuyen` đã merge vào `main`. Hiện nhánh chứa đủ `origin/main` và đi trước 74 commit;
 - quota còn ít nhất 183 chỗ (100 + 83);
 - app thử dưới đây đã đạt.
 
-**App thử trước cửa sổ (PM chốt 2026-11-09).** Code mới chưa từng chạy trên Streamlit Cloud, nên phải thử mà không đụng web đang chạy. PM làm sau khi L1, L2, L3a đã merge, đủ thời gian sửa trước cửa sổ:
+**App thử trước cửa sổ (PM chốt 2026-11-09).** Code mới chưa từng chạy trên Streamlit Cloud, nên phải thử mà không đụng web đang chạy. PM làm sau khi L1, L2, L3a và B1 đã merge, đủ thời gian sửa trước cửa sổ:
 1. Tạo app Streamlit Cloud thứ hai, chạy từ `main` tại đúng commit sẽ đưa lên `app/myuyen`. App đang chạy trên `app/myuyen` giữ nguyên.
 2. Chép secrets từ app đang chạy, **không thêm khóa `RETAIL_NHAP_*`**. `RETAIL_NHAP_DOT` mặc định là `tat`, nên app thử không ghi vào Volume.
 3. Kiểm:
@@ -348,11 +348,11 @@ Claude sẽ viết lệnh đầy đủ thành một script cho PM chạy ngoài 
 | L2 | DAG `nhap_du_lieu_do`, `--dot` trên databricks, DAG `retail_dot_pipeline` theo conf, pool, quyền chỉ cho web (§5, §6, §7.1, §7.2) | có | cloud giả, cộng một lượt thật sau cửa sổ |
 | L3a | Ba chỗ sửa chữ (`giao_viec_l3a_sua_chu.md`) | có | test local |
 | L3, L4 | Đợt 2024: hoãn tới sau 12/12 (Q12), không làm ở đợt này | | |
-| L5 | G8 cho `don_ban_cu.py` (§10). Hạn trước lần xóa `5d32a104` khoảng 11-22 | không | cloud giả |
-| — | App thử trên Streamlit Cloud (§11), sau khi L1, L2, L3a đã merge | không | PM chạy |
-| — | Cửa sổ bảo trì (§11), sau L1, L2, L3a và app thử | | PM chạy |
+| L5 | Phiếu `giao_viec_l5_g8_b1.md`, hai phần. **G8** cho `don_ban_cu.py` (§10), hạn trước lần xóa `5d32a104` khoảng 11-22. **B1** (thêm 2026-11-10, lỗi PM ghi nhận khi tổng duyệt): trang Gửi và Duyệt tự kiểm lại trạng thái đợt và lệnh dashboard khi còn việc chờ, không phải tải lại trang | G8 không; B1 có (`apps/retail_app`) | G8 cloud giả; B1 test, xem trên app local, xác nhận ở lượt thật sau cửa sổ |
+| — | App thử trên Streamlit Cloud (§11), sau khi L1, L2, L3a và B1 đã merge | không | PM chạy |
+| — | Cửa sổ bảo trì (§11), sau L1, L2, L3a, B1 và app thử | | PM chạy |
 
-L5 làm sau cửa sổ cũng được. Thời gian mỗi lát chưa ước†. Nếu L1, L2, L3a chưa xong trước khoảng 11-21 thì Mốc 1 trễ theo.
+**B1 phải xong trước cửa sổ** vì `apps/retail_app` đóng băng sau cửa sổ tới 12/12; G8 làm sau cửa sổ cũng được, miễn trước khoảng 11-22. Thời gian mỗi lát chưa ước†. Nếu L1, L2, L3a, B1 chưa xong trước khoảng 11-21 thì Mốc 1 trễ theo.
 
 ## 15. Câu còn mở
 
@@ -360,4 +360,4 @@ Không còn câu nào. PM chốt ngày 2026-11-07 theo đề xuất của Claude
 
 Việc kế:
 1. PM dọn `03ad08c0` khi warehouse chạy lại (§10).
-2. GPT làm L3a (L1, L2 đã đạt); L5 làm sau cũng được.
+2. GPT làm L5 theo `giao_viec_l5_g8_b1.md` (L1, L2, L3a đã đạt); B1 trước cửa sổ, G8 trước khoảng 11-22.
