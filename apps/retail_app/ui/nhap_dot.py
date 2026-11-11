@@ -16,6 +16,9 @@ LABELS_DOT = dict(zip(
     ('Đã gửi', 'Đang kiểm tra file', 'Chờ chạy', 'Đang chạy', 'Đã kiểm tra', 'Chờ đưa lên dashboard',
      'Đang trên dashboard', 'Đã trả dashboard', 'Sai hợp đồng dữ liệu', 'Không đọc được file',
      'Hết chỗ lưu trữ', 'Lỗi khi chạy', 'Đã hủy', 'Dữ liệu trạng thái hỏng')))
+LABELS_MOT = dict(LABELS_DOT, dang_doc='Đang đọc file', cho_duyet='Chờ duyệt',
+    da_duyet='Đã duyệt', loi_de_xuat='Không đọc được file',
+    cho_model_dbt='Chờ đội dữ liệu bổ sung mô hình', tu_choi='Từ chối', khong_moi='Không có gì mới')
 MAX_FILE_BYTES = 200 * 1024 * 1024
 MAX_TOTAL_BYTES = 100 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
@@ -58,7 +61,7 @@ class DotStore:
         try:
             events = [(int(n[:-5]), self._json(folder + '/su_kien/' + n))
                       for n in sequence_names(self.kho.liet_ke(folder + '/su_kien'))]
-            replay = phat_lai(events)
+            replay = phat_lai(events, metadata.get('loai', 'dot'))
         except (ValueError, TypeError, KhongCo) as error:
             replay = {'trang_thai': 'hong', 'lich_su': [], 'thong_bao': 'Dữ liệu trạng thái hỏng: ' + str(error)}
         return dict(metadata, **replay)
@@ -178,24 +181,44 @@ class DotStore:
     def label(self, row, command):
         pending = (row['trang_thai'] == 'da_kiem' and command and command['ket_qua'] is None
                    and command.get('loai') == 'dat' and command.get('request_id') == row['id'])
-        return LABELS_DOT['cho_dashboard' if pending else row['trang_thai']]
+        labels = LABELS_MOT if row.get('loai') == 'mot_file' else LABELS_DOT
+        return labels['cho_dashboard' if pending else row['trang_thai']]
 
     def dashboard_command(self, release_id=None, *, confirmed=False):
         username, audit = actor('cong_bo')
-        if release_id is not None and not confirmed:
-            raise ValueError('Cần xác nhận dữ liệu tổng hợp, chỉ để demo.')
         body = {'loai': 'tra' if release_id is None else 'dat', 'ai': username}
         if release_id is not None:
             from ui.nhap_runner import dashboard_state_cloud
             state = dashboard_state_cloud()
             record = state.get('releases', {}).get(release_id, {})
-            if record.get('status') != 'ready' or record.get('co_du_lieu_tong_hop') is not True:
+            synthetic = record.get('co_du_lieu_tong_hop') is True
+            new_source = record.get('chi_dashboard') is True
+            if record.get('status') != 'ready' or synthetic == new_source:
                 raise ValueError('Bản tổng hợp chưa đạt quality gate.')
+            if synthetic and not confirmed:
+                raise ValueError('Cần xác nhận dữ liệu tổng hợp, chỉ để demo.')
             body['release_id'] = release_id
-            rows = self.visible(username, roles.current_role())
-            matching = next((r for r in rows if r.get('release_id') == release_id), None)
-            if matching:
-                body['request_id'] = matching['id']
+            if new_source:
+                # Không phụ thuộc danh sách của trang web; chỉ nhận một yêu cầu đã kiểm đúng bản.
+                matches = []
+                for request_id in self.kho.liet_ke('yeu_cau'):
+                    if not ID_PATTERN.fullmatch(request_id) or not request_id.endswith('_mot'):
+                        continue
+                    try:
+                        row = self.read(request_id)
+                    except (FileNotFoundError, ValueError, KeyError, TypeError, AttributeError):
+                        continue
+                    if (row.get('loai') == 'mot_file' and row.get('release_id') == release_id
+                            and row.get('trang_thai') in ('da_kiem', 'da_tra', 'tren_dashboard')):
+                        matches.append(row)
+                if len(matches) != 1:
+                    raise ValueError('Chưa xác định được đúng một yêu cầu đã kiểm cho bản nguồn mới.')
+                body['request_id'] = matches[0]['id']
+            else:
+                rows = self.visible(username, roles.current_role())
+                matching = next((r for r in rows if r.get('release_id') == release_id), None)
+                if matching:
+                    body['request_id'] = matching['id']
         latest = self.latest_command()  # Đọc lại lúc bấm, không dùng dữ liệu lúc vẽ nút.
         if latest and latest['ket_qua'] is None:
             raise ValueError('Đang chờ Airflow xử lý lệnh (thường dưới 5 phút)')
