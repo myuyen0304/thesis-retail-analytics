@@ -127,14 +127,16 @@ def _kiem_khop(folder, source, target):
     return trained
 
 
-def dung_lai(context, root, release_id, *, registry=None):
+def _dung_lai(context, root, release_id, *, registry=None, same_sales=False):
     """Chép dự báo bản gốc vào lượt này. Chạy lại khi đã đúng thì không chép lại."""
     from scripts.forecast import stage
     root = Path(root)
     out = Path(context['directory']) / 'forecast'
-    ky_cua_ban(context['snapshot_path'])
+    if not same_sales:
+        ky_cua_ban(context['snapshot_path'])
     folder, meta, source, record = _kiem_nguon(root, release_id, context['target'], registry)
-    trained = _kiem_khop(folder, source, Path(context['snapshot_path']))
+    check = _kiem_cung_sales if same_sales else _kiem_khop
+    trained = check(folder, source, Path(context['snapshot_path']))
     nguon = {'release_id': release_id, 'snapshot_id': record['snapshot_id'], 'run_id': record['run_id'],
              'trained_through': str(trained)}
     keys = ('model_version', 'primary', 'selection_step', 'fits', 'seconds')
@@ -159,3 +161,32 @@ def dung_lai(context, root, release_id, *, registry=None):
         shutil.rmtree(tmp, ignore_errors=True)
         raise
     return out.as_posix(), {**{k: new[k] for k in keys}, 'nguon_du_bao': nguon}
+
+
+def _kiem_cung_sales(folder, source, target):
+    with duckdb.connect(config=DUCKDB_CONFIG) as con:
+        columns = '"Date", "Revenue", "COGS"'
+        base = 'select ' + columns + ' from read_parquet(' + _quoted(source / 'sales.parquet') + ')'
+        ours = 'select ' + columns + ' from read_parquet(' + _quoted(target / 'sales.parquet') + ')'
+        diff = con.execute(f'select count(*) from (({base} except all {ours}) union all '
+                           f'({ours} except all {base}))').fetchone()[0]
+        if diff:
+            raise ValueError('sales khác bản nguồn; không dùng lại dự báo')
+        count, trained = con.execute('select count(distinct trained_through), min(trained_through) '
+            'from read_parquet(' + _quoted(folder / 'forecast_daily.parquet') + ')').fetchone()
+        if count != 1:
+            raise ValueError('Dự báo nguồn phải có đúng một trained_through')
+        last = con.execute('select max(cast("Date" as date)) from read_parquet('
+                           + _quoted(source / 'sales.parquet') + ')').fetchone()[0]
+        if trained != last:
+            raise ValueError('Dự báo nguồn không khớp ngày cuối của sales')
+    return trained
+
+
+def dung_lai(context, root, release_id, *, registry=None):
+    return _dung_lai(context, root, release_id, registry=registry)
+
+
+def dung_lai_cung_sales(context, root, release_id, *, registry=None):
+    """Bản một file chỉ dùng lại dự báo khi toàn bộ sales giống hệt bản nguồn."""
+    return _dung_lai(context, root, release_id, registry=registry, same_sales=True)
