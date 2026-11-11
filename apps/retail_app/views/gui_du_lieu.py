@@ -10,7 +10,8 @@ if not roles.allowed(roles.current_role(), 'gui_du_lieu'):
     st.stop()
 from ui.common import backend
 from ui.kho_dot import configured_store, mode
-from ui.nhap_dot import DotStore
+from ui.nhap_dot import DotStore, tao_anh_chup
+from ui.theo_doi_dot import theo_doi_dot
 
 local_available = nhap_kha_dung()
 dot_mode = mode()
@@ -43,7 +44,8 @@ if dot_mode != 'tat':
                 st.error(str(error))
         try:
             command = dots.latest_command()
-            for row in dots.visible(user['username'], roles.current_role()):
+            dot_rows = dots.visible(user['username'], roles.current_role())
+            for row in dot_rows:
                 with st.expander(f"{row['nhan']} · {dots.label(row, command)} · {row['id']}"):
                     st.caption(f"{len(row['files'])} file · {sum(f['so_byte'] for f in row['files']) / 1024**2:.2f} MB · {row['ngay_gui']}")
                     st.text(row.get('mo_ta', ''))
@@ -53,6 +55,7 @@ if dot_mode != 'tat':
                         st.info(row['thong_bao'])
                     if row['trang_thai'] in ('dang_chay', 'da_kiem') and row.get('release_id'):
                         st.caption('Bản dữ liệu: ' + row['release_id'][:8])
+            theo_doi_dot(dots, user['username'], roles.current_role(), tao_anh_chup(dot_rows, command))
         except Exception as error:
             st.error('Chưa đọc được yêu cầu đợt; báo kỹ sư dữ liệu.')
 if not local_available:
