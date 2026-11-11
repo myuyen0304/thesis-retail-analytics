@@ -106,7 +106,7 @@ class Registry:
         state = before['payload']
         if rid not in state['releases'] or state['releases'][rid]['status'] != 'ready':
             raise ValueError('Bản chưa đạt quality gate')
-        if state['releases'][rid].get('co_du_lieu_tong_hop'):
+        if state['releases'][rid].get('co_du_lieu_tong_hop') or state['releases'][rid].get('chi_dashboard'):
             raise ValueError('Bản tổng hợp chỉ được công bố lên dashboard')
         if state['active'] == rid:
             return  # Retry sau khi commit thành công nhưng mất ACK.
@@ -125,7 +125,7 @@ class Registry:
         before = self.read()
         state = before['payload']
         record = state['releases'].get(rid, {})
-        if record.get('status') != 'ready' or record.get('co_du_lieu_tong_hop') is not True:
+        if record.get('status') != 'ready' or not (record.get('co_du_lieu_tong_hop') is True or record.get('chi_dashboard') is True):
             raise ValueError('Dashboard chỉ nhận bản tổng hợp đã đạt quality gate')
         if state.get('dashboard') != expected:
             raise RuntimeError('Con trỏ dashboard đã đổi; không ghi đè')
