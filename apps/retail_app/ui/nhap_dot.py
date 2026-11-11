@@ -21,6 +21,28 @@ MAX_TOTAL_BYTES = 100 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
 
 
+def tao_anh_chup(rows, command):
+    """Chụp đúng dữ liệu đã vẽ; không đọc thêm kho để tạo ảnh đầu."""
+    return {
+        'rows': tuple(tuple(row.get(key) for key in
+                           ('id', 'trang_thai', 'release_id', 'ma_loi', 'thong_bao'))
+                      for row in rows),
+        'lenh': None if command is None else {
+            'so': command['so'], 'loai': command.get('loai'),
+            # Tách kết quả khỏi đầu vào để ảnh đầu không đổi theo nó.
+            'ket_qua': None if command['ket_qua'] is None else dict(command['ket_qua']),
+        },
+    }
+
+
+def can_theo_doi(anh):
+    """Chỉ dò khi Airflow còn có thể đổi trạng thái hoặc trả kết quả lệnh."""
+    command = anh['lenh']
+    return (command is not None and command['ket_qua'] is None) or any(
+        row[1] in ('da_gui', 'dang_kiem', 'het_cho', 'cho_chay', 'dang_chay')
+        for row in anh['rows'])
+
+
 class DotStore:
     def __init__(self, kho):
         self.kho = kho
@@ -71,6 +93,9 @@ class DotStore:
             if role in ('ky_su', 'admin') or row['nguoi_gui'] == username:
                 rows.append(row)
         return sorted(rows, key=lambda r: (r['ngay_gui'], r['id']), reverse=True)
+
+    def anh_chup(self, username, role):
+        return tao_anh_chup(self.visible(username, role), self.latest_command(strict=True))
 
     def gui_dot(self, uploads, nhan, mo_ta):
         username, audit = actor('gui')
@@ -123,7 +148,7 @@ class DotStore:
         audit.log(username, 'dot_chay_lai' if target == 'cho_chay' else 'dot_huy', {'id': request_id, 'so': number})
         return number
 
-    def latest_command(self):
+    def latest_command(self, *, strict=False):
         names = sequence_names(self.kho.liet_ke('lenh'))
         if not names:
             return None
@@ -144,6 +169,9 @@ class DotStore:
             except KhongCo:
                 command['ket_qua'] = None
         except (ValueError, TypeError, KeyError, KhongCo, OSError):
+            if strict:
+                # Nhịp dò bỏ qua lỗi đọc, không biến lỗi tạm thời thành kết quả lệnh.
+                raise
             command['ket_qua'] = broken
         return command
 
