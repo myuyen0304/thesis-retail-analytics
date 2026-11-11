@@ -557,3 +557,152 @@ def test_goi_y_khoi_phuc_can_hoi_de_cho_tung_schema(tmp_path, capsys):
     for suffix in don.SUFFIXES:
         assert f'UNDROP TABLE retail_lab.r_{OLD}_{suffix}.<ten_bang>' in output
     assert output.count('UNDROP TABLE') == 6
+
+
+def test_g8_dashboard_target_blocks_all_drops(tmp_path, capsys):
+    payload = state()
+    payload['dashboard'] = OLD
+    registry, cloud = setup(tmp_path, payload), FakeCloud((ACTIVE, ROLLBACK, OLD, EXTRA))
+    _, reasons = don.plan_deletion(payload, cloud.schemas, [], [], [OLD, EXTRA],
+                                   now=datetime.now(timezone.utc))
+    assert 'G8: yêu cầu xóa bản đang trên dashboard' in reasons
+    assert_blocked(tmp_path, cloud, registry, '--xoa', EXTRA, '--xoa', OLD)
+    assert 'G8: yêu cầu xóa bản đang trên dashboard' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('pointer', [EXTRA, 'bad', '', 123, [], {}])
+def test_g8_invalid_pointer_blocks_every_target(tmp_path, capsys, pointer):
+    payload = state()
+    payload['dashboard'] = pointer
+    registry, cloud = setup(tmp_path, payload), FakeCloud()
+    _, reasons = don.plan_deletion(payload, cloud.schemas, [], [], [OLD],
+                                   now=datetime.now(timezone.utc))
+    reason = 'G8: con trỏ dashboard không trỏ tới bản hợp lệ; trả dashboard trước khi xóa'
+    assert reason in reasons
+    assert_blocked(tmp_path, cloud, registry, '--xoa', OLD)
+    assert reason in capsys.readouterr().err
+
+
+def test_g8_non_hex_pointer_in_releases_is_invalid(tmp_path):
+    payload = state()
+    payload['dashboard'] = 'bad'
+    payload['releases']['bad'] = record('bad')
+    cloud = FakeCloud()
+    cloud.schemas |= don.schema_set('bad')
+    _, reasons = don.plan_deletion(payload, cloud.schemas, [], [], [OLD],
+                                   now=datetime.now(timezone.utc))
+    assert reasons == ('G8: con trỏ dashboard không trỏ tới bản hợp lệ; trả dashboard trước khi xóa',)
+
+
+def test_g8_dashboard_missing_schema_blocks_unrelated_deletion(tmp_path, capsys):
+    payload = state()
+    payload['dashboard'] = EXTRA
+    payload['releases'][EXTRA] = record(EXTRA)
+    registry = setup(tmp_path, payload)
+    cloud = FakeCloud((ACTIVE, ROLLBACK, OLD, EXTRA))
+    cloud.schemas.remove(f'r_{EXTRA}_ops')
+    _, reasons = don.plan_deletion(payload, cloud.schemas, [], [], [OLD],
+                                   now=datetime.now(timezone.utc))
+    assert reasons == ('G8: bản trên dashboard không còn đủ sáu schema',)
+    assert_blocked(tmp_path, cloud, registry, '--xoa', OLD)
+    assert 'G8: bản trên dashboard không còn đủ sáu schema' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('with_none', [False, True])
+def test_g8_no_pointer_keeps_old_plan(tmp_path, with_none):
+    original = state()
+    payload = state()
+    if with_none:
+        payload['dashboard'] = None
+    cloud = FakeCloud()
+    now = datetime.now(timezone.utc)
+    assert don.plan_deletion(payload, cloud.schemas, [], [], [OLD], now=now) == (
+        don.plan_deletion(original, cloud.schemas, [], [], [OLD], now=now))
+    don.checked_payload(payload)
+    registry = setup(tmp_path, payload)
+    assert run(tmp_path, cloud, '--xoa', OLD, '--thuc-hien') == 0
+    assert OLD not in registry.read()['payload']['releases']
+
+
+@pytest.mark.parametrize('pointer', [EXTRA, '', 123, [], {}])
+def test_g8_checked_payload_independent_guard(pointer):
+    payload = state()
+    payload['dashboard'] = pointer
+    with pytest.raises(don.Blocked, match='dashboard'):
+        don.checked_payload(payload)
+
+
+def test_g8_deleting_other_release_preserves_dashboard(tmp_path):
+    payload = state()
+    payload['dashboard'] = ROLLBACK
+    payload['dashboard_since'] = {'release_id': ROLLBACK, 'at': '2026-11-10T01:00:00Z'}
+    registry, cloud = setup(tmp_path, payload), FakeCloud()
+    assert run(tmp_path, cloud, '--xoa', OLD, '--thuc-hien') == 0
+    updated = registry.read()['payload']
+    assert updated['dashboard'] == ROLLBACK
+    assert updated['dashboard_since'] == payload['dashboard_since']
+    assert OLD not in updated['releases']
+    don.checked_payload(updated)
+    remaining = don.removed_payload(payload, [OLD], datetime.now(timezone.utc))
+    assert remaining['dashboard'] == ROLLBACK
+    assert remaining['dashboard_since'] == payload['dashboard_since']
+    with pytest.raises(don.Blocked, match='dashboard'):
+        don.removed_payload(payload, [ROLLBACK], datetime.now(timezone.utc))
+
+
+def test_g8_pointer_changes_while_waiting_for_lock(tmp_path, monkeypatch, capsys):
+    registry, cloud = setup(tmp_path), FakeCloud()
+    before = registry.read()
+    original_read = registry.read
+    calls = []
+    held = []
+    real_lock = don.deletion_lock
+
+    def read():
+        calls.append(1)
+        if len(calls) == 1:
+            return original_read()
+        assert held, 'Phải kiểm lại registry trong khóa'
+        payload = dict(before['payload'], dashboard=OLD)
+        return dict(before, payload=payload)
+
+    @contextmanager
+    def lock(root):
+        with real_lock(root):
+            held.append(True)
+            try:
+                yield
+            finally:
+                held.pop()
+
+    monkeypatch.setattr(registry, 'read', read)
+    monkeypatch.setattr(don, 'deletion_lock', lock)
+    # Ảnh trước khi chờ khóa vẫn cho phép xóa.
+    _, reasons = don.plan_deletion(registry.read()['payload'], cloud.schemas, [], [], [OLD],
+                                   now=datetime.now(timezone.utc))
+    assert not reasons
+    assert run(tmp_path, cloud, '--xoa', OLD, '--thuc-hien',
+               registry_factory=lambda root, sql: registry) == 2
+    assert len(calls) == 2 and not drops(cloud)
+    assert original_read() == before
+    assert 'G8: yêu cầu xóa bản đang trên dashboard' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('pointer', [None, OLD, ROLLBACK, ACTIVE])
+def test_g8_report_pointer_and_role_priority(tmp_path, capsys, pointer):
+    payload = state()
+    payload['dashboard'] = pointer
+    setup(tmp_path, payload)
+    cloud = FakeCloud()
+    assert run(tmp_path, cloud) == 0
+    output = capsys.readouterr().out
+    lines = output.splitlines()
+    total = lines.index('Tổng bảng trong catalog: 3')
+    assert lines[total + 1] == 'Con trỏ dashboard: ' + (pointer or 'theo bản số thật')
+    assert f'{ACTIVE} | active |' in output
+    if pointer and pointer != ACTIVE:
+        line = next(line for line in lines if line.startswith(pointer + ' |'))
+        assert f'{pointer} | dashboard |' in line
+        assert 'G8: yêu cầu xóa bản đang trên dashboard' in line
+        if pointer == ROLLBACK:
+            assert 'G2: yêu cầu xóa đích rollback' in line

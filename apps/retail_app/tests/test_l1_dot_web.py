@@ -411,16 +411,45 @@ for name in ('duckdb', 'scripts.ingest.auto_mapping', 'scripts.ingest.dot'):
     assert result.returncode == 0, result.stderr[-6000:]
 
 
+def test_cloud_import_only_app_on_sys_path(tmp_path):
+    source = ("import sys\n"
+              "sys.path.insert(0, sys.argv[1])\n"
+              "import ui.nhap_store\n"
+              "import ui.nhap_runner\n"
+              "import ui.nhap_dot\n"
+              "import ui.theo_doi_dot\n"
+              "import scripts.ingest.approval\n")
+    env = os.environ.copy()
+    env.pop('PYTHONPATH', None)
+    result = subprocess.run([sys.executable, '-P', '-B', '-X', 'utf8', '-c', source, str(APP)],
+                            cwd=tmp_path, env=env, capture_output=True, text=True, encoding='utf-8')
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.parametrize('different', [False, True])
 def test_forecast_note_only_when_different(monkeypatch, different):
     monkeypatch.setattr(common, 'info_strip', lambda: None)
     monkeypatch.setattr(releases, 'pointers_differ', lambda: different)
-    monkeypatch.setattr(common, 'load_or_stop', lambda *a: pd.DataFrame({'data_end_date': ['2022-12-31']}))
+    monkeypatch.setattr(common, 'load_or_stop', lambda *a: pd.DataFrame({'data_end_date': [pd.Timestamp('2022-12-31')]}))
     at = AppTest.from_string("from ui.common import page_header; page_header('Dự báo G và COGS', 'Dự báo?')").run()
     assert not at.exception
     assert bool(at.info) is different
     if different:
-        assert 'số tới 2022-12-31' in at.info[0].value
+        assert 'số tới 31/12/2022' in at.info[0].value
+        assert '00:00:00' not in at.info[0].value
+
+
+@pytest.mark.parametrize('different', [False, True])
+def test_chat_note_only_when_different(monkeypatch, different):
+    monkeypatch.setattr(common, 'info_strip', lambda: None)
+    monkeypatch.setattr(releases, 'pointers_differ', lambda: different)
+    monkeypatch.setattr(common, 'load_or_stop', lambda *a: pd.DataFrame({'data_end_date': [pd.Timestamp('2022-12-31')]}))
+    at = AppTest.from_string("from ui.common import page_header; page_header('Hỏi dữ liệu (AI)', 'Hỏi?')").run()
+    assert not at.exception
+    assert bool(at.info) is different
+    if different:
+        assert 'số tới 31/12/2022' in at.info[0].value
+        assert '00:00:00' not in at.info[0].value
 
 
 REQUESTS = [pe.request_ps1('2019', 'year'), pe.request_ps4('2019', 'year', 2018, 2019, '2019'),
@@ -713,3 +742,70 @@ def test_corrupt_metadata_isolated_per_request(store, monkeypatch, damage):
     at = cloud_page(store, monkeypatch)
     assert not at.exception and not at.error
     assert any('Dữ liệu trạng thái hỏng' in e.label for e in at.expander)
+
+
+def test_l2_replay_reactivate_and_bad_field_types(store):
+    events = [(1, {'toi': 'da_gui'}), (2, {'toi': 'dang_kiem'}),
+              (3, {'toi': 'cho_chay'}), (4, {'toi': 'dang_chay'}),
+              (5, {'toi': 'da_kiem', 'release_id': RID}),
+              (6, {'toi': 'tren_dashboard'}), (7, {'toi': 'da_tra'}),
+              (8, {'toi': 'tren_dashboard'})]
+    assert nd.phat_lai(events)['trang_thai'] == 'tren_dashboard'
+    for key in ('release_id', 'ma_loi', 'thong_bao'):
+        malformed = [(1, {'toi': 'da_gui', key: 123})]
+        assert nd.phat_lai(malformed)['trang_thai'] == 'hong'
+
+
+def test_l2_pure_modules_import_without_streamlit():
+    code = ("import sys; sys.path.insert(0, 'apps/retail_app'); "
+            "sys.modules['streamlit']=None; "
+            "import ui.trang_thai_dot, ui.kho_dot")
+    result = subprocess.run([sys.executable, '-B', '-X', 'utf8', '-c', code],
+                            cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize('damage', ['command_json', 'command_type', 'command_missing_kind', 'result_json'])
+def test_l2_bad_command_does_not_lock_buttons(store, damage):
+    row = store.gui_dot([Upload()], 'batch', '')
+    advance(store, row, ['dang_kiem', 'cho_chay', 'dang_chay', 'da_kiem'])
+    command = b'{broken' if damage == 'command_json' else (
+        b'[]' if damage == 'command_type' else
+        b'{}' if damage == 'command_missing_kind' else
+        b'{"loai":"dat"}')
+    store.kho.ghi_moi('lenh/000001.json', command)
+    if damage == 'result_json':
+        store.kho.ghi_moi('lenh/000001.ket_qua.json', b'{broken')
+    latest = store.latest_command()
+    assert latest['ket_qua'] == {'ket_qua': 'loi',
+        'thong_bao': 'Dữ liệu lệnh hỏng; báo kỹ sư dữ liệu.'}
+    assert store.label(store.read(row['id']), latest) == 'Đã kiểm tra'
+
+
+def test_l2_bad_ledger_has_fixed_message(store):
+    store.kho.ghi_moi('so_dot/000001.json', b'{broken')
+    with pytest.raises(ValueError) as error:
+        store.ledger()
+    assert str(error.value) == 'Sổ đợt hỏng; báo kỹ sư dữ liệu.'
+
+
+def test_l2_unreadable_command_and_ledger_are_sanitized(store, monkeypatch):
+    row = store.gui_dot([Upload()], 'batch', '')
+    advance(store, row, ['dang_kiem', 'cho_chay', 'dang_chay', 'da_kiem'])
+    store.kho.ghi_moi('lenh/000001.json', b'{"loai":"dat","so":999}')
+    assert store.latest_command()['so'] == 1
+    original = store.kho.doc
+
+    def unreadable(path):
+        if path == 'lenh/000001.json' or path == 'so_dot/000001.json':
+            raise OSError('secret-file-path')
+        return original(path)
+
+    store.kho.ghi_moi('so_dot/000001.json', b'{}')
+    monkeypatch.setattr(store.kho, 'doc', unreadable)
+    latest = store.latest_command()
+    assert latest['so'] == 1
+    assert latest['ket_qua']['thong_bao'] == 'Dữ liệu lệnh hỏng; báo kỹ sư dữ liệu.'
+    assert store.label(store.read(row['id']), latest) == 'Đã kiểm tra'
+    with pytest.raises(ValueError, match=r'^Sổ đợt hỏng; báo kỹ sư dữ liệu\.$'):
+        store.ledger()

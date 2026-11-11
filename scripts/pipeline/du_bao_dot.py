@@ -72,17 +72,17 @@ def _kiem_hash(folder, meta, files):
             raise ValueError(f'Dự báo nguồn hỏng hoặc thiếu {name}')
 
 
-def _kiem_nguon(root, release_id):
+def _kiem_nguon(root, release_id, target='duckdb', registry=None):
     """Trả (thư mục dự báo, meta, thư mục snapshot, bản ghi) của bản nguồn; sai điều kiện thì ValueError."""
     from scripts.forecast import stage
-    state = Registry(root).read()['payload']
+    state = (registry or Registry(root)).read()['payload']
     record = state['releases'].get(release_id)
     if not record or record.get('status') != 'ready':
         raise ValueError(f'Bản nguồn {release_id} không có trong registry hoặc chưa sẵn sàng')
     run = root / 'runs' / record['run_id']
     context = json.loads((run / 'context.json').read_text(encoding='utf-8'))
-    if context.get('target') != 'duckdb' or context.get('release_id') != release_id:
-        raise ValueError('Bản nguồn phải là bản DuckDB của đúng lượt chạy đó')
+    if context.get('target') != target or context.get('release_id') != release_id:
+        raise ValueError('Bản nguồn phải cùng target và đúng lượt chạy đó')
     source = root / 'snapshots' / record['snapshot_id']
     options = {'extension_directory': context['extension_dir']} if context.get('extension_dir') else {}
     if snapshot.validate(source, **options).get('dot'):
@@ -127,15 +127,13 @@ def _kiem_khop(folder, source, target):
     return trained
 
 
-def dung_lai(context, root, release_id):
+def dung_lai(context, root, release_id, *, registry=None):
     """Chép dự báo bản gốc vào lượt này. Chạy lại khi đã đúng thì không chép lại."""
     from scripts.forecast import stage
     root = Path(root)
     out = Path(context['directory']) / 'forecast'
-    if context['target'] != 'duckdb':
-        raise ValueError('Bản có đợt chỉ chạy local')
     ky_cua_ban(context['snapshot_path'])
-    folder, meta, source, record = _kiem_nguon(root, release_id)
+    folder, meta, source, record = _kiem_nguon(root, release_id, context['target'], registry)
     trained = _kiem_khop(folder, source, Path(context['snapshot_path']))
     nguon = {'release_id': release_id, 'snapshot_id': record['snapshot_id'], 'run_id': record['run_id'],
              'trained_through': str(trained)}

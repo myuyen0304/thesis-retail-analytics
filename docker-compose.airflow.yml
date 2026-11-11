@@ -51,6 +51,7 @@ services:
       - -c
       - |
         airflow db migrate &&
+        airflow pools set retail_writer 1 'CLI ghi cua pipeline' &&
         python -c "import json, os, pathlib; pathlib.Path('/opt/airflow/logs/passwords.json').write_text(json.dumps({'admin': os.environ['RETAIL_AIRFLOW_ADMIN_PASSWORD']}))"
   airflow-api:
     <<: *airflow

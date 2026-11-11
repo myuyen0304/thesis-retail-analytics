@@ -1,5 +1,7 @@
 # Giao việc L3: đợt 2024 (bộ sinh dữ liệu, nới dải ngày dbt, chế độ không dự báo)
 
+> **HOÃN, KHÔNG LÀM (PM chốt 2026-11-09).** Demo 12/12 chỉ gồm đợt 2023. Phiếu này giữ lại để làm sau 12/12, khi đó phải đối chiếu lại số dòng với code. Hai lỗi chữ ở §3.5 đã chuyển sang [giao_viec_l3a_sua_chu.md](giao_viec_l3a_sua_chu.md).
+
 Soạn ngày 2026-11-09, Claude. GPT code §3–§5. Claude rà độc lập trước khi commit; chưa đạt thì ghi vào §8 để GPT sửa.
 Thiết kế gốc: [thiet_ke_dot_web_public.md](thiet_ke_dot_web_public.md), các mục §8, §9, §13 Mốc 2, §14 lát L3 và L4. PM đã chốt: 2024 là đủ năm, bản có đợt 2024 không có bảng dự báo (Q5).
 

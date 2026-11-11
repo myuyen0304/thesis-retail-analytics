@@ -113,7 +113,7 @@ def test_code_version_checked_before_snapshot(cli_case, monkeypatch):
 
 @pytest.mark.parametrize('stage', ['forecast', 'build', 'validate', 'publish', 'run'])
 def test_execute_direct_rejects_dots_for_other_stages(tmp_path, stage):
-    with pytest.raises(ValueError, match='--dot chỉ dùng với prepare local'):
+    with pytest.raises(ValueError, match='--dot chỉ dùng với prepare, không cùng --snapshot-id'):
         cli._execute(stage, run_id='invalid', root=tmp_path / 'pipeline', dots=[tmp_path / 'batch'])
     assert not (tmp_path / 'pipeline').exists()
 
@@ -138,13 +138,28 @@ def test_run_id_compares_hash_not_path(cli_case, tmp_path):
 
 
 @pytest.mark.parametrize('args', [['forecast'], ['build'], ['validate'], ['publish'], ['run'],
-    ['prepare', '--target', 'databricks'], ['prepare', '--snapshot-id', 'abcdef123456']])
+    ['prepare', '--snapshot-id', 'abcdef123456']])
 def test_parser_rejects_invalid_dot_options(monkeypatch, args):
     monkeypatch.setattr(sys, 'argv', ['pipeline', *args, '--run-id', 'x', '--dot', 'unused'])
     monkeypatch.setattr(cli, 'execute', lambda *a, **k: pytest.fail('Không được gọi stage'))
     with pytest.raises(SystemExit) as caught:
         cli.main()
     assert caught.value.code == 2
+
+
+def test_parser_accepts_dot_on_databricks(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sys, 'argv', ['pipeline', 'prepare', '--target', 'databricks',
+                                     '--run-id', 'x', '--dot', '/opt/retail/data_demo/batch'])
+    def execute(stage, **options):
+        calls.append((stage, options))
+        return {'run_id': 'x', 'release_id': 'a' * 24, 'snapshot_id': 'b' * 12, 'stage': 'prepared'}
+    monkeypatch.setattr(cli, 'execute', execute)
+    cli.main()
+    assert len(calls) == 1
+    assert calls[0][0] == 'prepare'
+    assert calls[0][1]['target'] == 'databricks'
+    assert calls[0][1]['dots'] == ['/opt/retail/data_demo/batch']
 
 
 def test_prepare_error_writes_summary_without_snapshot(cli_case):

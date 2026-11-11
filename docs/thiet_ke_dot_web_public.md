@@ -1,4 +1,4 @@
-# Thiết kế: đợt dữ liệu 2023 rồi 2024 trên web public
+# Thiết kế: đợt dữ liệu 2023 trên web public (2024 hoãn tới sau 12/12)
 
 Soạn ngày 2026-11-07, Claude. Trạng thái: **PM đã chốt mọi quyết định ngày 2026-11-07** (§0). L1 đã commit; phiếu L2, L3 soạn ngày 2026-11-09.
 Nền: [thiet_ke_nap_ky_moi.md](thiet_ke_nap_ky_moi.md) (B′, D1–D5) và `thiet_ke_duong_tu_dong.md` §8 (T2, nhánh `docs/thiet-ke-b-tam-thoi`).
@@ -19,6 +19,8 @@ Các vị trí `file:dòng` đã đọc trong worktree `D:\retail-analytics-nap`
 | Q9 | Bản tổng hợp chỉ cấp quyền đọc cho `retail-web-ro`, không cho `retail-ai-ro` (§7.2). Làm trong L2, trước cửa sổ bảo trì | PM 2026-11-07 |
 | Q10 | Bộ phần mở rộng của đợt lấy đúng theo bản `active` (§5 bước 3) | PM 2026-11-07 |
 | Q11 | Mốc 1 không gồm luồng một file mở rộng trên web (§1) | PM 2026-11-07 |
+| Q12 | **Demo 12/12 chỉ gồm đợt 2023.** Bỏ Mốc 2. Đợt 2024 (Q5, §8 phần chuỗi, §9, phiếu L3 + L4) hoãn tới sau 12/12. Hai lỗi chữ tách sang phiếu L3a | PM 2026-11-09 |
+| Q13 | Tổng duyệt chạy trọn luồng từ giao diện (§11). Một đợt gồm nhiều bảng, **mỗi bảng đúng một file**; không làm phần ghép một bảng từ nhiều file | PM 2026-11-09 |
 
 ## 1. Kịch bản và phạm vi
 
@@ -29,13 +31,13 @@ Các vị trí `file:dòng` đã đọc trong worktree `D:\retail-analytics-nap`
 4. Trong khoảng 5 phút, PS1–PS5 và Tổng quan hiện 2023, có băng rôn.
 5. Trang Dự báo và chat vẫn đọc số thật (`active`).
 
-**Mốc 2 (khoảng 2026-12-01).** `chushop` gửi đợt 2024, Admin công bố, PS hiện cả 2023 và 2024. Trễ mốc nào thì phần đó vào hướng phát triển của báo cáo.
+**Mốc 2: bỏ (Q12).** Đợt 2024 vào hướng phát triển của báo cáo. Hệ thống hiện từ chối đợt kết thúc từ 2024-07-01 trở đi (`du_bao_dot.py:44–45`), nên demo chỉ chứng minh được một lần nối.
 
 **Ngoài phạm vi:**
 - file 155 MB;
 - học lại dự báo (D4);
 - chat theo kỳ có đợt (D6);
-- luồng một file mở rộng của §8: thiết kế cũ vẫn giữ nguyên, nhưng không thuộc hai mốc này. Tài liệu này chỉ dùng chung hạ tầng (Volume, DAG dò).
+- luồng một file mở rộng của §8: thiết kế cũ vẫn giữ nguyên, nhưng không thuộc Mốc 1. Tài liệu này chỉ dùng chung hạ tầng (Volume, DAG dò).
 
 ## 2. Luồng đầu–cuối
 
@@ -174,9 +176,11 @@ Khi dashboard đang hiện bản có đợt, khung AI vẫn chạy với lựa c
 
 ### 7.5 Vận hành (Q4)
 
-Chỉ bật con trỏ trong khung demo: hai mốc, buổi gặp thầy, buổi tập trước 12/12, ngày 12/12. Xong thì Admin bấm "Trả dashboard". Mỗi lần bật hoặc trả mất tối đa khoảng 5 phút, cộng thời gian dựng nếu có. Băng rôn tổng hợp đã có ở các trang PS (D5a).
+Chỉ bật con trỏ trong khung demo: Mốc 1, buổi gặp thầy, buổi tập trước 12/12, ngày 12/12. Xong thì Admin bấm "Trả dashboard". Mỗi lần bật hoặc trả mất tối đa khoảng 5 phút, cộng thời gian dựng nếu có. Băng rôn tổng hợp đã có ở các trang PS (D5a).
 
 ## 8. Sổ đợt và chuỗi 2023 → 2024
+
+Q12: demo chỉ có đợt 2023. Sổ đợt vẫn dùng như dưới; các dòng về D24 là cho phần làm sau 12/12.
 
 - Đợt mới luôn nối sau **các đợt trong sổ**, theo thứ tự `vao_so`. Đợt 2024 tự thành chuỗi gốc + 2023 + 2024, dựng lại trong một lần `prepare`. `dot.prepare` lấy lại mốc cắt sau mỗi đợt (`dot.py:211–230`).
 - Lúc chạy, file của đợt cũ tải lại từ Volume và so sha256 với sổ. Thư mục local chỉ là bộ đệm.
@@ -186,6 +190,8 @@ Chỉ bật con trỏ trong khung demo: hai mốc, buổi gặp thầy, buổi t
 - DE bỏ một đợt khỏi sổ (sự kiện `bo`) chỉ ảnh hưởng lần dựng sau, không đổi con trỏ đang bật.
 
 ## 9. Đợt 2024
+
+**Hoãn tới sau 12/12 (Q12).** Toàn bộ §9 giữ làm tài liệu cho phần làm sau, không thuộc cửa sổ bảo trì.
 
 ### 9.1 Bộ sinh dữ liệu
 
@@ -246,8 +252,6 @@ Từ 2026-11-02 tới nay không có lượt nào publish: các lượt 08:00 t�
 | Ngay khi N chạy ổn 1–2 lượt 08:00 (khoảng 11-22) | Đặt đích rollback = `dbb80f56`, xóa `5d32a104` | vẫn ~249, vì bảng đã xóa còn bị tính |
 | 11-24 | D23 | ~332 |
 | Khoảng 11-29 | Hết thời gian tính trễ của `5d32a104` | ~252 |
-| Từ 11-29 | D24 (ít bảng hơn, vì không có `rpt_forecast_*`) | ~327 |
-| Sau khi D24 lên dashboard (tùy chọn) | Xóa D23 | |
 
 Nếu xóa `5d32a104` trễ, quota đỉnh lên khoảng 410†. Mốc ở hàng 3 là mốc chặn.
 
@@ -266,13 +270,13 @@ Script cần SQL warehouse để đọc registry, quét view (G6) và ghi CAS. N
 Lý do phải làm có kiểm soát: DAG production **tự publish** (`deploy/airflow/dags/retail_batch_pipeline.py:71`, `prepare >> … >> publish`). Image mới đổi `code_version`, nên lượt kế tiếp sẽ dựng và publish ngay mà không ai xem.
 
 **Điều kiện vào cửa sổ:**
-- L1–L3 (§14) đã merge, và bộ sinh L4 đã chạy được: `retail_dbt` đóng băng sau cửa sổ, nên L3 phải đạt `dbt build` thật với dữ liệu 2024 trước đó (chỉnh ngày 2026-11-09). L4 còn có thể sửa sau cửa sổ, vì `scripts/demo` ngoài phần băm. L5 làm sau cửa sổ cũng được;
+- L1, L2, L3a và phần B1 của L5 (§14) đã merge (chỉnh ngày 2026-11-09 theo Q12; thêm B1 ngày 2026-11-10). Phần G8 của L5 làm sau cửa sổ cũng được;
 - D5a đã commit;
 - `nap-ky/myuyen` đã merge vào `main`. Hiện nhánh chứa đủ `origin/main` và đi trước 74 commit;
 - quota còn ít nhất 183 chỗ (100 + 83);
 - app thử dưới đây đã đạt.
 
-**App thử trước cửa sổ (PM chốt 2026-11-09).** Code mới chưa từng chạy trên Streamlit Cloud, nên phải thử mà không đụng web đang chạy. PM làm sau khi L1–L3 đã merge, đủ thời gian sửa trước cửa sổ:
+**App thử trước cửa sổ (PM chốt 2026-11-09).** Code mới chưa từng chạy trên Streamlit Cloud, nên phải thử mà không đụng web đang chạy. PM làm sau khi L1, L2, L3a và B1 đã merge, đủ thời gian sửa trước cửa sổ:
 1. Tạo app Streamlit Cloud thứ hai, chạy từ `main` tại đúng commit sẽ đưa lên `app/myuyen`. App đang chạy trên `app/myuyen` giữ nguyên.
 2. Chép secrets từ app đang chạy, **không thêm khóa `RETAIL_NHAP_*`**. `RETAIL_NHAP_DOT` mặc định là `tat`, nên app thử không ghi vào Volume.
 3. Kiểm:
@@ -282,7 +286,19 @@ Lý do phải làm có kiểm soát: DAG production **tự publish** (`deploy/ai
    - một câu chat đúng.
 4. Xóa app thử sau khi kiểm xong, và không chia sẻ link trong lúc thử vì app đọc dữ liệu thật.
 
-Trượt thì sửa rồi thử lại, chưa vào cửa sổ. Cách này chỉ kiểm code mới với bản đang chạy; phần đọc và ghi Volume thật vẫn kiểm ở lượt thật sau cửa sổ (§14, L2).
+Trượt thì sửa rồi thử lại, chưa vào cửa sổ. Cách này chỉ kiểm code mới với bản đang chạy, không kiểm phần đọc và ghi Volume; phần đó thuộc tổng duyệt dưới đây.
+
+**Tổng duyệt đợt 2023 trên cloud trước cửa sổ (PM chốt 2026-11-09, Q13).** Upload thật trên Streamlit Cloud chưa từng chạy, và đường `--dot` target `databricks` mới kiểm bằng cloud giả. Lỗi lộ ra sau cửa sổ thì phần băm đã đóng băng. PM chạy một lượt thật từ giao diện theo script Claude viết:
+1. Dựng image thử `retail-airflow:thu-l2` từ `git archive` của commit có L1, L2, L3a. Chạy một bộ Airflow thử riêng: compose project khác, metadata riêng, cổng khác, `RETAIL_PIPELINE_SCHEDULE_ENABLED=false`, và mount cùng `warehouse/pipeline` với Airflow đang chạy để dùng chung `writer.lock`, `state.json`, `snapshots`. `retail_batch_pipeline` trên Airflow đang chạy giữ nguyên. **Image thử bỏ hẳn file DAG `retail_batch_pipeline.py`** vì DAG đó tự publish; bộ thử chỉ có `nhap_du_lieu_do` và `retail_dot_pipeline`. Không chạy qua mốc 08:00. Script: `scripts/ops/tong_duyet.ps1`.
+2. Tạo một app Streamlit Cloud tạm từ commit đó, thêm `RETAIL_NHAP_DOT=volume`, khóa `RETAIL_NHAP_DBX_*` của `retail-nhap-writer`, và `RETAIL_NHAP_VOLUME` trỏ vào thư mục riêng `/Volumes/retail_lab/nhap_du_lieu/kho/tong_duyet`. Airflow thử dùng đúng thư mục này. **Không dùng thư mục gốc của `kho`:** cùng bộ file có cùng mã đợt, đợt ở `da_kiem` không hủy được, nên lượt thật sẽ bị D2-7.
+3. PM đăng nhập bằng tài khoản `quan_ly`, không dùng Admin, upload 15 file của `data_demo/dot_2023`. Luồng phải tự đi: `da_gui` → `dang_kiem` → `cho_chay` → `dang_chay` → `da_kiem`.
+4. Tới `da_kiem` thì tắt `nhap_du_lieu_do` ngay. **Không bấm đưa lên dashboard, không chạy `publish`, không `dat-dashboard`:** lệnh `dat` trong thư mục thử vẫn đổi con trỏ `dashboard` thật. `active` và `dashboard` không đổi. Nhật ký audit trên Neon sẽ có thêm dòng của lượt thử.
+5. Claude kiểm số dòng, G/COGS so với đối chứng của bộ sinh, quyền `retail-web-ro` có và `retail-ai-ro` không có trên bản này.
+6. Dọn bằng `don --xoa <bản tổng duyệt> --thuc-hien` trước cửa sổ, để trang Duyệt không hiện bản này trong danh sách chọn. Bản này không phải `active`, đích rollback hay `dashboard`, nên luật G1–G3 và G8 không chặn. Xóa thêm app tạm, thư mục `tong_duyet`, và bộ Airflow thử (cả volume metadata của nó).
+
+Lượt này không kiểm được bước `dat-dashboard` và image chính thức; hai phần đó vẫn kiểm ở lượt thật sau cửa sổ (§14, L2).
+
+Lượt này tốn khoảng 83 chỗ quota, vẫn bị tính khoảng 7 ngày sau khi xóa†. **Xóa bản tổng duyệt trước khoảng 11-16** để hết bị tính trước 11-24: đỉnh ở Mốc 1 khoảng 332† (N 83, `dbb80f56` 83, `5d32a104` còn tính 80, D23 83, khác 3). Trễ hơn thì đỉnh khoảng 415†, và một lần chạy lại D23 có thể lên gần 500†. Số chưa kiểm lại. Trượt thì sửa rồi dựng lại image thử, chưa vào cửa sổ.
 
 Sau cửa sổ, **đóng băng** `retail_dbt/*`, `scripts/{pipeline,ingest,parity,forecast}` và `apps/retail_app` tới 12/12. `scripts/demo` và `scripts/ops` vẫn sửa được.
 
@@ -321,13 +337,7 @@ Claude sẽ viết lệnh đầy đủ thành một script cho PM chạy ngoài 
 6. "Trả dashboard" → PS về số thật; sổ đợt vẫn còn 2023.
 7. `retail-nhap-writer` không đọc được bảng nào; `retail-web-ro` không đọc được Volume.
 
-**Mốc 2**
-1. Gửi đợt 2024 → chuỗi là gốc + 2023 + 2024; bản mới không có `rpt_forecast_*`.
-2. Công bố → PS hiện kỳ `2013-2024`; tháng 8/2024 không có Urban Blowout (năm chẵn).
-3. Trang Dự báo và chat không đổi.
-4. Bản không có đợt build y hệt trước khi nới `dim_date`: test số dòng 4566 / 4381 vẫn đạt.
-
-**Buổi tập** (trước 12/12 ít nhất 1 ngày): chạy lại mục 4 của Mốc 1 và mục 2 của Mốc 2 trên web public, rồi trả dashboard.
+**Buổi tập** (trước 12/12 ít nhất 1 ngày): chạy lại mục 4 của Mốc 1 trên web public, rồi trả dashboard.
 
 ## 14. Lát làm (mỗi lát một phiếu GPT, Claude rà)
 
@@ -336,13 +346,13 @@ Claude sẽ viết lệnh đầy đủ thành một script cho PM chạy ngoài 
 | L0 | Dọn `03ad08c0` (PM); commit D5a; merge `nap-ky` vào `main` | không | §10 |
 | L1 | Lớp lưu Volume, loại yêu cầu "đợt" ở trang Gửi, trạng thái ở trang Duyệt, nút dashboard ghi lệnh (§3, §4, §7.3, §7.4) | có | test với Volume giả; S0 đã chứng minh `overwrite=false` |
 | L2 | DAG `nhap_du_lieu_do`, `--dot` trên databricks, DAG `retail_dot_pipeline` theo conf, pool, quyền chỉ cho web (§5, §6, §7.1, §7.2) | có | cloud giả, cộng một lượt thật sau cửa sổ |
-| L3 | Đợt 2024: dbt §9.2, chế độ không dự báo §9.3. **Cùng phiếu với L4** | có | local đầy đủ: không có đợt, có 2023, có 2023 + 2024 |
-| L4 | Bộ sinh dữ liệu 2024 (§9.1). Phải chạy được trước cửa sổ để kiểm L3 | không | local |
-| L5 | G8 cho `don_ban_cu.py` (§10). Hạn trước lần xóa `5d32a104` khoảng 11-22 | không | cloud giả |
-| — | App thử trên Streamlit Cloud (§11), sau khi L1–L3 đã merge | không | PM chạy |
-| — | Cửa sổ bảo trì (§11), sau L1–L3 và app thử | | PM chạy |
+| L3a | Ba chỗ sửa chữ (`giao_viec_l3a_sua_chu.md`) | có | test local |
+| L3, L4 | Đợt 2024: hoãn tới sau 12/12 (Q12), không làm ở đợt này | | |
+| L5 | Phiếu `giao_viec_l5_g8_b1.md`, hai phần. **G8** cho `don_ban_cu.py` (§10), hạn trước lần xóa `5d32a104` khoảng 11-22. **B1** (thêm 2026-11-10, lỗi PM ghi nhận khi tổng duyệt): trang Gửi và Duyệt tự kiểm lại trạng thái đợt và lệnh dashboard khi còn việc chờ, không phải tải lại trang | G8 không; B1 có (`apps/retail_app`) | G8 cloud giả; B1 test, xem trên app local, xác nhận ở lượt thật sau cửa sổ |
+| — | App thử trên Streamlit Cloud (§11), sau khi L1, L2, L3a và B1 đã merge | không | PM chạy |
+| — | Cửa sổ bảo trì (§11), sau L1, L2, L3a, B1 và app thử | | PM chạy |
 
-L2 làm trước, rồi L3 + L4, không làm song song vì cùng sửa `cli.py` và `du_bao_dot.py` (chỉnh ngày 2026-11-09). L5 làm sau cửa sổ cũng được. Thời gian mỗi lát chưa ước†. Nếu L1–L3 chưa xong trước khoảng 11-21 thì Mốc 1 trễ theo.
+**B1 phải xong trước cửa sổ** vì `apps/retail_app` đóng băng sau cửa sổ tới 12/12; G8 làm sau cửa sổ cũng được, miễn trước khoảng 11-22. Thời gian mỗi lát chưa ước†. Nếu L1, L2, L3a, B1 chưa xong trước khoảng 11-21 thì Mốc 1 trễ theo.
 
 ## 15. Câu còn mở
 
@@ -350,5 +360,4 @@ Không còn câu nào. PM chốt ngày 2026-11-07 theo đề xuất của Claude
 
 Việc kế:
 1. PM dọn `03ad08c0` khi warehouse chạy lại (§10).
-2. Claude soạn phiếu GPT cho L1, L2, L3, mỗi lát một phiếu.
-3. GPT làm L2, rồi L3 + L4; L5 làm sau cũng được.
+2. GPT làm L5 theo `giao_viec_l5_g8_b1.md` (L1, L2, L3a đã đạt); B1 trước cửa sổ, G8 trước khoảng 11-22.

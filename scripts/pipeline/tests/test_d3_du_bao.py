@@ -126,7 +126,7 @@ def test_rejects_not_ready(base):
 
 def test_rejects_cloud_source(base):
     (base.run / 'context.json').write_text(json.dumps({'target': 'databricks', 'release_id': RID}), encoding='utf-8')
-    with pytest.raises(ValueError, match='bản DuckDB'):
+    with pytest.raises(ValueError, match='cùng target'):
         du_bao_dot.dung_lai(base.context, base.root, RID)
 
 
@@ -191,7 +191,7 @@ def test_rejects_no_forecast_left(base):
 
 
 def test_rejects_cloud_run(base):
-    with pytest.raises(ValueError, match='chỉ chạy local'):
+    with pytest.raises(ValueError, match='cùng target'):
         du_bao_dot.dung_lai({**base.context, 'target': 'databricks'}, base.root, RID)
 
 

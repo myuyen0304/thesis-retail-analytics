@@ -245,7 +245,8 @@ def verify_consumers(context, registry, cloud=None):
         _, rows = cloud.query(f'select count(*) from {cloud.catalog}.information_schema.tables '
                               'where table_schema = ? and table_name = ?', (schema, name))
         return rows[0][0] > 0
-    for kind, full in [('APP', app), ('AI', ai)]:
+    for kind, full in ([('APP', app)] if context.get('co_du_lieu_tong_hop') is True
+                       else [('APP', app), ('AI', ai)]):
         logical = present(full, context['schema'], exists)
         client = os.getenv(f'RETAIL_{kind}_DBX_CLIENT_ID')
         secret = os.getenv(f'RETAIL_{kind}_DBX_CLIENT_SECRET')
@@ -337,8 +338,8 @@ def execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='
 def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data='data', snapshot_id=None, force=False, extensions=(), extension_directory=None, dots=(), du_bao_tu=None, confirm_synthetic=False):
     if confirm_synthetic and stage != 'publish':
         raise ValueError('--xac-nhan-tong-hop chỉ dùng với publish')
-    if dots and (stage != 'prepare' or target == 'databricks' or snapshot_id):
-        raise ValueError('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
+    if dots and (stage != 'prepare' or snapshot_id):
+        raise ValueError('--dot chỉ dùng với prepare, không cùng --snapshot-id')
     if du_bao_tu and stage != 'forecast':
         raise ValueError('--du-bao-tu chỉ dùng với stage forecast')
     if not re.fullmatch(r'[a-zA-Z0-9_-]{1,100}', run_id):
@@ -437,8 +438,6 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                 raise ValueError('Code đổi giữa các stage; tạo run_id mới')
             manifest = snapshot.validate(context['snapshot_path'], **({'extension_directory': context['extension_dir']}
                                         if context.get('extension_dir') else {}))
-            if manifest.get('dot') and target == 'databricks':
-                raise ValueError('snapshot có đợt chưa dùng được ở stage này (D5)')
             if stage == 'forecast':
                 # task riêng forecast_train_score (S2): không cần cloud hay registry; chỉ đọc snapshot, ghi runs/<id>/forecast
                 if context['stage'] in ('forecasted', 'built', 'validated'):
@@ -449,7 +448,14 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
                     if not du_bao_tu:
                         raise ValueError('Snapshot có đợt: dự báo đứng yên, cần --du-bao-tu <release_id> của bản gốc')
                     from scripts.pipeline import du_bao_dot
-                    context['forecast_path'], context['forecast'] = du_bao_dot.dung_lai(context, root, du_bao_tu)
+                    if target == 'databricks':
+                        cloud = Databricks()
+                    if cloud:
+                        registry_source = Registry(root, cloud.query)
+                        context['forecast_path'], context['forecast'] = du_bao_dot.dung_lai(
+                            context, root, du_bao_tu, registry=registry_source)
+                    else:
+                        context['forecast_path'], context['forecast'] = du_bao_dot.dung_lai(context, root, du_bao_tu)
                 elif du_bao_tu:
                     raise ValueError('--du-bao-tu chỉ dùng cho snapshot có đợt')
                 else:
@@ -513,8 +519,12 @@ def _execute(stage, *, run_id, target='duckdb', root='warehouse/pipeline', data=
             return context
         except Exception as error:
             # Không ghi exception chứa SQL/token vào metadata chung.
-            atomic_json(directory / 'failure.json', {'stage': stage, 'type': type(error).__name__,
-                        'at': dt.datetime.now(dt.timezone.utc).isoformat()})
+            failure = {'stage': stage, 'type': type(error).__name__,
+                       'at': dt.datetime.now(dt.timezone.utc).isoformat()}
+            match = re.match(r'^(D2-[A-Za-z0-9-]+):', str(error))
+            if match:
+                failure['ma_loi'] = match.group(1)
+            atomic_json(directory / 'failure.json', failure)
             raise
         finally:
             if cloud:
@@ -585,8 +595,8 @@ def main():
     ap.add_argument('--release-id')
     ap.add_argument('--limit', type=int, default=20, help='history: số lần chạy gần nhất cần in')
     a = ap.parse_args()
-    if a.dot and (a.stage not in ('prepare', 'run') or a.target == 'databricks' or a.snapshot_id):
-        ap.error('--dot chỉ dùng với prepare local, không cùng --snapshot-id')
+    if a.dot and (a.stage not in ('prepare', 'run') or a.snapshot_id):
+        ap.error('--dot chỉ dùng với prepare, không cùng --snapshot-id')
     if a.du_bao_tu and a.stage not in ('forecast', 'run'):
         ap.error('--du-bao-tu chỉ dùng với stage forecast')
     if a.xac_nhan_tong_hop and a.stage not in ('publish', 'dat-dashboard'):
@@ -607,21 +617,24 @@ def main():
         with writer_lock(a.root):
             if not a.xac_nhan_tong_hop:
                 ap.error('Admin cần --xac-nhan-tong-hop để đặt dashboard.')
-            if a.target != 'duckdb':
-                ap.error('dat-dashboard chỉ hỗ trợ target duckdb.')
             if not a.release_id or not re.fullmatch('[a-f0-9]{24}', a.release_id):
                 ap.error('dat-dashboard cần --release-id gồm 24 ký tự hex.')
-            registry = Registry(a.root)
-            state = registry.read()['payload']
-            record = state['releases'].get(a.release_id, {})
-            if record.get('status') != 'ready' or record.get('co_du_lieu_tong_hop') is not True:
-                ap.error('Bản tổng hợp phải tồn tại và đạt quality gate.')
+            cloud = Databricks() if a.target == 'databricks' else None
             try:
-                verify_consumers(record, registry, None)
-            except Exception as error:
-                ap.error(f'Không đọc được kho của bản đã chọn: {error}')
-            expected = state.get('dashboard')
-            registry.publish_dashboard(a.release_id, expected)
+                registry = Registry(a.root, cloud.query if cloud else None)
+                state = registry.read()['payload']
+                record = state['releases'].get(a.release_id, {})
+                if record.get('status') != 'ready' or record.get('co_du_lieu_tong_hop') is not True:
+                    ap.error('Bản tổng hợp phải tồn tại và đạt quality gate.')
+                try:
+                    verify_consumers(record, registry, cloud)
+                except Exception as error:
+                    ap.error(f'Không đọc được kho của bản đã chọn: {error}')
+                expected = state.get('dashboard')
+                registry.publish_dashboard(a.release_id, expected)
+            finally:
+                if cloud:
+                    cloud.close()
         record_history(Path(a.root).resolve(), _entry('publish_dashboard', a.run_id, a.target, started,
                                                       'bo_qua' if expected == a.release_id else 'dat', record))
         print('Đã đặt bản tổng hợp lên dashboard.' if expected != a.release_id else 'bo_qua: dashboard đang dùng bản này.')
@@ -691,6 +704,9 @@ if __name__ == '__main__':
             stream.reconfigure(encoding='utf-8')
     try:
         main()
+    except BlockingIOError:
+        print('writer.lock đang bận', file=sys.stderr)
+        sys.exit(75)
     except (ValueError, FileNotFoundError) as error:
         print(f'{type(error).__name__}: {error}', file=sys.stderr)
         sys.exit(2)

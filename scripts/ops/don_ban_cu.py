@@ -115,6 +115,14 @@ def plan_deletion(payload, schemas, contexts, views, requested, overrides=(), *,
         reasons.append('G3: active không còn đủ sáu schema')
     if rollback and not schema_set(rollback) <= schemas:
         reasons.append('G3: đích rollback không còn đủ sáu schema')
+    dashboard = payload.get('dashboard')
+    if dashboard is not None:
+        if dashboard in targets:
+            reasons.append('G8: yêu cầu xóa bản đang trên dashboard')
+        if not isinstance(dashboard, str) or not HEX.fullmatch(dashboard) or dashboard not in releases:
+            reasons.append('G8: con trỏ dashboard không trỏ tới bản hợp lệ; trả dashboard trước khi xóa')
+        elif not schema_set(dashboard) <= schemas:
+            reasons.append('G8: bản trên dashboard không còn đủ sáu schema')
     if any(recent_unfinished(contexts, now)):
         reasons.append('G4: có lượt chưa kết thúc bắt đầu trong vòng hai giờ hoặc thiếu thời điểm bắt đầu')
 
@@ -154,6 +162,9 @@ def checked_payload(payload):
             or any(not isinstance(rec, dict) or rec.get('status') != 'ready'
                    for rec in releases.values())):
         raise Blocked('Registry sau dọn phải giữ active và mọi bản còn lại ở trạng thái ready')
+    dashboard = payload.get('dashboard')
+    if dashboard is not None and (not isinstance(dashboard, str) or dashboard not in releases):
+        raise Blocked('Registry sau dọn phải giữ bản mà dashboard trỏ tới trong releases')
 
 
 def removed_payload(payload, selected, when):
@@ -207,6 +218,8 @@ def print_report(payload, schemas, tables, views, contexts, quota):
         owned = by_rid.get(rid, set())
         if rid == active:
             role = 'active'
+        elif rid == payload.get('dashboard'):
+            role = 'dashboard'
         elif rid == rollback:
             role = 'dich_rollback'
         elif rid in pending:
@@ -228,6 +241,8 @@ def print_report(payload, schemas, tables, views, contexts, quota):
               f"run_id={rec.get('run_id', '-')} | có thể xóa={'có' if allowed else 'không'} | {reason}")
     total = sum(str(t.get('table_type', '')).upper() != 'VIEW' for t in tables)
     print(f'Tổng bảng trong catalog: {total}')
+    dashboard = payload.get('dashboard')
+    print(f"Con trỏ dashboard: {dashboard if dashboard is not None else 'theo bản số thật'}")
     if quota is None:
         print('Không đọc được quota')
     else:
