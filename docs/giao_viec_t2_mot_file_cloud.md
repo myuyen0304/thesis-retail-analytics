@@ -224,4 +224,49 @@ chỗ lệch phiếu và lý do, câu hỏi còn mở. Không tự sửa phiếu
 
 ## 11. Rà của Claude (Claude ghi, GPT đọc để sửa)
 
-(chưa có)
+### Lượt 1 (T2a backend), 2026-11-11: ĐẠT
+
+**Quyết định trong lượt (PM/Claude chốt, đè lên phiếu ở trên):**
+- **Cờ CLI web (phương án 1):** `nhap_runner.dashboard_action` chọn cờ theo bản ghi: `chi_dashboard` → `--xac-nhan-nguon-moi`,
+  `co_du_lieu_tong_hop` → `--xac-nhan-tong-hop`; có cả hai hoặc không có cờ nào → `ValueError`, không gọi CLI.
+- **Chữ ký nghiệp vụ (đè §5.4):** `hop_dong_sha256` đổi mỗi lượt (`file` chứa id, `ngay_duyet`), nên không dùng để chống trùng.
+  `kho_hop_dong.chu_ky_nghiep_vu(doc)` = sha256 JSON (`sort_keys`, `ensure_ascii=False`) của hợp đồng bỏ `file`, `ngay_duyet`, `duyet_boi`,
+  `hop_dong_sha256`; giữ `phien_ban`. Ghi vào sự kiện `da_duyet`, phát lại như `hop_dong_sha256`. `_mot_duplicate` so chữ ký của sự kiện yêu
+  cầu kia và `csv_sha256` trong manifest bản của nó; **không đọc hợp đồng cũ trên đĩa**. Thiếu chữ ký, hoặc manifest lỗi ở bản không phải
+  dashboard → coi là không trùng (chạy). Con trỏ dashboard hỏng → `loi`. Đường `tay` (lượt 2) phải ghi chữ ký bằng cùng hàm.
+- **Đính chính §5.6:** `_process_command` không chỉ xét lệnh mới nhất mà lấy lệnh **mới nhất chưa có kết quả**, nên lệnh cũ còn treo vẫn được
+  xử lý ở lượt sau. Giữ nguyên bộ xử lý; `_auto_dashboard` chỉ tự ghi `dat` khi **mọi** lệnh trong `lenh/` đã có `.ket_qua.json` hợp lệ
+  (`dat`/`loi`). Nếu chỉ xét lệnh cuối, một lệnh cũ còn treo có thể ghi đè dashboard sau khi Airflow tự đưa lên.
+- **Lệch phiếu chấp nhận:** `TRANSITIONS_MOT` thêm `da_duyet → loi`, `het_cho → loi/khong_moi` (cần cho kiểm lại hợp đồng §5.3).
+
+**Claude tự chạy** (`RETAIL_TEST_DATABRICKS=0`, từng file, nối tạm `data/` rồi gỡ):
+- Mới: `test_t2_mot_file_web.py` 31, `test_t2_chi_dashboard.py` 28, `test_t2_mot_file.py` 55.
+- Cũ (§7): `test_nhap_do` 46, `test_l1_dot_web` 140, `test_l5_theo_doi_dot` 67, `test_d5_dashboard` 35, `test_d5_con_tro` 39,
+  `test_l2_dot_cloud` 11, `test_nhap_du_lieu` 97, `test_don_ban_cu` 63, `test_d3_du_bao` 41, `test_airflow_extensions` 12,
+  `test_extensions_cli` 7, `test_nhap_extension_dir` 9, `test_state_io` 9. Không trượt.
+- Web (`ui.kho_hop_dong`, `ui.nhap_dot`, `ui.trang_thai_dot`) không nạp `duckdb`, `auto_mapping`, `scripts.pipeline.cli`.
+- `data/ui_nhap_cloud/`, `warehouse/pipeline/docker/nhap/` nằm trong `.gitignore`.
+
+**Đột biến: 28/30 bị bắt.** Bị bắt: tự ghi khi dashboard có bản; chỉ xét lệnh cuối; bỏ kiểm `file`/sha/model dbt/`v<N>` của hợp đồng;
+không bao giờ trùng; bỏ so chữ ký; chữ ký gồm `file`; manifest lỗi thành `loi`; sai cờ CLI (nhap_do, web, `dat-dashboard`); bản một file
+ghi sổ đợt; `da_kiem` không cần `chi_dashboard`; tự ghi cả đường `tay`; `dots` khác rỗng; hợp đồng repo thắng hợp đồng lượt;
+`publish` (Registry, CLI) nhận `chi_dashboard`; `dung_lai_cung_sales` không so sales; DAG bỏ khớp `request_id`/cho `dots` rỗng;
+`nguon_moi` rỗng; web nhận bản hai loại; `phat_lai` bỏ kiểm `duong`; `KhoHopDong` lùi về repo khi `v<N>` hỏng; web nhận nhiều yêu cầu.
+Lọt:
+- Bỏ `doc['ten'] != name` ở `_mot_contract`: **tương đương**, vì `load_raw` đã bắt `doc['ten'] == name` (`extension_contract.py:33`).
+- Bỏ `record.get('chi_dashboard') is not True` ở `_auto_dashboard`: **thiếu test** (không chặn; `ket_thuc` đã đòi `chi_dashboard`
+  trong context và `dat-dashboard` cũng chặn). Thêm ở lượt 2.
+
+**Việc gộp vào lượt 2 (không chặn lượt 1):**
+1. Test: bản ghi registry không có `chi_dashboard` → `_auto_dashboard` không ghi lệnh, có `thong_bao.json`.
+2. `cli.py` dòng in sau `validate` (`run`): với bản `chi_dashboard` đang in "publish --xac-nhan-tong-hop" (sai, publish bị từ chối); đổi thành
+   "Admin đưa lên dashboard bằng dat-dashboard --xac-nhan-nguon-moi".
+3. Đường `tay` trên web ghi `chu_ky_nghiep_vu` vào sự kiện `da_duyet` bằng `kho_hop_dong.chu_ky_nghiep_vu`.
+
+**Ghi chú vận hành (PM):** `don_ban_cu --dat-dich-rollback` chưa chặn bản `chi_dashboard`/tổng hợp (file cấm sửa ở phiếu này): **không đặt
+đích rollback là bản một file**. Yêu cầu một file ở `het_cho` đọc registry (SQL warehouse) mỗi lượt dò 5 phút cho tới khi đủ quota; tránh bằng cách **dọn bản thử ngay sau
+mỗi lượt, không để quá 1 bản thử tồn đọng** (quota cần số bảng + 183 ≤ 500; mỗi bản thử ~80 bảng/view). Thứ tự dọn: trả dashboard → tắt hai
+DAG đợt → `don_ban_cu --xoa` (chạy thử rồi `--thuc-hien`) → `don_kho_dot --ca-hop-dong --thuc-hien` → xóa tay `data/ui_nhap_cloud/` và
+`warehouse/pipeline/docker/nhap/*_mot/`.
+`nhap_runner.py:655` (danh sách bản local) chưa loại `chi_dashboard`; `Registry.publish` vẫn chặn, nên chỉ hiện lỗi khi bấm.
+Chưa kiểm trên cloud thật (nghiệm thu ở tổng duyệt).
