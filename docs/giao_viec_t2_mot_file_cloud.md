@@ -22,8 +22,8 @@ Soạn ngày 2026-11-11, Claude. GPT code. Claude rà độc lập trước khi 
 ## 1. Môi trường và ràng buộc
 
 - Worktree `D:\retail-analytics-nap`, nhánh `nap-ky/myuyen` (từ `108219d` = main `213e8fb` + script cửa sổ + `don_kho_dot.py`, có thêm commit
-  phiếu này và §8.12). App tạm Streamlit Cloud chạy theo nhánh này: **không push** cho tới khi Mốc 1 (đợt 2023) dọn xong và Claude báo.
-  **Không** làm trên `nap-ky/myuyen` (app tạm đang theo nhánh đó).
+  phiếu này và §8.12). Mốc 1 (đợt 2023) đã đạt và dọn xong 2026-11-11. App tạm Streamlit Cloud chạy theo nhánh này, nên chỉ PM push,
+  sau khi Claude rà đạt.
 - Python: `D:/retail-analytics/.venv/Scripts/python.exe -B -X utf8`, `RETAIL_TEST_DATABRICKS=0`. Nối tạm `data/` như các phiếu trước nếu test cần CSV.
 - Không commit, không push. Không kết nối Databricks, không chạy Docker. Không đọc `.env.*.local`, `.streamlit/secrets.toml`, `~/.retail-secrets/*`.
 - Máy thiếu RAM: chạy từng file test một lệnh; `apps` và `scripts` hai lệnh pytest riêng.
