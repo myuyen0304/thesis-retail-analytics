@@ -129,4 +129,10 @@ Phần G8 được kiểm ở lần chạy `bao_cao_don` kế tiếp: báo cáo 
 
 ## 7. Rà của Claude (Claude ghi, GPT đọc để sửa)
 
-Chưa có.
+**Lượt 1 (2026-11-11).**
+- G8 đạt: luật trong `plan_deletion`, kiểm `checked_payload`, vai trò `dashboard` và dòng con trỏ đúng §2. Test G8 63/63. Đã commit c27f41e, dc87140.
+- Claude chạy lại test: B1 59, L1 140, `nhap_do` 46, D5 35 đều đạt. 19 ca trượt của `test_nhap_du_lieu.py` chỉ do worktree thiếu `data/`; nối tạm `data/` thì đạt 97/97.
+- Script giả lập `sys.path` của Cloud: module mới không kéo thêm thư viện. `st.rerun` trong `try/except Exception` ở trang Gửi không bị nuốt, vì `RerunException` kế thừa `BaseException` (Streamlit 1.64).
+- **Chưa đạt (lỗi do §3 phiếu thiếu, không phải GPT lệch):** fragment chạy thân hàm ngay trong lượt vẽ trang, nên `anh_chup` đọc lại toàn bộ Volume mỗi lần vẽ, kể cả khi không có gì chờ. Yêu cầu: lần chạy đầu không đọc kho và không kiểm danh tính.
+
+**Lượt 2 (2026-11-11).** GPT thêm cờ lần đầu trong closure. Claude đọc `streamlit/runtime/fragment.py:733–749`: nhịp `run_every` gọi lại đúng hàm đã đăng ký, nên cờ đúng. Test B1 67/67, L1 140, D5 35. Đột biến "bỏ cờ lần đầu" bị bắt (10 ca trượt), file đã trả về. **Đạt.** Đã commit 461df30…fac2bd8 (mỗi file một commit). Còn lại: PM xem trang tự đổi trên app local trước cửa sổ (`RETAIL_NHAP_DOT=dia`); phần nút dashboard xác nhận ở lượt thật sau cửa sổ.
