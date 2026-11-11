@@ -17,9 +17,11 @@ import tempfile
 ROOT = Path('warehouse/pipeline/docker')
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'apps' / 'retail_app'))
 from ui.kho_dot import DaCo, KhoVolume, TrangThaiDaDoi, sequence_names
-from ui.trang_thai_dot import ID_PATTERN, phat_lai, request_path
+from ui.trang_thai_dot import ID_PATTERN, phat_lai, request_path, loai_cua
 from scripts.ingest import dot
 from scripts.pipeline.state import Registry
+
+REPO = Path(__file__).resolve().parents[2]
 
 SAFE_NAME = re.compile(r'[A-Za-z0-9_.-]+')
 
@@ -41,12 +43,17 @@ def _requests(kho):
         try:
             names = sequence_names(kho.liet_ke(folder + '/su_kien'))
             events = [(int(name[:-5]), _json(kho, folder + '/su_kien/' + name)) for name in names]
-            state = phat_lai(events)
+            body = _json(kho, folder + '/yeu_cau.json')
+            if not isinstance(body, dict) or body.get('id') != request_id or body.get('loai') != loai_cua(request_id):
+                raise ValueError('Yêu cầu hỏng')
+            if body['loai'] == 'mot_file':
+                for key in ('nguoi_gui', 'vai_tro', 'mo_ta', 'ngay_gui'):
+                    if not isinstance(body.get(key), str):
+                        raise ValueError('Metadata một file hỏng')
+                _mot_file(body)
+            state = phat_lai(events, body['loai'])
             if state['trang_thai'] == 'hong':
                 raise ValueError('Sự kiện hỏng')
-            body = _json(kho, folder + '/yeu_cau.json')
-            if not isinstance(body, dict) or body.get('id') != request_id or body.get('loai') != 'dot':
-                raise ValueError('Yêu cầu hỏng')
             result[request_id] = {**body, **state}
         except Exception as error:
             _log(request_id, error)
@@ -161,10 +168,10 @@ def _command_result(kho, name, result, message=''):
         pass
 
 
-def _run_cli(call, stage, number, release_id=None):
+def _run_cli(call, stage, number, release_id=None, *, mot_file=False):
     args = [stage, '--run-id', 'lenh_' + str(number), '--target', 'databricks', '--root', str(ROOT)]
     if release_id:
-        args += ['--release-id', release_id, '--xac-nhan-tong-hop']
+        args += ['--release-id', release_id, '--xac-nhan-nguon-moi' if mot_file else '--xac-nhan-tong-hop']
     try:
         response = call(args)
         return response if isinstance(response, int) else response.returncode
@@ -197,15 +204,15 @@ def _process_command(kho, rows, call, ledger):
     if kind == 'dat':
         request_id, rid = command.get('request_id'), command.get('release_id')
         row = rows.get(request_id)
-        if (not row or not isinstance(rid, str) or row.get('release_id') != rid or not _ma_dot(row)
+        if (not row or not isinstance(rid, str) or row.get('release_id') != rid or (row.get('loai') != 'mot_file' and not _ma_dot(row))
                 or row['trang_thai'] not in ('da_kiem', 'da_tra', 'tren_dashboard')):
             _command_result(kho, name, 'loi', 'Bản không đạt điều kiện đưa lên dashboard.')
             return
-        if ledger is None:
+        if ledger is None and row.get('loai') != 'mot_file':
             return
     try:
         code = _run_cli(call, 'dat-dashboard' if kind == 'dat' else 'tra-dashboard', number,
-                        rid if kind == 'dat' else None)
+                        rid if kind == 'dat' else None, **({'mot_file': True} if kind == 'dat' and row.get('loai') == 'mot_file' else {}))
     except Exception as error:
         _log('lenh_' + str(number), error)
         code = -1
@@ -217,12 +224,13 @@ def _process_command(kho, rows, call, ledger):
         _command_result(kho, name, 'loi', message)
         return
     if kind == 'dat':
-        entries, size = _ledger(kho)
-        if not _ma_dot(row):
-            raise ValueError('Yêu cầu thiếu mã đợt')
-        if not any(entry['ma_dot'] == _ma_dot(row) for entry in entries):
-            kho.ghi_json_so_tiep('so_dot', {'loai': 'vao_so', 'ma_dot': _ma_dot(row),
-                'request_id': request_id, 'release_id': rid, 'files': row['files']}, expected=size)
+        if row.get('loai') != 'mot_file':
+            entries, size = _ledger(kho)
+            if not _ma_dot(row):
+                raise ValueError('Yêu cầu thiếu mã đợt')
+            if not any(entry['ma_dot'] == _ma_dot(row) for entry in entries):
+                kho.ghi_json_so_tiep('so_dot', {'loai': 'vao_so', 'ma_dot': _ma_dot(row),
+                    'request_id': request_id, 'release_id': rid, 'files': row['files']}, expected=size)
         for other in rows.values():
             if other['id'] != request_id and other['trang_thai'] == 'tren_dashboard':
                 _event(kho, other, 'da_tra', ghi_chu='Thay bằng bản mới')
@@ -235,8 +243,8 @@ def _process_command(kho, rows, call, ledger):
     _command_result(kho, name, 'dat')
 
 
-def quet(kho, client, *, root=ROOT, call=_cli):
-    """Chỉ Files API và metadata catalog, không mở SQL warehouse."""
+def quet(kho, client, *, root=ROOT, call=_cli, cloud_factory=None):
+    """Đợt chỉ đọc Files API/metadata; một file đã duyệt đọc thêm registry để kiểm trùng."""
     root = Path(root)
     rows = _requests(kho)
     try:
@@ -259,6 +267,14 @@ def quet(kho, client, *, root=ROOT, call=_cli):
     just_reserved = set()
     for row in rows.values():
         state = row['trang_thai']
+        if row.get('loai') == 'mot_file':
+            try:
+                _quet_mot(kho, client, row, root, cloud_factory)
+            except TrangThaiDaDoi:
+                pass
+            except Exception as error:
+                _log(row['id'], error)
+            continue
         if state not in ('da_gui', 'dang_kiem', 'het_cho'):
             continue
         if ledger is None:
@@ -338,9 +354,12 @@ def ket_thuc(kho, states, *, root=ROOT, cloud_factory=None):
                     context = _read_stage(root, event['pipeline_run_id'], 'context.json')
                 except (OSError, ValueError):
                     context = {}
-                if (context.get('stage') == 'validated' and context.get('co_du_lieu_tong_hop') is True
+                marker = 'chi_dashboard' if row.get('loai') == 'mot_file' else 'co_du_lieu_tong_hop'
+                if (context.get('stage') == 'validated' and context.get(marker) is True
                         and isinstance(context.get('release_id'), str)):
                     _event(kho, row, 'da_kiem', release_id=context['release_id'])
+                    if row.get('loai') == 'mot_file' and row.get('duong') == 'tu_dong':
+                        _auto_dashboard(kho, dict(row, release_id=context['release_id']), root, cloud_factory)
                 else:
                     _event(kho, row, 'loi', thong_bao='Lượt chạy chưa đạt bước kiểm; kỹ sư dữ liệu xem nhật ký.')
             else:
@@ -364,7 +383,7 @@ def ket_thuc(kho, states, *, root=ROOT, cloud_factory=None):
         return {'trigger': trigger}
     row = candidates[0]
     try:
-        ledger, _ = _ledger(kho)
+        ledger = _ledger(kho)[0] if row.get('loai') != 'mot_file' else []
         cloud = cloud_factory()
         try:
             state = Registry(root, cloud.query).read()['payload']
@@ -374,17 +393,39 @@ def ket_thuc(kho, states, *, root=ROOT, cloud_factory=None):
             cloud.close()
         manifest = json.loads((root / 'snapshots' / record['snapshot_id'] / 'manifest.json').read_text(encoding='utf-8'))
         extensions = sorted(name for name, item in manifest['sources'].items() if item.get('mo_rong'))
-        dots = []
-        for entry in ledger:
-            old = rows[entry['request_id']]
-            path = _download(kho, {'id': old['id'], 'files': entry['files']}, root)
-            dots.append(str(path.resolve()))
-        path = _download(kho, row, root)
-        dots.append(str(path.resolve()))
         lan = sum(e['toi'] == 'dang_chay' for e in row['lich_su']) + 1
-        run_id = f"dot_{row['id']}_{lan}"
-        conf = {'request_id': row['id'], 'target': 'databricks', 'dots': dots,
-                'du_bao_tu': active, 'extensions': extensions, 'pipeline_run_id': run_id}
+        if row.get('loai') == 'mot_file':
+            try:
+                doc, raw = _mot_contract(kho, row)
+                _download_mot(kho, row)
+                own = row['ten_mo_rong']
+                extensions = sorted(set(extensions) | {own})
+                folder = root / 'nhap' / row['id'] / 'hop_dong'
+                folder.mkdir(parents=True, exist_ok=True)
+                for name in extensions:
+                    content = raw if name == own else (REPO / 'scripts/ingest/extensions' / (name + '.yml')).read_bytes()
+                    from ui.kho_hop_dong import load_raw
+                    load_raw(name, content)
+                    (folder / (name + '.yml')).write_bytes(content)
+            except Exception as error:
+                _log(row['id'], error)
+                _event(kho, row, 'loi', thong_bao='Hợp đồng hoặc file không còn hợp lệ; cần đội dữ liệu kiểm tra.')
+                return {'trigger': trigger}
+            run_id = f"mot_{row['id']}_{lan}"
+            conf = {'request_id': row['id'], 'target': 'databricks', 'dots': [],
+                    'extension_dir': folder.resolve().as_posix(), 'chi_dashboard': True,
+                    'du_bao_tu': active, 'extensions': extensions, 'pipeline_run_id': run_id}
+        else:
+            dots = []
+            for entry in ledger:
+                old = rows[entry['request_id']]
+                path = _download(kho, {'id': old['id'], 'files': entry['files']}, root)
+                dots.append(str(path.resolve()))
+            path = _download(kho, row, root)
+            dots.append(str(path.resolve()))
+            run_id = f"dot_{row['id']}_{lan}"
+            conf = {'request_id': row['id'], 'target': 'databricks', 'dots': dots,
+                    'du_bao_tu': active, 'extensions': extensions, 'pipeline_run_id': run_id}
         _event(kho, row, 'dang_chay', lan=lan, airflow_run_id=run_id, pipeline_run_id=run_id, conf=conf)
         trigger.append({'airflow_run_id': run_id, 'conf': conf})
     except TrangThaiDaDoi:
@@ -393,6 +434,245 @@ def ket_thuc(kho, states, *, root=ROOT, cloud_factory=None):
         _log(row['id'], error)
     return {'trigger': trigger}
 
+
+
+def _mot_file(row):
+    item = row.get('file')
+    _files({'files': [item]})
+    if not item['ten'].lower().endswith(('.csv', '.json')) or item['so_byte'] > 200 * 1024**2:
+        raise ValueError('Một file chỉ nhận CSV/JSON tối đa 200 MB')
+    return item
+
+
+def _put(kho, path, raw):
+    try:
+        kho.ghi_moi(path, raw)
+    except DaCo:
+        if kho.doc(path) != raw:
+            raise ValueError('Nội dung bất biến đã khác')
+
+
+def _download_mot(kho, row):
+    item = _mot_file(row)
+    folder = REPO / 'data/ui_nhap_cloud' / row['id']
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / item['ten']
+    if target.exists() and target.stat().st_size == item['so_byte']:
+        with target.open('rb') as handle:
+            if hashlib.file_digest(handle, 'sha256').hexdigest() == item['sha256']:
+                return target
+    raw = kho.doc(request_path(row['id']) + '/file/' + item['ten'])
+    if len(raw) != item['so_byte'] or hashlib.sha256(raw).hexdigest() != item['sha256']:
+        raise ValueError('File không khớp checksum')
+    with tempfile.NamedTemporaryFile(dir=folder, delete=False) as handle:
+        temporary = Path(handle.name)
+        handle.write(raw)
+    try:
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
+
+
+def _mot_contract(kho, row):
+    from ui.kho_hop_dong import KhoHopDong, load_raw, chu_ky_nghiep_vu
+    from scripts.ingest import approval
+    name = row.get('ten_mo_rong')
+    registry = KhoHopDong(kho, REPO / 'scripts/ingest/extensions')
+    registry.folder(name)  # Kiểm tên trước khi dựng đường dẫn.
+    raw = kho.doc(request_path(row['id']) + '/hop_dong/' + name + '.yml')
+    doc = load_raw(name, raw)
+    expected_file = f"ui_nhap_cloud/{row['id']}/{_mot_file(row)['ten']}"
+    if (doc['hop_dong_sha256'] != row.get('hop_dong_sha256') or doc['ten'] != name
+            or doc['file'] != expected_file
+            or not approval.has_dbt_model(name, REPO / 'retail_dbt/models')):
+        raise ValueError('Hợp đồng không khớp yêu cầu hoặc thiếu model')
+    signature = row.get('chu_ky_nghiep_vu')
+    if signature is not None and signature != chu_ky_nghiep_vu(doc):
+        raise ValueError('Chữ ký nghiệp vụ không khớp hợp đồng đã duyệt')
+    registry.current(name)  # Có v mới hỏng thì dừng, không lùi về repo.
+    return doc, raw
+
+
+def _payload(root, cloud_factory=None):
+    if cloud_factory is None:
+        from scripts.pipeline.runtime import Databricks
+        cloud_factory = Databricks
+    cloud = cloud_factory()
+    try:
+        return Registry(root, cloud.query).read()['payload']
+    finally:
+        cloud.close()
+
+
+def _mot_duplicate(kho, row, doc, root, cloud_factory):
+    state = _payload(root, cloud_factory)
+    releases = state['releases']
+    if not isinstance(releases, dict):
+        raise ValueError('Registry hỏng')
+    dashboard = state.get('dashboard')
+    manifests = {}
+
+    def read_manifest(record):
+        manifest = _read_stage_manifest(root, record)
+        if (not isinstance(manifest, dict) or not isinstance(manifest.get('sources'), dict)
+                or any(not isinstance(item, dict) for item in manifest['sources'].values())):
+            raise ValueError('Manifest hỏng')
+        return manifest
+
+    # Con trỏ đang phục vụ không được âm thầm bỏ qua khi hỏng.
+    if dashboard is not None:
+        if (not isinstance(dashboard, str) or not re.fullmatch(r'[a-f0-9]{24}', dashboard)
+                or not isinstance(releases.get(dashboard), dict)
+                or releases[dashboard].get('status') != 'ready'):
+            raise ValueError('Con trỏ dashboard hỏng')
+        manifests[dashboard] = read_manifest(releases[dashboard])
+
+    signature = row.get('chu_ky_nghiep_vu')
+    if not isinstance(signature, str) or not signature:
+        return False  # Yêu cầu từ phiên bản cũ chưa có chữ ký: không đoán là trùng.
+    for other in _requests(kho).values():
+        if (other['id'] == row['id'] or other.get('loai') != 'mot_file'
+                or other['trang_thai'] not in ('da_kiem', 'tren_dashboard', 'da_tra')
+                or other.get('ten_mo_rong') != row['ten_mo_rong']
+                or other.get('chu_ky_nghiep_vu') != signature):
+            continue
+        rid = other.get('release_id')
+        record = releases.get(rid)
+        if (not isinstance(record, dict) or record.get('status') != 'ready'
+                or record.get('co_du_lieu_tong_hop') is True):
+            continue  # Bản đợt không phải bản hợp đồng một file.
+        try:
+            manifest = manifests[rid] if rid in manifests else read_manifest(record)
+            item = manifest['sources'].get(row['ten_mo_rong'], {})
+            if not isinstance(item, dict):
+                raise ValueError('Nguồn trong manifest hỏng')
+        except Exception:
+            if rid == dashboard:
+                raise
+            continue  # Bản cũ không đang phục vụ, mất manifest thì cho phép dựng lại.
+        if item.get('csv_sha256') == row['file']['sha256']:
+            return True
+    return False
+
+
+def _read_stage_manifest(root, record):
+    sid = record.get('snapshot_id')
+    if not isinstance(sid, str) or not re.fullmatch(r'[a-f0-9]{12}', sid):
+        raise ValueError('Mã snapshot hỏng')
+    return json.loads((root / 'snapshots' / sid / 'manifest.json').read_text(encoding='utf-8'))
+
+
+def _safe_proposal(value):
+    # Giữ thống kê và tên cột; không đưa giá trị ô hoặc ánh xạ ID lên đề xuất cloud.
+    if isinstance(value, dict):
+        return {key: ([] if key in ('mau', 'anh_xa') else _safe_proposal(item))
+                for key, item in value.items()}
+    if isinstance(value, list):
+        return [_safe_proposal(item) for item in value]
+    return value
+
+
+def _quet_mot(kho, client, row, root, cloud_factory):
+    from datetime import datetime, timezone
+    from ui.kho_hop_dong import KhoHopDong, load_raw, chu_ky_nghiep_vu
+    from scripts.ingest import approval, auto_mapping, tu_dong
+    import yaml
+    folder = request_path(row['id'])
+    state = row['trang_thai']
+    if state == 'da_gui':
+        try:
+            _download_mot(kho, row)
+        except Exception as error:
+            _log(row['id'], error)
+            _event(kho, row, 'loi_file')
+            return
+        _event(kho, row, 'dang_doc')
+        row = _requests(kho)[row['id']]
+        state = 'dang_doc'
+    if state == 'dang_doc':
+        try:
+            proposal = auto_mapping.propose(_download_mot(kho, row), REPO / 'data')
+            proposal = _safe_proposal(proposal)
+            with tempfile.TemporaryDirectory() as temporary:
+                files = auto_mapping.write_proposal(proposal, Path(temporary) / 'de_xuat')
+                for file in files:
+                    _put(kho, folder + '/de_xuat/' + file.name, file.read_bytes())
+        except Exception as error:
+            _log(row['id'], error)
+            _event(kho, row, 'loi_de_xuat', thong_bao='Chưa đọc được file; cần đội dữ liệu kiểm tra.')
+            return
+        try:
+            registry = KhoHopDong(kho, REPO / 'scripts/ingest/extensions')
+            candidates = registry.ung_vien(proposal)
+            complete = [c for c in candidates if not c[3]]
+            model = len(complete) == 1 and approval.has_dbt_model(complete[0][0], REPO / 'retail_dbt/models')
+            result = tu_dong.phan_loai(proposal, candidates, model)
+            if result['ket_qua'] != 'tu_dong':
+                _event(kho, row, 'cho_duyet', duong='tay', ly_do=result['ly_do'])
+                return
+            name = result['ten']
+            meta, approved = registry.current(name)
+            if meta['phien_ban'] != result['phien_ban']:
+                raise ValueError('Hợp đồng đã đổi')
+            doc = tu_dong.hop_dong_cua_luot(approved, [c['ten_trong_file'] for c in proposal['cot']],
+                f"ui_nhap_cloud/{row['id']}/{row['file']['ten']}", meta['phien_ban'],
+                datetime.now(timezone.utc).isoformat())
+            raw = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False).encode('utf-8')
+            checked = load_raw(name, raw)
+            _put(kho, folder + '/hop_dong/' + name + '.yml', raw)
+            _event(kho, row, 'da_duyet', duong='tu_dong', ten_mo_rong=name,
+                   hop_dong_sha256=checked['hop_dong_sha256'], cot_moi=result['cot_moi'],
+                   chu_ky_nghiep_vu=chu_ky_nghiep_vu(checked))
+        except TrangThaiDaDoi:
+            raise
+        except Exception as error:
+            _log(row['id'], error)
+            reason = {'ma': 'hop_dong_khong_hop_le', 'nghiep_vu': 'Hợp đồng cần đội dữ liệu kiểm tra.',
+                      'ky_thuat': 'Hợp đồng chưa qua kiểm tra.'}
+            _event(kho, row, 'cho_duyet', duong='tay', ly_do=[reason])
+            return
+        row = _requests(kho)[row['id']]
+        state = 'da_duyet'
+    if state in ('da_duyet', 'het_cho'):
+        try:
+            _download_mot(kho, row)
+            doc, _ = _mot_contract(kho, row)
+            if _mot_duplicate(kho, row, doc, root, cloud_factory):
+                _event(kho, row, 'khong_moi')
+                return
+        except Exception as error:
+            _log(row['id'], error)
+            _event(kho, row, 'loi', thong_bao='Hợp đồng hoặc file không còn hợp lệ; cần đội dữ liệu kiểm tra.')
+            return
+        enough = _quota(client)
+        if enough or state != 'het_cho':
+            _event(kho, row, 'cho_chay' if enough else 'het_cho')
+
+
+def _auto_dashboard(kho, row, root, cloud_factory):
+    try:
+        state = _payload(root, cloud_factory)
+        record = state['releases'].get(row['release_id'], {})
+        names = sequence_names(kho.liet_ke('lenh'))
+        pending = False
+        for name in names:
+            result = _json(kho, 'lenh/' + name[:-5] + '.ket_qua.json')
+            if not isinstance(result, dict) or result.get('ket_qua') not in ('dat', 'loi'):
+                pending = True
+                break
+        if state.get('dashboard') is not None or pending or record.get('status') != 'ready' or record.get('chi_dashboard') is not True:
+            raise ValueError('Dashboard cần Admin kiểm tra')
+        kho.ghi_json_so_tiep('lenh', {'loai': 'dat', 'request_id': row['id'],
+            'release_id': row['release_id'], 'ai': 'airflow'}, expected=int(names[-1][:-5]) if names else 0)
+        return
+    except Exception as error:
+        _log(row['id'], error)
+    try:
+        kho.ghi_moi(request_path(row['id']) + '/thong_bao.json',
+            json.dumps({'thong_bao': 'Dashboard đang có bản khác; chờ Admin đưa lên.'}, ensure_ascii=False).encode('utf-8'))
+    except DaCo:
+        pass
 
 def _default_store():
     from databricks.sdk import WorkspaceClient
