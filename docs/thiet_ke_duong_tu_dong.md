@@ -289,3 +289,71 @@ Chạy ở catalog demo trước, rồi lặp mục 1 và 2 trên `retail_lab`.
 
 **PM duyệt 2026-11-02:** production dừng ở validate, người bấm công bố; giữ Airflow trên laptop, không chuyển Databricks Job. Cho nhập trên app public: đã chốt
 2026-11-01. Không còn câu mở cho T2.
+
+### 8.12 Cập nhật 2026-11-11: làm T2 trên nền luồng đợt (PM duyệt 2026-11-11: chọn (b) + tự đưa lên dashboard như local)
+
+PM chọn 2026-11-11 làm T2 trước ngày bảo vệ 12/12. Luồng đợt ([thiet_ke_dot_web_public.md](thiet_ke_dot_web_public.md)) đã dựng xong nhiều phần
+§8.1–§8.9 cần, nên T2 chỉ còn phần riêng của "một file lạ cột".
+
+**Đã có, dùng lại nguyên:**
+
+| Phần | Ở đâu |
+|---|---|
+| Volume `kho`, sự kiện `overwrite=false`, phát lại trạng thái | `apps/retail_app/ui/kho_dot.py`, `trang_thai_dot.py` |
+| Tài khoản `retail-nhap-writer` chỉ ghi volume (S0 đã kiểm) | thiết kế đợt §8.5 |
+| DAG dò 5 phút, chỉ Files API, kiểm chỗ quota trước khi trigger | `deploy/airflow/dags/nhap_du_lieu_do.py`, `scripts/ops/nhap_do.py` |
+| DAG chạy tới validate, **không có stage publish** | `deploy/airflow/dags/retail_dot_pipeline.py:16–17` |
+| Con trỏ `dashboard`, lệnh đưa lên/trả, trang tự cập nhật (B1) | `nhap_do._process_command`, `ui/theo_doi_dot.py` |
+| Dọn bản cũ có luật G, dọn kho | `scripts/ops/don_ban_cu.py`, `scripts/ops/don_kho_dot.py` |
+| Đề xuất, phân loại, hợp đồng của lượt, nâng hợp đồng | `scripts/ingest/auto_mapping.py`, `tu_dong.py` (T1) |
+
+**Còn thiếu:**
+1. Loại yêu cầu `mot_file` trên Volume. Hiện `nhap_do._requests` chỉ nhận `loai == 'dot'` (`nhap_do.py:48`), DAG đợt chỉ nhận mã `_dot`
+   (`retail_dot_pipeline.py:33–34`) và bắt buộc có ít nhất một đợt (dòng 20–21).
+2. `nhap_do` chạy `auto_mapping.propose` + `tu_dong.phan_loai` cho yêu cầu `mot_file`, ghi đề xuất và sự kiện `tu_dong`/`can_nguoi` lên Volume.
+3. Kho hợp đồng đã duyệt trên Volume (`hop_dong_da_duyet/`), chép về container rồi truyền `--extension-dir`; không đổi `code_version`.
+4. Trang Duyệt trên cloud: xem đề xuất, chỉnh, duyệt, từ chối, nâng mẫu (ghi sự kiện, không chạy gì trong app).
+5. Trang Gửi trên cloud nhận một file lạ cột, bên cạnh đợt.
+
+**Đề xuất đổi so với §8.1, §8.3, §8.4 (PM quyết):**
+
+- **Q-T2-1. Công bố trên cloud.**
+  - (a) Theo §8.1: Admin bấm Công bố thì đổi `active`; cần `hieu_luc.json` và **sửa lượt 08:00** (`retail_batch_pipeline`) đọc file này (§8.4).
+  - (b) **Claude đề xuất:** dùng lại con trỏ `dashboard` như luồng đợt. Bản có phần mở rộng mới dừng ở "Đã kiểm tra"; Admin bấm "Đưa lên dashboard"
+    rồi "Trả". `active` và lượt 08:00 **không đổi**, nên không cần `hieu_luc.json`, không đụng DAG chạy hằng ngày.
+    Lý do: phần mở rộng chỉ vào silver, không đổi số PS1–PS5 (§8.10 mục 2, 6), nên (a) không cho thấy gì thêm trên dashboard mà lại thêm rủi ro
+    cho lượt 08:00 (bẫy P7). Đánh đổi: báo cáo phải ghi "bản đưa lên dashboard", không ghi "bản đang dùng"; đợt và một file dùng chung một
+    con trỏ, mỗi lúc chỉ một bản trên dashboard; bản đợt dựng sau không mang phần mở rộng của bản một file (vì lấy phần mở rộng theo `active`, `nhap_do.py:376`).
+- **Q-T2-2. Tự đưa lên dashboard (PM chốt 2026-11-11, đổi §8.1 "luôn có người bấm" cho riêng con trỏ `dashboard`).** Giống local:
+  yêu cầu đi đường `tu_dong` kiểm đạt thì Airflow tự ghi lệnh `dat` (người ghi `airflow`), như Admin bấm. Đường `can_nguoi` sau khi DE duyệt
+  và kiểm đạt thì chờ Admin bấm. Ba luật:
+  1. Chỉ tự đưa khi con trỏ `dashboard` đang trống; đang có bản khác (vd đợt 2023) thì dừng ở "Đã kiểm tra", báo lý do, chờ Admin.
+  2. `validate` vẫn là cổng: không đạt thì không ghi lệnh.
+  3. `active` và lượt 08:00 không bao giờ đổi theo đường này; Admin "Trả" là về bản đang dùng.
+  Báo cáo ghi: local tự công bố (đổi bản đang dùng), cloud tự đưa lên dashboard (không đổi bản đang dùng).
+- **Q-T2-3. DAG chạy.** Với (b), dùng lại `retail_dot_pipeline`, thêm tham số `extension_dir`, cho phép danh sách đợt trống và mã `_mot`.
+  `retail_batch_pipeline` giữ nguyên. Với (a), làm theo §8.3.
+
+**Tiêu chí nghiệm thu, thay §8.10 khi chọn (b):** mục 3, 4, 5, 7, 8, 9 giữ nguyên. Mục 1: gửi file đúng mẫu đã duyệt nhưng chưa có trong bản đang dùng
+(ứng viên `shipments_realistic`, cần kiểm file), dashboard đang trống, thì không ai bấm gì mà bản tự lên dashboard; `active` không đổi.
+Mục 1b: cùng file nhưng dashboard đang có bản khác thì dừng ở "Đã kiểm tra", có lý do. Mục 2: số PS1–PS5
+không đổi, bảng silver của phần mở rộng có trong bản đó; Admin trả dashboard thì về như cũ.
+Mục 6 trên cloud: DE duyệt nâng mẫu → **gửi lại file** thì `bonus` vào silver (không nạp bù tự động như local). Đường `tay` tự vào hàng sau khi
+DE duyệt, không có nút "Chạy" như local. Mục 10 bỏ (PM Q3 2026-11-07 cho dữ liệu đợt vào `retail_lab`).
+
+**S0 (§8.9):** bốn mục đã đạt khi làm luồng đợt (ghi đè, quyền tài khoản, liệt kê không đánh thức warehouse, đếm bảng thay quota). Còn mục tải file
+155 MB từ Streamlit Cloud: chọn file demo nhỏ hơn, hoặc PM thử trên app tạm trước khi soạn phiếu.
+
+**Thứ tự:**
+1. Mốc 1 (đợt 2023) xong và dọn.
+2. PM duyệt §8.12.
+3. Claude soạn phiếu, GPT code (backend `nhap_do` + DAG, rồi hai trang).
+4. Claude rà, nghiệm thu local.
+5. Tổng duyệt trên app tạm với thư mục Volume riêng.
+6. Cửa sổ bảo trì lần 2: code đổi `apps/retail_app`, `scripts/ingest`, nên `code_version` đổi và phải dựng lại bản như 11-11.
+7. Sửa báo cáo Word.
+
+Mỗi lượt nghiệm thu dựng một bản khoảng 83 bảng; dọn bằng `don_ban_cu` giữa các lượt và chạy bước `quota` trước mỗi lượt. Bảng đã xóa còn bị tính thêm vài ngày (§8.6).
+Vì vậy phần lớn tiêu chí nghiệm thu bằng test và chạy local; trên cloud chỉ **tối đa 3 lượt dựng** (mục 1 tự lên dashboard, mục 6 hai lượt), mỗi lượt
+xóa bản cũ trước. Tổng duyệt dùng chung registry production: lệnh tự đưa lên dashboard sẽ đổi dashboard của web public cho tới khi Admin trả.
+Dọn sau nghiệm thu thêm `hop_dong_da_duyet/` (`don_kho_dot.py --ca-hop-dong`), nếu không hợp đồng thử sẽ đổi cách phân loại về sau.
