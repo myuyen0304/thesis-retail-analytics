@@ -17,7 +17,16 @@ def command(stage, context):
         raise ValueError('DAG nạp đợt không có stage công bố')
     params = context['params']
     dots, source = params['dots'], params['du_bao_tu']
-    if not isinstance(dots, list) or not dots:
+    extension_dir = params.get('extension_dir')
+    chi_dashboard = params.get('chi_dashboard', False)
+    if type(chi_dashboard) is not bool:
+        raise ValueError('chi_dashboard phải là boolean')
+    extension_pattern = r'/opt/retail/warehouse/pipeline/docker/nhap/([0-9]{8}T[0-9]{6}Z_[a-f0-9]{6}_mot)/hop_dong'
+    if extension_dir is not None and (not isinstance(extension_dir, str) or not re.fullmatch(extension_pattern, extension_dir)):
+        raise ValueError('Đường dẫn hợp đồng không hợp lệ')
+    if chi_dashboard and (not extension_dir or dots):
+        raise ValueError('Bản một file cần hợp đồng và không nhận đợt')
+    if not isinstance(dots, list) or (not dots and not (chi_dashboard and extension_dir)):
         raise ValueError('Cần ít nhất một thư mục đợt')
     pattern = (r'/opt/retail/(?:data_demo/[a-zA-Z0-9_-]{1,100}|'
                r'warehouse/pipeline/docker/nhap/[0-9]{8}T[0-9]{6}Z_[a-f0-9]{6}_dot/file)')
@@ -31,8 +40,10 @@ def command(stage, context):
         raise ValueError('Mã lượt pipeline không hợp lệ')
     request_id = params.get('request_id')
     if request_id is not None and (not isinstance(request_id, str) or not re.fullmatch(
-            r'[0-9]{8}T[0-9]{6}Z_[a-f0-9]{6}_dot', request_id)):
+            r'[0-9]{8}T[0-9]{6}Z_[a-f0-9]{6}_(?:dot|mot)', request_id)):
         raise ValueError('Mã yêu cầu không hợp lệ')
+    if chi_dashboard and request_id != re.fullmatch(extension_pattern, extension_dir)[1]:
+        raise ValueError('Hợp đồng phải thuộc đúng yêu cầu')
     if not re.fullmatch(r'[a-f0-9]{24}', source):
         raise ValueError('Bản nguồn dự báo phải gồm 24 ký tự hex')
     run_id = run_id or hashlib.sha256(context['run_id'].encode()).hexdigest()[:24]
@@ -41,6 +52,10 @@ def command(stage, context):
     if params.get('force'):
         args.append('--force')
     if stage == 'prepare':
+        if extension_dir:
+            args += ['--extension-dir', extension_dir]
+        if chi_dashboard:
+            args.append('--chi-dashboard')
         for path in dots:
             args += ['--dot', path]
         for extension in sorted(set(params.get('extensions', []))):
@@ -63,7 +78,9 @@ with DAG(
     params={'target': Param('duckdb', enum=['duckdb', 'databricks']),
             'dots': Param([], type='array', items={'type': 'string'}),
             'pipeline_run_id': Param(None, type=['null', 'string'], pattern='^[a-zA-Z0-9_-]{1,100}$'),
-            'request_id': Param(None, type=['null', 'string'], pattern='^[0-9]{8}T[0-9]{6}Z_[a-f0-9]{6}_dot$'),
+            'request_id': Param(None, type=['null', 'string'], pattern='^[0-9]{8}T[0-9]{6}Z_[a-f0-9]{6}_(dot|mot)$'),
+            'extension_dir': Param(None, type=['null', 'string']),
+            'chi_dashboard': Param(False, type='boolean'),
             'du_bao_tu': Param(type='string', pattern='^[a-f0-9]{24}$'),
             'force': Param(False, type='boolean'),
             'extensions': Param([], type='array', items={'type': 'string', 'pattern': '^[a-z][a-z0-9_]*$'})},
