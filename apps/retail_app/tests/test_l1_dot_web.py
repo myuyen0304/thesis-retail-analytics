@@ -417,6 +417,7 @@ def test_cloud_import_only_app_on_sys_path(tmp_path):
               "import ui.nhap_store\n"
               "import ui.nhap_runner\n"
               "import ui.nhap_dot\n"
+              "import ui.theo_doi_dot\n"
               "import scripts.ingest.approval\n")
     env = os.environ.copy()
     env.pop('PYTHONPATH', None)
