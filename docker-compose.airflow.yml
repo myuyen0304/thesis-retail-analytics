@@ -19,6 +19,7 @@ x-airflow: &airflow
     PYTHONUTF8: '1'
   volumes:
     - ./data:/opt/retail/data:ro
+    - ./data/ui_nhap_cloud:/opt/retail/data/ui_nhap_cloud
     - ./data_demo:/opt/retail/data_demo:ro
     - ./warehouse/pipeline:/opt/retail/warehouse/pipeline
     - airflow-logs:/opt/airflow/logs
