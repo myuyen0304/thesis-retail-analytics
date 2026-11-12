@@ -270,3 +270,26 @@ DAG đợt → `don_ban_cu --xoa` (chạy thử rồi `--thuc-hien`) → `don_kh
 `warehouse/pipeline/docker/nhap/*_mot/`.
 `nhap_runner.py:655` (danh sách bản local) chưa loại `chi_dashboard`; `Registry.publish` vẫn chặn, nên chỉ hiện lỗi khi bấm.
 Chưa kiểm trên cloud thật (nghiệm thu ở tổng duyệt).
+
+### Lượt 2 (T2b trang web), 2026-11-12: ĐẠT
+
+**Quyết định trong lượt:** cho phép sửa ngoài §8 đúng một dòng `scripts/ingest/approval.py`: `default_decisions` import `normalize` từ
+`scripts.ingest.tu_dong` thay vì `adapters` (hai hàm giống hệt; `adapters` nạp DuckDB nên form chung không chạy được trên cloud).
+
+**Claude tự chạy** (`RETAIL_TEST_DATABRICKS=0`, từng file, nối tạm `data/` rồi gỡ): `test_t2_mot_file_web` 84, `test_t2_chi_dashboard` 30,
+`test_t2_mot_file` 56, `test_l1_dot_web` 140, `test_l5_theo_doi_dot` 67, `test_d5_dashboard` 35, `test_d5_con_tro` 39, `test_nhap_du_lieu` 97,
+`test_nhap_tu_dong` 151, `test_nhap_do` 46, `test_l2_dot_cloud` 11, `test_don_ban_cu` 63, `test_tu_dong` 44. Không trượt. Trang Gửi/Duyệt được
+render bằng AppTest trong test T2. `test_smoke`/`test_m1` không chạy (worktree thiếu `warehouse/dbt.duckdb`).
+
+**Đột biến: 21/24 bị bắt.** Bị bắt: duyệt không ghi chữ ký; bỏ kiểm model dbt (`cho_model_dbt`); ghi hợp đồng trước khi kiểm; không ghi `v1`;
+sai `duong`; bỏ kiểm trạng thái/số sự kiện; từ chối không lý do; nâng khi đã từ chối; nâng `mart` khi dbt chưa có cột; nhịp dò bỏ `dang_doc`;
+gửi quá 200 MB; sai sha; mã `_dot` cho một file; ô xác nhận tổng hợp với bản nguồn mới; ứng viên mang cả hai cờ; mất băng rôn; `approval`
+quay lại `adapters`; nâng hợp đồng ghi lệnh nạp bù; trang Gửi mất lựa chọn một file; `_auto_dashboard` không kiểm `chi_dashboard`
+(mục 1 việc gộp lượt 1); `cli` in sai hướng dẫn (mục 2). Lọt:
+- Bỏ so tên cột ở `upgrade_contract`: **tương đương**, `extension_contract.load` bắt `{cot.ten} == header` khi `KhoHopDong.write` kiểm.
+- Bỏ kiểm role ở `change`: **tương đương**, `actor('duyet')` chỉ cho role có trang Duyệt (`ky_su`, `admin`).
+- Bỏ `expected=` khi `upgrade_contract` gọi `KhoHopDong.write`: **thiếu test** (test xung đột giả `write`). Code đúng; nếu thiếu, người nâng
+  sau có thể ghi `v<N+2>` đè ý người trước trong khe giữa kiểm và ghi. Không chặn; thêm test khi có lượt sửa sau.
+
+**Ghi chú (không chặn):** `DotStore.approve` ghi `hop_dong/<ten>.yml` rồi mới ghi sự kiện; nếu ghi sự kiện lỗi giữa chừng, duyệt lại cùng tên
+gặp `DaCo` (file bất biến). Gỡ bằng Từ chối rồi gửi lại file. Chưa kiểm trên cloud thật (tổng duyệt).
