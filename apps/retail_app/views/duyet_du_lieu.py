@@ -5,13 +5,14 @@ import streamlit as st
 from ui import roles, nhap_runner
 from ui.nhap_store import RequestStore, LABELS, nhap_kha_dung
 from scripts.ingest import approval
-from scripts.ingest.source_contract import SOURCES
+from ui.form_duyet import form_duyet, form_nang
 
 if not roles.allowed(roles.current_role(), 'duyet_du_lieu'):
     st.error('Bạn không có quyền xem trang này.')
     st.stop()
 from ui.common import backend
-from ui.kho_dot import configured_store, mode
+from ui.kho_dot import configured_store, mode, KhongCo, DaCo, TrangThaiDaDoi
+from ui.trang_thai_dot import request_path
 from ui.nhap_dot import DotStore, tao_anh_chup
 from ui.theo_doi_dot import theo_doi_dot
 
@@ -35,7 +36,7 @@ if dot_mode != 'tat':
             command = dots.latest_command()
             dot_rows = dots.visible(current_user['username'], roles.current_role())
             dot_snapshot = tao_anh_chup(dot_rows, command)
-            for row in dot_rows:
+            for row in (r for r in dot_rows if r.get('loai') != 'mot_file'):
                 with st.expander(f"{row['nhan']} · {dots.label(row, command)} · {row['id']}"):
                     st.caption(f"{len(row['files'])} file · {sum(f['so_byte'] for f in row['files']) / 1024**2:.2f} MB · {row['ngay_gui']}")
                     if row.get('release_id'):
@@ -51,6 +52,85 @@ if dot_mode != 'tat':
                         if st.button('Hủy', key='dot_cancel_' + row['id']):
                             dots.change(row['id'], 'huy')
                             st.rerun()
+            if dot_mode == 'volume':
+                st.subheader('Yêu cầu một file')
+                for row in (r for r in dot_rows if r.get('loai') == 'mot_file'):
+                    with st.expander(f"{row['nhan']} · {dots.label(row, command)} · {row['id']}"):
+                        try:
+                            request_id = row['id']
+                            folder = request_path(request_id)
+                            st.text(row.get('mo_ta', ''))
+                            st.caption('Trạng thái: ' + dots.label(row, command))
+                            st.caption('Đường xử lý: ' + ('Tự động' if row.get('duong') == 'tu_dong' else 'Chờ đội dữ liệu'))
+                            for reason in row.get('ly_do', []):
+                                st.warning(reason['ky_thuat'])
+                            if row.get('thong_bao'):
+                                st.info(row['thong_bao'])
+                            notice = dots.notice(request_id)
+                            if notice:
+                                st.info(notice)
+                            if row.get('ten_mo_rong'):
+                                st.caption('Hợp đồng ' + row['ten_mo_rong'])
+                                st.code(dots.kho.doc(folder + '/hop_dong/' + row['ten_mo_rong'] + '.yml').decode('utf-8'), language='yaml')
+                            proposal = None
+                            try:
+                                proposal = dots.proposal(request_id)
+                            except KhongCo:
+                                pass
+                            if proposal:
+                                with st.expander('Báo cáo kỹ thuật đầy đủ'):
+                                    st.markdown(dots.kho.doc(folder + '/de_xuat/bao_cao_mapping.md').decode('utf-8'))
+                                    st.json(proposal)
+                            if row['trang_thai'] == 'cho_duyet' and proposal:
+                                result = form_duyet(proposal, row['file']['ten'], request_id)
+                                if result:
+                                    name, decisions = result
+                                    dots.approve(request_id, len(row['lich_su']), decisions, name)
+                                    st.rerun()
+                                with st.form('tu_choi_' + request_id):
+                                    reason = st.text_area('Lý do từ chối (bắt buộc)')
+                                    reject = st.form_submit_button('Từ chối')
+                                if reject:
+                                    dots.reject(request_id, len(row['lich_su']), reason)
+                                    st.rerun()
+                            if row['trang_thai'] == 'tu_choi':
+                                st.warning('Lý do từ chối: ' + row['lich_su'][-1]['ghi_chu'])
+                            if row['trang_thai'] == 'cho_model_dbt':
+                                st.info('Đã duyệt và lưu file; đội dữ liệu cần bổ sung mô hình trước khi chạy.')
+                            if row['trang_thai'] == 'loi':
+                                if st.button('Chạy lại', key='mot_retry_' + request_id):
+                                    dots.change(request_id, 'cho_chay')
+                                    st.rerun()
+                                if st.button('Hủy', key='mot_cancel_' + request_id):
+                                    dots.change(request_id, 'huy')
+                                    st.rerun()
+                            current = dots.upgrade_info(request_id)
+                            if current and proposal:
+                                version = current[0]['phien_ban']
+                                name = row['ten_mo_rong']
+                                st.subheader(f'Nâng hợp đồng {name} v{version} → v{version + 1}')
+                                decisions = form_nang(proposal, row['cot_moi'], request_id)
+                                if decisions is not None:
+                                    dots.upgrade_contract(request_id, decisions, expected=version)
+                                    st.rerun()
+                                with st.form('tu_choi_nang_' + request_id):
+                                    reason = st.text_area('Lý do từ chối nâng hợp đồng')
+                                    reject = st.form_submit_button('Từ chối nâng hợp đồng')
+                                if reject:
+                                    dots.reject_upgrade(request_id, reason, expected=version)
+                                    st.rerun()
+                            elif row.get('duong') == 'tu_dong' and row.get('cot_moi'):
+                                from ui.kho_hop_dong import KhoHopDong
+                                if KhoHopDong(dots.kho).rejected(row['ten_mo_rong'], row['cot_moi']):
+                                    st.info('Đã từ chối nâng hợp đồng cho các cột mới.')
+                                else:
+                                    st.info('Cột mới có hiệu lực từ lần gửi sau; gửi lại file để dựng bản có cột mới')
+                            with st.expander('Lịch sử yêu cầu'):
+                                st.json(row['lich_su'])
+                        except (DaCo, TrangThaiDaDoi):
+                            st.warning('Có người vừa thao tác cùng lúc; tải lại trang.')
+                        except Exception as error:
+                            st.error('Chưa xử lý được yêu cầu một file: ' + type(error).__name__)
             ledger = dots.ledger()
             st.subheader('Sổ đợt')
             st.caption('Chỉ ảnh hưởng lần dựng đợt sau, không đổi dashboard đang hiện.')
@@ -89,12 +169,27 @@ if backend() == 'databricks' and roles.current_role() == 'admin':
             if isinstance(since, dict) and since.get('release_id') == state.get('dashboard') and since.get('at'):
                 st.caption('Giờ công bố: ' + str(since['at']))
             candidates = sorted(key for key, value in state.get('releases', {}).items()
-                                if value.get('status') == 'ready' and value.get('co_du_lieu_tong_hop') is True)
+                                if value.get('status') == 'ready' and
+                                ((value.get('co_du_lieu_tong_hop') is True) != (value.get('chi_dashboard') is True)))
             if candidates:
+                has_new_source = any(state['releases'][key].get('chi_dashboard') is True for key in candidates)
+                def candidate_label(key):
+                    record = state['releases'][key]
+                    kind = ('Bản có đợt (dữ liệu tổng hợp)' if record.get('co_du_lieu_tong_hop') is True
+                            else 'Bản có nguồn mới ' + ', '.join(record.get('nguon_moi') or []))
+                    return key + ' · ' + kind if has_new_source else key
+                chosen = st.selectbox('Bản dữ liệu', candidates, disabled=pending,
+                                      key='cloud_dashboard_release', format_func=candidate_label)
+                record = state['releases'][chosen]
+                synthetic = record.get('co_du_lieu_tong_hop') is True
+                st.caption('Bản có đợt (dữ liệu tổng hợp)' if synthetic else
+                           'Bản có nguồn mới ' + ', '.join(record.get('nguon_moi') or []))
                 with st.form('cloud_dashboard_publish'):
-                    chosen = st.selectbox('Bản có đợt', candidates, disabled=pending)
-                    confirmed = st.checkbox('Đây là dữ liệu tổng hợp, chỉ để demo', disabled=pending)
-                    publish = st.form_submit_button('Đưa bản có đợt lên dashboard (demo)', disabled=pending)
+                    confirmed = (st.checkbox('Đây là dữ liệu tổng hợp, chỉ để demo', disabled=pending)
+                                 if synthetic else False)
+                    publish = st.form_submit_button(
+                        'Đưa bản có đợt lên dashboard (demo)' if synthetic else 'Đưa bản có nguồn mới lên dashboard',
+                        disabled=pending)
                 if publish:
                     dots.dashboard_command(chosen, confirmed=confirmed)
                     st.rerun()
@@ -174,43 +269,10 @@ def review():
             st.markdown((store.folder(selected) / 'de_xuat/bao_cao_mapping.md').read_text(encoding='utf-8'))
             st.json(proposal)
     if record['trang_thai'] == 'cho_duyet' and proposal:
-        defaults = approval.default_decisions(proposal)
-        with st.form('duyet_' + selected):
-            name = st.text_input('Tên phần mở rộng', approval.extension_name(record['ten_file']))
-            st.caption('Duyệt tay cho tên đã có hợp đồng chỉ áp dụng với yêu cầu này; hợp đồng hiện hành chỉ đổi qua Nâng hợp đồng.')
-            st.caption('PII mặc định chỉ ở silver. Chọn mart là quyết định chủ động cho phép xuất hiện trên báo cáo.')
-            frame = pd.DataFrame(defaults['cot'])
-            for col, value in [('kieu', 'string'), ('duoc_rong', False), ('hien_thi', 'silver'), ('ly_do', '')]:
-                if col not in frame:
-                    frame[col] = value
-                frame[col] = frame[col].fillna(value)
-            edited = st.data_editor(frame, disabled=['ten'], hide_index=True, key='cot_' + selected,
-                column_config={'xu_ly': st.column_config.SelectboxColumn('Xử lý', options=['khoa_noi', 'doi_chieu_loi', 'bo', 'nap'], required=True),
-                               'kieu': st.column_config.SelectboxColumn('Kiểu', options=extension_contract.VALID_TYPES, required=True),
-                               'duoc_rong': st.column_config.CheckboxColumn('Được rỗng'),
-                               'hien_thi': st.column_config.SelectboxColumn('Hiển thị', options=['silver', 'mart']),
-                               'ly_do': st.column_config.TextColumn('Lý do')})
-            source = st.selectbox('Nguồn nối', list(SOURCES), index=list(SOURCES).index(defaults['khoa_noi']['nguon']) if defaults['khoa_noi']['nguon'] in SOURCES else 0)
-            source_key = st.text_input('Cột khóa trong nguồn', defaults['khoa_noi']['cot_nguon'])
-            entities = st.text_area('Thực thể đã duyệt (YAML; [] nếu không duyệt thực thể)',
-                yaml.safe_dump(defaults['thuc_the'], allow_unicode=True, sort_keys=False), height=180)
-            tolerance = st.number_input('Ngưỡng cách ly (tỷ lệ)', min_value=0.0, max_value=0.99, value=0.01, step=0.01)
-            approve = st.form_submit_button('Duyệt', type='primary')
-        if approve:
+        result = form_duyet(proposal, record['ten_file'], selected)
+        if result:
             try:
-                cols = []
-                for row in edited.to_dict('records'):
-                    fields = ['ten', 'xu_ly']
-                    if row['xu_ly'] in ('nap', 'khoa_noi'):
-                        fields += ['kieu', 'duoc_rong']
-                    if row['xu_ly'] == 'nap':
-                        fields += ['hien_thi']
-                    if row['xu_ly'] == 'bo':
-                        fields += ['ly_do']
-                    cols.append({k: row[k] for k in fields})
-                decisions = {'cot': cols, 'thuc_the': yaml.safe_load(entities), 'nguong_cach_ly': tolerance,
-                             'khoa_noi': {'nguon': source, 'cot_nguon': source_key,
-                                'cot': next((r['ten'] for r in cols if r['xu_ly'] == 'khoa_noi'), '')}}
+                name, decisions = result
                 store.approve(selected, record['revision'], decisions, name)
                 st.rerun()
             except Exception as error:
