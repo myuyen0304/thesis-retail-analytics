@@ -407,3 +407,11 @@ def test_contract_changed_after_queue_is_rechecked_before_trigger(env):
     path.write_bytes(path.read_bytes()+b'\n# changed\n')
     assert not poll.ket_thuc(env.kho,{},root=env.root,cloud_factory=env.cloud_factory)['trigger']
     assert row(env)['trang_thai'] == 'loi'
+
+
+def test_auto_dashboard_unmarked_registry_record_only_notifies(env):
+    env.registry.register({'release_id':B,'status':'ready','snapshot_id':'b'*12,'run_id':'run'})
+    poll._auto_dashboard(env.kho, {'id':MOT,'release_id':B}, env.root, env.cloud_factory)
+    assert env.kho.liet_ke('lenh') == []
+    assert json.loads(env.kho.doc(poll.request_path(MOT)+'/thong_bao.json'))['thong_bao']
+    assert env.registry.read()['payload']['active'] == A
