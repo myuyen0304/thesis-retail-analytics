@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import hashlib
 import json
+from pathlib import Path
 import re
 from uuid import uuid4
 
@@ -42,7 +43,7 @@ def can_theo_doi(anh):
     """Chỉ dò khi Airflow còn có thể đổi trạng thái hoặc trả kết quả lệnh."""
     command = anh['lenh']
     return (command is not None and command['ket_qua'] is None) or any(
-        row[1] in ('da_gui', 'dang_kiem', 'het_cho', 'cho_chay', 'dang_chay')
+        row[1] in ('da_gui', 'dang_kiem', 'dang_doc', 'da_duyet', 'het_cho', 'cho_chay', 'dang_chay')
         for row in anh['rows'])
 
 
@@ -75,6 +76,13 @@ class DotStore:
                 continue
             try:
                 row = self.read(request_id)
+                if row.get('loai') == 'mot_file':
+                    if not request_id.endswith('_mot') or row.get('id') != request_id:
+                        raise ValueError('Loại yêu cầu không khớp mã.')
+                    item = row['file']
+                    if not isinstance(item, dict):
+                        raise TypeError('Thông tin file không hợp lệ.')
+                    row = dict(row, nhan=item['ten'], files=[item])
                 for key in ('id', 'nguoi_gui', 'ngay_gui', 'nhan'):
                     if not isinstance(row[key], str):
                         raise TypeError('Trường trạng thái không phải chuỗi.')
@@ -139,6 +147,142 @@ class DotStore:
         audit.log(username, 'dot_gui', {'id': request_id})
         return self.read(request_id)
 
+    def gui_mot_file(self, upload, mo_ta):
+        username, audit = actor('gui')
+        if upload is None:
+            raise ValueError('Chọn một file trước khi gửi.')
+        name = relative_path(safe_filename(upload.name))
+        upload.seek(0)
+        content = bytearray()
+        digest = hashlib.sha256()
+        while block := upload.read(CHUNK_BYTES):
+            if len(content) + len(block) > MAX_FILE_BYTES:
+                raise ValueError('Mỗi file tối đa 200 MB.')
+            digest.update(block)
+            content.extend(block)
+        request_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ_') + uuid4().hex[:6] + '_mot'
+        folder = request_path(request_id)
+        record = dict(id=request_id, loai='mot_file', nguoi_gui=username,
+            vai_tro=roles.current_role(), mo_ta=mo_ta,
+            ngay_gui=datetime.now(timezone.utc).isoformat(),
+            file={'ten': name, 'so_byte': len(content), 'sha256': digest.hexdigest()})
+        self.kho.ghi_moi(folder + '/file/' + name, bytes(content))
+        self.kho.ghi_moi(folder + '/yeu_cau.json', json.dumps(record, ensure_ascii=False).encode('utf-8'))
+        self.kho.ghi_json_so_tiep(folder + '/su_kien',
+            {'toi': 'da_gui', 'ai': username, 'ghi_chu': ''}, expected=0)
+        audit.log(username, 'mot_gui', {'id': request_id})
+        return self.read(request_id)
+
+    def proposal(self, request_id):
+        import yaml
+        return yaml.safe_load(self.kho.doc(request_path(request_id) + '/de_xuat/mapping_de_xuat.yml'))
+
+    def notice(self, request_id):
+        try:
+            doc = self._json(request_path(request_id) + '/thong_bao.json')
+            return doc['thong_bao']
+        except KhongCo:
+            return None
+
+    def _review(self, request_id, expected, status):
+        username, audit = actor('duyet')
+        row = self.read(request_id)
+        if (row.get('loai') != 'mot_file' or row['trang_thai'] not in status
+                or len(row['lich_su']) != expected):
+            raise TrangThaiDaDoi()
+        return username, audit, row
+
+    def approve(self, request_id, expected, decisions, name):
+        import yaml
+        from scripts.ingest import approval
+        from ui.kho_hop_dong import KhoHopDong, load_raw, chu_ky_nghiep_vu
+        username, audit, row = self._review(request_id, expected, ('cho_duyet',))
+        folder = request_path(request_id)
+        doc = approval.hop_dong_tu_de_xuat(self.proposal(request_id), decisions, name,
+            f"ui_nhap_cloud/{request_id}/{row['file']['ten']}", username,
+            datetime.now(timezone.utc).isoformat())
+        raw = yaml.safe_dump(doc, allow_unicode=True, sort_keys=False).encode('utf-8')
+        checked = load_raw(name, raw)  # Kiểm toàn bộ trước khi ghi bất kỳ hiện vật đã duyệt nào.
+        registry = KhoHopDong(self.kho)
+        current = registry.current(name)
+        model = approval.has_dbt_model(name, Path(__file__).resolve().parents[3] / 'retail_dbt/models')
+        audit.log(username, 'mot_duyet', {'id': request_id, 'ten': name})
+        self.kho.ghi_moi(folder + '/hop_dong/' + name + '.yml', raw)
+        if current is None:
+            registry.write(name, doc, username, 'yeu_cau:' + request_id, expected=0)
+        self.kho.ghi_json_so_tiep(folder + '/su_kien', {
+            'toi': 'da_duyet' if model else 'cho_model_dbt', 'ai': username, 'ghi_chu': '',
+            'duong': 'tay', 'ten_mo_rong': name, 'hop_dong_sha256': checked['hop_dong_sha256'],
+            'chu_ky_nghiep_vu': chu_ky_nghiep_vu(checked)}, expected=expected)
+        return self.read(request_id)
+
+    def reject(self, request_id, expected, reason):
+        username, audit, row = self._review(request_id, expected, ('cho_duyet',))
+        if not reason.strip():
+            raise ValueError('Từ chối phải ghi lý do.')
+        self.kho.ghi_json_so_tiep(request_path(request_id) + '/su_kien',
+            {'toi': 'tu_choi', 'ai': username, 'ghi_chu': reason.strip()}, expected=expected)
+        audit.log(username, 'mot_tu_choi', {'id': request_id, 'ly_do': reason.strip()})
+
+    def upgrade_info(self, request_id):
+        from ui.kho_hop_dong import KhoHopDong, load_raw
+        row = self.read(request_id)
+        if (row.get('loai') != 'mot_file' or row.get('duong') != 'tu_dong'
+                or not row.get('cot_moi') or not row.get('ten_mo_rong')):
+            return None
+        name = row['ten_mo_rong']
+        doc = load_raw(name, self.kho.doc(request_path(request_id) + '/hop_dong/' + name + '.yml'))
+        if doc['hop_dong_sha256'] != row.get('hop_dong_sha256'):
+            raise ValueError('Hợp đồng của lượt đã đổi.')
+        registry = KhoHopDong(self.kho)
+        current = registry.current(name)
+        if (current is None or current[0]['phien_ban'] != doc.get('phien_ban')
+                or registry.rejected(name, row['cot_moi'])):
+            return None
+        return current
+
+    def upgrade_contract(self, request_id, decisions, *, expected):
+        from copy import deepcopy
+        from scripts.ingest import approval
+        from scripts.ingest.tu_dong import normalize
+        from ui.kho_hop_dong import KhoHopDong
+        username, audit = actor('duyet')
+        current = self.upgrade_info(request_id)
+        if current is None or current[0]['phien_ban'] != expected:
+            raise TrangThaiDaDoi()
+        row = self.read(request_id)
+        columns = row['cot_moi']
+        if (len(decisions) != len(columns)
+                or {normalize(c['ten']) for c in decisions} != {normalize(c) for c in columns}
+                or any(c.get('xu_ly') not in ('bo', 'nap') for c in decisions)):
+            raise ValueError('Chỉ được duyệt đúng các cột mới của đề xuất.')
+        name = row['ten_mo_rong']
+        models = Path(__file__).resolve().parents[3] / 'retail_dbt/models'
+        if any(c.get('xu_ly') == 'nap' and c.get('hien_thi') == 'mart'
+               and not approval.has_dbt_column(name, c['ten'], models) for c in decisions):
+            raise ValueError('Model dbt chưa có cột; chọn silver trước khi duyệt.')
+        doc = deepcopy(current[1])
+        doc['header'].extend(columns)
+        doc['cot'].extend([{**c, 'trang_thai': 'da_duyet',
+            'tuy_chon': c['xu_ly'] == 'bo' or c.get('hien_thi') == 'silver'} for c in decisions])
+        # Chỉ nâng mẫu; không tạo yêu cầu hay ghi lệnh nạp bù.
+        meta, checked = KhoHopDong(self.kho).write(name, doc, username,
+            'nang_hop_dong:' + request_id, expected=expected)
+        audit.log(username, 'mot_nang_hop_dong', {'id': request_id, 'ten': name,
+                  'phien_ban': meta['phien_ban']})
+        return meta
+
+    def reject_upgrade(self, request_id, reason, *, expected):
+        from ui.kho_hop_dong import KhoHopDong
+        username, audit = actor('duyet')
+        current = self.upgrade_info(request_id)
+        if current is None or current[0]['phien_ban'] != expected:
+            raise TrangThaiDaDoi()
+        row = self.read(request_id)
+        KhoHopDong(self.kho).reject(row['ten_mo_rong'], row['cot_moi'], reason, username)
+        audit.log(username, 'mot_nang_hop_dong', {'id': request_id, 'ten': row['ten_mo_rong'],
+                  'phien_ban': expected, 'tu_choi': True, 'ly_do': reason.strip()})
+
     def change(self, request_id, target):
         username, audit = actor('duyet')
         if roles.current_role() not in ('ky_su', 'admin'):
@@ -148,7 +292,8 @@ class DotStore:
             raise ValueError('Chỉ được chạy lại hoặc hủy đợt đang lỗi.')
         number = self.kho.ghi_json_so_tiep(request_path(request_id) + '/su_kien',
             {'toi': target, 'ai': username, 'ghi_chu': ''}, expected=len(row['lich_su']))
-        audit.log(username, 'dot_chay_lai' if target == 'cho_chay' else 'dot_huy', {'id': request_id, 'so': number})
+        prefix = 'mot' if row.get('loai') == 'mot_file' else 'dot'
+        audit.log(username, prefix + ('_chay_lai' if target == 'cho_chay' else '_huy'), {'id': request_id, 'so': number})
         return number
 
     def latest_command(self, *, strict=False):
