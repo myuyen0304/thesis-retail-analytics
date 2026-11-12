@@ -12,7 +12,7 @@ def extension_name(filename):
 
 
 def default_decisions(proposal):
-    from scripts.ingest.adapters import normalize
+    from scripts.ingest.tu_dong import normalize
     source = proposal['nguon']['de_xuat']
     keys = KEYS.get(source) or []
     key = keys[0] if len(keys) == 1 else None
