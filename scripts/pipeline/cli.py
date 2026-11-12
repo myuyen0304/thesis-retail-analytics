@@ -730,7 +730,10 @@ def main():
                          du_bao_tu=a.du_bao_tu if stage == 'forecast' else None, **options)
         print(json.dumps({k: result[k] for k in ('run_id', 'release_id', 'snapshot_id', 'stage')}, ensure_ascii=False))
         if a.stage == 'run' and stage == 'validate' and (result.get('dot') or result.get('chi_dashboard')):
-            print('Bản đã qua kiểm; Admin công bố bằng publish --xac-nhan-tong-hop.')
+            if result.get('chi_dashboard'):
+                print('Bản đã qua kiểm; Admin đưa lên dashboard bằng dat-dashboard --xac-nhan-nguon-moi.')
+            else:
+                print('Bản đã qua kiểm; Admin công bố bằng publish --xac-nhan-tong-hop.')
             break
 
 
