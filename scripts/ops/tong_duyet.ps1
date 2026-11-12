@@ -2,7 +2,7 @@
 # File nay chi dung ASCII vi PowerShell 5.1 doc sai UTF-8 khong BOM.
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('dung', 'truoc', 'bat', 'trang_thai', 'tat_do', 'kiem', 'bao_cao_don', 'xoa_ban', 'xoa_kho', 'ha')]
+    [ValidateSet('dung', 'truoc', 'bat', 'trang_thai', 'tat_do', 'kiem', 'kiem_t2', 'bao_cao_don', 'xoa_ban', 'xoa_kho', 'ha')]
     [string]$Buoc,
     [Parameter(Position = 1)]
     [string]$Ban
@@ -63,6 +63,7 @@ switch ($Buoc) {
     'trang_thai' { Kiem 'trang_thai' }
     'tat_do' { TrongContainer @('airflow', 'dags', 'pause', '-y', 'nhap_du_lieu_do') }
     'kiem' { Kiem 'kiem' }
+    'kiem_t2' { Kiem 'kiem_t2' }
     'bao_cao_don' { Don @() }
     'xoa_ban' {
         if ($Ban -notmatch '^[a-f0-9]{24}$') { throw 'Can ma ban 24 ky tu hex' }
