@@ -46,6 +46,8 @@ def sidebar(role: str, page: str = '') -> None:
             record = None  # Phần đọc dữ liệu của trang sẽ báo lỗi theo cơ chế hiện có.
         if record and record.get('co_du_lieu_tong_hop'):
             st.warning('Dữ liệu tổng hợp – chỉ để demo')
+        elif record and record.get('chi_dashboard') is True:
+            st.caption('Đang xem bản có nguồn mới ' + ', '.join(record.get('nguon_moi') or []) + ', chưa phải bản chính')
 
 
 @st.cache_data(ttl=600, show_spinner=False)
