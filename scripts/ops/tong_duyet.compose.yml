@@ -25,6 +25,7 @@ x-airflow: &airflow
     RETAIL_NHAP_VOLUME: /Volumes/retail_lab/nhap_du_lieu/kho/tong_duyet
   volumes:
     - D:/retail-analytics/data:/opt/retail/data:ro
+    - D:/retail-analytics/data/ui_nhap_cloud:/opt/retail/data/ui_nhap_cloud
     - D:/retail-analytics-nap/data_demo:/opt/retail/data_demo:ro
     - D:/retail-analytics/warehouse/pipeline:/opt/retail/warehouse/pipeline
     - airflow-logs:/opt/airflow/logs
