@@ -195,3 +195,21 @@ def test_mount_keeps_core_readonly_and_ui_directory_writable():
     assert './data:/opt/retail/data:ro' in mounts
     assert './data/ui_nhap_cloud:/opt/retail/data/ui_nhap_cloud' in mounts
     assert 'data/' in (ROOT/'.gitignore').read_text(encoding='utf-8')
+
+
+@pytest.mark.parametrize('kind',['chi_dashboard','dot'])
+def test_run_after_validate_prints_correct_next_step(monkeypatch,capsys,kind):
+    calls=[]
+    def execute(stage,**kwargs):
+        calls.append(stage)
+        return {'run_id':'r','release_id':B,'snapshot_id':'c'*12,'stage':stage,kind:True}
+    monkeypatch.setattr(cli,'execute',execute)
+    invoke(monkeypatch,'run','--run-id','r','--extension-dir','unused',
+           '--extension','orders_enriched','--chi-dashboard','--du-bao-tu',A)
+    text=capsys.readouterr().out
+    assert calls==['prepare','forecast','build','validate']
+    if kind=='chi_dashboard':
+        assert 'dat-dashboard --xac-nhan-nguon-moi' in text
+        assert 'publish --xac-nhan-tong-hop' not in text
+    else:
+        assert 'publish --xac-nhan-tong-hop' in text
