@@ -15,3 +15,6 @@ databricks-sql-connector==4.4.0
 databricks-sdk==0.117.0
 # DB tài khoản đăng nhập (Postgres riêng của app, Neon; docs/phan_quyen.md §5), cùng bản với requirements.txt gốc (2026-10-29)
 psycopg[binary]==3.3.6
+
+# Hợp đồng và form duyệt cloud T2 (2026-11-11), cùng bản .venv.
+pyyaml==6.0.3

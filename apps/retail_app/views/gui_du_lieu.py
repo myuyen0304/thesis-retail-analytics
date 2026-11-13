@@ -10,7 +10,7 @@ if not roles.allowed(roles.current_role(), 'gui_du_lieu'):
     st.stop()
 from ui.common import backend
 from ui.kho_dot import configured_store, mode
-from ui.nhap_dot import DotStore, tao_anh_chup
+from ui.nhap_dot import DotStore, tao_anh_chup, chu_duong_xu_ly
 from ui.theo_doi_dot import theo_doi_dot
 
 local_available = nhap_kha_dung()
@@ -30,25 +30,50 @@ if dot_mode != 'tat':
     except (ValueError, OSError) as error:
         st.info(str(error))
     else:
-        with st.form('gui_dot', clear_on_submit=True):
-            uploads = st.file_uploader('Các file của đợt', type=['csv', 'json'],
-                                      accept_multiple_files=True, max_upload_size=200)
-            batch_label = st.text_input('Nhãn đợt', max_chars=40)
-            batch_description = st.text_area('Mô tả đợt', max_chars=2000)
-            send_batch = st.form_submit_button('Gửi đợt dữ liệu')
-        if send_batch:
-            try:
-                row = dots.gui_dot(uploads, batch_label, batch_description)
-                st.success(f"Đã gửi đợt {row['nhan']}.")
-            except Exception as error:
-                st.error(str(error))
+        kind = (st.radio('Loại yêu cầu', ['Một đợt nhiều file', 'Một file dữ liệu mới'])
+                if dot_mode == 'volume' else 'Một đợt nhiều file')
+        if kind == 'Một file dữ liệu mới':
+            with st.form('gui_mot_file', clear_on_submit=True):
+                single_upload = st.file_uploader('File dữ liệu mới', type=['csv', 'json'],
+                                                accept_multiple_files=False, max_upload_size=200)
+                description = st.text_area('Mô tả dữ liệu mới', max_chars=2000)
+                send_single = st.form_submit_button('Gửi file dữ liệu mới')
+            if send_single:
+                try:
+                    row = dots.gui_mot_file(single_upload, description)
+                    st.success(f"Đã gửi yêu cầu {row['id']}.")
+                except Exception as error:
+                    st.error('Chưa gửi được file: ' + type(error).__name__)
+        else:
+            with st.form('gui_dot', clear_on_submit=True):
+                uploads = st.file_uploader('Các file của đợt', type=['csv', 'json'],
+                                          accept_multiple_files=True, max_upload_size=200)
+                batch_label = st.text_input('Nhãn đợt', max_chars=40)
+                batch_description = st.text_area('Mô tả đợt', max_chars=2000)
+                send_batch = st.form_submit_button('Gửi đợt dữ liệu')
+            if send_batch:
+                try:
+                    row = dots.gui_dot(uploads, batch_label, batch_description)
+                    st.success(f"Đã gửi đợt {row['nhan']}.")
+                except Exception as error:
+                    st.error(str(error))
         try:
             command = dots.latest_command()
             dot_rows = dots.visible(user['username'], roles.current_role())
+            st.subheader('Yêu cầu đã gửi')
             for row in dot_rows:
                 with st.expander(f"{row['nhan']} · {dots.label(row, command)} · {row['id']}"):
                     st.caption(f"{len(row['files'])} file · {sum(f['so_byte'] for f in row['files']) / 1024**2:.2f} MB · {row['ngay_gui']}")
                     st.text(row.get('mo_ta', ''))
+                    if row.get('loai') == 'mot_file':
+                        st.caption('Một file dữ liệu mới')
+                        route_caption = chu_duong_xu_ly(row)
+                        if route_caption is not None:
+                            st.caption(route_caption)
+                        for reason in row.get('ly_do', []):
+                            st.info(reason['nghiep_vu'])
+                        if row['trang_thai'] == 'tu_choi':
+                            st.warning('Lý do từ chối: ' + row['lich_su'][-1]['ghi_chu'])
                     if row.get('ma_loi'):
                         st.warning(f"{row['ma_loi']}: {row.get('thong_bao', '')}")
                     elif row.get('thong_bao'):

@@ -804,12 +804,15 @@ def dashboard_action(store, backend, release_id=None, *, confirmed=False):
     command = [sys.executable, '-m', 'scripts.pipeline.cli']
     run_id = 'ui-dashboard-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     if release_id is not None:
-        if not confirmed:
-            raise ValueError('Cần xác nhận dữ liệu tổng hợp, chỉ để demo.')
         record = state['releases'].get(release_id, {})
-        if record.get('status') != 'ready' or record.get('co_du_lieu_tong_hop') is not True:
-            raise ValueError('Bản tổng hợp chưa đạt quality gate.')
-        command += ['dat-dashboard', '--run-id', run_id, '--release-id', release_id, '--xac-nhan-tong-hop']
+        synthetic = record.get('co_du_lieu_tong_hop') is True
+        new_source = record.get('chi_dashboard') is True
+        if record.get('status') != 'ready' or synthetic == new_source:
+            raise ValueError('Bản phải đạt quality gate và có đúng một loại dashboard.')
+        if synthetic and not confirmed:
+            raise ValueError('Cần xác nhận dữ liệu tổng hợp, chỉ để demo.')
+        flag = '--xac-nhan-nguon-moi' if new_source else '--xac-nhan-tong-hop'
+        command += ['dat-dashboard', '--run-id', run_id, '--release-id', release_id, flag]
     else:
         command += ['tra-dashboard', '--run-id', run_id]
     command += ['--target', 'duckdb', '--root', str(root)]
