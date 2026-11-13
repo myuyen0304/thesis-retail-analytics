@@ -84,4 +84,9 @@ rồi chuyển sang `cho_duyet`, `duong='tay'`. Lượt thật trên cloud diễ
 
 ## 7. Rà của Claude (Claude ghi, GPT đọc để sửa)
 
-(trống)
+**Lượt 1 (2026-11-13). Đạt.**
+- Diff đúng 4 file ở §4. Hàm `chu_duong_xu_ly` khớp bảng §2. Khối local và số lần gọi `DotStore.visible` giữ nguyên. Cú pháp `str | None` đã có sẵn trong app (`ai_explain/charts.py:66`), nên không đổi yêu cầu bản Python.
+- Claude chạy lại từng file test: T2 web 96/96, theo dõi 61/61, L1 140/140, L5 67/67. `git diff --check` đạt.
+- Đột biến 6/6 bị bắt: bỏ `dang_doc`; trả lại chữ cũ khi không có `duong`; `loi_de_xuat` vẫn hiện dòng đường xử lý; `…` đổi thành `...`; trang Gửi dùng lại biểu thức cũ; trang Duyệt dùng lại biểu thức cũ.
+- Đã commit 22c157c…e7f20cb (mỗi file một commit).
+- Còn lại: PM xem trên app local (`RETAIL_NHAP_DOT=dia`) theo §6; lượt thật trên cloud sau cửa sổ #2.
