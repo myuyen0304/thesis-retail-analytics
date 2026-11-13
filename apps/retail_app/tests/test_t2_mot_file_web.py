@@ -722,3 +722,58 @@ def test_actual_upgrade_conflict_requests_reload(cloud_store,monkeypatch):
     assert not at.exception and not at.error
     assert any('tải lại trang' in w.value for w in at.warning)
     assert cloud_store.kho.liet_ke('hop_dong_da_duyet/orders_enriched')==[]
+
+
+@pytest.mark.parametrize('row,expected', [
+    ({'trang_thai': 'da_gui'}, 'Đang đọc và hiểu file…'),
+    ({'trang_thai': 'dang_doc'}, 'Đang đọc và hiểu file…'),
+    ({'trang_thai': 'loi_file'}, None),
+    ({'trang_thai': 'loi_de_xuat'}, None),
+    ({'trang_thai': 'da_duyet', 'duong': 'tu_dong'}, 'Đường xử lý: Tự động'),
+    ({'trang_thai': 'cho_duyet', 'duong': 'tay'}, 'Đường xử lý: Chờ đội dữ liệu'),
+])
+def test_route_caption_exact_text(row, expected):
+    from ui.nhap_dot import chu_duong_xu_ly
+    assert chu_duong_xu_ly(row) == expected
+
+
+@pytest.mark.parametrize('page', ['gui_du_lieu', 'duyet_du_lieu'])
+def test_actual_pages_route_caption_waits_for_classification(cloud_store, page):
+    row = cloud_store.gui_mot_file(upload(), 'Chưa đọc file')
+    events = request_path(row['id']) + '/su_kien'
+    at = cloud_page(page)
+    assert not at.exception and not at.error
+    captions = [item.value for item in at.caption]
+    assert 'Đang đọc và hiểu file…' in captions
+    assert not any('Chờ đội dữ liệu' in text for text in captions)
+    assert not any(text.startswith('Đường xử lý') for text in captions)
+
+    cloud_store.kho.ghi_json_so_tiep(events, {'toi': 'dang_doc'})
+    at.run(timeout=20)
+    assert not at.exception and not at.error
+    captions = [item.value for item in at.caption]
+    assert 'Đang đọc và hiểu file…' in captions
+    assert not any('Chờ đội dữ liệu' in text for text in captions)
+    assert not any(text.startswith('Đường xử lý') for text in captions)
+
+    cloud_store.kho.ghi_json_so_tiep(events, {'toi': 'cho_duyet', 'duong': 'tay'})
+    at.run(timeout=20)
+    assert not at.exception and not at.error
+    captions = [item.value for item in at.caption]
+    assert 'Đường xử lý: Chờ đội dữ liệu' in captions
+    assert 'Đang đọc và hiểu file…' not in captions
+
+
+@pytest.mark.parametrize('page', ['gui_du_lieu', 'duyet_du_lieu'])
+@pytest.mark.parametrize('state', ['loi_file', 'loi_de_xuat'])
+def test_actual_pages_file_error_has_no_route_caption(cloud_store, page, state):
+    row = cloud_store.gui_mot_file(upload(), 'File lỗi')
+    events = request_path(row['id']) + '/su_kien'
+    if state == 'loi_de_xuat':
+        cloud_store.kho.ghi_json_so_tiep(events, {'toi': 'dang_doc'})
+    cloud_store.kho.ghi_json_so_tiep(events, {'toi': state})
+    at = cloud_page(page)
+    assert not at.exception and not at.error
+    captions = [item.value for item in at.caption]
+    assert not any(text.startswith('Đường xử lý') for text in captions)
+    assert 'Đang đọc và hiểu file…' not in captions
