@@ -13,7 +13,7 @@ if not roles.allowed(roles.current_role(), 'duyet_du_lieu'):
 from ui.common import backend
 from ui.kho_dot import configured_store, mode, KhongCo, DaCo, TrangThaiDaDoi
 from ui.trang_thai_dot import request_path
-from ui.nhap_dot import DotStore, tao_anh_chup
+from ui.nhap_dot import DotStore, tao_anh_chup, chu_duong_xu_ly
 from ui.theo_doi_dot import theo_doi_dot
 
 local_available = nhap_kha_dung()
@@ -61,7 +61,9 @@ if dot_mode != 'tat':
                             folder = request_path(request_id)
                             st.text(row.get('mo_ta', ''))
                             st.caption('Trạng thái: ' + dots.label(row, command))
-                            st.caption('Đường xử lý: ' + ('Tự động' if row.get('duong') == 'tu_dong' else 'Chờ đội dữ liệu'))
+                            route_caption = chu_duong_xu_ly(row)
+                            if route_caption is not None:
+                                st.caption(route_caption)
                             for reason in row.get('ly_do', []):
                                 st.warning(reason['ky_thuat'])
                             if row.get('thong_bao'):
