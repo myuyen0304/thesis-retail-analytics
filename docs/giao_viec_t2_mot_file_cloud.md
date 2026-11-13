@@ -293,3 +293,115 @@ quay lại `adapters`; nâng hợp đồng ghi lệnh nạp bù; trang Gửi m�
 
 **Ghi chú (không chặn):** `DotStore.approve` ghi `hop_dong/<ten>.yml` rồi mới ghi sự kiện; nếu ghi sự kiện lỗi giữa chừng, duyệt lại cùng tên
 gặp `DaCo` (file bất biến). Gỡ bằng Từ chối rồi gửi lại file. Chưa kiểm trên cloud thật (tổng duyệt).
+
+## 12. Kịch bản nghiệm thu trên cloud (PM chạy, Claude đọc kết quả)
+
+Chạy bằng **bộ Airflow thử** (`scripts/ops/tong_duyet.ps1`, image dựng từ commit hiện tại của `nap-ky/myuyen`) và thư mục
+`kho/tong_duyet`. Airflow chính vẫn chạy code cũ, giữ lịch 08:00; hai DAG đợt của nó vẫn tắt. Không chạy gần 08:00. Tắt Sleep máy.
+File demo (đã thu nhỏ, nghiệm thu local 2026-11-05) ở `D:\retail-analytics-nhap\data\student_data\demo_2022\` và
+`D:\retail-analytics-schema\data\student_data\`. Claude đã chạy thử phân loại trên máy (2026-11-12): `shipments_realistic.csv` → `tu_dong`;
+`orders_enriched_bonus.csv` → `tu_dong`, `cot_moi = [bonus]`; `orders_enriched_thieu_comment.csv` → `can_nguoi` (`thieu_cot`);
+`tf.json` → `can_nguoi` (`chua_co_hop_dong`, `doi_kieu`, `xung_dot_khoa`); quyết định mặc định của form cho `tf` ra hợp đồng hợp lệ, chưa có model dbt.
+
+**File JSON demo (Claude dựng 2026-11-12, để chứng minh "nhận JSON, thêm/bớt field" đi trọn đường):** `orders_enriched_bonus.json`
+(20,3 MB) và `orders_enriched_thieu_comment.json` (16,1 MB), cùng thư mục `demo_2022`, chuyển từ hai file CSV cùng tên: mảng đối tượng,
+giữ thứ tự cột, mọi giá trị là chuỗi, ô rỗng thành `null`. Claude kiểm trên máy: `adapters.read_file` của bản JSON và bản CSV lệch 0 ô
+(36.004 dòng); phân loại giống nhau (`bonus.json` → `tu_dong`, `cot_moi = [bonus]`; `thieu_comment.json` → `can_nguoi`, `thieu_cot`); mô phỏng
+hợp đồng của lượt (`nhap_do` dòng 610–617) rồi `extension_prepare.prepare` ra `orders_enriched.parquet` lệch 0 dòng so với bản CSV.
+Ca A giữ CSV, nên kịch bản có cả hai định dạng.
+
+Lệnh `.\tong_duyet.ps1` dưới đây chạy trong `D:\retail-analytics-nap\scripts\ops`. Mỗi bước `truoc`, `trang_thai`, `kiem_t2`, `bao_cao_don`: dán kết quả cho Claude.
+
+**Chuẩn bị**
+1. `New-Item -ItemType Directory -Force D:\retail-analytics\data\ui_nhap_cloud`
+2. App tạm, Secrets: đường dẫn kho đổi thành `/Volumes/retail_lab/nhap_du_lieu/kho/tong_duyet` → Save → Reboot.
+3. `.\tong_duyet.ps1 dung` → `.\tong_duyet.ps1 truoc`. Đạt khi: `dashboard` null, `dat_nguong_do` true, `so_yeu_cau_co_san` 0.
+4. `.\tong_duyet.ps1 bat`.
+
+**A. Đường tự động, tự đưa lên dashboard, chống trùng**
+- A1. Quản lý gửi "Một file dữ liệu mới" `demo_2022\shipments_realistic.csv`. Mong đợi: Đã gửi → Đang đọc file → Đã duyệt (đường Tự động) → Chờ chạy →
+  Đang chạy → Đã kiểm tra → Đang trên dashboard, không ai bấm. Kẹt quá 10 phút ở một trạng thái thì `trang_thai`.
+- A2. Admin và khách xem PS1: dòng nhỏ "Đang xem bản có nguồn mới shipments_realistic, chưa phải bản chính"; số G/R giống bản chính (sales không đổi).
+- A3. `kiem_t2`. Đạt: `ket_luan` DAT, `active` = `moc.active`, bản có `chi_dashboard` true, `nguon_moi` có `shipments_realistic`, `dim_shipper` 80,
+  `sales_lech_ngay` 0, một lệnh `dat` `ai: airflow`.
+- A4. Gửi lại đúng file đó. Mong đợi trong ~5 phút: "Không có gì mới", không có lượt chạy.
+
+**Sửa B (2026-11-12, sau A3):** ước tính quota ở trên sai. Ngưỡng của `nhap_do._quota` đếm **cả bảng lẫn view** (`truoc` 248, sau
+bản A 334), không phải 174 bảng; 334 + 183 > 500 nên một bản thứ hai không chạy khi bản A còn. Thứ tự mới:
+- B1'. (A vẫn trên dashboard) gửi `orders_enriched_bonus.json`. Mong đợi: Đã duyệt (Tự động) rồi **Hết chỗ lưu trữ** (`het_cho`), không chạy.
+- B2 như dưới (nâng v2 không cần quota).
+- B3'. Admin Trả dashboard (A thành Đã trả) → `tat_do` → `xoa_ban <bản A>` → `bat`. Trong ~5 phút B từ `het_cho` sang Chờ chạy, chạy, rồi
+  **tự lên dashboard** (dashboard trống, đường tự động).
+- B4'. Admin Trả dashboard (B thành Đã trả) → chọn bản B (nhãn "Bản có nguồn mới orders_enriched"), không có ô xác nhận tổng hợp → Đưa lên
+  → B Đang trên dashboard: thử nút Admin đưa bản một file lên.
+- B5'. `kiem_t2` như B4 dưới. Ca "bản dựng xong khi dashboard đang bận thì không tự lên" không thử được trên cloud lần này (quota); chỉ có test.
+
+**Dọn quota (2026-11-12, sau A4, thay B1'–B5'):** `bao_cao_don` cho bốn bản: active `1eb69c0e…` 83, đích rollback `5d32a104…` 80,
+dashboard (bản A) `6b38412d…` 86, `dbb80f56…` (active trước cửa sổ #1, cùng snapshot với active) 83; còn 2 bảng `retail_control`.
+Chuyển đích rollback sang `dbb80f56…` (`don_ban_cu --dat-dich-rollback`) rồi `xoa_ban 5d32a104…` → còn 254, 254 + 183 ≤ 500: chạy **B gốc**
+dưới đây, thử được cả ca dashboard bận. Cuối D chỉ xóa bản A và B; giữ `dbb80f56…` làm đích rollback.
+
+**B. Cột mới, dashboard đang bận, nâng hợp đồng, Admin đưa lên** (bản gốc; chạy sau khi dọn quota ở trên)
+- B1. (A vẫn trên dashboard) gửi `demo_2022\orders_enriched_bonus.json` (JSON, thêm field `bonus`). Mong đợi: đường Tự động, chạy tới Đã kiểm tra, **không** tự lên dashboard;
+  trang Duyệt hiện "Dashboard đang có bản khác; chờ Admin đưa lên."
+- B2. Kỹ sư dữ liệu, trang Duyệt, yêu cầu B: "Nâng hợp đồng orders_enriched v1 → v2", cột `bonus` để `nap`/`silver` → Duyệt nâng. Mong đợi: dòng
+  "Cột mới có hiệu lực từ lần gửi sau…", không có yêu cầu hay lượt chạy mới.
+- B3. Admin: Trả dashboard (chờ ≤ 5 phút, A thành Đã trả dashboard) → chọn bản B (nhãn "Bản có nguồn mới orders_enriched"), không có ô xác nhận
+  tổng hợp → Đưa lên → chờ ≤ 5 phút → B Đang trên dashboard, dòng nhỏ đổi sang `orders_enriched`.
+- B4. `kiem_t2`. Đạt: DAT, bản B `dim_sales_employee` 200, `hop_dong_da_duyet.orders_enriched` = `[v2.yml]`, mọi lệnh có kết quả.
+
+**C. Đường tay (không tốn quota)**
+- C1. Gửi `demo_2022\orders_enriched_thieu_comment.json` (JSON, bớt field `comment`) → Chờ duyệt, lý do thiếu cột. Kỹ sư dữ liệu Từ chối kèm lý do. Quản lý thấy "Lý do từ chối".
+- C2. Gửi `D:\retail-analytics-schema\data\student_data\tf.json` → Chờ duyệt. Kỹ sư dữ liệu Duyệt với mặc định của form (tên `tf`) → "Chờ đội dữ liệu
+  bổ sung mô hình", không chạy.
+- C3. `kiem_t2`: hai yêu cầu `tu_choi`, `cho_model_dbt`; `hop_dong_da_duyet` có `tf: [v1.yml]`.
+- Đường tay **có chạy** dùng chung code sau `da_duyet` với đường tự động (test lượt 1, mục 8); kịch bản không có file demo nào duyệt tay mà dbt chạy được.
+
+**D. Dọn (bắt buộc, §11 lượt 1)**
+1. Admin Trả dashboard; chờ ≤ 5 phút; `trang_thai` không còn `tren_dashboard`.
+2. `.\tong_duyet.ps1 tat_do` → `.\tong_duyet.ps1 bao_cao_don` (dán) → `.\tong_duyet.ps1 xoa_ban <bản A>` → `.\tong_duyet.ps1 xoa_ban <bản B>`.
+3. `.\tong_duyet.ps1 xoa_kho` (xóa cả `hop_dong_da_duyet/` của thư mục thử).
+4. Xóa tay: nội dung `D:\retail-analytics\data\ui_nhap_cloud\` và `D:\retail-analytics\warehouse\pipeline\docker\nhap\*_mot\`.
+5. `.\tong_duyet.ps1 ha`.
+6. **Giữ** Secrets app tạm ở `kho/tong_duyet` tới cửa sổ bảo trì #2, để không ai gửi một file vào kho thật khi Airflow chính còn code cũ.
+
+**Kết quả nghiệm thu (2026-11-12 → 2026-11-13, PM chạy, Claude đọc kết quả)**
+
+Chạy theo **B gốc** sau khi dọn quota. Bản chính trong suốt đợt: `1eb69c0ea3dc4d17826364c6`; đích rollback: `dbb80f5674af47fe9c98f796`.
+
+| Ca | Yêu cầu / bản | Thực tế | Kết luận |
+|---|---|---|---|
+| Chuẩn bị | | `truoc` đạt | Đạt |
+| A1–A3 | `20261112T074526Z_ac6d15_mot` → bản A `6b38412dc6fb4dc4848728b3` | Tự đi hết các trạng thái, tự lên dashboard, không ai bấm; dòng nhỏ hiện cho khách; `kiem_t2` DAT | Đạt |
+| A4 | | Không thử: gửi lại sẽ dựng bản mới (A đã xóa; chữ ký hợp đồng đổi sau v2) và vượt quota. Chỉ có test | Bỏ |
+| B1 | `20261112T143649Z_909673_mot` → bản B `53db83c3515441f48ca5b909` | Đường Tự động, `cot_moi` = `bonus`, dừng ở Đã kiểm tra, không tự đè A; hiện "Dashboard đang có bản khác; chờ Admin đưa lên." | Đạt |
+| B2 | hợp đồng `orders_enriched` | Nâng v1 → v2, `bonus` để `nap`, kiểu integer, `silver`; không sinh yêu cầu hay lượt chạy mới | Đạt |
+| B3 | lệnh 2 `tra`, lệnh 3 `dat` | Admin Trả A rồi đưa B lên; dashboard = B, công bố 2026-11-13 02:11:42Z; PS1 16,43 tỷ / 12,52 tỷ / 76,2% (khớp bản chính) | Đạt |
+| (dọn giữa) | bản A | Sau B3: `xoa_ban 6b38412d…` | Xong |
+| B4 | | `kiem_t2` DAT: active không đổi, `chi_dashboard` true, `nguon_moi` `orders_enriched`, `sales_lech_ngay` 0, `dim_sales_employee` 200, 3 lệnh đều `dat`, `orders_enriched: [v2.yml]` | Đạt |
+| C1 | `20261113T025446Z_1a94e2_mot` | Chờ duyệt, lý do "File thiếu cột comment so với hợp đồng orders_enriched v2"; DE Từ chối với lý do "File thiếu cột comment" → `tu_choi` | Đạt |
+| C2 | `20261113T032356Z_7d8196_mot` (`tf.json`) | Chờ duyệt (không có hợp đồng, nguồn gần nhất `web_traffic`, lỗi ép kiểu, trùng khóa); DE duyệt tên `tf` → `cho_model_dbt`, không chạy | Đạt |
+| C3 | | `kiem_t2` DAT: `tu_choi` + `cho_model_dbt`, `hop_dong_da_duyet` có `tf: [v1.yml]` | Đạt |
+| D | | Thử `xoa_ban` B khi B còn trên dashboard → chốt **G8 chặn**, không xóa gì. Admin Trả → B `da_tra`, dashboard null → `tat_do` → `bao_cao_don` (chỉ B xóa được; G1, G2 khóa active và rollback) → `xoa_ban 53db83c3…` → `xoa_kho` → xóa tay `*_mot` (giữ `*_dot`) → `ha` | Xong |
+
+Sau D: catalog `retail_lab` chỉ còn schema của `r_1eb69c0e` và `r_dbb80f56`; dashboard null; Secrets app tạm vẫn trỏ `kho/tong_duyet`.
+
+**Thời gian đo được** (từ `lich_su` và task Airflow):
+- **A** (CSV 95 MB):
+  - chờ DAG 4m48s; đọc và ghép cột 8s; hàng đợi khoảng 50s;
+  - pipeline 13m30: `prepare_snapshot` 1m15, `forecast_from_source` 21s, `ingest_and_dbt_build` 7m07, `quality_and_reader_gate` 4m43;
+  - tự lên dashboard thêm khoảng 6 phút;
+  - tổng khoảng 26 phút.
+- **B** (JSON 19 MB): ghép cột 31s; pipeline 31 phút, vì `ingest_and_dbt_build` nằm chờ 14m40 sau `forecast_from_source`. Chưa rõ nguyên nhân; ca A không gặp.
+
+**Phát hiện, chưa sửa:**
+1. Trên danh sách kho cloud, dòng "Đường xử lý: Chờ đội dữ liệu" hiện ngay lúc Đã gửi, khi chưa biết đường nào. Vị trí: `views/gui_du_lieu.py:70`, `views/duyet_du_lieu.py:64`. Khối local có nhánh `da_gui` riêng. Lỗi chỉ ở chữ hiển thị; phải sửa trước cửa sổ #2 vì `apps/retail_app` nằm trong `code_version`.
+2. `nhap_do._quota` chỉ đếm bảng và view đang tồn tại. Bảng đã xóa vẫn được metastore tính quota một thời gian (418/500 lúc đọc 2026-11-12 15:38Z), nên guard có thể cho chạy rồi dựng hỏng giữa chừng.
+3. `bao_cao_don` in "Không đọc được quota".
+4. `airflow dags pause` (`tat_do`) in `is_paused False`, tức trạng thái trước khi tắt. `dags list` sau đó cho `True`.
+5. Ca A4 (gửi trùng) và ca "bản dựng xong khi dashboard bận không tự lên" có test; ca sau đã thử được trên cloud ở B1.
+
+**Bằng chứng** (`D:\retail-analytics-nap\warehouse\nghiem_thu_t2_20261113\`, gitignored, chỉ trên máy PM):
+- `kho_va_registry.json`: 48 file gồm sự kiện, đề xuất, hợp đồng, lệnh của 4 yêu cầu, và registry. Ba file dữ liệu lớn không chép.
+- `airflow_thoi_gian.txt`: các lượt chạy và thời gian từng task.
+- Ảnh chụp màn hình do PM giữ.
