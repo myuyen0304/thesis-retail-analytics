@@ -25,6 +25,17 @@ MAX_TOTAL_BYTES = 100 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
 
 
+def chu_duong_xu_ly(row) -> str | None:
+    """Chỉ nêu đường xử lý khi đã biết; chưa đọc xong thì báo đang đọc."""
+    if row.get('duong') == 'tu_dong':
+        return 'Đường xử lý: Tự động'
+    if row.get('duong') == 'tay':
+        return 'Đường xử lý: Chờ đội dữ liệu'
+    if row.get('trang_thai') in ('da_gui', 'dang_doc'):
+        return 'Đang đọc và hiểu file…'
+    return None
+
+
 def tao_anh_chup(rows, command):
     """Chụp đúng dữ liệu đã vẽ; không đọc thêm kho để tạo ảnh đầu."""
     return {
