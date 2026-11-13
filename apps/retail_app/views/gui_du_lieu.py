@@ -10,7 +10,7 @@ if not roles.allowed(roles.current_role(), 'gui_du_lieu'):
     st.stop()
 from ui.common import backend
 from ui.kho_dot import configured_store, mode
-from ui.nhap_dot import DotStore, tao_anh_chup
+from ui.nhap_dot import DotStore, tao_anh_chup, chu_duong_xu_ly
 from ui.theo_doi_dot import theo_doi_dot
 
 local_available = nhap_kha_dung()
@@ -67,7 +67,9 @@ if dot_mode != 'tat':
                     st.text(row.get('mo_ta', ''))
                     if row.get('loai') == 'mot_file':
                         st.caption('Một file dữ liệu mới')
-                        st.caption('Đường xử lý: ' + ('Tự động' if row.get('duong') == 'tu_dong' else 'Chờ đội dữ liệu'))
+                        route_caption = chu_duong_xu_ly(row)
+                        if route_caption is not None:
+                            st.caption(route_caption)
                         for reason in row.get('ly_do', []):
                             st.info(reason['nghiep_vu'])
                         if row['trang_thai'] == 'tu_choi':
