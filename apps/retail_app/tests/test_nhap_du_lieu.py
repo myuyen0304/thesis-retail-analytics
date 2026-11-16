@@ -370,7 +370,7 @@ def test_visibility_and_roles(store, monkeypatch):
         assert roles.allowed(role, 'gui_du_lieu') == (role != 'khach')
         assert roles.allowed(role, 'duyet_du_lieu') == (role in ('ky_su', 'admin'))
     assert not store.visible('outsider', 'quan_ly')
-    assert not store.visible('outsider', 'phan_tich')
+    assert not store.visible('outsider', 'vai_tro_cu')
     assert not store.visible('manager', 'khach')
     assert store.visible('outsider', 'ky_su')[0]['id'] == r['id']
     assert store.visible('manager', 'quan_ly')[0]['id'] == r['id']
@@ -601,7 +601,7 @@ def test_published_skip_keeps_state(store, identity, monkeypatch):
     assert calls == ['prepare']
 
 
-@pytest.mark.parametrize('role', ['quan_ly', 'phan_tich', 'ky_su', 'admin'])
+@pytest.mark.parametrize('role', ['quan_ly', 'ky_su', 'admin'])
 def test_sender_page_privacy(store, identity, monkeypatch, role):
     r = pending(store)
     monkeypatch.setattr(roles, 'current_role', lambda: role)
@@ -861,3 +861,17 @@ def test_comparison_writes_nothing(store, identity):
     nr.active_extensions(store), nr.published_release(store, record), nr.doi_chieu_ban(store, record), nr.nguon_dang_dung(store)
     assert fingerprint() == before
     assert store.read(record['id'])['trang_thai'] == 'da_cong_bo' and store.read(record['id'])['revision'] == record['revision']
+
+
+@pytest.mark.parametrize('role', ['quan_ly', 'ky_su', 'admin'])
+def test_sender_technical_error_only_for_engineer_and_admin(store, identity, monkeypatch, role):
+    row = store.create(upload(), 'File lỗi', 'manager')
+    store.transition(row['id'], row['revision'], 'loi_de_xuat', 'manager',
+                     'Chưa hiểu file dữ liệu', loi_ky_thuat='CHI TIẾT KỸ THUẬT RIÊNG')
+    monkeypatch.setattr(roles, 'current_role', lambda: role)
+    monkeypatch.setattr(roles, 'logged_in_user', lambda: {'username': 'manager'})
+    monkeypatch.setattr(ns, 'RequestStore', lambda: store)
+    at = AppTest.from_file(str(VIEWS / 'gui_du_lieu.py')).run()
+    assert not at.exception
+    assert any(e.value == 'Chưa hiểu file dữ liệu' for e in at.error)
+    assert ('CHI TIẾT KỸ THUẬT RIÊNG' in [t.value for t in at.text]) == (role in ('ky_su', 'admin'))
