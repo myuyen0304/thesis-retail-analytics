@@ -17,7 +17,7 @@ from psycopg import sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-ROLES = ('quan_ly', 'phan_tich', 'ky_su', 'admin')   # role gán được cho tài khoản; khách là người không đăng nhập
+ROLES = ('quan_ly', 'ky_su', 'admin')   # role gán được cho tài khoản; khách là người không đăng nhập
 MIN_LEN = 10
 MAX_FAIL = 5                                        # sai liên tiếp từng này lần thì khóa
 LOCK = dt.timedelta(minutes=15)
