@@ -107,7 +107,7 @@ def test_admin_khoa_doi_role_dat_lai(store):
     assert store.login('de1', MK) == (None, 'Tài khoản đã bị admin khóa. Liên hệ admin.')
     assert store.login('de1', 'sai-mat-khau-1') == (None, A.SAI)               # sai mật khẩu thì không lộ là bị khóa
     assert store.set_disabled('de1', False, 'admin1') is None
-    assert store.set_role('de1', 'phan_tich', 'admin1') is None and store.get('de1')['role'] == 'phan_tich'
+    assert store.set_role('de1', 'quan_ly', 'admin1') is None and store.get('de1')['role'] == 'quan_ly'
     store.change_password('de1', MK, 'mat-khau-moi-22')
     assert store.reset_password('de1', 'mat-khau-tam-333', 'admin1') is None
     u, _ = store.login('de1', 'mat-khau-tam-333')
