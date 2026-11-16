@@ -39,7 +39,7 @@ else:
 
     st.dataframe(pd.DataFrame({
         'Tên đăng nhập': [u['username'] for u in users],
-        'Role': [roles.LABEL[u['role']] for u in users],
+        'Role': [roles.LABEL.get(u['role'], f"Role cũ: {u['role']} (cần đổi)") for u in users],
         'Trạng thái': [_trang_thai(u) for u in users],
         'Đăng nhập gần nhất': [u['last_login'] for u in users],
         'Tạo bởi': [u['created_by'] for u in users],
@@ -66,11 +66,11 @@ else:
         else:
             ten = st.selectbox('Tài khoản', khac, key='pq_sua_ten')
             u = next(x for x in users if x['username'] == ten)
-            role = st.selectbox('Role mới', auth_store.ROLES, index=auth_store.ROLES.index(u['role']),
-                                format_func=roles.LABEL.get, key='pq_sua_role')
+            role = st.selectbox('Role mới', auth_store.ROLES, index=auth_store.ROLES.index(u['role']) if u['role'] in auth_store.ROLES else None,
+                                format_func=roles.LABEL.get, key=f"pq_sua_role_{ten}_{u['role']}")
             b1, b2, b3 = st.columns(3)
             err, mk = None, None
-            if b1.button('Đổi role', disabled=role == u['role']):
+            if b1.button('Đổi role', disabled=role is None or role == u['role']):
                 err = s.set_role(ten, role, me) or 'ok'
             if b2.button('Mở khóa' if u['disabled'] else 'Khóa'):
                 err = s.set_disabled(ten, not u['disabled'], me) or 'ok'
