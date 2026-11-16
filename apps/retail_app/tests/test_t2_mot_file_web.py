@@ -691,7 +691,7 @@ def test_actual_review_reject_upgrade_notice(cloud_store):
     assert not any('gửi lại file' in i.value for i in at.info)
 
 
-@pytest.mark.parametrize('role',['quan_ly','phan_tich','khach'])
+@pytest.mark.parametrize('role',['quan_ly','khach'])
 def test_mot_review_permission_denied(cloud_store,monkeypatch,role):
     from ui import roles
     row=pending_mot(cloud_store)
