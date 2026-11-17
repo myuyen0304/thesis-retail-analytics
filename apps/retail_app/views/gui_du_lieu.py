@@ -140,12 +140,12 @@ def requests():
                 st.info(snapshot['notices'][row['id']])
             if row['trang_thai'] == 'loi_de_xuat':
                 st.error(row['lich_su'][-1]['ghi_chu'])
-                if role in ('phan_tich', 'ky_su', 'admin') and row.get('loi_ky_thuat'):
+                if role in ('ky_su', 'admin') and row.get('loi_ky_thuat'):
                     st.text(row['loi_ky_thuat'])
             elif (store.folder(row['id']) / 'de_xuat/mapping_de_xuat.yml').exists():
                 for line in tom_tat_nghiep_vu(store.proposal(row['id'])):
                     st.text(line)
-                if role in ('phan_tich', 'ky_su', 'admin'):
+                if role in ('ky_su', 'admin'):
                     st.markdown((store.folder(row['id']) / 'de_xuat/bao_cao_mapping.md').read_text(encoding='utf-8'))
             if row['trang_thai'] == 'tu_choi':
                 st.warning('Lý do từ chối: ' + row['lich_su'][-1]['ghi_chu'])

@@ -19,11 +19,11 @@ MK = 'mat-khau-dai-1'
 
 def test_ma_tran_trang(monkeypatch):
     monkeypatch.setattr(roles, 'DEFAULT_PAGE', conftest.DEFAULT_PAGE)
-    assert roles.DEFAULT_PAGE == {'khach': 'tong_quan', 'quan_ly': 'tong_quan', 'phan_tich': 'ps1_do_dung',
+    assert roles.DEFAULT_PAGE == {'khach': 'tong_quan', 'quan_ly': 'tong_quan',
                                   'ky_su': 'suc_khoe_du_lieu', 'admin': 'suc_khoe_du_lieu'}
     chi = lambda key: [r for r in roles.ROLES if roles.allowed(r, key)]
-    assert chi('ai_explain') == ['quan_ly', 'phan_tich', 'ky_su', 'admin']      # khách không có chat
-    assert chi('suc_khoe_du_lieu') == ['phan_tich', 'ky_su', 'admin']
+    assert chi('ai_explain') == ['quan_ly', 'ky_su', 'admin']      # khách không có chat
+    assert chi('suc_khoe_du_lieu') == ['ky_su', 'admin']
     assert chi('phan_quyen') == ['admin']
     for key in ['tong_quan', 'ps1_do_dung', 'ps2_xu_huong', 'ps3_nhip_lich', 'ps4_don_mon_gia', 'ps5_nhom', 'du_bao']:
         assert chi(key) == list(roles.ROLES), key
@@ -44,8 +44,8 @@ def test_muc_nhay_cam():
     view = {(r, lv): roles.column_view(r, lv) for r in roles.ROLES for lv in roles.LEVELS + ('khong_ro',)}
     assert all(view[r, 'cong_khai'] == 'du' for r in roles.ROLES)
     assert all(view[r, 'cam'] == 'an' and view[r, 'khong_ro'] == 'an' for r in roles.ROLES)
-    assert [view[r, 'noi_bo'] for r in roles.ROLES] == ['an', 'du', 'du', 'du', 'du']
-    assert [view[r, 'lien_he'] for r in roles.ROLES] == ['an', 'che', 'du', 'du', 'du']
+    assert [view[r, 'noi_bo'] for r in roles.ROLES] == ['an', 'du', 'du', 'du']
+    assert [view[r, 'lien_he'] for r in roles.ROLES] == ['an', 'che', 'du', 'du']
 
 
 @pytest.mark.parametrize('raw, masked', [('0901234567', '*******567'), ('+84 90 123 4567', '********567'),
@@ -82,7 +82,7 @@ def test_nhat_ky_khong_ghi_gia_tri(monkeypatch):
 
 # --- Xác định role: fail closed ---
 
-@pytest.mark.parametrize('env, role', [('admin', 'admin'), ('phan_tich', 'phan_tich'), ('Admin', 'khach'),
+@pytest.mark.parametrize('env, role', [('admin', 'admin'), ('vai_tro_cu', 'khach'), ('Admin', 'khach'),
                                        ('root', 'khach'), (None, 'khach')])
 def test_khong_auth_doc_bien_moi_truong(monkeypatch, env, role):
     if env is None:
@@ -147,9 +147,9 @@ def test_tai_khoan_bi_khoa_hoac_doi_role_co_hieu_luc(monkeypatch, co_auth):
     phien = {'tai_khoan': 'de1', roles.PREVIEW_KEY: 'admin'}
     monkeypatch.setattr(roles.st, 'session_state', phien)
     assert roles.current_role() == 'ky_su'                                     # Xem như role chỉ có tác dụng với admin thật
-    co_auth.set_role('de1', 'phan_tich', 'admin1')
+    co_auth.set_role('de1', 'quan_ly', 'admin1')
     roles._account.clear()                                                      # trang Phân quyền xóa cache sau mỗi thao tác
-    assert roles.current_role() == 'phan_tich'
+    assert roles.current_role() == 'quan_ly'
     co_auth.set_disabled('de1', True, 'admin1')
     roles._account.clear()
     assert roles.current_role() == 'khach' and 'tai_khoan' not in phien        # bỏ phiên

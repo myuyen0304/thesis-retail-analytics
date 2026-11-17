@@ -174,7 +174,7 @@ def test_t11_cache_follows_pointer(warehouse):
     assert demo.iloc[0]['r'] == 90 and real.iloc[0]['r'] == 10
 
 
-@pytest.mark.parametrize('role', ['khach', 'quan_ly', 'phan_tich', 'ky_su'])
+@pytest.mark.parametrize('role', ['khach', 'quan_ly', 'ky_su'])
 def test_t9_direct_action_requires_admin(warehouse, monkeypatch, role):
     monkeypatch.setattr(roles, 'current_role', lambda: role)
     monkeypatch.setattr(nr.subprocess, 'run', lambda *a, **kw: pytest.fail('Không được chạy subprocess'))
@@ -294,8 +294,8 @@ def test_t1_null_dashboard_follows_active_and_clear_removes_keys(warehouse):
 
 @pytest.mark.parametrize('page', ['du_bao', 'ai_explain'])
 def test_t14_default_page_reads_active(warehouse, monkeypatch, page):
-    monkeypatch.setattr(roles, 'current_role', lambda: 'phan_tich')
-    monkeypatch.setitem(roles.DEFAULT_PAGE, 'phan_tich', page)
+    monkeypatch.setattr(roles, 'current_role', lambda: 'quan_ly')
+    monkeypatch.setitem(roles.DEFAULT_PAGE, 'quan_ly', page)
     original = common.load_or_stop
     seen = []
     def read(*args, **kwargs):

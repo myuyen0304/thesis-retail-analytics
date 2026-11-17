@@ -79,7 +79,7 @@ class DotStore:
         return dict(metadata, **replay)
 
     def visible(self, username, role):
-        if role not in ('quan_ly', 'phan_tich', 'ky_su', 'admin'):
+        if role not in ('quan_ly', 'ky_su', 'admin'):
             return []
         rows = []
         for request_id in self.kho.liet_ke('yeu_cau'):

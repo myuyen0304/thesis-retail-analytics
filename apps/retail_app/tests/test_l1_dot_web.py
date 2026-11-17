@@ -266,7 +266,7 @@ def test_second_file_failure_leaves_invisible_orphan(store, monkeypatch):
     assert not list(store.kho.root.rglob('yeu_cau.json'))
 
 
-@pytest.mark.parametrize('role', ['khach', 'quan_ly', 'phan_tich', 'ky_su'])
+@pytest.mark.parametrize('role', ['khach', 'quan_ly', 'ky_su'])
 def test_non_admin_cannot_write_command(store, monkeypatch, role):
     monkeypatch.setattr(roles, 'current_role', lambda: role)
     monkeypatch.setattr(roles, 'logged_in_user', lambda: {'username': 'admin1', 'role': 'admin'})
@@ -733,7 +733,7 @@ def test_corrupt_metadata_isolated_per_request(store, monkeypatch, damage):
         else:
             metadata.pop(damage)
         path.write_text(json.dumps(metadata), encoding='utf-8')
-    for role in ('quan_ly', 'phan_tich'):
+    for role in ('quan_ly',):
         assert [r['id'] for r in store.visible('admin1', role)] == [good['id']]
     for role in ('ky_su', 'admin'):
         rows = {r['id']: r for r in store.visible('admin1', role)}

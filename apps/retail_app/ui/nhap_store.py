@@ -162,7 +162,7 @@ class RequestStore:
             return self.change(record, state, username, note, **updates)
 
     def visible(self, username, role):
-        if role not in ('quan_ly', 'phan_tich', 'ky_su', 'admin'):
+        if role not in ('quan_ly', 'ky_su', 'admin'):
             return []
         rows = [self.read(p.parent.name) for p in self.requests.glob('*/yeu_cau.json')]
         return sorted((r for r in rows if role in ('ky_su', 'admin') or r['nguoi_gui'] == username),

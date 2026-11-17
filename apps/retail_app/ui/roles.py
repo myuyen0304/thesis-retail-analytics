@@ -26,8 +26,8 @@ import streamlit as st
 
 from ui import auth_store
 
-ROLES = ('khach', 'quan_ly', 'phan_tich', 'ky_su', 'admin')          # thấp → cao
-LABEL = {'khach': 'Khách', 'quan_ly': 'Quản lý', 'phan_tich': 'DA/BI', 'ky_su': 'Data engineer', 'admin': 'Admin'}
+ROLES = ('khach', 'quan_ly', 'ky_su', 'admin')          # thấp → cao
+LABEL = {'khach': 'Khách', 'quan_ly': 'Quản lý', 'ky_su': 'Data engineer', 'admin': 'Admin'}
 
 # key → (file trang, tiêu đề); thứ tự này là thứ tự trên menu
 PAGES = {
@@ -50,7 +50,6 @@ _KHACH = ('tong_quan', 'ps1_do_dung', 'ps2_xu_huong', 'ps3_nhip_lich', 'ps4_don_
 _PAGE_CHOICES = {
     'khach': _KHACH,
     'quan_ly': _KHACH + ('ai_explain', 'gui_du_lieu'),
-    'phan_tich': _KHACH + ('suc_khoe_du_lieu', 'ai_explain', 'gui_du_lieu'),
     'ky_su': _KHACH + ('suc_khoe_du_lieu', 'ai_explain', 'gui_du_lieu', 'duyet_du_lieu'),
     'admin': _KHACH + ('suc_khoe_du_lieu', 'ai_explain', 'phan_quyen', 'gui_du_lieu', 'duyet_du_lieu'),
 }
@@ -69,7 +68,7 @@ class _RolePages(Mapping):
 
 
 PAGES_BY_ROLE = _RolePages()
-DEFAULT_PAGE = {'khach': 'tong_quan', 'quan_ly': 'tong_quan', 'phan_tich': 'ps1_do_dung',
+DEFAULT_PAGE = {'khach': 'tong_quan', 'quan_ly': 'tong_quan',
                 'ky_su': 'suc_khoe_du_lieu', 'admin': 'suc_khoe_du_lieu'}
 BACKEND_ROLES = ('ky_su', 'admin')       # được đổi backend ở thanh bên
 PREVIEW_KEY = 'xem_nhu_role'             # session_state của ô "Xem như role" (chỉ admin)
@@ -78,7 +77,7 @@ SESSION_KEY = 'tai_khoan'                # session_state: username đã đăng n
 # Mức nhạy cảm của cột (§7.1). Cột không có mức coi như 'cam'.
 LEVELS = ('cong_khai', 'noi_bo', 'lien_he', 'cam')
 LEVEL_LABEL = {'cong_khai': 'Công khai', 'noi_bo': 'Nội bộ', 'lien_he': 'Liên hệ', 'cam': 'Cấm'}
-_LEVEL_FULL = {'cong_khai': 'khach', 'noi_bo': 'quan_ly', 'lien_he': 'phan_tich'}   # role thấp nhất thấy đủ
+_LEVEL_FULL = {'cong_khai': 'khach', 'noi_bo': 'quan_ly', 'lien_he': 'ky_su'}   # role thấp nhất thấy đủ
 _LEVEL_MASKED = {'lien_he': 'quan_ly'}                                              # role thấp nhất thấy bản che
 
 _audit = logging.getLogger('retail.audit')
