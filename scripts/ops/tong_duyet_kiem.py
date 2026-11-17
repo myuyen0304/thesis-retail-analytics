@@ -143,8 +143,10 @@ def kiem_t2():
 
 
 def _co_quyen(cloud, doi_tuong, principal):
-    _, rows = cloud.query(f'show grants on {doi_tuong}')
-    return any(principal in row for row in rows)
+    # Row của databricks-sql-connector: `x in row` dò tên cột, không dò giá trị; phải so đúng cột principal.
+    cols, rows = cloud.query(f'show grants on {doi_tuong}')
+    i = [str(c).lower() for c in cols].index('principal')
+    return any(row[i] == principal for row in rows)
 
 
 def kiem():
