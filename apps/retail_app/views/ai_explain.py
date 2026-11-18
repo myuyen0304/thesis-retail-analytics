@@ -171,14 +171,11 @@ notes(
         f'PS5 R theo một chiều ({", ".join(cat.DIMENSIONS)}) × năm.',
     ],
     gioi_han=[
-        'Chưa mở: số khách C theo nhóm, lọc nhiều chiều, nhiều tháng / quý / khoảng ngày tùy ý, G so năm trước, phân rã '
-        'N/U/P theo giai đoạn, tháng đổi hướng do dữ liệu tự tìm. Hỏi những câu này thì trợ lý báo chưa hỗ trợ.',
-        'Số PS3 theo giai đoạn dùng cách gom năm ranh giới đề xuất (chờ BA chốt); số cả kỳ 2013–2022 không phụ thuộc '
-        'quy ước này.',
-        'Phân rã là số học, không phải nguyên nhân (marketing, churn, tồn kho... không có trong dữ liệu).',
-        'Biểu đồ chưa vẽ được R / G theo từng năm hay từng tháng của một năm (chưa có công cụ trả cả chuỗi), và chưa có '
-        'nút mở trang tương ứng kèm bộ lọc.',
-        'Câu diễn giải không qua bước kiểm số thì không hiện; khi đó chỉ hiện bảng số lấy thẳng từ kho.',
-        'Tiền ghi VND: dữ liệu nguồn không ghi đơn vị tiền tệ, PM chốt dùng VND ngày 2026-10-05.',
+        'Trợ lý chỉ trả lời các câu trong phạm vi ở mục Cách đọc; câu ngoài phạm vi thì báo chưa hỗ trợ.',
+        'Số PS3 theo giai đoạn dùng cách gom năm đề xuất; số cả kỳ 2013–2022 không phụ thuộc cách gom này.',
+        'Phân rã là số học, không phải nguyên nhân.',
+        'Biểu đồ chưa vẽ được R / G theo từng năm hay từng tháng của một năm.',
+        'Câu trả lời không qua bước kiểm số thì không hiện; khi đó chỉ hiện bảng số lấy thẳng từ kho.',
+        'Tiền tính theo VND (dữ liệu nguồn không ghi đơn vị tiền tệ).',
     ],
 )
