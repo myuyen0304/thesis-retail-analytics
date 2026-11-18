@@ -253,8 +253,8 @@ def kpi_revenue(row: pd.Series) -> None:
 def notes(cach_doc: list[str], gioi_han: list[str]) -> None:
     st.subheader('Cách đọc')
     st.markdown('\n'.join(f'- {x}' for x in cach_doc))
-    st.subheader('Giới hạn')
-    st.markdown('\n'.join(f'- {x}' for x in gioi_han))
+    with st.expander('Giới hạn', expanded=False):
+        st.markdown('\n'.join(f'- {x}' for x in gioi_han))
 
 
 # Giới hạn chung, lấy từ deck slide 15 (Phạm vi và giới hạn)
