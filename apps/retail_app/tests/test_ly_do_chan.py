@@ -269,3 +269,33 @@ def test_rank_guidance_only_for_change_ranking(message, extra):
     messages = ly_do_chan.giai_thich([message] * 5)
     assert (ly_do_chan.RANK_GUIDANCE in messages) is extra
     assert messages.count(ly_do_chan.ERROR_MESSAGES['xep_hang']) == 1
+
+
+@pytest.mark.parametrize('answer, year, key, expected', [
+    ('Ngành ảnh hưởng lớn nhất tới ΔR năm 2019 là {c1}.', 2019, 'largest_decrease', True),
+    ('Ngành có đóng góp lớn nhất năm 2019 là {c1}.', 2019, 'largest_decrease', True),
+    ('Ngành có R thấp nhất năm 2018 là {c1}.', 2018, 'largest_decrease', False),
+    ('Ngành đóng góp lớn nhất năm 2019 là {c1}.', 2019, 'lowest_r', False),
+])
+def test_segment_change_context_regression(answer, year, key, expected):
+    result = tools.run({'tool': 'get_segment_contribution',
+                        'arguments': {'metric': 'R', 'dimension': 'category', 'year': year}}, 'duckdb')
+    assert result.ok, result.message
+    assert result.derived[key] is not None
+    checked = evidence.validate(answer, [{'id': 'c1', 'path': f'T1.derived.{key}.groups'}], {'T1': result})
+    assert checked.ok is expected, checked.errors
+
+
+@pytest.mark.parametrize('context', [
+    'ΔR', 'đóng góp', 'ảnh hưởng', 'tác động', 'thay đổi', 'biến động', 'chênh lệch', 'so với năm trước',
+])
+@pytest.mark.parametrize('word, key, expected', [
+    ('lớn nhất', 'largest_decrease', True), ('thấp nhất', 'lowest_r', False),
+])
+def test_segment_change_context_terms(context, word, key, expected):
+    result = tools.run({'tool': 'get_segment_contribution',
+                        'arguments': {'metric': 'R', 'dimension': 'category', 'year': 2019}}, 'duckdb')
+    assert result.ok, result.message
+    answer = f'Ngành có mức {word} ({context}) năm 2019 là {{c1}}.'
+    checked = evidence.validate(answer, [{'id': 'c1', 'path': f'T1.derived.{key}.groups'}], {'T1': result})
+    assert checked.ok is expected, checked.errors
