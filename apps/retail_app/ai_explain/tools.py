@@ -29,7 +29,7 @@ from dwh.connection import describe
 from dwh import releases
 from dwh.guarded import DEFAULT_MAX_ROWS, GuardError, QueryTimeout, RowLimitExceeded, Statement, open_session
 
-TOOL_VERSION = 'v2.2'   # S9b lượt 2: rank_dir và ngưỡng nhóm nhỏ; v2.1 là lượt đầu
+TOOL_VERSION = 'v2.3'   # Xếp hạng mức R của nhóm; v2.2: rank_dir và ngưỡng nhóm nhỏ
                         # v1.7: chuỗi từng năm (to_year), ghi chú app (notes) cho đóng góp nhóm / sai số tháng
 ALLOWED_RELATIONS = frozenset({
     'reporting.rpt_build_info', 'reporting.rpt_health_summary', 'reporting.rpt_revenue_yearly',
@@ -302,6 +302,10 @@ def _segment(turn: _Turn, a: dict) -> ToolResult:
                'smallest_decrease': _extreme(rows, -1, min), 'smallest_increase': _extreme(rows, +1, min),
                'n_groups': len(rows), 'n_groups_down': rows[0]['n_groups_down'], 'n_groups_up': rows[0]['n_groups_up'],
                'denominator': 'ΔR và R toàn công ty cùng năm (không đổi khi chỉ xem một nhóm)'}
+    for key, pick in (('highest_r', max), ('lowest_r', min)):
+        value = pick(r['r'] for r in rows)
+        groups = [r['dimension_value'] for r in rows if r['r'] == value]
+        derived[key] = {'groups': groups, 'r': value, 'tie': len(groups) > 1}
     if (g := a.get('group')) is not None:
         if g not in {r['dimension_value'] for r in rows}:
             return ToolResult('no_data', f'Không có nhóm này trong {dim} năm {year}. Các nhóm có: '
@@ -318,7 +322,8 @@ def _segment(turn: _Turn, a: dict) -> ToolResult:
                                                   'contribution_to_delta'),
                           method='Xếp theo ΔR (tiền) trên đủ tập nhóm, cả phía lớn nhất (largest_*) lẫn phía nhỏ nhất '
                                  '(smallest_*: chỉ trong các nhóm cùng chiều); đồng hạng giữ tất cả. Không dùng '
-                                 'delta_r_rank (rank 1 = tăng nhiều nhất / giảm ít nhất).',
+                                 'delta_r_rank (rank 1 = tăng nhiều nhất / giảm ít nhất). '
+                                 'Xếp theo mức R của năm trên đủ tập nhóm (highest_r / lowest_r); đồng hạng giữ tất cả.',
                           read_at=read_at))
 
 
@@ -1134,7 +1139,9 @@ TOOLS = {s.name: s for s in [
         'year': _YEAR,
         'period_type': Param('enum', 'year (mở) hoặc phase (chưa mở)', ('year', 'phase'), required=False, default='year'),
     }, _drivers),
-    ToolSpec('get_segment_contribution', 'R theo MỘT chiều × năm: ΔR, tỷ trọng, % đóng góp vào ΔR toàn công ty.', {
+    ToolSpec('get_segment_contribution', 'R theo MỘT chiều × năm: ΔR, tỷ trọng, % đóng góp vào ΔR toàn công ty. '
+             'derived.highest_r / lowest_r gồm groups, r, tie: nhóm có mức R cao / thấp nhất năm; '
+             'khác largest_increase / largest_decrease là tăng / giảm nhiều nhất theo ΔR.', {
         'metric': _METRIC_RG,
         'dimension': Param('enum', 'category / region / acquisition_channel', tuple(cat.DIMENSIONS)),
         'year': _YEAR,
