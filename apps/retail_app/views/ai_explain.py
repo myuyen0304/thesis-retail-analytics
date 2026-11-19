@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from ai_explain import metric_catalog as cat
-from ai_explain import charts, links, provider, service, tools
+from ai_explain import charts, links, ly_do_chan, provider, service, tools
 from ui.ai_panel import ai_unavailable
 from ui.common import BACKEND_LABEL, backend, notes, page_header
 from ui.fmt import arrow_safe, num
@@ -87,11 +87,16 @@ def _turn(t: service.TurnResult) -> None:
     with st.chat_message('user'):
         st.markdown(_md(t.question))
     with st.chat_message('assistant'):
-        kind, nhan = TRANG_THAI.get(t.status, (None, None))
+        kind, nhan = TRANG_THAI.get(t.status, ('warning', 'Chưa trả lời được'))
+        technical_text = None
         if t.status == 'ok':
             st.markdown(_md(t.answer_md))
         else:
             text = t.answer_md or t.message or '; '.join(r.message for r in t.results.values()) or nhan
+            shown, technical = ly_do_chan.status_message(t.status, text)
+            if technical:
+                technical_text = text
+            text = shown
             getattr(st, kind)(f'**{nhan}.** {_md(text)}')
         if any(tool == 'get_revenue_drivers' and t.results[r].ok for r, tool, _ in t.calls):
             st.caption('Phần góp N → U → P là phân rã số học, cho biết ΔR "nằm ở đâu", không chứng minh nguyên nhân.')
@@ -125,8 +130,14 @@ def _turn(t: service.TurnResult) -> None:
             _evidence(ref, tool, args, t.results[ref])
         if t.validation_errors:
             with st.expander('Vì sao câu diễn giải bị chặn'):
-                for e in t.validation_errors:
+                for e in ly_do_chan.giai_thich(t.validation_errors):
                     st.markdown(f'- {_md(e)}')
+        if technical_text or t.validation_errors:
+            with st.expander('Chi tiết kỹ thuật (cho người phát triển)', expanded=False):
+                if technical_text:
+                    st.code(technical_text, language=None)
+                for e in t.validation_errors:
+                    st.code(e, language=None)
         st.caption(f'{t.model} · prompt {t.prompt_version} · {t.llm_calls} lần gọi mô hình · '
                    f'{num(t.tokens)} token · {num(t.latency_s, 1)} giây')
 
