@@ -32,7 +32,7 @@ from ai_explain.evidence import (DATE_RE, Checked, allowed_years, check_digits, 
                                   stated_period_errors, validate)
 from ai_explain.provider import ProviderError, openai_tools, parse_arguments
 
-PROMPT_VERSION = 'ny-2026-10-27'  # NY lượt 9: câu đáp trần bằng năm sau câu hỏi lại kèm gợi ý kỳ đã hỏi
+PROMPT_VERSION = 'segment-r-2026-11-19'  # Phân biệt xếp hạng mức R của nhóm với mức thay đổi ΔR
                                    # s9b-2026-10-20b: S9b lượt 2; lượt đầu s9b-2026-10-20
                                    # b5-2026-10-20b: PM chốt A: mã chỉ tiêu lấy định nghĩa từ catalog, RAG chỉ bổ sung
                                    # b5-2026-10-20: mở router RAG cho câu định nghĩa / quy ước / theo tài liệu
@@ -154,6 +154,9 @@ QUY TẮC BẮT BUỘC
    derived.smallest_decrease.groups / smallest_increase.groups (chỉ trong các nhóm cùng chiều; vd. "Ngành giảm ít nhất
    năm 2019 là {{c4}}"). Không dùng derived.largest_* hay top_*_driver cho ý "nhỏ nhất / ít nhất"; giai đoạn, điểm đổi
    hướng, N/U/P chưa có xếp hạng phía nhỏ: nói chưa xếp được, không đổi sang phía lớn nhất.
+   "Ngành / vùng / kênh có R cao nhất / thấp nhất năm X": dùng derived.highest_r.groups / lowest_r.groups
+   (mức R là .r, đồng hạng giữ tất cả trong .groups, .tie). Đây là mức R của năm, KHÔNG phải mức thay đổi ΔR.
+   "Tăng / giảm nhiều nhất" vẫn phải dùng largest_increase / largest_decrease, không dùng highest_r / lowest_r.
    Tên nhóm (ngành hàng, khu vực, kênh) KHÔNG viết thẳng: dùng chỗ đặt trỏ vào derived.largest_*.groups hoặc
    rows[<nhóm>].dimension_value; hoặc viết tên nhóm cùng vế với một claim rows[<nhóm>].<cột>.
    Tên thành phần N/U/P thì viết thẳng ("số đơn (N)", "số món mỗi đơn (U)", "giá mỗi món (P)") rồi đặt số của
