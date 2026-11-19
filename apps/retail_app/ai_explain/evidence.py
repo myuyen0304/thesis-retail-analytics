@@ -2112,6 +2112,24 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
             elif len(refs) == 1 and piece_direction != 2:
                 explain_chain = (next(iter(refs)), piece_direction or question_direction, sent)
             continue
+        # Mức R của nhóm và thay đổi ΔR là hai tiêu chí khác nhau; không dùng thay thế.
+        segment_paths = [p for p in paths if (res := results.get(p.split('.')[0])) is not None
+                         and res.evidence and res.evidence.tool == 'get_segment_contribution']
+        level_paths = [p for p in segment_paths if re.search(r'\.derived\.(?:highest|lowest)_r\.', p)]
+        changing = bool(_DIR_WORD.search(_PLACEHOLDER.sub(' ', sent).lower().replace('tăng trưởng', '')))
+        level_words = any(w in low for w in HIGH_WORDS + LOW_WORDS)
+        hi = any(w in low for w in HIGH_WORDS)
+        lo = any(w in low for w in LOW_WORDS)
+        if level_paths and hi != lo and any(_rank_direction(p) != (1 if hi else -1) for p in level_paths):
+            errors.append('xếp hạng mức R của nhóm dẫn sai phía cao / thấp; dùng highest_r cho cao, lowest_r cho thấp')
+            continue
+        if level_paths and changing:
+            errors.append('xếp hạng theo thay đổi ΔR phải dùng largest_increase / largest_decrease; '
+                          'highest_r / lowest_r chỉ xếp mức R của năm')
+            continue
+        if segment_paths and level_words and not changing and not level_paths:
+            errors.append('xếp hạng mức R của nhóm phải dẫn derived.highest_r / lowest_r, không dùng xếp hạng ΔR')
+            continue
         if not ranks and _verified_driver_rank(sent, results):
             continue
         if not ranks and any(by_id[cid][2] in RANK_BOTH for cid in _PLACEHOLDER.findall(sent) if cid in by_id):
