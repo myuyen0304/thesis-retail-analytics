@@ -2116,7 +2116,10 @@ def validate(answer: str, claims: list, results: dict, extra_allowed: frozenset 
         segment_paths = [p for p in paths if (res := results.get(p.split('.')[0])) is not None
                          and res.evidence and res.evidence.tool == 'get_segment_contribution']
         level_paths = [p for p in segment_paths if re.search(r'\.derived\.(?:highest|lowest)_r\.', p)]
-        changing = bool(_DIR_WORD.search(_PLACEHOLDER.sub(' ', sent).lower().replace('tăng trưởng', '')))
+        change_context = _PLACEHOLDER.sub(' ', sent).lower().replace('tăng trưởng', '')
+        changing = bool(_DIR_WORD.search(change_context) or re.search(
+            r'(?<!\w)(?:ΔR|đóng góp|ảnh hưởng|tác động|thay đổi|biến động|chênh lệch|so với năm trước)(?!\w)',
+            change_context, re.I))
         level_words = any(w in low for w in HIGH_WORDS + LOW_WORDS)
         hi = any(w in low for w in HIGH_WORDS)
         lo = any(w in low for w in LOW_WORDS)
