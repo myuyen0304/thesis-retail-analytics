@@ -1220,7 +1220,7 @@ def test_trang_chat_cau_bi_chan_chi_hien_bang_so(monkeypatch):
     assert not at.exception and not at.error
     assert any('Chưa tạo được diễn giải' in w.value for w in at.warning)
     assert not any('R năm 2019 tăng' in m.value for m in at.markdown)       # câu sai không được hiện
-    assert any('nói "tăng"' in m.value for m in at.markdown)                # lý do chặn thì có
+    assert any('nói "tăng"' in m.value for m in at.code)                    # lời kiểm gốc nằm trong ô kỹ thuật
 
 
 def test_trang_chat_doi_backend_xoa_hoi_thoai(monkeypatch):
