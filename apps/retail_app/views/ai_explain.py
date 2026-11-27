@@ -15,13 +15,13 @@ from ui.common import BACKEND_LABEL, backend, notes, page_header
 from ui.fmt import arrow_safe, num
 
 
-GOI_Y = {q: q for q in [
-    'G hụt thành R bao nhiêu năm 2019, khoản nào lớn nhất?',          # PS1
-    'Doanh thu chia mấy giai đoạn, giai đoạn nào giảm mạnh nhất?',    # PS2
-    'Tháng 8 năm lẻ có luôn thấp hơn năm chẵn không?',               # PS3
-    'Vì sao R năm 2019 giảm?',                                         # PS4
-    'Ngành hàng nào kéo giảm R nhiều nhất năm 2019?',                  # PS5
-    'Dự báo doanh thu tháng 8/2023 là bao nhiêu?',                    # dự báo (B3, cần bản dữ liệu có dự báo)
+GOI_Y = {q: q for q in [                                               # docs/cau_hoi_test_ai_du_bao.md
+    'Doanh thu thực tế năm 2023 là bao nhiêu?',                        # từ chối đúng chỗ (#11, live G06)
+    'Dự báo doanh thu ngành Streetwear tháng 8/2023?',                 # từ chối đúng chỗ (#12, live G08)
+    'Vì sao dự báo G tháng 8/2023 thấp?',                              # giải thích dự báo L4 (#18, live L4D1)
+    'Có phải Urban Blowout là nguyên nhân làm dự báo G tháng 8/2023 giảm?',  # giải thích dự báo (#24, live L404)
+    'Cho mình xem đường dự báo doanh thu gộp theo từng tháng',         # biểu đồ L2 (#28, live V01)
+    'Vẽ R theo ngành hàng năm 2019',                                   # biểu đồ số thật (V2 trang Demo bảo vệ; test_ai_charts dùng năm 2022)
 ]}
 TRANG_THAI = {
     'needs_clarification': ('info', 'Cần làm rõ'), 'unsupported': ('info', 'Chưa hỗ trợ'),
